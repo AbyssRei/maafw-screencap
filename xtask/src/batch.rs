@@ -81,8 +81,8 @@ pub fn run(args: &[String]) -> Result<()> {
         pending: vec![
             "Complete responsibility review and method/target parity matrix".into(),
             "Independent unpatched reference executable and latest-source OpenCV adapter".into(),
-            "Complete FramePool failure/resize/permission matrix, Desktop Duplication and other backend shutdown".into(),
-            "Complete Linux PipeWire failure/format, Wlr and macOS target/failure prototypes".into(),
+            "Complete FramePool failure/resize/permission, Desktop Duplication output/access-loss/rotation and other backend shutdown matrices".into(),
+            "Complete Linux PipeWire/Wlr format/failure matrices and macOS target/failure prototypes".into(),
             "Three native Actions runner results, platform dependency isolation and AUTO/ON/OFF"
                 .into(),
         ],

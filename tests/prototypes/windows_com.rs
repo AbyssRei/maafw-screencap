@@ -21,6 +21,9 @@ use windows_core::{IUnknown, Interface};
 #[path = "windows_framepool.rs"]
 mod framepool;
 
+#[path = "windows_desktop_dup.rs"]
+mod desktop_dup;
+
 fn create_frame_pool(
     device: &IDirect3DDevice,
     size: SizeInt32,

@@ -16,7 +16,7 @@ use windows_core::{Interface, PCWSTR};
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
-fn pump() -> Result<()> {
+pub(super) fn pump() -> Result<()> {
     let mut message = MSG::default();
     // SAFETY: Runs only on this probe's dedicated MTA/window thread. The output
     // is writable and only this thread's messages are dispatched.
@@ -81,9 +81,13 @@ impl Drop for Dispatcher {
     }
 }
 
-struct Window(Option<HWND>);
+pub(super) struct Window(Option<HWND>);
 impl Window {
-    fn new() -> Result<Self> {
+    pub(super) fn new() -> Result<Self> {
+        Self::with_color(0x00332211)
+    }
+
+    pub(super) fn with_color(color: u32) -> Result<Self> {
         let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
         let title = [0_u16];
         // SAFETY: Built-in class, terminated strings, own window on this thread.
@@ -118,8 +122,8 @@ impl Window {
         if dc.0.is_null() {
             return Err("GetDC failed".into());
         }
-        // SAFETY: Creates a solid brush with red=0x11, green=0x22, blue=0x33.
-        let brush = unsafe { CreateSolidBrush(COLORREF(0x00332211)) };
+        // SAFETY: Creates the fixture's specified COLORREF; no pointer inputs.
+        let brush = unsafe { CreateSolidBrush(COLORREF(color)) };
         if brush.0.is_null() {
             // SAFETY: Owns the successful DC acquisition above.
             unsafe {
@@ -144,10 +148,10 @@ impl Window {
         Ok(result)
     }
 
-    fn handle(&self) -> HWND {
+    pub(super) fn handle(&self) -> HWND {
         self.0.unwrap()
     }
-    fn close(&mut self) -> Result<()> {
+    pub(super) fn close(&mut self) -> Result<()> {
         if let Some(window) = self.0 {
             // SAFETY: Only this thread owns/destroys the window, after capture.
             unsafe {

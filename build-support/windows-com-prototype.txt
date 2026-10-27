@@ -67,3 +67,17 @@ DeleteObject
 FillRect
 GdiFlush
 DwmFlush
+# P0 Desktop Duplication feasibility uses the original DuplicateOutput entry.
+IDXGIAdapter::EnumOutputs
+IDXGIOutput::GetDesc
+IDXGIOutput1::DuplicateOutput
+IDXGIOutputDuplication::{AcquireNextFrame,ReleaseFrame,GetDesc}
+DXGI_ERROR_NOT_FOUND
+DXGI_ERROR_INVALID_CALL
+DXGI_MODE_ROTATION_IDENTITY
+ClientToScreen
+SetWindowPos
+HWND_TOPMOST
+SWP_NOMOVE
+SWP_NOSIZE
+SWP_NOACTIVATE
