@@ -108,7 +108,7 @@ maafw-screencap/
     allocation.rs                  # nightly fallible API 内部窄封装
     backends/
       windows/                     # 原生绑定/资源封装、窗口协调均在此
-      linux/                       # PipeWire / Wlr 及局部原生封装
+      linux/                       # PipeWire / Wlr / P3 ExtImage 及局部原生封装
       macos/                       # ScreenCaptureKit 及局部原生封装
   native/<platform>/               # 仅在证明绑定缺口后添加窄桥接
   bindings/                        # 基础绑定及语言薄适配

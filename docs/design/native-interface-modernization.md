@@ -20,6 +20,7 @@
 | Linux 上游兼容导出 | MaaKWinControlUnit / MaaWlRootsControlUnit 转接入口 | 新产品只提供自身 Rust/C ABI/C++/Python 契约，不再导出旧 Maa 接口或引入其输入控制；保留 U/P 对截图构造、授权输入接管和退出职责的覆盖 |
 
 独立 GDI 全虚拟桌面方式从首次产品实现即采用 [ADR 0001 的 DIB 路径](gdi-virtual-desktop.md)，不先新增一条 GetBitmapBits 实现再迁移。DIB、布局初始化和独立 Frame 保证继续以[像素与内存契约](../contracts/frame.md)为准。
+新建或复用的 DIB 在每次取图前初始化所有可能未被本次原生写入覆盖的字节；PrintWindow 等无法证明完整覆盖时清零整个画布，不能把未初始化内存或上次残留当作本次像素。CPU 初始化/读取与 GDI 写入按同步契约排序，覆盖部分绘制及复用后失败的夹具；清零本身不证明取得了目标内容，仍须验证原生结果及受控图样。
 
 ## 能力、来源与执行约束
 
