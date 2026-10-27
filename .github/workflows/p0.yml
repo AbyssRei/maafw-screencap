@@ -60,9 +60,25 @@ jobs:
         run: cargo xtask reference verify
       - name: Archive engineering evidence
         if: always()
+        shell: pwsh
+        run: |
+          # tar preserves empty Git directories, symlinks and executable modes.
+          $packageRoot = Join-Path (Split-Path -Parent $env:CARGO_HOME) 'evidence'
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          $archive = Join-Path $packageRoot 'p0-evidence.tar'
+          "MFS_EVIDENCE_ARCHIVE=$archive" >> $env:GITHUB_ENV
+          tar -cf $archive -C $env:MFS_REFERENCE_ROOT .
+          if ($LASTEXITCODE -ne 0) { throw 'Evidence packaging failed' }
+          $restored = Join-Path $packageRoot 'restored'
+          New-Item -ItemType Directory -Path $restored | Out-Null
+          tar -xf $archive -C $restored
+          if ($LASTEXITCODE -ne 0) { throw 'Evidence restoration failed' }
+          cargo xtask reference verify --root $restored
+          if ($LASTEXITCODE -ne 0) { throw 'Restored evidence verification failed' }
+      - name: Upload engineering evidence
+        if: always()
         uses: actions/upload-artifact@v7
         with:
           name: p0-evidence-${{ matrix.os }}
-          path: ${{ env.MFS_REFERENCE_ROOT }}
-          include-hidden-files: true
+          path: ${{ env.MFS_EVIDENCE_ARCHIVE }}
           if-no-files-found: error

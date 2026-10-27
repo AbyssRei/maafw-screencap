@@ -92,9 +92,9 @@ fn command(program: &str, args: &[&OsStr], directory: &Path) -> Result<Vec<u8>> 
 }
 
 fn git(directory: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    command(
-        "git",
-        &args.iter().map(OsStr::new).collect::<Vec<_>>(),
-        directory,
-    )
+    // Downloaded evidence can live deeper than the original runner workspace.
+    // Scope long-path support to this process; never alter the user's Git config.
+    let mut arguments: Vec<&OsStr> = vec!["-c".as_ref(), "core.longpaths=true".as_ref()];
+    arguments.extend(args.iter().map(OsStr::new));
+    command("git", &arguments, directory)
 }

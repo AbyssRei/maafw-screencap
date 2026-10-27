@@ -61,6 +61,8 @@ cargo xtask native --desktop --offline-inputs runs/<prepared-run-id>/manifest.js
 
 实际记录格式由 `xtask/src/records.rs`、`reference.rs`、`batch.rs` 的版本化 serde 结构及校验逻辑维护，未知字段会失败。`manifest.json` 仅索引 baselines/patches/runs；已完成来源记录与运行记录不覆盖，运行中新失败保留在新目录。准备中断的目录保留以供检查，未索引目录不是有效基线。Cargo.lock 只约束同次验证与离线重建，不作为后续在线构建的版本约束。
 
+Actions 将 reference 先打包为 `p0-evidence.tar`，保留 Git 所需空目录、符号链接和执行权限，再解包并执行 `reference verify` 后上传。下载 artifact 后先解包 tar；不要直接把展开的 reference 文件列表当成可保留上述元数据的归档。校验工具对 Git 子进程启用长路径支持，不修改宿主 Git 全局配置。实际失败状态保留在原运行记录，证据包校验通过不把失败的捕获或构建改记为通过。
+
 ## 构建责任与启动顺序
 
 | 入口 | 职责 | 输入/输出边界 |
