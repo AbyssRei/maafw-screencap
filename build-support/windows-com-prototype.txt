@@ -27,8 +27,43 @@ IDXGIAdapter::GetDesc
 CreateDirect3D11DeviceFromDXGIDevice
 IDirect3DDxgiInterfaceAccess::GetInterface
 Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice
-Windows.Graphics.Capture.Direct3D11CaptureFramePool::{Create,TryGetNextFrame,FrameArrived,Close}
+Windows.Graphics.Capture.Direct3D11CaptureFramePool::{TryGetNextFrame,FrameArrived,Close}
+Windows.Graphics.Capture.IDirect3D11CaptureFramePoolStatics::Create
 # Explicit closure/factory dependencies required by windows-bindgen 0.100's
 # narrow member projection; these do not enable CreateFreeThreaded behavior.
 Windows.Graphics.Capture.IDirect3D11CaptureFramePoolStatics2::{}
 Windows.Foundation.TypedEventHandler
+# P0 real-window FramePool probes use Create (not CreateFreeThreaded) on an MTA
+# with an owned current-thread dispatcher. Each driver type is tested explicitly.
+D3D_DRIVER_TYPE_HARDWARE
+IGraphicsCaptureItemInterop::CreateForWindow
+Windows.Graphics.Capture.GraphicsCaptureItem::Size
+Windows.Graphics.Capture.GraphicsCaptureSession::{StartCapture,Close,IsCursorCaptureEnabled}
+Windows.Graphics.Capture.IGraphicsCaptureSessionStatics::IsSupported
+Windows.Graphics.Capture.Direct3D11CaptureFramePool::CreateCaptureSession
+Windows.Graphics.Capture.Direct3D11CaptureFrame::{Surface,ContentSize,Close}
+CreateDispatcherQueueController
+DQTYPE_THREAD_CURRENT
+DQTAT_COM_NONE
+Windows.System.DispatcherQueueController::ShutdownQueueAsync
+Windows.System.IDispatcherQueueControllerStatics::{}
+Windows.Graphics.Capture.IGraphicsCaptureItemStatics::{}
+Windows.Graphics.Capture.IGraphicsCaptureItemStatics2::{}
+PeekMessageW
+TranslateMessage
+DispatchMessageW
+PM_REMOVE
+WM_QUIT
+GetCurrentThreadId
+CreateWindowExW
+DestroyWindow
+WS_POPUP
+WS_VISIBLE
+GetClientRect
+GetDC
+ReleaseDC
+CreateSolidBrush
+DeleteObject
+FillRect
+GdiFlush
+DwmFlush

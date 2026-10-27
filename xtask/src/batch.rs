@@ -81,7 +81,7 @@ pub fn run(args: &[String]) -> Result<()> {
         pending: vec![
             "Complete responsibility review and method/target parity matrix".into(),
             "Independent unpatched reference executable and latest-source OpenCV adapter".into(),
-            "FramePool capture/events, hardware DXGI and backend-specific native shutdown".into(),
+            "Complete FramePool failure/resize/permission matrix, Desktop Duplication and other backend shutdown".into(),
             "Linux PipeWire/Wlr and macOS ScreenCaptureKit native prototypes".into(),
             "Three native Actions runner results, platform dependency isolation and AUTO/ON/OFF"
                 .into(),
@@ -396,6 +396,7 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
         "build.rs",
         "build-support/windows-prototype.txt",
         "build-support/windows-com-prototype.txt",
+        "scripts/archive-evidence.ps1",
         "xtask/src/main.rs",
     ] {
         if !source.join(required).is_file() {

@@ -84,7 +84,7 @@ P0 验收：在三个原生平台分别验证模块、运行依赖、原生探�
 
 P0 验收：原生取帧、GUID/HRESULT、调用约定、COM apartment、引用计数、WinRT 接口及事件回调、注销排空、D3D/DXGI 对象与链接。发现绑定缺口时记录证据并讨论必要窄桥接，不默认为已覆盖。
 
-当前 COM 原型覆盖宿主 STA 拒绝 MTA、成功初始化的逐次配平、显式 WARP D3D11/DXGI/WinRT 的 COM 身份往返与引用保活，以及 staging 实际像素读回和独立 CPU 存储。FramePool 另覆盖工厂、未启动会话的空帧结果及事件注册释放；rich 投影将原生成功空帧包装成空错误，迁移必须在窄 ABI 边界保持上游空帧语义。FramePool 真实事件/捕获及硬件 DXGI 尚未验证。原型命令和 feature 见[开发指南](../guides/development.md#当前仓库与本机命令)，实际结果仍按运行批次外置；该原型没有迁移产品后端。
+当前 COM 原型覆盖宿主 STA 拒绝 MTA、成功初始化的逐次配平、显式 WARP D3D11/DXGI/WinRT 的 COM 身份往返与引用保活，以及 staging 实际像素读回和独立 CPU 存储。FramePool 覆盖工厂、空帧、注册释放及受控窗口的实际事件/捕获：硬件和 WARP 为独立显式用例，各执行 20 次生命周期。rich 投影将原生成功空帧包装成空错误，迁移必须在窄 ABI 边界保持上游空帧语义；连续 MTA rundown 原型还复现了生成的进程级工厂缓存访问违规，当前用通道内显式工厂并在 uninit 前释放。它没有引入永久 MTA 引用或 CreateFreeThreaded。Desktop Duplication、完整 FramePool 异常/重建/权限矩阵仍待验证。原型命令和 feature 见[开发指南](../guides/development.md#当前仓库与本机命令)，实际结果仍按运行批次及平台外置；该原型没有迁移产品后端。
 
 依据：[Microsoft windows-rs 官方说明](https://github.com/microsoft/windows-rs)。
 

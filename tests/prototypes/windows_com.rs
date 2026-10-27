@@ -1,8 +1,8 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-// This private P0 prototype proves projection/ownership boundaries. WARP is
-// selected explicitly; success does not establish hardware or capture support.
+// Private P0 projection/ownership probes. Explicit hardware/WARP real-window
+// cases live in framepool; none of these tests is a migrated product backend.
 #[allow(
     non_snake_case,
     non_camel_case_types,
@@ -17,6 +17,37 @@ mod native {
 use native::*;
 use std::{error::Error, marker::PhantomData, rc::Rc};
 use windows_core::{IUnknown, Interface};
+
+#[path = "windows_framepool.rs"]
+mod framepool;
+
+fn create_frame_pool(
+    device: &IDirect3DDevice,
+    size: SizeInt32,
+) -> windows_core::Result<Direct3D11CaptureFramePool> {
+    // Generated class statics cache factories for the process. Keep an explicit
+    // factory on this initialized MTA instead, and release it before uninit.
+    let factory: IDirect3D11CaptureFramePoolStatics =
+        windows_core::factory::<Direct3D11CaptureFramePool, _>()?;
+    let mut output = std::ptr::null_mut();
+    // SAFETY: Valid factory/device on this MTA, exact generated signature and
+    // writable output. Adopt the one returned reference only after success.
+    unsafe {
+        (Interface::vtable(&factory).Create)(
+            factory.as_raw(),
+            device.as_raw(),
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            1,
+            size,
+            &mut output,
+        )
+        .ok()?;
+        if output.is_null() {
+            return Err(windows_core::Error::empty());
+        }
+        Ok(Direct3D11CaptureFramePool::from_raw(output))
+    }
+}
 
 struct Apartment(PhantomData<Rc<()>>);
 impl Apartment {
@@ -140,10 +171,8 @@ fn preserves_framepool_empty_result_and_releases_unstarted_event_registration() 
         // SAFETY: Valid live DXGI interface; generated wrapper adopts its result.
         let runtime: IDirect3DDevice =
             unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? }.cast()?;
-        let pool = Direct3D11CaptureFramePool::Create(
+        let pool = create_frame_pool(
             &runtime,
-            DirectXPixelFormat::B8G8R8A8UIntNormalized,
-            1,
             SizeInt32 {
                 Width: 32,
                 Height: 24,

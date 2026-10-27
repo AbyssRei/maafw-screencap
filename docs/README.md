@@ -1,6 +1,6 @@
 # 文档导航与维护约定
 
-日期：2026-10-27。P0 实施中：独立 xtask、外部来源记录校验、分配原型、显式 Windows GDI 原型、COM apartment 和 WARP D3D/DXGI/WinRT 读回原型已实现，Actions 原生矩阵已定义；完整 P0 门禁待完成。产品入口仍为 Hello World，迁移后端、捕获库及绑定尚未实现。实际命令及原型边界见[开发指南](guides/development.md)。
+日期：2026-10-27。P0 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；结果按平台记录，完整 P0 门禁待完成。产品入口仍为 Hello World，迁移后端、捕获库及绑定尚未实现。实际命令及原型边界见[开发指南](guides/development.md)。
 
 ## 阅读顺序与权威来源
 
