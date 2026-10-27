@@ -4,7 +4,7 @@
 
 ## 当前仓库与本机命令
 
-产品入口仍是 Rust 2024 Hello World binary。独立 workspace xtask 与 P0 测试已实现，尚无迁移后端、产品捕获库或 binding。`.github/workflows/p0.yml` 定义三个原生 runner 的工具验证和现有原型；Linux/macOS 原生捕获尚未实现，不能将矩阵通过解释为 P0 通过。命令从仓库根执行，本机只验证宿主 OS，不以 WSL 代替 Linux 验收。
+产品入口仍是 Rust 2024 Hello World binary。独立 workspace xtask 与 P0 测试已实现，尚无迁移后端、产品捕获库或 binding。`.github/workflows/p0.yml` 定义三个原生 runner 的工具验证和现有原型；Linux 已验证私有 PipeWire 流；macOS ScreenCaptureKit 主线程原型已实现、待首次原生验证，不能将矩阵通过解释为 P0 通过。命令从仓库根执行，本机只验证宿主 OS，不以 WSL 代替 Linux 验收。
 
 先更新 nightly，再改写 CARGO_HOME；若已经改写，使用 `rustup update nightly --no-self-update`。随后将可清理缓存及构建输出放入同级 deps：
 
@@ -45,6 +45,7 @@ cargo xtask check
 cargo xtask batch --desktop  # Windows 显式桌面批次；其他平台暂不加此参数
 cargo xtask native --desktop # Windows x64：VS2026/MSBuild、C++/OpenCV 互操作及独立参考
 cargo xtask pipewire-prototype # Linux x64 原生环境：私有 daemon/C 源和 Rust 取帧原型
+cargo xtask macos-prototype    # macOS arm64：受控窗口与 objc2/ScreenCaptureKit 主线程原型
 ```
 
 - `reference prepare` 获取固定上游与固定 PR head，核验两个提交及唯一变更文件，外置保存完整未打补丁源码归档、相关文件发现清单、许可声明记录、累计补丁和 head 文件。它只做来源准备，不应用补丁，不构建参考程序，也不生成已验收 U/P。可用 `--root <目录>` 或 `MFS_REFERENCE_ROOT` 指定独立参考根。
@@ -57,6 +58,8 @@ cargo xtask pipewire-prototype # Linux x64 原生环境：私有 daemon/C 源和
 `native` 是显式原生验收入口，当前仅实现 Windows x64 + VS2026/MSBuild，需要 Git、curl、GitHub CLI 和 PowerShell。它先完成本次 Rust 批次，再在线解析 CMake、OpenCV 和 Boost 最新正式版，以及 MaaUtils 正式版或无正式版时的维护分支。原生源码、工具归档、配置、SDK/编译器身份、日志和产物仍在 reference/deps，产品基础构建不触发这些步骤。OpenCV 只选择所需模块及其传递依赖，保留 CPU 分发、SIMD 与 IPP/HAL，并验证实际配置；未选择的 DNN/OCR 依赖不进入参考构建。
 
 `pipewire-prototype` 在原生 Linux x64 上执行，自有 C 视频源、20 次流生命周期及完整退出已通过原生 Actions；早期 SPA 夹具清理断言和各次失败证据仍保留在外部批次，本机 Windows 不执行或声称 Linux 验收。入口解析 PipeWire 官方最新 release 与 Python 工具正式版，从源码构建隔离前缀，归档源码、wheels、配置和日志；创建独立 runtime/socket、无宿主设备的 daemon 和独立自有 C 视频源（RGB 行距 96 字节，目标每行 84 字节，填充显式初始化）。私有 0700 socket 显式使用无需 session manager 的访问模式，不参与宿主授权。Rust 测试执行 20 次连接/停止，每次通过移交的 fd 和明确 node ID 接入，检查 RGB 协商、受检 stride/offset、32 个真实样本、原生缓冲重复使用与逐次归还、回调线程、注销/stop 及 CPU 持帧。高层绑定用于 loop/context/stream/POD；借助窄 sys 缓冲租约保存底层 queue 返回码，panic 被封在 Rust 回调内。原生源和 daemon 由编排进程启动和依次停止，分别要求自然处理 SIGTERM 后退出 0，不接受强制结束或提前退出；已验证生产端和消费端各 640 次 dequeue/queue 配平，逐次原生缓冲复用与 CPU 像素断言通过，不访问宿主默认 remote。该入口暂不提供离线重放；Rust 门禁失败时可继续收集诊断原型结果，但最终命令仍失败，不能当成已验收。Portal 桌面来源、DMA-BUF、完整格式/失败矩阵及 Wlr 均未覆盖。
+
+`macos-prototype` 已实现、待首次原生编译/捕获。在 macOS arm64 记录 Xcode/SDK、编译器、部署目标与 Mach-O 依赖，从源码快照构建不使用 libtest 工作线程的显式程序；在进程主线程管理自有 AppKit 窗口和原生 run loop。沿固定上游 sample-buffer 截图入口验证 20 次受控颜色取帧、受检 BGRA 行复制、像素锁/解锁、完成块及其原生输入释放、独立 CPU 持帧与跨线程消费，并验证调用方放弃请求后晚到结果丢弃和上下文保活。回调只捕获自有状态，Rust panic 封在块内；不为原生对象声明 Send/Sync。未授权返回明确 missing_environment，仍使门禁失败，不发起授权弹窗或修改 TCC；构建、Clippy、捕获及环境缺失分别记录。当前仅记录 runner 的 Apple SDK 身份，最新正式 SDK 的政策核验、原始 C++ 对照及完整目标/格式/失败矩阵仍待完成。
 
 私有 C++/OpenCV 适配器验证 C 布局和失败输出、真实外部线程回调、stop 排空及回调内拒绝、原生像素覆写/释放后的 Rust 独立持帧、跨线程释放和 Rust/C++ 异常边界。独立参考程序直接编译固定未打补丁的 `GdiScreencap.cpp`，在原调用点执行上游转换；其构建、加载/FFI 和受控窗口实际捕获分别记账。当前参考覆盖只包括 GDI，不代表六种 Windows 方法、完整 U 或 P0 已验收。具体构建/原生测试结果以各批次记录为准。
 

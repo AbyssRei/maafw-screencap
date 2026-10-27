@@ -3,6 +3,7 @@
 
 mod batch;
 mod dependencies;
+mod macos;
 mod native;
 mod pipewire;
 mod quality;
@@ -33,6 +34,9 @@ fn run() -> Result<()> {
     }
     if argv.first().is_some_and(|arg| arg == "pipewire-prototype") {
         return pipewire::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "macos-prototype") {
+        return macos::run(&argv[1..]);
     }
     let mut args = argv.into_iter();
     match (args.next().as_deref(), args.next().as_deref()) {
@@ -66,6 +70,7 @@ fn run() -> Result<()> {
                       cargo xtask batch [--desktop]\n\n\
                       cargo xtask native [--desktop] [--offline-inputs <run manifest>]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
+                      cargo xtask macos-prototype     # native macOS arm64 only\n\n\
                       prepare fetches the fixed upstream and cumulative PR patch; it does not\n\
                       apply the patch, build a reference executable, or assert P0 acceptance.\n\
                       verify checks record versions, identities, paths, Git blobs and SHA-256.\n\

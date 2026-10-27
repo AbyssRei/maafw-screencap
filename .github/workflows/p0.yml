@@ -47,9 +47,9 @@ jobs:
           }
       - name: Resolve current dependencies and archive fixed sources
         run: cargo xtask reference prepare
-      - name: Validate tools and implemented prototypes, recording missing gates
+      - name: Validate native macOS ScreenCaptureKit prototype
         if: runner.os == 'macOS'
-        run: cargo xtask batch
+        run: cargo xtask macos-prototype
       - name: Validate Linux native PipeWire prototype
         if: runner.os == 'Linux'
         run: cargo xtask pipewire-prototype

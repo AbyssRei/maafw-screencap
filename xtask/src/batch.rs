@@ -367,8 +367,11 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
         "build-support/windows-com-prototype.txt",
         "scripts/archive-evidence.ps1",
         "scripts/prepare-pipewire.ps1",
+        "scripts/prepare-macos.ps1",
         "tests/fixtures/pipewire-probe.conf",
         "tests/fixtures/pipewire-source.c",
+        "tests/prototypes/macos_main.rs",
+        "tests/prototypes/macos_screen_capture.rs",
         "xtask/src/main.rs",
     ] {
         if !source.join(required).is_file() {
@@ -538,7 +541,7 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         records::verify(root, artifact)?;
     }
     for check in &run.checks {
-        if !["passed", "failed"].contains(&check.status.as_str()) {
+        if !["passed", "failed", "missing_environment"].contains(&check.status.as_str()) {
             return Err("invalid check status".into());
         }
     }
