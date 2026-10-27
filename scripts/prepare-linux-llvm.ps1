@@ -74,7 +74,11 @@ function Initialize-LinuxLlvm([string]$ReferenceRoot,[string]$DepsRoot,[string]$
             if(-not [IO.Path]::GetFullPath($path).StartsWith($depsAbsolute,[StringComparison]::Ordinal)) {throw 'LLVM installation escaped the dependency cache'}
         }
         New-Item -ItemType Directory -Path $stage|Out-Null
-        $entries=@(& tar -tf $archive)
+        # Official LLVM zstd packages use a long window exceeding zstd's
+        # default 128 MiB decoder limit. Stream through an explicit bounded
+        # decoder for both inventory and extraction; do not expand a full tar.
+        $decoder=if($asset.name.EndsWith('.tar.zst')){@('--use-compress-program=zstd --memory=2048MB')}else{@()}
+        $entries=@(& tar @decoder -tf $archive)
         if($LASTEXITCODE -ne 0){throw 'Cannot inspect the official LLVM package'}
         $allMembers=Join-Path $inputRoot llvm-archive-members.txt
         $entries|Set-Content -LiteralPath $allMembers -Encoding utf8NoBOM
@@ -100,7 +104,7 @@ function Initialize-LinuxLlvm([string]$ReferenceRoot,[string]$DepsRoot,[string]$
         $members=Join-Path $inputRoot llvm-package-members.txt
         $selected|Set-Content -LiteralPath $members -Encoding utf8NoBOM
         Save $members
-        Step llvm-unpack tar @('-xf',$archive,'-C',$stage,'--no-same-owner','--no-same-permissions','--no-recursion',"--strip-components=$strip",'--verbatim-files-from','-T',$members)
+        Step llvm-unpack tar ($decoder+@('-xf',$archive,'-C',$stage,'--no-same-owner','--no-same-permissions','--no-recursion',"--strip-components=$strip",'--verbatim-files-from','-T',$members))
         foreach($name in @('clang','clang++','llvm-config','ld.lld','llvm-ar','llvm-ranlib')) {
             if(-not(Test-Path -LiteralPath (Join-Path $stage "bin/$name") -PathType Leaf)){throw "LLVM package misses $name"}
         }

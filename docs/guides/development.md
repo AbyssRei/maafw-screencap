@@ -44,6 +44,8 @@ Linux 原型准备现在先查询 LLVM 维护者的最新正式版，校验官�
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像，选中正式版仍须完成实际编译/捕获验证；此新选择路径尚待原生验证。
 
+首次 LLVM 原生准备在包摘要校验后遇到 zstd 默认解码内存上限，失败结果已保留；读取 zstd 包现在对清单与解压均显式指定 2048 MiB 上限，继续流式读取，未改回旧编译器。
+
 ```powershell
 cargo xtask reference prepare
 cargo xtask reference verify
