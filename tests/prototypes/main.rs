@@ -13,3 +13,6 @@ mod windows_com;
 
 #[cfg(all(target_os = "linux", feature = "prototype-linux-pipewire"))]
 mod linux_pipewire;
+
+#[cfg(all(target_os = "linux", feature = "prototype-linux-wlr"))]
+mod linux_wlr;

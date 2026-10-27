@@ -53,6 +53,11 @@ jobs:
       - name: Validate Linux native PipeWire prototype
         if: runner.os == 'Linux'
         run: cargo xtask pipewire-prototype
+      - name: Validate Linux native Wlr screencopy prototype
+        if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask wlr-prototype
       - name: Validate Windows native interop and independent reference
         if: runner.os == 'Windows'
         env:

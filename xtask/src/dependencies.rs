@@ -8,7 +8,12 @@ use std::collections::{HashMap, HashSet};
 
 // User-approved policy for the selected bindings: the binding itself remains
 // latest stable; its exclusive transitive graph may follow upstream constraints.
-const CONSTRAINED_BINDINGS: &[&str] = &["pipewire"];
+const CONSTRAINED_BINDINGS: &[&str] = &[
+    "pipewire",
+    "wayland-client",
+    "wayland-backend",
+    "wayland-protocols-wlr",
+];
 
 fn closure(
     roots: impl IntoIterator<Item = String>,
