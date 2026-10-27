@@ -382,6 +382,19 @@ fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Result<()> {
         fs::copy(from, &to)?;
         run.inputs.push(records::artifact(root, &to)?);
     }
+    for required in [
+        "Cargo.toml",
+        "build.rs",
+        "build-support/windows-prototype.txt",
+        "xtask/src/main.rs",
+    ] {
+        if !source.join(required).is_file() {
+            return Err(format!(
+                "required source input omitted from snapshot (check Git ignore rules): {required}"
+            )
+            .into());
+        }
+    }
     for (name, args) in [
         ("product-git-head.txt", vec!["rev-parse", "HEAD"]),
         ("working-tree.patch", vec!["diff", "HEAD", "--binary"]),

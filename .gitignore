@@ -1193,3 +1193,7 @@ zig-pkg/
 build/
 build-*/
 docgen_tmp/
+
+# Maintained native declaration inputs are source, not build output.
+!/build-support/
+!/build-support/**

@@ -1,0 +1,20 @@
+# P0 private Win32 projection. This is not the SDK's C ABI or a product backend.
+GetLastError
+HWND
+BitBlt
+CreateCompatibleBitmap
+CreateCompatibleDC
+CreateSolidBrush
+DeleteDC
+DeleteObject
+FillRect
+GetBitmapBits
+GetDC
+ReleaseDC
+SelectObject
+SRCCOPY
+CreateWindowExW
+DestroyWindow
+GetClientRect
+WS_POPUP
+WS_VISIBLE
