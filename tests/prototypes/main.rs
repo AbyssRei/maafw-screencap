@@ -10,3 +10,6 @@ mod windows;
 
 #[cfg(all(target_os = "windows", feature = "prototype-windows-com"))]
 mod windows_com;
+
+#[cfg(all(target_os = "linux", feature = "prototype-linux-pipewire"))]
+mod linux_pipewire;

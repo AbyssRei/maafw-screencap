@@ -112,6 +112,8 @@ Rust 管理捕获流程、缓冲和停止逻辑。保持 PipeWire thread-loop �
 
 P0/P1 验收：PipeWire 取帧、锁/通知/停止、buffer 归还和初始化配平；Wlr 协议生成、事件顺序、队列隔离、fd 移交、断连和退出；系统库缺失时的配置行为。绑定选型不代替原生行为对照。
 
+实施中已确认的依赖取舍：最新正式版 pipewire 绑定仍对部分生成/解析工具约束旧主版本。用户确认保持最新正式版绑定，允许其专属传递依赖使用上游约束内最新版，并持续检查、外置记录与全局最新版的差距；直接依赖及非绑定依赖链共用版本不适用此豁免。门禁同时检查约束内是否落后，不把旧 lockfile 当作约束。具体政策维护在[计划第 5.6 节](../plans/maafw-screencap-extraction-plan.md#56-依赖选型与最新版本策略)。
+
 依据：
 
 - [PipeWire ThreadLoop](https://pipewire.pages.freedesktop.org/pipewire-rs/pipewire/thread_loop/struct.ThreadLoop.html)

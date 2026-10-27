@@ -7,7 +7,6 @@ use crate::{
     repository,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -125,19 +124,19 @@ pub fn run(args: &[String]) -> Result<()> {
         fs::copy(repository().join("Cargo.lock"), &lock)?;
         run.inputs.push(records::artifact(&root, &lock)?);
         let latest_path = inputs.join("latest-crates.json");
-        let (status, message) = match latest_crates(&metadata) {
+        let (status, message) = match crate::dependencies::latest(&metadata) {
             Ok(value) => {
                 let all_latest = value
                     .as_array()
                     .unwrap()
                     .iter()
-                    .all(|entry| entry["resolved"] == entry["latest_stable"]);
+                    .all(|entry| entry["satisfies_policy"] == true);
                 records::create_json(&latest_path, &value)?;
                 run.inputs.push(records::artifact(&root, &latest_path)?);
                 if all_latest {
                     (
                         "passed",
-                        "All registry packages match crates.io latest stable releases.".into(),
+                        "Latest direct dependencies and required transitive releases verified; binding constraint gaps are recorded in latest-crates.json.".into(),
                     )
                 } else {
                     ("failed", "Resolved packages lag latest stable releases; inspect latest-crates.json and adapt.".into())
@@ -187,7 +186,6 @@ pub fn run(args: &[String]) -> Result<()> {
                     "warnings",
                 ],
             ),
-            ("project-conventions", vec!["xtask", "check"]),
         ] {
             check(
                 &root,
@@ -199,6 +197,18 @@ pub fn run(args: &[String]) -> Result<()> {
                 Some(&build_env),
             )?;
         }
+        // Clippy can change Cargo's fingerprint for xtask. Re-enter the running
+        // executable without asking Cargo to replace that live file on Windows.
+        let executable = env::current_exe()?;
+        check(
+            &root,
+            &logs,
+            &mut run,
+            "project-conventions",
+            executable.to_str().ok_or("non-UTF-8 xtask executable")?,
+            &["check"],
+            Some(&build_env),
+        )?;
         if desktop {
             check(
                 &root,
@@ -326,47 +336,6 @@ fn passed(run: &Run, name: &str) -> bool {
         .any(|check| check.name == name && check.status == "passed")
 }
 
-fn latest_crates(metadata: &[u8]) -> Result<Value> {
-    let metadata: Value = serde_json::from_slice(metadata)?;
-    let mut records = Vec::new();
-    for package in metadata["packages"].as_array().ok_or("packages missing")? {
-        if !package["source"]
-            .as_str()
-            .is_some_and(|source| source.starts_with("registry+"))
-        {
-            continue;
-        }
-        let name = package["name"].as_str().ok_or("package name missing")?;
-        let url = format!("https://crates.io/api/v1/crates/{name}");
-        let response = command(
-            "curl",
-            &[
-                "--fail".as_ref(),
-                "--silent".as_ref(),
-                "--show-error".as_ref(),
-                "--location".as_ref(),
-                "--connect-timeout".as_ref(),
-                "10".as_ref(),
-                "--max-time".as_ref(),
-                "60".as_ref(),
-                "--proto".as_ref(),
-                "=https".as_ref(),
-                "--user-agent".as_ref(),
-                "maafw-screencap-p0".as_ref(),
-                url.as_ref(),
-            ],
-            repository(),
-        )
-        .map_err(|error| format!("latest-release query {url}: {error}"))?;
-        let response: Value = serde_json::from_slice(&response)?;
-        let latest = response["crate"]["max_stable_version"]
-            .as_str()
-            .ok_or("latest stable version missing")?;
-        records.push(json!({ "name": name, "resolved": package["version"], "latest_stable": latest, "source": url, "license": package["license"] }));
-    }
-    Ok(Value::Array(records))
-}
-
 pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Result<()> {
     let source = inputs.join("product-source");
     fs::create_dir(&source)?;
@@ -397,6 +366,8 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
         "build-support/windows-prototype.txt",
         "build-support/windows-com-prototype.txt",
         "scripts/archive-evidence.ps1",
+        "scripts/prepare-pipewire.ps1",
+        "tests/fixtures/pipewire-probe.conf",
         "xtask/src/main.rs",
     ] {
         if !source.join(required).is_file() {

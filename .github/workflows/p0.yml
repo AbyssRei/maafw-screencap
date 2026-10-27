@@ -48,8 +48,11 @@ jobs:
       - name: Resolve current dependencies and archive fixed sources
         run: cargo xtask reference prepare
       - name: Validate tools and implemented prototypes, recording missing gates
-        if: runner.os != 'Windows'
+        if: runner.os == 'macOS'
         run: cargo xtask batch
+      - name: Validate Linux native PipeWire prototype
+        if: runner.os == 'Linux'
+        run: cargo xtask pipewire-prototype
       - name: Validate Windows native interop and independent reference
         if: runner.os == 'Windows'
         env:

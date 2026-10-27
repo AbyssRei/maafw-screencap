@@ -10,12 +10,16 @@ license = "LGPL-3.0-or-later"
 default = []
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows-com = ["prototype-windows", "dep:windows-core", "dep:windows-future"]
+prototype-linux-pipewire = ["dep:pipewire"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-link = { version = "0.100", optional = true }
 # This prototype consumes projected interfaces; it does not author COM classes.
 windows-core = { version = "0.100", optional = true, default-features = false, features = ["std"] }
 windows-future = { version = "0.100", optional = true }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+pipewire = { version = "0.10", optional = true, features = ["v1_2_0"] }
 
 [build-dependencies]
 windows-bindgen = { version = "0.100", optional = true }
