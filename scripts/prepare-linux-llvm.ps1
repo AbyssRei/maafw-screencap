@@ -77,7 +77,9 @@ function Initialize-LinuxLlvm([string]$ReferenceRoot,[string]$DepsRoot,[string]$
         # Official LLVM zstd packages use a long window exceeding zstd's
         # default 128 MiB decoder limit. Stream through an explicit bounded
         # decoder for both inventory and extraction; do not expand a full tar.
-        $decoder=if($asset.name.EndsWith('.tar.zst')){@('--use-compress-program=zstd --memory=2048MB')}else{@()}
+        # Keep even one argument as an array: PowerShell otherwise unwraps
+        # the conditional output and splats a scalar string as characters.
+        [string[]]$decoder=if($asset.name.EndsWith('.tar.zst')){@('--use-compress-program=zstd --memory=2048MB')}else{@()}
         $entries=@(& tar @decoder -tf $archive)
         if($LASTEXITCODE -ne 0){throw 'Cannot inspect the official LLVM package'}
         $allMembers=Join-Path $inputRoot llvm-archive-members.txt
