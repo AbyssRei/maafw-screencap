@@ -79,8 +79,8 @@ static void state_changed(void *userdata, enum pw_stream_state old,
     if (state == PW_STREAM_STATE_ERROR) {
         fail(p, error != NULL ? error : "producer stream failed");
     } else if (state == PW_STREAM_STATE_STREAMING) {
-        const struct timespec start = { .tv_nsec = 1 };
-        const struct timespec interval = { .tv_nsec = 40000000 };
+        struct timespec start = { .tv_nsec = 1 };
+        struct timespec interval = { .tv_nsec = 40000000 };
         if (pw_loop_update_timer(pw_main_loop_get_loop(p->loop), p->timer,
                                  &start, &interval, false) < 0)
             fail(p, "producer timer start failed");
