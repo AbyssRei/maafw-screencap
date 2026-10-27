@@ -203,7 +203,9 @@ try{
     $wlrPackage='wlroots-'+(($wlr.version -split '\.')[0..1]-join '.')
     VerifyPackage $wlr $wlrPackage
     $flagPath=Join-Path $inputRoot compositor-flags.json
-    & $python -c 'import json,shlex,subprocess,sys;print(json.dumps(shlex.split(subprocess.check_output(["pkg-config","--cflags","--libs",sys.argv[1]],text=True))))' $wlrPackage > $flagPath
+    # The fixture directly calls libwayland-server. wlroots' private link
+    # dependencies do not supply those symbols to this executable.
+    & $python -c 'import json,shlex,subprocess,sys;print(json.dumps(shlex.split(subprocess.check_output(["pkg-config","--cflags","--libs",*sys.argv[1:]],text=True))))' $wlrPackage wayland-server > $flagPath
     if($LASTEXITCODE -ne 0){throw 'Native fixture flags query failed'};Save $flagPath
     $flags=Get-Content -LiteralPath $flagPath -Raw|ConvertFrom-Json
     $binary=Join-Path $native mfs-p0-wlr-compositor
