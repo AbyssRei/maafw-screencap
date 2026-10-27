@@ -357,6 +357,8 @@ try {
         @((Join-Path $productRoot LICENSE), 'maafw-screencap-LICENSE.txt'),
         @((Join-Path $UpstreamRoot LICENSE.md), 'MaaFramework-LICENSE.md'),
         @((Join-Path $maautils LICENSE.md), 'MaaUtils-LICENSE.md'),
+        @((Join-Path $opencv LICENSE), 'OpenCV-LICENSE.txt'),
+        @((Join-Path $opencv COPYRIGHT), 'OpenCV-COPYRIGHT.txt'),
         @((Join-Path $boost LICENSE_1_0.txt), 'Boost-LICENSE.txt')
     )) {
         Copy-Item -LiteralPath $item[0] -Destination (Join-Path $licenses $item[1])
