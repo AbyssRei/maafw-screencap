@@ -249,7 +249,12 @@ try {
     Save-Input $maaPolicy
     $maautils = Source 'MaaXYZ/MaaUtils' $maaRef MaaUtils
 
-    $options = @('-DBUILD_LIST=core,imgproc,imgcodecs', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_WITH_STATIC_CRT=OFF',
+    # OpenCV enables generic ASM before detecting its platform. A runner's GNU
+    # assembler can load CMake's Windows-GNU platform and contaminate an MSVC
+    # build with MINGW/pthread/.a requirements. Use the same installed compiler
+    # as C/C++; this does not disable separate NASM or CPU-dispatched kernels.
+    $compiler = Join-Path $vs.installationPath "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+    $options = @("-DCMAKE_ASM_COMPILER=$compiler", '-DBUILD_LIST=core,imgproc,imgcodecs', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_WITH_STATIC_CRT=OFF',
         '-DBUILD_TESTS=OFF', '-DBUILD_PERF_TESTS=OFF', '-DBUILD_EXAMPLES=OFF', '-DBUILD_opencv_apps=OFF',
         '-DWITH_PROTOBUF=OFF', '-DWITH_FLATBUFFERS=OFF', '-DWITH_IPP=ON', '-DBUILD_IPP_IW=ON')
     $opencvDownloads = Join-Path $DepsRoot downloads/opencv
@@ -269,6 +274,7 @@ try {
         cmake_binary_sha256 = (Get-FileHash -LiteralPath $cmake -Algorithm SHA256).Hash.ToLowerInvariant()
         cpu_policy = 'OpenCV upstream default CPU baseline, dispatch, SIMD and applicable HAL/third-party optimizations retained'
         module_policy = 'No DNN/OCR/inference module is selected. Disable unused Protobuf/Flatbuffers discovery; OpenCV 5 otherwise exports an unbuilt libprotobuf target in this static subset.'
+        assembler_policy = 'Generic ASM uses the selected MSVC compiler to prevent GNU platform contamination. Separate NASM and optimized CPU kernels remain enabled.'
     }
     $configPath = Join-Path $inputsRoot native-configuration.json
     Write-NewJson $configPath $configuration
@@ -296,6 +302,10 @@ try {
     Save-Input $cvconfig
     $cvconfigText = Get-Content -LiteralPath $cvconfig -Raw
     $cacheText = Get-Content -LiteralPath $opencvCache -Raw
+    $selectedAssembler = ($cacheText -split "`n" | Where-Object { $_ -match '^CMAKE_ASM_COMPILER:(STRING|FILEPATH)=' }) -replace '^CMAKE_ASM_COMPILER:(STRING|FILEPATH)=', ''
+    if (-not $selectedAssembler -or [IO.Path]::GetFullPath($selectedAssembler.Trim()) -ne [IO.Path]::GetFullPath($compiler)) {
+        throw 'OpenCV generic ASM compiler differs from the selected MSVC toolchain'
+    }
     if ($cvconfigText -notmatch '(?m)^#define HAVE_IPP\s*$' -or
         $cacheText -notmatch '(?m)^CV_DISABLE_OPTIMIZATION:BOOL=OFF\s*$' -or
         $cacheText -notmatch '(?m)^CPU_DISPATCH:STRING=\S+') {
