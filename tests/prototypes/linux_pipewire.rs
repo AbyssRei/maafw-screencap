@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-// P0 feasibility only: an owned daemon/SPA source, not portal desktop capture
+// P0 feasibility only: an owned daemon/C source, not portal desktop capture
 // or the migrated upstream backend. No native object is declared Send/Sync.
 use pipewire as pw;
 use pw::{properties::properties, spa};
@@ -409,7 +409,7 @@ fn validate(pixels: &[u8]) -> Result<()> {
         [191, 0, 0],
         [0, 0, 191],
     ];
-    for y in 0..16_usize {
+    for y in 0..HEIGHT {
         for x in 0..WIDTH {
             let start = y
                 .checked_mul(WIDTH)
@@ -419,7 +419,7 @@ fn validate(pixels: &[u8]) -> Result<()> {
             let end = start.checked_add(3).ok_or("pixel span overflow")?;
             if pixels.get(start..end) != Some(&bars[x / 4]) {
                 return Err(format!(
-                    "native SPA RGB fixture mismatch at ({x},{y}): {:?}",
+                    "owned native RGB fixture mismatch at ({x},{y}): {:?}",
                     pixels.get(start..end)
                 )
                 .into());
@@ -430,8 +430,8 @@ fn validate(pixels: &[u8]) -> Result<()> {
 }
 
 #[test]
-#[ignore = "explicit private PipeWire daemon/native SPA fixture; native Linux Actions only"]
-fn captures_native_spa_pixels_returns_every_buffer_and_drains_callbacks() -> Result<()> {
+#[ignore = "explicit private PipeWire daemon/owned native source; native Linux Actions only"]
+fn captures_native_rgb_pixels_returns_every_buffer_and_drains_callbacks() -> Result<()> {
     let socket = std::env::var("MFS_P0_PIPEWIRE_SOCKET")?;
     let target = std::env::var("MFS_P0_PIPEWIRE_NODE_ID")?.parse::<u32>()?;
     let expected_version = std::env::var("MFS_P0_PIPEWIRE_VERSION")?;

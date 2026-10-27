@@ -18,6 +18,9 @@ $inputs = [Collections.Generic.List[object]]::new()
 $server = $null
 $serverOut = $null
 $serverError = $null
+$fixture = $null
+$fixtureOut = $null
+$fixtureError = $null
 $failed = $false
 
 function Artifact([string]$Path) {
@@ -44,6 +47,33 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
     } finally {
         $checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)})
         Write-Host "${Name}: $status"
+    }
+}
+function StopOwned([string]$Name, $Process, $OutputTask, $ErrorTask) {
+    if (-not $Process) { return }
+    $log = Join-Path $logsRoot "$Name-stop.log"
+    $status = 'passed'
+    try {
+        $unexpectedExit = $Process.HasExited
+        $forced = $false
+        if (-not $unexpectedExit) {
+            & /bin/kill -TERM $Process.Id
+            if($LASTEXITCODE -ne 0 -and -not $Process.HasExited) { $forced=$true; $Process.Kill() }
+            if(-not $Process.WaitForExit(10000)) { $Process.Kill(); $Process.WaitForExit(); $forced=$true }
+        }
+        if ($unexpectedExit -or $forced -or $Process.ExitCode -ne 0) { $status='failed' }
+        "owned_pid=$($Process.Id), exit=$($Process.ExitCode), unexpected_exit=$unexpectedExit, forced=$forced" | Set-Content -LiteralPath $log -Encoding utf8
+        foreach($item in @(@("$Name-stdout.log",$OutputTask),@("$Name-stderr.log",$ErrorTask))) {
+            $path=Join-Path $logsRoot $item[0]
+            $item[1].GetAwaiter().GetResult() | Set-Content -LiteralPath $path -Encoding utf8
+            Save $path
+        }
+    } catch {
+        $status='failed'
+        $_.Exception.ToString() | Add-Content -LiteralPath $log -Encoding utf8
+    } finally {
+        $checks.Add([ordered]@{name="$Name-stop";status=$status;log=(Artifact $log)})
+        $Process.Dispose()
     }
 }
 
@@ -99,8 +129,8 @@ try {
     Step pipewire-source-archive git @('-C',$source,'archive','--format=tar','--output',$archive,$commit)
     Save $archive
     $configuration = Join-Path $inputRoot native-configuration.json
-    $options = @('--buildtype=release','--libdir=lib','--wrap-mode=nodownload','-Dauto_features=disabled','-Ddocs=disabled','-Dman=disabled','-Dtests=disabled','-Dexamples=disabled','-Ddbus=disabled','-Dflatpak=disabled','-Dpipewire-jack=disabled','-Dpipewire-v4l2=disabled','-Dsession-managers=[]','-Drlimits-install=false','-Dsupport=enabled','-Dvideotestsrc=enabled','-Dvideoconvert=enabled')
-    Json $configuration ([ordered]@{pipewire_commit=$commit;pipewire_release=$release.tag_name;python_packages=$packages;compiler=(& cc --version | Out-String);options=$options;scope='Native SPA test source and capture client feasibility; no portal/desktop acceptance or migrated backend.'})
+    $options = @('--buildtype=release','--libdir=lib','--wrap-mode=nodownload','-Dauto_features=disabled','-Ddocs=disabled','-Dman=disabled','-Dtests=disabled','-Dexamples=disabled','-Ddbus=disabled','-Dflatpak=disabled','-Dpipewire-jack=disabled','-Dpipewire-v4l2=disabled','-Dsession-managers=[]','-Drlimits-install=false','-Dsupport=enabled','-Dvideotestsrc=disabled','-Dvideoconvert=enabled')
+    Json $configuration ([ordered]@{pipewire_commit=$commit;pipewire_release=$release.tag_name;python_packages=$packages;compiler=(& cc --version | Out-String);options=$options;scope='Owned native C producer and Rust capture client feasibility; no portal/desktop acceptance or migrated backend.'})
     Save $configuration
     $key = (Get-FileHash -LiteralPath $configuration -Algorithm SHA256).Hash.ToLowerInvariant()
     $native = Join-Path $DepsRoot "native/pipewire-$key"
@@ -136,6 +166,11 @@ try {
     $version = (& pkg-config --modversion libpipewire-0.3 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $version -ne $release.tag_name) { throw 'pkg-config selected a different PipeWire library' }
     $env:MFS_P0_PIPEWIRE_VERSION = $version
+    $fixtureBinary = Join-Path $native mfs-p0-pipewire-source
+    Step native-source-build cc @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-source.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-o',$fixtureBinary)
+    $savedFixture = Join-Path $nativeArtifacts mfs-p0-pipewire-source
+    Copy-Item -LiteralPath $fixtureBinary -Destination $savedFixture
+    Save $savedFixture
     # Linux sockaddr_un.sun_path has 108 bytes including the terminator. Keep
     # live sockets outside the long content-addressed native build directory.
     $runtime = Join-Path $DepsRoot ('runtime/pw-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
@@ -160,11 +195,24 @@ try {
         if ($server.HasExited -or [DateTime]::UtcNow -ge $until) { throw 'Private PipeWire daemon did not become ready' }
         Start-Sleep -Milliseconds 50
     }
+    $fixtureStart = [Diagnostics.ProcessStartInfo]::new($fixtureBinary)
+    $fixtureStart.UseShellExecute = $false
+    $fixtureStart.RedirectStandardOutput = $true
+    $fixtureStart.RedirectStandardError = $true
+    $fixture = [Diagnostics.Process]::Start($fixtureStart)
+    $fixtureOut = $fixture.StandardOutput.ReadToEndAsync()
+    $fixtureError = $fixture.StandardError.ReadToEndAsync()
     $dumpPath = Join-Path $inputRoot private-registry.json
-    & pw-dump | Set-Content -LiteralPath $dumpPath -Encoding utf8
-    if ($LASTEXITCODE -ne 0) { throw 'Private registry query failed' }
+    $until = [DateTime]::UtcNow.AddSeconds(15)
+    do {
+        if ($fixture.HasExited -or $server.HasExited) { throw 'Owned PipeWire fixture or daemon exited during registration' }
+        # Bound this diagnostic subprocess; timeout is retained as a failed probe.
+        & timeout --signal=TERM --kill-after=5s 10s pw-dump | Set-Content -LiteralPath $dumpPath -Encoding utf8
+        if ($LASTEXITCODE -ne 0) { throw "Private registry query failed with exit $LASTEXITCODE" }
+        $nodes = @(Get-Content -LiteralPath $dumpPath -Raw | ConvertFrom-Json | Where-Object { $_.type -eq 'PipeWire:Interface:Node' -and $_.info.props.'node.name' -eq 'mfs-p0-fixture' })
+        if($nodes.Count -eq 0) { Start-Sleep -Milliseconds 50 }
+    } while ($nodes.Count -eq 0 -and [DateTime]::UtcNow -lt $until)
     Save $dumpPath
-    $nodes = @(Get-Content -LiteralPath $dumpPath -Raw | ConvertFrom-Json | Where-Object { $_.type -eq 'PipeWire:Interface:Node' -and $_.info.props.'node.name' -eq 'mfs-p0-fixture' })
     if ($nodes.Count -ne 1) { throw 'Expected exactly the owned SPA fixture node' }
     $env:MFS_P0_PIPEWIRE_SOCKET = $socket
     $env:MFS_P0_PIPEWIRE_NODE_ID = [string]$nodes[0].id
@@ -177,29 +225,12 @@ try {
     $checks.Add([ordered]@{name='pipewire-preparation';status='failed';log=(Artifact $log)})
     Write-Host $_.Exception.ToString()
 } finally {
-    if ($server) {
-        $stopLog = Join-Path $logsRoot daemon-stop.log
-        $stopStatus = 'passed'
-        if (-not $server.HasExited) {
-            # An explicit native program avoids PowerShell's kill alias.
-            & /bin/kill -TERM $server.Id
-            if($LASTEXITCODE -ne 0 -and -not $server.HasExited) { $stopStatus='failed';$server.Kill() }
-            if(-not $server.WaitForExit(10000)){$server.Kill();$server.WaitForExit();$stopStatus='failed'}
-        }
-        if ($server.ExitCode -ne 0) { $stopStatus='failed' }
-        "owned_pid=$($server.Id), exit=$($server.ExitCode)" | Set-Content -LiteralPath $stopLog -Encoding utf8
-        $checks.Add([ordered]@{name='daemon-stop';status=$stopStatus;log=(Artifact $stopLog)})
-        foreach($item in @(@('daemon-stdout.log',$serverOut),@('daemon-stderr.log',$serverError))) {
-            $path=Join-Path $logsRoot $item[0]
-            $item[1].GetAwaiter().GetResult() | Set-Content -LiteralPath $path -Encoding utf8
-            Save $path
-        }
-        $server.Dispose()
-    }
+    StopOwned source $fixture $fixtureOut $fixtureError
+    StopOwned daemon $server $serverOut $serverError
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase='P0';phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@('Native SPA fixture only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
+        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
     })
 }
 if($failed -or @($checks | Where-Object status -EQ failed).Count) { exit 1 }

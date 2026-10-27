@@ -368,6 +368,7 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
         "scripts/archive-evidence.ps1",
         "scripts/prepare-pipewire.ps1",
         "tests/fixtures/pipewire-probe.conf",
+        "tests/fixtures/pipewire-source.c",
         "xtask/src/main.rs",
     ] {
         if !source.join(required).is_file() {

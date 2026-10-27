@@ -1,6 +1,6 @@
 # maafw-screencap Rust 独立截图库设计与实施计划
 
-日期：2026-10-27。状态：P0 实施中；已有独立 xtask、外部固定来源/补丁记录校验、标准库分配原型、Windows 受控窗口 GDI、COM apartment、D3D/DXGI/WinRT 读回及 FramePool 实际捕获/事件原型，Linux PipeWire 原生 SPA 流原型及源码准备入口已实现、待首次原生 CI 验证；Actions 原生矩阵已定义，结果按平台记录。产品入口仍为 Hello World，完整 P0、迁移后端、SDK 及发布资产尚待验收；已实现命令与原型限制见[开发指南](../guides/development.md)。
+日期：2026-10-27。状态：P0 实施中；已有独立 xtask、外部固定来源/补丁记录校验、标准库分配原型、Windows 受控窗口 GDI、COM apartment、D3D/DXGI/WinRT 读回及 FramePool 实际捕获/事件原型，Linux PipeWire 初版取帧通过、SPA 夹具退出失败，已改用自有 C 源夹具、待完整原生验证；Actions 原生矩阵已定义，结果按平台记录。产品入口仍为 Hello World，完整 P0、迁移后端、SDK 及发布资产尚待验收；已实现命令与原型限制见[开发指南](../guides/development.md)。
 
 已确认技术路线、取舍与后续实施决策见[交互式技术选型记录](../decisions/interactive-technology-selection.md)。阅读入口及各主题权威来源见[文档导航](../README.md)。该记录属于仓库内的项目设计文档；本机环境、来源审计和实际验收材料按第 6.2 节外置保存。
 

@@ -44,7 +44,7 @@ cargo xtask reference verify
 cargo xtask check
 cargo xtask batch --desktop  # Windows 显式桌面批次；其他平台暂不加此参数
 cargo xtask native --desktop # Windows x64：VS2026/MSBuild、C++/OpenCV 互操作及独立参考
-cargo xtask pipewire-prototype # Linux x64 原生环境：私有 daemon/SPA 源和 Rust 取帧原型
+cargo xtask pipewire-prototype # Linux x64 原生环境：私有 daemon/C 源和 Rust 取帧原型
 ```
 
 - `reference prepare` 获取固定上游与固定 PR head，核验两个提交及唯一变更文件，外置保存完整未打补丁源码归档、相关文件发现清单、许可声明记录、累计补丁和 head 文件。它只做来源准备，不应用补丁，不构建参考程序，也不生成已验收 U/P。可用 `--root <目录>` 或 `MFS_REFERENCE_ROOT` 指定独立参考根。
@@ -56,7 +56,7 @@ cargo xtask pipewire-prototype # Linux x64 原生环境：私有 daemon/SPA 源�
 
 `native` 是显式原生验收入口，当前仅实现 Windows x64 + VS2026/MSBuild，需要 Git、curl、GitHub CLI 和 PowerShell。它先完成本次 Rust 批次，再在线解析 CMake、OpenCV 和 Boost 最新正式版，以及 MaaUtils 正式版或无正式版时的维护分支。原生源码、工具归档、配置、SDK/编译器身份、日志和产物仍在 reference/deps，产品基础构建不触发这些步骤。OpenCV 只选择所需模块及其传递依赖，保留 CPU 分发、SIMD 与 IPP/HAL，并验证实际配置；未选择的 DNN/OCR 依赖不进入参考构建。
 
-`pipewire-prototype` 在原生 Linux x64 上执行，当前实现待首次原生 CI 验证，本机 Windows 不执行或声称 Linux 验收。入口解析 PipeWire 官方最新 release 与 Python 工具正式版，从源码构建隔离前缀，归档源码、wheels、配置和日志；创建独立 runtime/socket、无宿主设备的 daemon 和 SPA 视频夹具。Rust 测试计划执行 20 次连接/停止，每次通过移交的 fd 和明确 node ID 接入，检查 RGB 协商、受检 stride/offset、32 个真实样本、原生缓冲重复使用与逐次归还、回调线程、注销/stop 及 CPU 持帧。高层绑定用于 loop/context/stream/POD；借助窄 sys 缓冲租约保存底层 queue 返回码，panic 被封在 Rust 回调内。daemon 由编排进程启动和停止，不访问宿主默认 remote。该入口暂不提供离线重放；Rust 门禁失败时可继续收集诊断原型结果，但最终命令仍失败，不能当成已验收。Portal 桌面来源、DMA-BUF、完整格式/失败矩阵及 Wlr 均未覆盖。
+`pipewire-prototype` 在原生 Linux x64 上执行，初版 SPA 夹具已通过 20 次取帧/停止和 Clippy，但 daemon 退出触发原生清理断言；现改用自有 C 视频源，完整原生验证仍待完成，本机 Windows 不执行或声称 Linux 验收。入口解析 PipeWire 官方最新 release 与 Python 工具正式版，从源码构建隔离前缀，归档源码、wheels、配置和日志；创建独立 runtime/socket、无宿主设备的 daemon 和独立自有 C 视频源（RGB 行距 96 字节，目标每行 84 字节，填充显式初始化）。Rust 测试执行 20 次连接/停止，每次通过移交的 fd 和明确 node ID 接入，检查 RGB 协商、受检 stride/offset、32 个真实样本、原生缓冲重复使用与逐次归还、回调线程、注销/stop 及 CPU 持帧。高层绑定用于 loop/context/stream/POD；借助窄 sys 缓冲租约保存底层 queue 返回码，panic 被封在 Rust 回调内。原生源和 daemon 由编排进程启动和依次停止，分别要求自然处理 SIGTERM 后退出 0，不接受强制结束或提前退出，不访问宿主默认 remote。该入口暂不提供离线重放；Rust 门禁失败时可继续收集诊断原型结果，但最终命令仍失败，不能当成已验收。Portal 桌面来源、DMA-BUF、完整格式/失败矩阵及 Wlr 均未覆盖。
 
 私有 C++/OpenCV 适配器验证 C 布局和失败输出、真实外部线程回调、stop 排空及回调内拒绝、原生像素覆写/释放后的 Rust 独立持帧、跨线程释放和 Rust/C++ 异常边界。独立参考程序直接编译固定未打补丁的 `GdiScreencap.cpp`，在原调用点执行上游转换；其构建、加载/FFI 和受控窗口实际捕获分别记账。当前参考覆盖只包括 GDI，不代表六种 Windows 方法、完整 U 或 P0 已验收。具体构建/原生测试结果以各批次记录为准。
 
