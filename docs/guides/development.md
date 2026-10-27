@@ -46,6 +46,8 @@ macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实
 
 首次 LLVM 原生准备在包摘要校验后遇到 zstd 默认解码内存上限，失败结果已保留；第一次参数修复又暴露了 PowerShell 单项条件数组被展开为字符串、splat 按字符传参的问题，本机 argv 检查已复现。读取 zstd 包现在以显式字符串数组对清单与解压均传入 2048 MiB 上限，继续流式读取，未改回旧编译器；修复后原生验证仍待完成。
 
+Windows 环境准备可单独运行 `pwsh -NoProfile -File scripts/prepare-windows-toolchain.ps1`：查询 VS2026 stable channel 和 Microsoft SDK 正式下载页，核对安装器的 Microsoft Authenticode 签名及版本，保存外部 local 记录。默认只读，环境缺失返回 77；已在本机确认当前版本差距及两个安装器的有效签名。管理员 PowerShell 加 `-Install` 才安装：Build Tools 使用 deps 下的专用实例，SDK 为系统级安装；不请求 UAC、不重启、不关闭现有 IDE。Actions 在临时 Windows runner 上显式安装，安装执行路径仍待原生验证。安装/注册成功后仍须通过真实编译、链接及捕获，不能算 SDK 验收。
+
 ```powershell
 cargo xtask reference prepare
 cargo xtask reference verify
