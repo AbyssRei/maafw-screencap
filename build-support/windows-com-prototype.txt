@@ -27,3 +27,8 @@ IDXGIAdapter::GetDesc
 CreateDirect3D11DeviceFromDXGIDevice
 IDirect3DDxgiInterfaceAccess::GetInterface
 Windows.Graphics.DirectX.Direct3D11.IDirect3DDevice
+Windows.Graphics.Capture.Direct3D11CaptureFramePool::{Create,TryGetNextFrame,FrameArrived,Close}
+# Explicit closure/factory dependencies required by windows-bindgen 0.100's
+# narrow member projection; these do not enable CreateFreeThreaded behavior.
+Windows.Graphics.Capture.IDirect3D11CaptureFramePoolStatics2::{}
+Windows.Foundation.TypedEventHandler

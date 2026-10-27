@@ -111,6 +111,121 @@ fn preserves_host_sta_when_mta_initialization_is_rejected() {
 }
 
 #[test]
+fn preserves_framepool_empty_result_and_releases_unstarted_event_registration() {
+    std::thread::spawn(|| -> windows_core::Result<()> {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        let _apartment = Apartment::mta()?;
+        let mut device = None;
+        // SAFETY: Explicit software-device feasibility probe, valid owned output.
+        unsafe {
+            D3D11CreateDevice(
+                None,
+                D3D_DRIVER_TYPE_WARP,
+                HMODULE::default(),
+                u32::try_from(D3D11_CREATE_DEVICE_BGRA_SUPPORT).unwrap(),
+                None,
+                u32::try_from(D3D11_SDK_VERSION).unwrap(),
+                Some(&mut device),
+                None,
+                None,
+            )
+            .ok()?;
+        }
+        let device = device.unwrap();
+        let dxgi: IDXGIDevice = device.cast()?;
+        // SAFETY: Valid live DXGI interface; generated wrapper adopts its result.
+        let runtime: IDirect3DDevice =
+            unsafe { CreateDirect3D11DeviceFromDXGIDevice(&dxgi)? }.cast()?;
+        let pool = Direct3D11CaptureFramePool::Create(
+            &runtime,
+            DirectXPixelFormat::B8G8R8A8UIntNormalized,
+            1,
+            SizeInt32 {
+                Width: 32,
+                Height: 24,
+            },
+        )?;
+        struct Pool {
+            object: Direct3D11CaptureFramePool,
+            closed: bool,
+        }
+        impl Pool {
+            fn close(&mut self) -> windows_core::Result<()> {
+                self.object.Close()?;
+                self.closed = true;
+                Ok(())
+            }
+        }
+        impl Drop for Pool {
+            fn drop(&mut self) {
+                if !self.closed {
+                    let _ = self.object.Close();
+                }
+            }
+        }
+        let mut pool = Pool {
+            object: pool,
+            closed: false,
+        };
+        let mut frame = std::ptr::null_mut();
+        // SAFETY: Pool is live on its owning MTA thread; output is writable.
+        // No session was started, so no native frame can be pending.
+        let result = unsafe {
+            (Interface::vtable(&pool.object).TryGetNextFrame)(pool.object.as_raw(), &mut frame)
+        };
+        println!(
+            "Unstarted FramePool: empty HRESULT={result:?}, null_output={}",
+            frame.is_null()
+        );
+        result.ok()?;
+        // Adopt any non-null successful output before making assertions.
+        let unexpected = if frame.is_null() {
+            None
+        } else {
+            // SAFETY: The successful ABI output transfers one COM reference.
+            Some(unsafe { Direct3D11CaptureFrame::from_raw(frame) })
+        };
+        assert!(unexpected.is_none());
+        assert_eq!(
+            pool.object.TryGetNextFrame().unwrap_err().code(),
+            windows_core::Error::empty().code()
+        );
+        // The rich wrapper translates native success + null to Error::empty().
+        // P1 must preserve upstream's empty-pool meaning via the narrow ABI,
+        // rather than treating this generated error as native capture failure.
+        let calls = Arc::try_new(AtomicUsize::new(0)).unwrap();
+        let weak = Arc::downgrade(&calls);
+        let retained = calls.clone();
+        let registration = pool.object.FrameArrived(move |_, _| {
+            // No native object access, locks, waits or panicking work in callback.
+            retained.fetch_add(1, Ordering::Relaxed);
+        })?;
+        drop(calls);
+        assert!(weak.upgrade().is_some());
+        let token = registration.into_token();
+        // SAFETY: Token belongs to this live pool. Check the actual unregister
+        // HRESULT instead of relying on EventRevoker's best-effort Drop.
+        unsafe {
+            (Interface::vtable(&pool.object).RemoveFrameArrived)(pool.object.as_raw(), token)
+                .ok()?;
+        }
+        pool.close()?;
+        drop(pool);
+        assert!(weak.upgrade().is_none());
+        // No capture session/events were started. This is registration release
+        // evidence only; it does not establish in-flight callback draining.
+        Ok(())
+    })
+    .join()
+    .unwrap()
+    .unwrap();
+}
+
+#[test]
 fn reads_owned_d3d_pixels_through_dxgi_and_winrt_without_changing_host_context()
 -> Result<(), Box<dyn Error + Send + Sync>> {
     let pixels = std::thread::spawn(|| -> Result<Vec<u8>, Box<dyn Error + Send + Sync>> {

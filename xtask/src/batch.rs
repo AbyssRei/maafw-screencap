@@ -217,6 +217,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     "--",
                     "--include-ignored",
                     "--test-threads=1",
+                    "--nocapture",
                 ],
                 Some(&build_env),
             )?;

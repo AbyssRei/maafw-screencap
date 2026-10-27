@@ -28,7 +28,9 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 `prototype-windows` 在自有小窗口绘制确定颜色，以 GetDC → compatible bitmap → BitBlt → GetBitmapBits 实际取帧，校验 BGR 字节，并在释放原生资源后验证独立像素及跨线程释放。`prototype-windows-com` 叠加私有 rich 投影与三项测试：平衡 WinRT 初始化计数、宿主 STA 拒绝 MTA 后保持 apartment，以及显式 WARP 设备的 D3D11 → DXGI → WinRT 对象身份往返与 staging 像素读回。后者校验非对称两行 BGRA，按实际 RowPitch 只复制目标像素，释放所有原生对象后跨线程持帧，并核查线程 DPI 上下文。WARP 是明确选择的软件设备，不是硬件失败后的回退。
 
-这些原型不提供产品截图 API，不构成六种 Windows 方法、硬件 DXGI、FramePool 事件/抓帧、原生后端回调退出、混合 DPI 或多显示器验收；P3 的 DIB 现代化与全虚拟桌面路径均未提前实施。三项 COM 测试不需要桌面交互，默认在选择该 feature 后执行；GDI 抓帧仍须显式启用 ignored 测试。
+第四项 COM 测试创建使用上游 `Create` 入口的 FramePool，核查未启动会话时的“原生 HRESULT 成功 + 空帧”与 rich 投影空错误的差异，并验证未启动会话的事件注册、显式注销 HRESULT、Close 和闭包持有状态释放。该用例未启动捕获，没有在途回调，不能作为事件送达或回调排空证据。维护输入还显式选择窄投影需要的工厂接口壳及 delegate 类型，避免生成代码缺少依赖；不修改生成器输出，也不调用 P3 的 CreateFreeThreaded。
+
+这些原型不提供产品截图 API，不构成六种 Windows 方法、硬件 DXGI、FramePool 事件送达/抓帧、原生后端回调退出、混合 DPI 或多显示器验收；P3 的 DIB 现代化与全虚拟桌面路径均未提前实施。四项 COM 测试不需要桌面交互，默认在选择该 feature 后执行；GDI 抓帧仍须显式启用 ignored 测试。
 
 ## 已实现的 P0 工具
 
