@@ -650,6 +650,15 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
             .ok_or("catalog run does not retain its validated definition")?;
         crate::review::verify(root, catalog)?;
     }
+    if run.run_id.starts_with("p0-licenses-") {
+        let path = format!("runs/{}/inputs/registry-licenses.json", run.run_id);
+        let inventory = run
+            .inputs
+            .iter()
+            .find(|input| input.path == path)
+            .ok_or("license run does not retain its registry inventory")?;
+        crate::licenses::verify(root, inventory)?;
+    }
     Ok(())
 }
 

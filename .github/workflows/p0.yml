@@ -63,6 +63,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask native --desktop
+      - name: Inventory registry license evidence for the native target
+        shell: pwsh
+        run: |
+          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
+          $candidate = $null
+          foreach ($entry in $index.runs) {
+            $record = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT $entry.path) -Raw | ConvertFrom-Json
+            if (@($record.inputs | Where-Object { $_.path.EndsWith('/inputs/dependency-target.txt') }).Count -eq 1) {
+              $candidate = $entry
+            }
+          }
+          if ($null -eq $candidate) { throw 'No archived native target dependency graph found' }
+          cargo xtask reference licenses $candidate.path
+          if ($LASTEXITCODE -ne 0) { throw 'Registry license evidence validation failed' }
       - name: Verify archived inputs and results
         if: always()
         run: cargo xtask reference verify
