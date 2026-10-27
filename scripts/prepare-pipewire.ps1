@@ -99,7 +99,7 @@ try {
     Step pipewire-source-archive git @('-C',$source,'archive','--format=tar','--output',$archive,$commit)
     Save $archive
     $configuration = Join-Path $inputRoot native-configuration.json
-    $options = @('--buildtype=release','--libdir=lib','--wrap-mode=nodownload','-Dauto_features=disabled','-Ddocs=disabled','-Dman=disabled','-Dtests=disabled','-Dexamples=disabled','-Ddbus=disabled','-Dpipewire-jack=disabled','-Dpipewire-v4l2=disabled','-Dsession-managers=[]','-Drlimits-install=false','-Dsupport=enabled','-Dvideotestsrc=enabled','-Dvideoconvert=enabled')
+    $options = @('--buildtype=release','--libdir=lib','--wrap-mode=nodownload','-Dauto_features=disabled','-Ddocs=disabled','-Dman=disabled','-Dtests=disabled','-Dexamples=disabled','-Ddbus=disabled','-Dflatpak=disabled','-Dpipewire-jack=disabled','-Dpipewire-v4l2=disabled','-Dsession-managers=[]','-Drlimits-install=false','-Dsupport=enabled','-Dvideotestsrc=enabled','-Dvideoconvert=enabled')
     Json $configuration ([ordered]@{pipewire_commit=$commit;pipewire_release=$release.tag_name;python_packages=$packages;compiler=(& cc --version | Out-String);options=$options;scope='Native SPA test source and capture client feasibility; no portal/desktop acceptance or migrated backend.'})
     Save $configuration
     $key = (Get-FileHash -LiteralPath $configuration -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -136,7 +136,11 @@ try {
     $version = (& pkg-config --modversion libpipewire-0.3 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $version -ne $release.tag_name) { throw 'pkg-config selected a different PipeWire library' }
     $env:MFS_P0_PIPEWIRE_VERSION = $version
-    $runtime = Join-Path $native ('runtime-'+(Split-Path -Leaf $RunRoot))
+    # Linux sockaddr_un.sun_path has 108 bytes including the terminator. Keep
+    # live sockets outside the long content-addressed native build directory.
+    $runtime = Join-Path $DepsRoot ('runtime/pw-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
+    $socket = Join-Path $runtime mfs-p0-pipewire
+    if ([Text.Encoding]::UTF8.GetByteCount($socket) -ge 108) { throw 'Private PipeWire socket exceeds Linux sun_path capacity' }
     New-Item -ItemType Directory -Path $runtime | Out-Null
     Step runtime-permissions chmod @('700',$runtime)
     $env:XDG_RUNTIME_DIR = $runtime
@@ -151,7 +155,6 @@ try {
     $server = [Diagnostics.Process]::Start($start)
     $serverOut = $server.StandardOutput.ReadToEndAsync()
     $serverError = $server.StandardError.ReadToEndAsync()
-    $socket = Join-Path $runtime mfs-p0-pipewire
     $until = [DateTime]::UtcNow.AddSeconds(10)
     while (-not(Test-Path -LiteralPath $socket)) {
         if ($server.HasExited -or [DateTime]::UtcNow -ge $until) { throw 'Private PipeWire daemon did not become ready' }
