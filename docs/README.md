@@ -1,6 +1,6 @@
 # 文档导航与维护约定
 
-日期：2026-10-27。P0 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 初版取帧通过、原生 SPA 夹具退出失败；已改用自有 C 源夹具，完整原生验证待完成；结果按平台记录，完整 P0 门禁待完成。产品入口仍为 Hello World，迁移后端、捕获库及绑定尚未实现。实际命令及原型边界见[开发指南](guides/development.md)。
+日期：2026-10-27。P0 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；结果按平台记录，完整 P0 门禁待完成。产品入口仍为 Hello World，迁移后端、捕获库及绑定尚未实现。实际命令及原型边界见[开发指南](guides/development.md)。
 
 ## 阅读顺序与权威来源
 
