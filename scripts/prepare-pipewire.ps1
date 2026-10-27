@@ -184,6 +184,7 @@ try {
     $env:XDG_RUNTIME_DIR = $runtime
     $env:PIPEWIRE_RUNTIME_DIR = $runtime
     $env:PIPEWIRE_REMOTE = 'mfs-p0-pipewire'
+    $env:PIPEWIRE_DEBUG = '3'
     $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $prefix bin/pipewire))
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
