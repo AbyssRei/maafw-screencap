@@ -33,9 +33,10 @@ jobs:
       - name: Configure external cache and evidence directories
         shell: pwsh
         run: |
-          "CARGO_HOME=$env:GITHUB_WORKSPACE/../maafw-screencap-deps/cargo-home" >> $env:GITHUB_ENV
-          "CARGO_TARGET_DIR=$env:GITHUB_WORKSPACE/../maafw-screencap-deps/target" >> $env:GITHUB_ENV
-          "MFS_REFERENCE_ROOT=$env:GITHUB_WORKSPACE/../maafw-screencap-reference" >> $env:GITHUB_ENV
+          $siblingRoot = Split-Path -Parent $env:GITHUB_WORKSPACE
+          "CARGO_HOME=$(Join-Path $siblingRoot 'maafw-screencap-deps/cargo-home')" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$(Join-Path $siblingRoot 'maafw-screencap-deps/target')" >> $env:GITHUB_ENV
+          "MFS_REFERENCE_ROOT=$(Join-Path $siblingRoot 'maafw-screencap-reference')" >> $env:GITHUB_ENV
       - name: Verify native runner OS and architecture
         shell: pwsh
         run: |
@@ -56,6 +57,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: p0-evidence-${{ matrix.os }}
-          path: ../maafw-screencap-reference
+          path: ${{ env.MFS_REFERENCE_ROOT }}
           include-hidden-files: true
           if-no-files-found: error

@@ -245,6 +245,9 @@ pub fn run(args: &[String]) -> Result<()> {
         }
     }
     snapshot_source(&root, &inputs, &mut run)?;
+    if passed(&run, "offline-inputs") {
+        offline_smoke(&root, &deps, &inputs, &logs, &mut run)?;
+    }
     let failed = run.checks.iter().any(|check| check.status != "passed");
     let manifest = directory.join("manifest.json");
     records::create_json(&manifest, &run)?;
@@ -341,6 +344,10 @@ fn latest_crates(metadata: &[u8]) -> Result<Value> {
                 "--silent".as_ref(),
                 "--show-error".as_ref(),
                 "--location".as_ref(),
+                "--connect-timeout".as_ref(),
+                "10".as_ref(),
+                "--max-time".as_ref(),
+                "60".as_ref(),
                 "--proto".as_ref(),
                 "=https".as_ref(),
                 "--user-agent".as_ref(),
@@ -402,6 +409,100 @@ fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Result<()> {
         let path = inputs.join(name);
         fs::write(&path, git(repository(), &args)?)?;
         run.inputs.push(records::artifact(root, &path)?);
+    }
+    Ok(())
+}
+
+fn offline_smoke(
+    root: &Path,
+    deps: &Path,
+    inputs: &Path,
+    logs: &Path,
+    run: &mut Run,
+) -> Result<()> {
+    // Copy inputs out of reference: the consumer has no sibling reference tree,
+    // an empty Cargo home, and only archived sources for offline dependency use.
+    let smoke = deps.join("offline-consumers").join(&run.run_id);
+    fs::create_dir_all(smoke.parent().unwrap())?;
+    fs::create_dir(&smoke)?;
+    let source = smoke.join("source");
+    copy_tree(&inputs.join("product-source"), &source)?;
+    fs::copy(inputs.join("Cargo.lock"), source.join("Cargo.lock"))?;
+    let vendor = smoke.join("vendor");
+    copy_tree(&inputs.join("vendor"), &vendor)?;
+    let configuration = smoke.join("vendor.toml");
+    fs::write(
+        &configuration,
+        format!(
+            "[source.crates-io]\nreplace-with = \"mfs-archived\"\n[source.mfs-archived]\ndirectory = {}\n",
+            serde_json::to_string(&vendor.to_string_lossy())?
+        ),
+    )?;
+    let manifest = source.join("Cargo.toml");
+    let configuration = configuration
+        .to_str()
+        .ok_or("non-UTF-8 configuration path")?;
+    let manifest = manifest.to_str().ok_or("non-UTF-8 consumer manifest")?;
+    let build_env = (smoke.join("empty-cargo-home"), smoke.join("target"));
+    check(
+        root,
+        logs,
+        run,
+        "offline-standalone-default",
+        "cargo",
+        &[
+            "build",
+            "--release",
+            "--offline",
+            "--locked",
+            "--no-default-features",
+            "--manifest-path",
+            manifest,
+            "--config",
+            configuration,
+        ],
+        Some(&build_env),
+    )?;
+    let mut args = vec![
+        "test",
+        "--release",
+        "--offline",
+        "--locked",
+        "--manifest-path",
+        manifest,
+        "--config",
+        configuration,
+        "--test",
+        "p0-interop",
+        "--no-run",
+    ];
+    if cfg!(target_os = "windows") {
+        args.extend(["--features", "prototype-windows"]);
+    }
+    check(
+        root,
+        logs,
+        run,
+        "offline-standalone-prototype",
+        "cargo",
+        &args,
+        Some(&build_env),
+    )?;
+    Ok(())
+}
+
+fn copy_tree(from: &Path, to: &Path) -> Result<()> {
+    fs::create_dir(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let path = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &path)?;
+        } else if entry.file_type()?.is_file() {
+            fs::copy(entry.path(), path)?;
+        } else {
+            return Err("unexpected symlink in standalone consumer inputs".into());
+        }
     }
     Ok(())
 }
