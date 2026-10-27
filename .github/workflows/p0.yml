@@ -67,19 +67,8 @@ jobs:
           New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
           $archive = Join-Path $packageRoot 'p0-evidence.tar'
           "MFS_EVIDENCE_ARCHIVE=$archive" >> $env:GITHUB_ENV
-          # Use the native Windows tool, independently of runner PATH additions.
-          $tar = if ($IsWindows) { Join-Path $env:SystemRoot 'System32/tar.exe' } else { (Get-Command tar -CommandType Application).Source }
-          Write-Host "Evidence archiver: $tar"
-          & $tar --version
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence archiver identity failed' }
-          & $tar -cf $archive -C $env:MFS_REFERENCE_ROOT .
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence packaging failed' }
           $restored = Join-Path $packageRoot 'restored'
-          New-Item -ItemType Directory -Path $restored | Out-Null
-          & $tar -xf $archive -C $restored
-          if ($LASTEXITCODE -ne 0) { throw 'Evidence restoration failed' }
-          cargo xtask reference verify --root $restored
-          if ($LASTEXITCODE -ne 0) { throw 'Restored evidence verification failed' }
+          ./scripts/archive-evidence.ps1 -ReferenceRoot $env:MFS_REFERENCE_ROOT -ArchivePath $archive -RestoreRoot $restored
       - name: Upload engineering evidence
         if: always()
         uses: actions/upload-artifact@v7
