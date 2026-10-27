@@ -75,6 +75,8 @@ Use latest direct dependency releases and check new major versions; cache hits n
 
 Initial Windows native validation uses `x86_64-pc-windows-msvc`, CMake, VS2026 and MSBuild. VS2022/Ninja require separate implementation and validation; they are not already supported combinations.
 
+Linux prototype preparation resolves the latest formal LLVM release into an isolated, integrity-checked deps installation; libclang discovery is active only for the PipeWire generator. This path awaits native Actions validation. Earlier runner results do not close the identified Windows VS/SDK and macOS Xcode freshness gaps.
+
 ## Testing and Acceptance
 
 - Put private unit tests in owning modules under `#[cfg(test)]`. Integration tests use public APIs and `tests/<name>/main.rs` or explicit `[[test]]` paths; `tests/contracts/main.rs` corresponds to `--test contracts`. Shared helpers go in `tests/common/mod.rs`, self-owned inputs in `tests/fixtures/`; do not expose internals for tests.

@@ -139,10 +139,12 @@ function VerifyPackage($Library,[string]$Package){
     $version=(& pkg-config --modversion $Package|Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or $version -ne $Library.version){throw "$Package selected $version rather than resolved $($Library.version)"}
 }
+. (Join-Path $PSScriptRoot prepare-linux-llvm.ps1)
 try{
     if(-not $IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne 'X64'){throw 'Native Linux x64 is required'}
     Step host-identity uname @('-a')
-    Step compiler-identity cc @('--version')
+    Initialize-LinuxLlvm -ReferenceRoot $ReferenceRoot -DepsRoot $DepsRoot -RunRoot $RunRoot
+    Step compiler-identity $env:CC @('--version')
     Step bison-identity bison @('--version')
     Step make-identity make @('--version')
     Step github-cli-identity gh @('--version')
@@ -181,7 +183,7 @@ try{
         wlr=@('-Dauto_features=disabled','-Dexamples=false','-Drenderers=[]','-Dbackends=[]','-Dallocators=[]','-Dsession=disabled','-Dxwayland=disabled','-Dcolor-management=disabled','-Dlibliftoff=disabled')
     }
     $configuration=Join-Path $inputRoot native-configuration.json
-    Json $configuration ([ordered]@{libraries=@($libraries.ToArray());python=$pythonPackages;options=$options;compiler=(& cc --version|Out-String);scope='Owned real wlroots headless/Pixman compositor, system libwayland-client, no host desktop or product backend'})
+    Json $configuration ([ordered]@{libraries=@($libraries.ToArray());python=$pythonPackages;options=$options;compiler=(& $env:CC --version|Out-String);scope='Owned real wlroots headless/Pixman compositor, system libwayland-client, no host desktop or product backend'})
     Save $configuration
     $key=(Get-FileHash -LiteralPath $configuration -Algorithm SHA256).Hash.ToLowerInvariant()
     $native=Join-Path $DepsRoot "native/wlr-$key";$prefix=Join-Path $native install
@@ -211,7 +213,7 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Native fixture flags query failed'};Save $flagPath
     $flags=Get-Content -LiteralPath $flagPath -Raw|ConvertFrom-Json
     $binary=Join-Path $native mfs-p0-wlr-compositor
-    Step native-compositor-build cc (@('-std=c11','-D_POSIX_C_SOURCE=200809L','-DWLR_USE_UNSTABLE','-O2','-Wall','-Wextra','-Werror',(Join-Path $productRoot tests/fixtures/wlr-compositor.c))+$flags+@('-o',$binary))
+    Step native-compositor-build $env:CC (@('-std=c11','-D_POSIX_C_SOURCE=200809L','-DWLR_USE_UNSTABLE','-O2','-Wall','-Wextra','-Werror',(Join-Path $productRoot tests/fixtures/wlr-compositor.c))+$flags+@('-fuse-ld=lld','-o',$binary))
     Step native-compositor-linkage ldd @($binary)
     $nativeArtifacts=Join-Path $inputRoot native-artifacts;New-Item -ItemType Directory -Path $nativeArtifacts|Out-Null
     Copy-Item -LiteralPath $binary -Destination (Join-Path $nativeArtifacts mfs-p0-wlr-compositor);Save (Join-Path $nativeArtifacts mfs-p0-wlr-compositor)

@@ -82,10 +82,12 @@ function StopOwned([string]$Name, $Process, $OutputTask, $ErrorTask) {
     }
 }
 
+. (Join-Path $PSScriptRoot prepare-linux-llvm.ps1)
 try {
     if (-not $IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne 'X64') { throw 'Native Linux x64 is required' }
     Step host-identity uname @('-a')
-    Step compiler-identity cc @('--version')
+    Initialize-LinuxLlvm -ReferenceRoot $ReferenceRoot -DepsRoot $DepsRoot -RunRoot $RunRoot -BindingGenerator
+    Step compiler-identity $env:CC @('--version')
     Step clang-identity clang @('--version')
     Step python-identity python3 @('--version')
     $packages = @{}
@@ -135,7 +137,7 @@ try {
     Save $archive
     $configuration = Join-Path $inputRoot native-configuration.json
     $options = @('--buildtype=release','--libdir=lib','--wrap-mode=nodownload','-Dauto_features=disabled','-Ddocs=disabled','-Dman=disabled','-Dtests=disabled','-Dexamples=disabled','-Ddbus=disabled','-Dflatpak=disabled','-Dpipewire-jack=disabled','-Dpipewire-v4l2=disabled','-Dsession-managers=[]','-Drlimits-install=false','-Dsupport=enabled','-Dvideotestsrc=disabled','-Dvideoconvert=enabled')
-    Json $configuration ([ordered]@{pipewire_commit=$commit;pipewire_release=$release.tag_name;python_packages=$packages;compiler=(& cc --version | Out-String);options=$options;scope='Owned native C producer and Rust capture client feasibility; no portal/desktop acceptance or migrated backend.'})
+    Json $configuration ([ordered]@{pipewire_commit=$commit;pipewire_release=$release.tag_name;python_packages=$packages;compiler=(& $env:CC --version | Out-String);options=$options;scope='Owned native C producer and Rust capture client feasibility; no portal/desktop acceptance or migrated backend.'})
     Save $configuration
     $key = (Get-FileHash -LiteralPath $configuration -Algorithm SHA256).Hash.ToLowerInvariant()
     $native = Join-Path $DepsRoot "native/pipewire-$key"
@@ -174,7 +176,7 @@ try {
     . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family pipewire
     Save $env:MFS_BUILD_CONFIGURATION
     $fixtureBinary = Join-Path $native mfs-p0-pipewire-source
-    Step native-source-build cc @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-source.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-o',$fixtureBinary)
+    Step native-source-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-source.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$fixtureBinary)
     $savedFixture = Join-Path $nativeArtifacts mfs-p0-pipewire-source
     Copy-Item -LiteralPath $fixtureBinary -Destination $savedFixture
     Save $savedFixture

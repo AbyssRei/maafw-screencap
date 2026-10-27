@@ -654,6 +654,13 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
             return Err("invalid check status".into());
         }
     }
+    for input in run
+        .inputs
+        .iter()
+        .filter(|input| input.path.ends_with("/inputs/llvm-toolchain.json"))
+    {
+        crate::native_tools::verify(root, input)?;
+    }
     if run.run_id.starts_with("p0-catalog-") {
         let path = format!("runs/{}/inputs/capture-catalog.json", run.run_id);
         let catalog = run

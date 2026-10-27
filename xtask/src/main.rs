@@ -7,6 +7,7 @@ mod dependencies;
 mod licenses;
 mod macos;
 mod native;
+mod native_tools;
 mod pipewire;
 mod quality;
 mod records;

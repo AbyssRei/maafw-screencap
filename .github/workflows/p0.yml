@@ -52,6 +52,8 @@ jobs:
         run: cargo xtask macos-prototype
       - name: Validate Linux native PipeWire prototype
         if: runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: cargo xtask pipewire-prototype
       - name: Validate Linux native Wlr screencopy prototype
         if: runner.os == 'Linux'

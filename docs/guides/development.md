@@ -19,7 +19,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Windows 默认 workspace 测试包含 4 项分配原型与 23 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
+Windows 默认 workspace 测试包含 4 项分配原型与 25 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
 
 ```powershell
 cargo test --release --test p0-interop --features prototype-windows-com -- --include-ignored --test-threads=1
@@ -39,6 +39,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 这些原型不提供产品截图 API，不构成六种 Windows 方法、完整 Desktop Duplication/FramePool 异常/重建/权限矩阵、混合 DPI 或多显示器验收；P3 的 DIB 现代化与全虚拟桌面路径均未提前实施。四项基础 COM 测试不需要桌面交互，默认在选择该 feature 后执行；GDI、两个实际 WGC 和 Desktop Duplication 用例仍须显式启用 ignored 测试。具体本机和 runner 结果分别以外部运行记录为准，缺硬件/桌面或捕获能力不能记为捕获通过。
 
 ## 已实现的 P0 工具
+
+Linux 原型准备现在先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。此准备路径尚待原生 Actions 验证；此前通过的 Linux 原型使用 runner 自带工具链。Windows VS/SDK 与 macOS Xcode 的正式版本差距仍须处理，不将旧矩阵结果作为最新工具链验收。
 
 ```powershell
 cargo xtask reference prepare
