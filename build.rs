@@ -5,6 +5,7 @@ fn main() {
     println!("cargo::rerun-if-env-changed=TARGET");
     println!("cargo::rerun-if-env-changed=CARGO_CFG_TARGET_OS");
     println!("cargo::rerun-if-changed=build-support/windows-prototype.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-com-prototype.txt");
     #[cfg(feature = "prototype-windows")]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
@@ -23,5 +24,20 @@ fn main() {
                 .filter(|line| !line.is_empty() && !line.starts_with('#')),
         );
         windows_bindgen::bindgen(args);
+    }
+    #[cfg(feature = "prototype-windows-com")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+            .join("windows_com_prototype.rs");
+        let input = std::fs::read_to_string("build-support/windows-com-prototype.txt").unwrap();
+        windows_bindgen::builder()
+            .output(out)
+            .flat()
+            .filters(
+                input
+                    .lines()
+                    .filter(|line| !line.is_empty() && !line.starts_with('#')),
+            )
+            .write();
     }
 }

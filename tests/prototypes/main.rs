@@ -7,3 +7,6 @@ mod allocation;
 
 #[cfg(all(target_os = "windows", feature = "prototype-windows"))]
 mod windows;
+
+#[cfg(all(target_os = "windows", feature = "prototype-windows-com"))]
+mod windows_com;

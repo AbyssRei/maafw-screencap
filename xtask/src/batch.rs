@@ -81,7 +81,7 @@ pub fn run(args: &[String]) -> Result<()> {
         pending: vec![
             "Complete responsibility review and method/target parity matrix".into(),
             "Independent unpatched reference executable and latest-source OpenCV adapter".into(),
-            "COM/WinRT/D3D, native callback shutdown and FFI prototypes".into(),
+            "FramePool capture/events, hardware DXGI and backend-specific native shutdown".into(),
             "Linux PipeWire/Wlr and macOS ScreenCaptureKit native prototypes".into(),
             "Three native Actions runner results, platform dependency isolation and AUTO/ON/OFF"
                 .into(),
@@ -213,7 +213,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     "--test",
                     "p0-interop",
                     "--features",
-                    "prototype-windows",
+                    "prototype-windows-com",
                     "--",
                     "--include-ignored",
                     "--test-threads=1",
@@ -232,7 +232,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     "--all-targets",
                     "--locked",
                     "--features",
-                    "prototype-windows",
+                    "prototype-windows-com",
                     "--",
                     "-D",
                     "warnings",
@@ -394,6 +394,7 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
         "Cargo.toml",
         "build.rs",
         "build-support/windows-prototype.txt",
+        "build-support/windows-com-prototype.txt",
         "xtask/src/main.rs",
     ] {
         if !source.join(required).is_file() {
@@ -478,7 +479,7 @@ fn offline_smoke(
         "--no-run",
     ];
     if cfg!(target_os = "windows") {
-        args.extend(["--features", "prototype-windows"]);
+        args.extend(["--features", "prototype-windows-com"]);
     }
     check(
         root,

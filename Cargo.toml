@@ -9,9 +9,12 @@ license = "LGPL-3.0-or-later"
 [features]
 default = []
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
+prototype-windows-com = ["prototype-windows", "dep:windows-core"]
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-link = { version = "0.100", optional = true }
+# This prototype consumes projected interfaces; it does not author COM classes.
+windows-core = { version = "0.100", optional = true, default-features = false, features = ["std"] }
 
 [build-dependencies]
 windows-bindgen = { version = "0.100", optional = true }

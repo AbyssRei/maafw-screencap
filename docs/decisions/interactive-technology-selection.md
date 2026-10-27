@@ -76,13 +76,15 @@ P0 验收：在三个原生平台分别验证模块、运行依赖、原生探�
 
 ## R1-02 Windows 原生绑定
 
-状态：用户已确认 A，P0 原型待验收。
+状态：用户已确认 A；P0 已实现私有 Win32 sys 及 COM/WinRT rich 投影原型，完整原生验收待完成。
 
 采用 Microsoft windows-rs 生态的专用 crate，以及由 `windows-bindgen` 生成的项目私有绑定。按实际需要使用核心 COM/WinRT 类型，生成未覆盖的 Win32、D3D11、DXGI、WinRT 等声明；维护生成输入，生成输出放入 `OUT_DIR`，安全封装独立维护。具体专用 crate 集合和生成参数由 P0 覆盖验证确定。
 
 选择理由：符合 Microsoft 当前面向可复用库的建议，减少 umbrella crate 的依赖重量及多版本类型协调成本。代价是需要维护生成配置与覆盖检查。
 
 P0 验收：原生取帧、GUID/HRESULT、调用约定、COM apartment、引用计数、WinRT 接口及事件回调、注销排空、D3D/DXGI 对象与链接。发现绑定缺口时记录证据并讨论必要窄桥接，不默认为已覆盖。
+
+当前 COM 原型覆盖宿主 STA 拒绝 MTA、成功初始化的逐次配平、显式 WARP D3D11/DXGI/WinRT 的 COM 身份往返与引用保活，以及 staging 实际像素读回和独立 CPU 存储。FramePool 事件/实际捕获及硬件 DXGI 尚未验证。原型命令和 feature 见[开发指南](../guides/development.md#当前仓库与本机命令)，实际结果仍按运行批次外置；该原型没有迁移产品后端。
 
 依据：[Microsoft windows-rs 官方说明](https://github.com/microsoft/windows-rs)。
 
