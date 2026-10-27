@@ -2,7 +2,7 @@
 
 ## Actual State and Reading Order
 
-P0 is in progress. The product entry point is still a Rust 2024 Hello World binary in `src/main.rs`. An independent `xtask` now prepares/verifies external fixed-source records, archives validation batches and checks project conventions. P0 tests cover fallible allocation and an explicitly enabled Windows controlled-window GDI prototype; a native Actions matrix is defined. The capture library, migrated backends, bindings and examples are not implemented, and P0 has not passed its full gate. A prototype or scaffold build is not validated product capture support.
+P0 is in progress. The product entry point is still a Rust 2024 Hello World binary in `src/main.rs`. An independent `xtask` prepares/verifies external fixed-source records, archives validation batches and checks project conventions. P0 tests cover fallible allocation, an explicitly enabled Windows controlled-window GDI prototype and private C++/OpenCV callback/FFI boundaries. `xtask native` prepares latest native dependencies and builds an independent unpatched GDI reference; explicit offline dependency snapshots are supported. A native Actions matrix is defined. The capture library, migrated backends, bindings and examples are not implemented, and P0 has not passed its full gate. A prototype or scaffold build is not validated product capture support.
 
 Read these authorities before changing the corresponding area:
 

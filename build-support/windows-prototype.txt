@@ -1,5 +1,8 @@
 # P0 private Win32 projection. This is not the SDK's C ABI or a product backend.
 GetLastError
+FreeLibrary
+GetProcAddress
+LoadLibraryExW
 HWND
 BitBlt
 CreateCompatibleBitmap

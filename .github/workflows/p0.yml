@@ -48,7 +48,13 @@ jobs:
       - name: Resolve current dependencies and archive fixed sources
         run: cargo xtask reference prepare
       - name: Validate tools and implemented prototypes, recording missing gates
-        run: cargo xtask batch ${{ matrix.desktop }}
+        if: runner.os != 'Windows'
+        run: cargo xtask batch
+      - name: Validate Windows native interop and independent reference
+        if: runner.os == 'Windows'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask native --desktop
       - name: Verify archived inputs and results
         if: always()
         run: cargo xtask reference verify

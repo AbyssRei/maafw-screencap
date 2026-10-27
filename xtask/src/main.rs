@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod batch;
+mod native;
 mod quality;
 mod records;
 mod reference;
@@ -24,6 +25,9 @@ fn run() -> Result<()> {
     }
     if argv.first().is_some_and(|arg| arg == "check") {
         return quality::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "native") {
+        return native::run(&argv[1..]);
     }
     let mut args = argv.into_iter();
     match (args.next().as_deref(), args.next().as_deref()) {
@@ -55,6 +59,7 @@ fn run() -> Result<()> {
                       cargo xtask reference verify [--root <external directory>]\n\n\
                       cargo xtask check [--message-file <commit message file>]\n\
                       cargo xtask batch [--desktop]\n\n\
+                      cargo xtask native [--desktop] [--offline-inputs <run manifest>]\n\n\
                       prepare fetches the fixed upstream and cumulative PR patch; it does not\n\
                       apply the patch, build a reference executable, or assert P0 acceptance.\n\
                       verify checks record versions, identities, paths, Git blobs and SHA-256.\n\

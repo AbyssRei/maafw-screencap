@@ -20,6 +20,11 @@ windows-bindgen = { version = "0.100", optional = true }
 name = "p0-interop"
 path = "tests/prototypes/main.rs"
 
+[[test]]
+name = "p0-native"
+path = "tests/prototypes/native.rs"
+required-features = ["prototype-windows"]
+
 [workspace]
 members = ["xtask"]
 default-members = ["."]

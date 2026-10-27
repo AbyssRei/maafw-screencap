@@ -18,21 +18,21 @@ use std::{
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Run {
-    layout_version: u32,
-    run_id: String,
-    phase: String,
-    phase_status: String,
-    checks: Vec<Check>,
-    pending: Vec<String>,
-    inputs: Vec<Artifact>,
+    pub(crate) layout_version: u32,
+    pub(crate) run_id: String,
+    pub(crate) phase: String,
+    pub(crate) phase_status: String,
+    pub(crate) checks: Vec<Check>,
+    pub(crate) pending: Vec<String>,
+    pub(crate) inputs: Vec<Artifact>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Check {
-    name: String,
-    status: String,
-    log: Artifact,
+pub(crate) struct Check {
+    pub(crate) name: String,
+    pub(crate) status: String,
+    pub(crate) log: Artifact,
 }
 
 pub fn run(args: &[String]) -> Result<()> {
@@ -355,7 +355,8 @@ fn latest_crates(metadata: &[u8]) -> Result<Value> {
                 url.as_ref(),
             ],
             repository(),
-        )?;
+        )
+        .map_err(|error| format!("latest-release query {url}: {error}"))?;
         let response: Value = serde_json::from_slice(&response)?;
         let latest = response["crate"]["max_stable_version"]
             .as_str()
@@ -365,7 +366,7 @@ fn latest_crates(metadata: &[u8]) -> Result<Value> {
     Ok(Value::Array(records))
 }
 
-fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Result<()> {
+pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Result<()> {
     let source = inputs.join("product-source");
     fs::create_dir(&source)?;
     let names = git(
@@ -522,7 +523,7 @@ fn archive_files(root: &Path, directory: &Path, artifacts: &mut Vec<Artifact>) -
     Ok(())
 }
 
-fn register(root: &Path, manifest: &Path) -> Result<()> {
+pub(crate) fn register(root: &Path, manifest: &Path) -> Result<()> {
     use std::io::Write;
     let path = root.join("manifest.json");
     let mut index: Index = if path.exists() {
