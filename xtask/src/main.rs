@@ -1,0 +1,95 @@
+// Copyright (C) 2026 AbyssRei
+// SPDX-License-Identifier: LGPL-3.0-or-later
+
+mod batch;
+mod quality;
+mod records;
+mod reference;
+
+use std::{env, error::Error, ffi::OsStr, path::Path, process::Command};
+
+type Result<T> = std::result::Result<T, Box<dyn Error>>;
+
+fn main() {
+    if let Err(error) = run() {
+        eprintln!("xtask: {error}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<()> {
+    let argv: Vec<_> = env::args().skip(1).collect();
+    if argv.first().is_some_and(|arg| arg == "batch") {
+        return batch::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "check") {
+        return quality::run(&argv[1..]);
+    }
+    let mut args = argv.into_iter();
+    match (args.next().as_deref(), args.next().as_deref()) {
+        (Some("reference"), Some(action @ ("prepare" | "verify"))) => {
+            let root = match args.next().as_deref() {
+                Some("--root") => args.next().ok_or("--root requires a path")?.into(),
+                None => env::var_os("MFS_REFERENCE_ROOT")
+                    .map(Into::into)
+                    .unwrap_or_else(|| {
+                        repository()
+                            .parent()
+                            .unwrap()
+                            .join("maafw-screencap-reference")
+                    }),
+                Some(_) => return Err("expected --root <external reference directory>".into()),
+            };
+            if args.next().is_some() {
+                return Err("unexpected arguments".into());
+            }
+            if action == "prepare" {
+                reference::prepare(&root)
+            } else {
+                reference::verify(&root)
+            }
+        }
+        (None | Some("help" | "--help" | "-h"), None) => {
+            println!(
+                "cargo xtask reference prepare [--root <external directory>]\n\
+                      cargo xtask reference verify [--root <external directory>]\n\n\
+                      cargo xtask check [--message-file <commit message file>]\n\
+                      cargo xtask batch [--desktop]\n\n\
+                      prepare fetches the fixed upstream and cumulative PR patch; it does not\n\
+                      apply the patch, build a reference executable, or assert P0 acceptance.\n\
+                      verify checks record versions, identities, paths, Git blobs and SHA-256.\n\
+                      git must be available. The reference directory must be outside the product."
+            );
+            Ok(())
+        }
+        _ => Err("unknown command; run cargo xtask help".into()),
+    }
+}
+
+fn repository() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap()
+}
+
+fn command(program: &str, args: &[&OsStr], directory: &Path) -> Result<Vec<u8>> {
+    let output = Command::new(program)
+        .args(args)
+        .current_dir(directory)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "{program} failed ({}): {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    Ok(output.stdout)
+}
+
+fn git(directory: &Path, args: &[&str]) -> Result<Vec<u8>> {
+    command(
+        "git",
+        &args.iter().map(OsStr::new).collect::<Vec<_>>(),
+        directory,
+    )
+}

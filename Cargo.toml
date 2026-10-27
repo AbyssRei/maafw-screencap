@@ -5,3 +5,22 @@ edition = "2024"
 license = "LGPL-3.0-or-later"
 
 [dependencies]
+
+[features]
+default = []
+prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-link = { version = "0.100", optional = true }
+
+[build-dependencies]
+windows-bindgen = { version = "0.100", optional = true }
+
+[[test]]
+name = "p0-interop"
+path = "tests/prototypes/main.rs"
+
+[workspace]
+members = ["xtask"]
+default-members = ["."]
+resolver = "3"

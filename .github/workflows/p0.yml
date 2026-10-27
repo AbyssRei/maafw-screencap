@@ -1,0 +1,61 @@
+name: P0 preparation and prototypes
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare-and-validate:
+    name: P0 tools (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            expected_target: x86_64-pc-windows-msvc
+            desktop: --desktop
+          - os: ubuntu-latest
+            expected_target: x86_64-unknown-linux-gnu
+            desktop: ''
+          - os: macos-latest
+            expected_target: aarch64-apple-darwin
+            desktop: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Update nightly before configuring Cargo caches
+        run: rustup update nightly --no-self-update
+      - name: Configure external cache and evidence directories
+        shell: pwsh
+        run: |
+          "CARGO_HOME=$env:GITHUB_WORKSPACE/../maafw-screencap-deps/cargo-home" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$env:GITHUB_WORKSPACE/../maafw-screencap-deps/target" >> $env:GITHUB_ENV
+          "MFS_REFERENCE_ROOT=$env:GITHUB_WORKSPACE/../maafw-screencap-reference" >> $env:GITHUB_ENV
+      - name: Verify native runner OS and architecture
+        shell: pwsh
+        run: |
+          $identity = rustc -vV | Out-String
+          $hostLine = ($identity -split "`n" | Where-Object { $_ -match '^host: ' })
+          if ($hostLine.Trim() -ne 'host: ${{ matrix.expected_target }}') {
+            throw "Unexpected native runner target: $hostLine"
+          }
+      - name: Resolve current dependencies and archive fixed sources
+        run: cargo xtask reference prepare
+      - name: Validate tools and implemented prototypes, recording missing gates
+        run: cargo xtask batch ${{ matrix.desktop }}
+      - name: Verify archived inputs and results
+        if: always()
+        run: cargo xtask reference verify
+      - name: Archive engineering evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p0-evidence-${{ matrix.os }}
+          path: ../maafw-screencap-reference
+          include-hidden-files: true
+          if-no-files-found: error

@@ -1,10 +1,10 @@
 # 开发、构建与验证
 
-日期：2026-10-27。状态：当前 scaffold 命令可用；下文准备、生成、对照、SDK 和桌面入口为已确认实施要求，随 P0–P5 建立并验收，尚未实现。
+日期：2026-10-27。状态：P0 部分实现。下节列出已可运行的工具与原型；后续构建责任、完整对照、SDK 和桌面验收要求仍随 P0–P5 实施，不能据此宣称完整阶段通过。
 
 ## 当前仓库与本机命令
 
-当前只有 Rust 2024 Hello World binary、nightly 配置及设计文档，尚无捕获库、workspace xtask、binding、测试或 CI。命令从仓库根执行。本机只验证宿主 OS，其他平台使用原生 Actions runner，不以 WSL 代替 Linux 验收。
+产品入口仍是 Rust 2024 Hello World binary。独立 workspace xtask 与 P0 测试已实现，尚无迁移后端、产品捕获库或 binding。`.github/workflows/p0.yml` 定义三个原生 runner 的工具验证和现有原型；Linux/macOS 原生捕获尚未实现，不能将矩阵通过解释为 P0 通过。命令从仓库根执行，本机只验证宿主 OS，不以 WSL 代替 Linux 验收。
 
 先更新 nightly，再改写 CARGO_HOME；若已经改写，使用 `rustup update nightly --no-self-update`。随后将可清理缓存及构建输出放入同级 deps：
 
@@ -19,7 +19,32 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-当前测试数量为零，构建通过不代表任何原生截图能力已经验收。首次产生的 Cargo.lock 及实际工具链记录按本次验证归档到 reference，不用它固定下一次在线构建。
+默认 workspace 测试包含 4 项分配原型与 6 项工具测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
+
+```powershell
+cargo test --release --test p0-interop --features prototype-windows -- --include-ignored --test-threads=1
+cargo clippy --workspace --all-targets --features prototype-windows -- -D warnings
+```
+
+该原型在自有小窗口绘制确定颜色，以 GetDC → compatible bitmap → BitBlt → GetBitmapBits 实际取帧，校验 BGR 字节，并在释放原生资源后验证独立像素及跨线程释放。它不提供产品截图 API，不构成六种 Windows 方法、COM/WinRT、回调退出、混合 DPI 或多显示器验收；P3 的 DIB 现代化与全虚拟桌面路径均未提前实施。
+
+## 已实现的 P0 工具
+
+```powershell
+cargo xtask reference prepare
+cargo xtask reference verify
+cargo xtask check
+cargo xtask batch --desktop  # Windows 显式桌面批次；其他平台暂不加此参数
+```
+
+- `reference prepare` 获取固定上游与固定 PR head，核验两个提交及唯一变更文件，外置保存完整未打补丁源码归档、相关文件发现清单、许可声明记录、累计补丁和 head 文件。它只做来源准备，不应用补丁，不构建参考程序，也不生成已验收 U/P。可用 `--root <目录>` 或 `MFS_REFERENCE_ROOT` 指定独立参考根。
+- `reference verify` 校验布局版本、未知字段、必需身份、父 U、Git 对象/文件内容、完整归档与记录 SHA-256、来源清单覆盖和相对路径越界，包含 symlink/junction 的实际路径检查。完整职责审阅、方法/目标矩阵和依赖许可审计仍待完成。
+- `check` 校验 HEAD 的 Conventional Commit 标题及 workspace 版本/许可元数据；提交前可用 `--message-file <文件>` 校验拟用消息。它不代替发布阶段的 API 兼容性与版本协商验收。
+- `batch` 先更新 nightly，再更新本次 Cargo 解析并查询每个 registry 包的最新正式版（包括范围外主版本），归档锁文件、元数据、vendor 源码、实际源码快照和逐项日志，再执行 release build、workspace tests、fmt、Clippy 和项目约定检查。Windows 的 `--desktop` 追加显式原型及其 Clippy。失败单列且不自动重试；所有批次均明确记录 P0 仍缺失的门禁。
+
+`xtask` 不依赖捕获 package，默认 Cargo 构建只构建产品入口。普通构建不读取 reference，不链接 OpenCV。当前 `build.rs` 仅在目标 Windows 且显式选择原型 feature 时读取维护的过滤输入，向 OUT_DIR 生成私有 Win32 声明；其他平台声明/生成与 AUTO/ON/OFF 尚未实现。
+
+实际记录格式由 `xtask/src/records.rs`、`reference.rs`、`batch.rs` 的版本化 serde 结构及校验逻辑维护，未知字段会失败。`manifest.json` 仅索引 baselines/patches/runs；已完成来源记录与运行记录不覆盖，运行中新失败保留在新目录。准备中断的目录保留以供检查，未索引目录不是有效基线。Cargo.lock 只约束同次验证与离线重建，不作为后续在线构建的版本约束。
 
 ## 构建责任与启动顺序
 

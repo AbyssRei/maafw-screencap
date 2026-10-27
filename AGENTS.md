@@ -2,7 +2,7 @@
 
 ## Actual State and Reading Order
 
-This repository currently contains a Rust 2024 Hello World binary in `src/main.rs`, nightly configuration, and design documents. The capture library, backends, `xtask`, bindings, tests, examples, and CI are not implemented. A design decision, directory plan, successful scaffold build, or zero-test run is not validated capture support.
+P0 is in progress. The product entry point is still a Rust 2024 Hello World binary in `src/main.rs`. An independent `xtask` now prepares/verifies external fixed-source records, archives validation batches and checks project conventions. P0 tests cover fallible allocation and an explicitly enabled Windows controlled-window GDI prototype; a native Actions matrix is defined. The capture library, migrated backends, bindings and examples are not implemented, and P0 has not passed its full gate. A prototype or scaffold build is not validated product capture support.
 
 Read these authorities before changing the corresponding area:
 
@@ -65,7 +65,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-`cargo run` currently prints Hello World. Test count is currently zero. For documentation-only work, validate links, anchors, status and diffs; do not describe scaffold tests as desktop acceptance or update the toolchain solely to check Markdown.
+`cargo run` currently prints Hello World. `cargo test --workspace` runs allocation prototypes and xtask tests; it does not run desktop capture. The explicit Windows prototype command and external batch records are documented in the development guide. For documentation-only work, validate links, anchors, status and diffs; do not describe tool/prototype tests as full desktop acceptance or update the toolchain solely to check Markdown.
 
 Future `xtask` preparation must run without directly or indirectly depending on the capture crate. Resolve latest dependencies and backend AUTO/ON/OFF before invoking Cargo, producing explicit per-build configuration. `build.rs` verifies it, builds/generates necessary native pieces in `OUT_DIR`, and declares input/environment invalidation; it does not download OpenCV or write external acceptance reports. Direct Cargo consumers use explicit features and documented system dependencies without reference data or `xtask`.
 
