@@ -151,7 +151,9 @@ function Boost-Source {
     Save-Input $saved
     $sourcePath = Join-Path $replayRoot Boost
     New-Item -ItemType Directory -Path $sourcePath -Force | Out-Null
-    Step 'boost-source-unpack' tar @('-xf', $archive, '--strip-components=1', '-C', $sourcePath)
+    # This documentation-only symlink in the complete release uses a spelling
+    # rejected by Windows tar. The full original archive is retained above.
+    Step 'boost-source-unpack' tar @('-xf', $archive, '--strip-components=1', '--exclude=*/libs/decimal/doc/modules/ROOT/examples', '-C', $sourcePath)
     return $sourcePath
 }
 
@@ -249,7 +251,7 @@ try {
 
     $options = @('-DBUILD_LIST=core,imgproc,imgcodecs', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_WITH_STATIC_CRT=OFF',
         '-DBUILD_TESTS=OFF', '-DBUILD_PERF_TESTS=OFF', '-DBUILD_EXAMPLES=OFF', '-DBUILD_opencv_apps=OFF',
-        '-DWITH_PROTOBUF=OFF', '-DWITH_FLATBUFFERS=OFF')
+        '-DWITH_PROTOBUF=OFF', '-DWITH_FLATBUFFERS=OFF', '-DWITH_IPP=ON', '-DBUILD_IPP_IW=ON')
     $opencvDownloads = Join-Path $DepsRoot downloads/opencv
     if ($offline) {
         $opencvDownloads = Join-Path $replayRoot downloads

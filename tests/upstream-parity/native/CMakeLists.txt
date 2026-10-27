@@ -30,7 +30,7 @@ foreach(input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_BOOST_ROOT)
         message(FATAL_ERROR "Explicit external input ${input} is required")
     endif()
 endforeach()
-set(BOOST_INCLUDE_LIBRARIES regex)
+set(BOOST_INCLUDE_LIBRARIES regex uuid)
 set(BOOST_BUILD_TESTING OFF)
 set(BOOST_SKIP_INSTALL_RULES ON)
 add_subdirectory("${MFS_BOOST_ROOT}" "${CMAKE_BINARY_DIR}/boost")
@@ -40,10 +40,12 @@ add_subdirectory("${MFS_BOOST_ROOT}" "${CMAKE_BINARY_DIR}/boost")
 # These source files are compiled without edits; this is a build adaptation.
 add_library(mfs_reference_utils SHARED
     "${MFS_MAAUTILS_ROOT}/source/Logger/Logger.cpp"
-    "${MFS_MAAUTILS_ROOT}/source/Platform/PlatformWin32.cpp")
+    "${MFS_MAAUTILS_ROOT}/source/Platform/PlatformWin32.cpp"
+    "${MFS_MAAUTILS_ROOT}/source/Encoding/Encoding.cpp"
+    "${MFS_MAAUTILS_ROOT}/source/Uuid/Uuid.cpp")
 target_compile_definitions(mfs_reference_utils PRIVATE MAA_UTILS_EXPORTS)
 target_include_directories(mfs_reference_utils PUBLIC "${MFS_MAAUTILS_ROOT}/include" ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(mfs_reference_utils PRIVATE ${OpenCV_LIBS} Boost::regex Psapi)
+target_link_libraries(mfs_reference_utils PRIVATE ${OpenCV_LIBS} Boost::regex Boost::uuid Psapi)
 target_compile_definitions(mfs_reference_utils PRIVATE BOOST_ALL_NO_LIB)
 
 add_executable(mfs_reference_u

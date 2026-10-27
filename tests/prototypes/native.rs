@@ -165,7 +165,7 @@ unsafe extern "C" fn callback(
 
 struct Worker {
     handle: *mut c_void,
-    context: Option<Box<Context>>,
+    context: Option<NonNull<Context>>,
     module: Option<Arc<Module>>,
     stop: Stop,
 }
@@ -176,7 +176,7 @@ impl Worker {
     }
 
     fn start_with_fault(adapter: &Adapter, panic_in_callback: bool, fault: u32) -> Result<Self> {
-        let mut context = Box::try_new(Context {
+        let context = Box::try_new(Context {
             stop: adapter.stop,
             panic_in_callback,
             status: AtomicI32::new(-99),
@@ -184,18 +184,18 @@ impl Worker {
             reentrant_stop: AtomicI32::new(-99),
             pixels: Mutex::new(None),
         })?;
+        // Transfer unique Box ownership before registration. No Box reborrow or
+        // move may retag the pointee while a foreign thread holds shared access.
+        let context = NonNull::new(Box::into_raw(context)).unwrap();
         let mut handle = null_mut();
-        // SAFETY: Context has stable Box storage and synchronized callback data.
+        // SAFETY: Context has stable owned storage and synchronized callback data.
         // Native start either fails with null output or borrows it until join.
-        let status = unsafe {
-            (adapter.start)(
-                (&mut *context as *mut Context).cast(),
-                Some(callback),
-                fault,
-                &mut handle,
-            )
-        };
+        let status =
+            unsafe { (adapter.start)(context.as_ptr().cast(), Some(callback), fault, &mut handle) };
         if status != 0 || handle.is_null() {
+            // SAFETY: The private C++ start contract guarantees that a failed
+            // start leaves no thread/callback retaining this allocation.
+            drop(unsafe { Box::from_raw(context.as_ptr()) });
             return Err(format!("native start failed: {status}").into());
         }
         Ok(Self {
@@ -215,17 +215,16 @@ impl Worker {
             return Err(format!("native stop failed, context/module retained: {status}").into());
         }
         self.handle = null_mut();
-        self.context
-            .take()
-            .ok_or_else(|| "callback context missing".into())
+        let context = self.context.take().ok_or("callback context missing")?;
+        // SAFETY: Successful native stop joined the only callback thread. This
+        // consumes the original Box allocation exactly once, after all aliases.
+        Ok(unsafe { Box::from_raw(context.as_ptr()) })
     }
 
     fn abandon(&mut self) {
         // A failed join is not proof of callback drain. Retain every owner rather
         // than freeing context/module under a potentially active foreign thread.
-        if let Some(owner) = self.context.take() {
-            std::mem::forget(owner);
-        }
+        self.context.take(); // Deliberately retain the heap allocation on error.
         if let Some(owner) = self.module.take() {
             std::mem::forget(owner);
         }
@@ -240,6 +239,10 @@ impl Drop for Worker {
             let status = unsafe { (self.stop)(self.handle) };
             if status != 0 {
                 self.abandon();
+            } else if let Some(context) = self.context.take() {
+                // SAFETY: Successful stop drained all accesses; this is the
+                // original unique allocation, still owned by the early-exit guard.
+                drop(unsafe { Box::from_raw(context.as_ptr()) });
             }
         }
     }
