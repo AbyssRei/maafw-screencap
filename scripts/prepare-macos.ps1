@@ -66,7 +66,11 @@ try {
         & cargo test --release --locked --test p0-macos --features prototype-macos --no-run --message-format=json > $messages 2> $log
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -ne 0){Get-Content -LiteralPath $log -Tail 60|ForEach-Object{Write-Host $_};throw 'ScreenCaptureKit prototype did not compile'}
+        if($code -ne 0){
+            Get-Content -LiteralPath $log -Tail 60|ForEach-Object{Write-Host $_}
+            Get-Content -LiteralPath $messages|ForEach-Object{$_|ConvertFrom-Json}|Where-Object reason -EQ compiler-message|ForEach-Object{Write-Host $_.message.rendered}
+            throw 'ScreenCaptureKit prototype did not compile'
+        }
         $buildStatus='passed'
     }finally{
         $checks.Add([ordered]@{name='native-build';status=$buildStatus;log=(Artifact $log)})

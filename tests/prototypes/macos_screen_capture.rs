@@ -440,9 +440,9 @@ fn probe() -> ProbeResult<()> {
     // payload must keep its state/input lifetime, discard the result, then drain.
     let metrics = Arc::try_new(Metrics::default()).map_err(|e| e.to_string())?;
     let request = Arc::try_new(Request::new(metrics.clone())).map_err(|e| e.to_string())?;
-    request.abandoned.store(true, Ordering::Release);
     let weak = Arc::downgrade(&request);
     begin(id, &request);
+    request.abandoned.store(true, Ordering::Release);
     drop(request);
     wait(|| weak.upgrade().is_none() && metrics.inputs_dropped.load(Ordering::Acquire) == 1)?;
     check_metrics(&metrics)?;

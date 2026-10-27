@@ -26,7 +26,7 @@ pipewire = { version = "0.10", optional = true, features = ["v1_2_0"] }
 objc2 = { version = "0.6", optional = true }
 block2 = { version = "0.6", optional = true }
 objc2-foundation = { version = "0.3", optional = true, default-features = false, features = ["std", "NSArray", "NSDate", "NSError", "NSGeometry", "NSRunLoop", "NSString"] }
-objc2-app-kit = { version = "0.3", optional = true, default-features = false, features = ["std", "NSApplication", "NSColor", "NSEvent", "NSGraphics", "NSResponder", "NSRunningApplication", "NSView", "NSWindow"] }
+objc2-app-kit = { version = "0.3", optional = true, default-features = false, features = ["std", "NSApplication", "NSColor", "NSEvent", "NSGraphics", "NSResponder", "NSRunningApplication", "NSView", "NSWindow", "objc2-core-foundation"] }
 objc2-screen-capture-kit = { version = "0.3", optional = true, default-features = false, features = ["std", "SCScreenshotManager", "SCShareableContent", "SCStream", "block2", "objc2-core-foundation", "objc2-core-graphics", "objc2-core-media"] }
 objc2-core-media = { version = "0.3", optional = true, default-features = false, features = ["std", "CMSampleBuffer", "objc2-core-video"] }
 objc2-core-video = { version = "0.3", optional = true, default-features = false, features = ["std", "CVBase", "CVBuffer", "CVImageBuffer", "CVPixelBuffer", "CVReturn"] }
