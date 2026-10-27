@@ -122,7 +122,7 @@ P0/P1 验收：PipeWire 取帧、锁/通知/停止、buffer 归还和初始化�
 
 ## R2-02 macOS 原生绑定
 
-状态：用户已确认 A；P0 主线程原型及编排已实现，首次原生编译/捕获待完成。
+状态：用户已确认 A；P0 主线程原型已通过原生受控窗口捕获、CPU 持帧及完成/晚到回调释放验证，完整平台与 U/P 对照仍待验收。
 
 通过 `objc2` 和 `objc2-screen-capture-kit` 及所需 CoreMedia/CoreVideo/CoreFoundation/AppKit 等框架绑定直接接入；按需使用 `block2`、`dispatch2`。仅为已证明的绑定或原生互操作缺口增加最小 Objective-C 桥接，确需 Objective-C++ 时单独说明。
 

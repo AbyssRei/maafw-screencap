@@ -8,6 +8,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     env, fs,
     path::{Path, PathBuf},
     process::Command,
@@ -81,11 +82,15 @@ pub fn run(args: &[String]) -> Result<()> {
             "Complete responsibility review and method/target parity matrix".into(),
             "Independent unpatched reference executable and latest-source OpenCV adapter".into(),
             "Complete FramePool failure/resize/permission matrix, Desktop Duplication and other backend shutdown".into(),
-            "Linux PipeWire/Wlr and macOS ScreenCaptureKit native prototypes".into(),
+            "Complete Linux PipeWire failure/format, Wlr and macOS target/failure prototypes".into(),
             "Three native Actions runner results, platform dependency isolation and AUTO/ON/OFF"
                 .into(),
         ],
     };
+    // Keep the input source before any command. Edits while dependency queries
+    // or native checks run must never be attributed to one coherent batch.
+    let source_before = snapshot_source(&root, &inputs, &mut run)?;
+    let head_before = fs::read(inputs.join("product-git-head.txt"))?;
     // Update the toolchain before overriding CARGO_HOME in child builds.
     check(
         &root,
@@ -255,10 +260,55 @@ pub fn run(args: &[String]) -> Result<()> {
                 .push("Native desktop capture not requested in this batch".into());
         }
     }
-    snapshot_source(&root, &inputs, &mut run)?;
     if passed(&run, "offline-inputs") {
         offline_smoke(&root, &deps, &inputs, &logs, &mut run)?;
     }
+    let source_after = source_fingerprint(repository());
+    let head_after = git(repository(), &["rev-parse", "HEAD"]);
+    let stable = source_after
+        .as_ref()
+        .is_ok_and(|after| after == &source_before)
+        && head_after.as_ref().is_ok_and(|after| after == &head_before);
+    let mut message =
+        String::from("Checks compare source bytes and Git HEAD at the batch boundaries.\n");
+    match source_after {
+        Ok(after) => {
+            for name in source_before
+                .keys()
+                .chain(after.keys())
+                .collect::<std::collections::BTreeSet<_>>()
+            {
+                if source_before.get(name) != after.get(name) {
+                    message.push_str(&format!("changed/added/removed source: {name}\n"));
+                }
+            }
+        }
+        Err(error) => message.push_str(&format!("Cannot fingerprint final source: {error}\n")),
+    }
+    match head_after {
+        Ok(after) if after != head_before => {
+            message.push_str("Git HEAD differs from the archived starting revision.\n")
+        }
+        Err(error) => message.push_str(&format!("Cannot read final Git HEAD: {error}\n")),
+        _ => {}
+    }
+    if stable {
+        message.push_str("Source and Git HEAD matched the archived starting input.\n");
+    } else {
+        message.push_str("Source/HEAD changed or could not be verified; this batch cannot pass.\n");
+        let changed = inputs.join("changed-source");
+        fs::create_dir(&changed)?;
+        if let Err(error) = snapshot_source(&root, &changed, &mut run) {
+            message.push_str(&format!("Final source snapshot is incomplete: {error}\n"));
+        }
+    }
+    let log = logs.join("source-stability.log");
+    fs::write(&log, message)?;
+    run.checks.push(Check {
+        name: "source-stability".into(),
+        status: if stable { "passed" } else { "failed" }.into(),
+        log: records::artifact(&root, &log)?,
+    });
     let failed = run.checks.iter().any(|check| check.status != "passed");
     let manifest = directory.join("manifest.json");
     records::create_json(&manifest, &run)?;
@@ -336,11 +386,9 @@ fn passed(run: &Run, name: &str) -> bool {
         .any(|check| check.name == name && check.status == "passed")
 }
 
-pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Result<()> {
-    let source = inputs.join("product-source");
-    fs::create_dir(&source)?;
+fn source_names(directory: &Path) -> Result<Vec<String>> {
     let names = git(
-        repository(),
+        directory,
         &[
             "ls-files",
             "--cached",
@@ -349,16 +397,43 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
             "-z",
         ],
     )?;
-    for name in names.split(|b| *b == 0).filter(|name| !name.is_empty()) {
-        let name = std::str::from_utf8(name)?;
-        let from = repository().join(name);
+    names
+        .split(|b| *b == 0)
+        .filter(|name| !name.is_empty())
+        .map(|name| Ok(std::str::from_utf8(name)?.to_owned()))
+        .collect()
+}
+
+fn source_fingerprint(directory: &Path) -> Result<BTreeMap<String, String>> {
+    let mut files = BTreeMap::new();
+    for name in source_names(directory)? {
+        let path = directory.join(&name);
+        if path.is_file() {
+            files.insert(name, records::hash(&path)?);
+        }
+    }
+    Ok(files)
+}
+
+pub(crate) fn snapshot_source(
+    root: &Path,
+    inputs: &Path,
+    run: &mut Run,
+) -> Result<BTreeMap<String, String>> {
+    let source = inputs.join("product-source");
+    fs::create_dir(&source)?;
+    let mut files = BTreeMap::new();
+    for name in source_names(repository())? {
+        let from = repository().join(&name);
         if !from.is_file() {
             continue;
         }
-        let to = source.join(name);
+        let to = source.join(&name);
         fs::create_dir_all(to.parent().unwrap())?;
         fs::copy(from, &to)?;
-        run.inputs.push(records::artifact(root, &to)?);
+        let artifact = records::artifact(root, &to)?;
+        files.insert(name, artifact.sha256.clone());
+        run.inputs.push(artifact);
     }
     for required in [
         "Cargo.toml",
@@ -389,7 +464,7 @@ pub(crate) fn snapshot_source(root: &Path, inputs: &Path, run: &mut Run) -> Resu
         fs::write(&path, git(repository(), &args)?)?;
         run.inputs.push(records::artifact(root, &path)?);
     }
-    Ok(())
+    Ok(files)
 }
 
 fn offline_smoke(
@@ -546,4 +621,51 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct SourceFixture(PathBuf);
+    impl Drop for SourceFixture {
+        fn drop(&mut self) {
+            let base = env::temp_dir().canonicalize().unwrap();
+            let target = self.0.canonicalize().unwrap();
+            assert!(target.starts_with(&base) && target != base);
+            fs::remove_dir_all(target).unwrap();
+        }
+    }
+
+    #[test]
+    fn detects_changed_added_and_removed_source_but_excludes_ignored_outputs() {
+        let path = env::temp_dir().join(format!(
+            "mfs-source-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&path).unwrap();
+        let fixture = SourceFixture(path);
+        git(&fixture.0, &["init", "--quiet"]).unwrap();
+        fs::write(fixture.0.join(".gitignore"), "output\n").unwrap();
+        fs::write(fixture.0.join("tracked.rs"), "original").unwrap();
+        git(&fixture.0, &["add", ".gitignore", "tracked.rs"]).unwrap();
+        let before = source_fingerprint(&fixture.0).unwrap();
+        fs::write(fixture.0.join("output"), "generated bytes").unwrap();
+        assert_eq!(before, source_fingerprint(&fixture.0).unwrap());
+        fs::write(fixture.0.join("tracked.rs"), "edited").unwrap();
+        fs::write(fixture.0.join("new.rs"), "new untracked source").unwrap();
+        let after = source_fingerprint(&fixture.0).unwrap();
+        assert_ne!(before["tracked.rs"], after["tracked.rs"]);
+        assert!(after.contains_key("new.rs"));
+        fs::remove_file(fixture.0.join("tracked.rs")).unwrap();
+        assert!(
+            !source_fingerprint(&fixture.0)
+                .unwrap()
+                .contains_key("tracked.rs")
+        );
+    }
 }
