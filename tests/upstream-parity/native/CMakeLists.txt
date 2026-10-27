@@ -45,7 +45,7 @@ add_library(mfs_reference_utils SHARED
     "${MFS_MAAUTILS_ROOT}/source/Uuid/Uuid.cpp")
 target_compile_definitions(mfs_reference_utils PRIVATE MAA_UTILS_EXPORTS)
 target_include_directories(mfs_reference_utils PUBLIC "${MFS_MAAUTILS_ROOT}/include" ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(mfs_reference_utils PRIVATE ${OpenCV_LIBS} Boost::regex Boost::uuid Psapi)
+target_link_libraries(mfs_reference_utils PUBLIC Boost::regex PRIVATE ${OpenCV_LIBS} Boost::uuid Psapi)
 target_compile_definitions(mfs_reference_utils PRIVATE BOOST_ALL_NO_LIB)
 
 add_executable(mfs_reference_u
