@@ -641,6 +641,15 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
             return Err("invalid check status".into());
         }
     }
+    if run.run_id.starts_with("p0-catalog-") {
+        let path = format!("runs/{}/inputs/capture-catalog.json", run.run_id);
+        let catalog = run
+            .inputs
+            .iter()
+            .find(|input| input.path == path)
+            .ok_or("catalog run does not retain its validated definition")?;
+        crate::review::verify(root, catalog)?;
+    }
     Ok(())
 }
 

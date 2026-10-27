@@ -19,7 +19,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Windows 默认 workspace 测试包含 4 项分配原型与 10 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
+Windows 默认 workspace 测试包含 4 项分配原型与 16 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
 
 ```powershell
 cargo test --release --test p0-interop --features prototype-windows-com -- --include-ignored --test-threads=1
@@ -43,6 +43,7 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 ```powershell
 cargo xtask reference prepare
 cargo xtask reference verify
+cargo xtask reference catalog runs/<input-id>/capture-catalog.json # 校验外部职责/目标/用例定义
 cargo xtask check
 cargo xtask batch --desktop  # Windows 显式桌面批次；其他平台暂不加此参数
 cargo xtask native --desktop # Windows x64：VS2026/MSBuild、C++/OpenCV 互操作及独立参考
@@ -53,6 +54,7 @@ cargo xtask wlr-prototype      # Linux x64：真实 wlroots headless/Pixman 与 
 
 - `reference prepare` 获取固定上游与固定 PR head，核验两个提交及唯一变更文件，外置保存完整未打补丁源码归档、相关文件发现清单、许可声明记录、累计补丁和 head 文件。它只做来源准备，不应用补丁，不构建参考程序，也不生成已验收 U/P。可用 `--root <目录>` 或 `MFS_REFERENCE_ROOT` 指定独立参考根。
 - `reference verify` 校验布局版本、未知字段、必需身份、父 U、Git 对象/文件内容、完整归档与记录 SHA-256、来源清单覆盖和相对路径越界，包含 symlink/junction 的实际路径检查。完整职责审阅、方法/目标矩阵和依赖许可审计仍待完成。
+- `reference catalog <reference-relative input> [--root <目录>]` 校验并归档外部职责、方法/目标与 U 用例定义。保留固定准备基线，同时要求已发现源码、公共控制单元头和 Portal 交接文件的覆盖；逐文件核对固定 Git blob、原始字节 SHA-256 和准确行锚点，核对报告及方法/目标/用例引用。未审阅文件必须明确标为 pending，定义不能引用它们；所有用例只能是 not_run，不能填入 passed 或完整阶段状态。校验后将输入、报告副本及工具源码快照写入新的外部批次，不修改旧基线。若已有本机批次的 Cargo.lock、工具链身份与当前完全一致且包含 vendor，关联其依赖快照供离线重建；未找到时明确记录缺口，准备入口不触发捕获库构建。`reference verify` 会重新执行已归档 catalog 的语义校验。这只证明记录结构和来源证据一致，不证明人工结论穷尽、原生对照执行、许可验收或 P0 完成。
 - `check` 校验 HEAD 的 Conventional Commit 标题及 workspace 版本/许可元数据；提交前可用 `--message-file <文件>` 校验拟用消息。它不代替发布阶段的 API 兼容性与版本协商验收。
 - `batch` 先更新 nightly，再更新 Cargo 解析并查询每个 registry 包的最新正式版（包括范围外主版本），归档锁文件、元数据、vendor 源码、实际源码快照和逐项日志，再执行 release build、workspace tests、fmt、Clippy 和项目约定检查。直接依赖保持全局最新版；依用户确认的绑定传递规则，已接入 PipeWire/Wayland 绑定的专属依赖链可使用已核验父约束内的最新正式版，报告同时保存全局版本、约束内版本、父声明、采用规则及升级差距。非绑定链共用版本不豁免，约束内未更新仍失败。Windows 的 `--desktop` 追加显式原型及其 Clippy。批次开始时即归档源码，结束后比较 Git HEAD、全部跟踪/未忽略源文件的路径和内容哈希；若源码变化或无法核验，明确失败并另存结束状态，防止把混合输入算作同次验收。最后将起始源码、锁文件及 vendor 复制到 deps 中独立目录，以空 Cargo home 和离线模式验证默认构建及原型编译，该消费目录没有同级 reference。失败单列且不自动重试；所有批次均明确记录 P0 仍缺失的门禁。
 

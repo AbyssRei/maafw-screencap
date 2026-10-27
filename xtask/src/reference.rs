@@ -471,6 +471,59 @@ fn verify_source(root: &Path, upstream: &Path, commit: &str, source: &Source) ->
     Ok(())
 }
 
+pub(crate) struct ReviewContext {
+    pub(crate) upstream: std::path::PathBuf,
+    pub(crate) commit: String,
+    pub(crate) required_sources: BTreeSet<String>,
+}
+
+pub(crate) fn review_context(root: &Path, parent: &Artifact) -> Result<ReviewContext> {
+    let index: Index = records::read(&root.join("manifest.json"))?;
+    records::version(index.layout_version)?;
+    if !index
+        .baselines
+        .iter()
+        .any(|entry| entry.path == parent.path && entry.sha256 == parent.sha256)
+    {
+        return Err("catalog parent is not an indexed fixed U preparation baseline".into());
+    }
+    let path = records::verify(root, parent)?;
+    let baseline: Baseline = records::read(&path)?;
+    records::version(baseline.layout_version)?;
+    if baseline.kind != "u" || baseline.commit != BASE || baseline.repository_url != URL {
+        return Err("catalog requires the fixed unpatched upstream".into());
+    }
+    let upstream = path.parent().unwrap().join("reference/upstream");
+    if text(git(&upstream, &["rev-parse", "HEAD"])?)? != BASE
+        || text(git(&upstream, &["rev-parse", "HEAD^{tree}"])?)? != baseline.tree
+    {
+        return Err("catalog checkout differs from its fixed parent".into());
+    }
+    // The immutable discovery baseline predates the complete public-header and
+    // portal handoff review. Extend review coverage without rewriting it.
+    let mut required_sources: BTreeSet<_> = baseline
+        .sources
+        .into_iter()
+        .map(|s| s.original_path)
+        .collect();
+    required_sources.extend(tracked_files(&upstream)?.into_iter().filter(|path| {
+        path.starts_with("include/MaaControlUnit/")
+            || path.starts_with("source/MaaToolkit/Portal/")
+            || path.starts_with("include/MaaToolkit/Portal/")
+            || [
+                "include/MaaFramework/MaaDef.h",
+                "include/MaaFramework/MaaPort.h",
+                "include/MaaFramework/Instance/MaaCustomController.h",
+            ]
+            .contains(&path.as_str())
+    }));
+    Ok(ReviewContext {
+        upstream,
+        commit: baseline.commit,
+        required_sources,
+    })
+}
+
 fn text(bytes: Vec<u8>) -> Result<String> {
     Ok(String::from_utf8(bytes)?.trim().to_owned())
 }

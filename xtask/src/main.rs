@@ -9,6 +9,7 @@ mod pipewire;
 mod quality;
 mod records;
 mod reference;
+mod review;
 mod wlr;
 
 use std::{env, error::Error, ffi::OsStr, path::Path, process::Command};
@@ -42,6 +43,9 @@ fn run() -> Result<()> {
     if argv.first().is_some_and(|arg| arg == "wlr-prototype") {
         return wlr::run(&argv[1..]);
     }
+    if argv.starts_with(&["reference".into(), "catalog".into()]) {
+        return review::run(&argv[2..]);
+    }
     let mut args = argv.into_iter();
     match (args.next().as_deref(), args.next().as_deref()) {
         (Some("reference"), Some(action @ ("prepare" | "verify"))) => {
@@ -70,6 +74,7 @@ fn run() -> Result<()> {
             println!(
                 "cargo xtask reference prepare [--root <external directory>]\n\
                       cargo xtask reference verify [--root <external directory>]\n\n\
+                      cargo xtask reference catalog <reference-relative input> [--root <external directory>]\n\n\
                       cargo xtask check [--message-file <commit message file>]\n\
                       cargo xtask batch [--desktop]\n\n\
                       cargo xtask native [--desktop] [--offline-inputs <run manifest>]\n\n\
