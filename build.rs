@@ -1,7 +1,86 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
+#[path = "build-support/p0-configuration.rs"]
+mod configuration;
+
 fn main() {
+    println!("cargo::rerun-if-changed=build-support/p0-configuration.rs");
+    println!("cargo::rerun-if-env-changed=MFS_BUILD_CONFIGURATION");
+    println!("cargo::rerun-if-env-changed=HOST");
+    for name in configuration::PROBE_ENV {
+        println!("cargo::rerun-if-env-changed={name}");
+    }
+    if let Some(path) = std::env::var_os("MFS_BUILD_CONFIGURATION") {
+        println!(
+            "cargo::rerun-if-changed={}",
+            std::path::Path::new(&path).display()
+        );
+        let text = std::fs::read_to_string(&path).expect("read explicit P0 build configuration");
+        let selected =
+            configuration::Configuration::parse(&text).expect("valid P0 build configuration");
+        let target = std::env::var("TARGET").expect("Cargo target");
+        let host = std::env::var("HOST").expect("Cargo host");
+        assert_eq!(
+            selected.target, target,
+            "configuration target differs from Cargo TARGET"
+        );
+        assert_eq!(
+            host, target,
+            "P0 prepared configuration currently requires native builds"
+        );
+        let os = std::env::var("CARGO_CFG_TARGET_OS").expect("Cargo target OS");
+        let expected_os = match target.as_str() {
+            "x86_64-pc-windows-msvc" => "windows",
+            "x86_64-unknown-linux-gnu" => "linux",
+            "aarch64-apple-darwin" => "macos",
+            _ => unreachable!(),
+        };
+        assert_eq!(
+            os, expected_os,
+            "configuration target OS differs from Cargo"
+        );
+        let features = configuration::FEATURES.map(|name| {
+            let variable = format!(
+                "CARGO_FEATURE_{}",
+                name.replace('-', "_").to_ascii_uppercase()
+            );
+            println!("cargo::rerun-if-env-changed={variable}");
+            std::env::var_os(variable).is_some()
+        });
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_PROTOTYPE_WINDOWS");
+        selected
+            .verify_features(
+                &features,
+                std::env::var_os("CARGO_FEATURE_PROTOTYPE_WINDOWS").is_some(),
+            )
+            .expect("prepared Cargo feature selection");
+        for (family, enabled) in selected.enabled.iter().enumerate() {
+            if *enabled {
+                let mut evidence = Vec::new();
+                configuration::probe(&target, family, &mut evidence)
+                    .expect("selected native dependencies remain available");
+                selected
+                    .verify_native(family, &evidence)
+                    .expect("native dependencies match the explicit prepared input");
+                for item in evidence {
+                    if let Some(path) = item.strip_prefix("native_file=") {
+                        println!("cargo::rerun-if-changed={path}");
+                    }
+                }
+            }
+        }
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+        std::fs::write(out.join("p0-build-configuration.txt"), selected.encode())
+            .expect("write verified configuration into OUT_DIR");
+        // Enumerate selected feature names here too so the saved build input is
+        // inspectable without depending on xtask's external report layout.
+        std::fs::write(
+            out.join("p0-build-features.txt"),
+            selected.features().join(","),
+        )
+        .expect("write verified features into OUT_DIR");
+    }
     println!("cargo::rerun-if-env-changed=TARGET");
     println!("cargo::rerun-if-env-changed=CARGO_CFG_TARGET_OS");
     println!("cargo::rerun-if-changed=build-support/windows-prototype.txt");

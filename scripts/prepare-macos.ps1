@@ -3,7 +3,9 @@
 param(
     [Parameter(Mandatory)][string]$ReferenceRoot,
     [Parameter(Mandatory)][string]$DepsRoot,
-    [Parameter(Mandatory)][string]$RunRoot
+    [Parameter(Mandatory)][string]$RunRoot,
+    [Parameter(Mandatory)][string]$ConfigureTool,
+    [Parameter(Mandatory)][string]$RustBatch
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -48,6 +50,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
 }
 try {
     if(-not $IsMacOS -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne 'Arm64'){throw 'Native macOS arm64 is required'}
+    . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family screen-capture-kit
+    $inputs.Add((Artifact $env:MFS_BUILD_CONFIGURATION))
     Step host-identity uname @('-a')
     Step os-identity sw_vers @()
     Step xcode-identity xcodebuild @('-version')

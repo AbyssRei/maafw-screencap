@@ -36,16 +36,25 @@ pub(crate) struct Check {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
-    let desktop = match args {
-        [] => false,
-        [flag] if flag == "--desktop" => true,
-        _ => return Err("expected batch [--desktop]".into()),
+    run_at(args, None)
+}
+
+pub(crate) fn prepare_at(root: &Path) -> Result<()> {
+    run_at(&["--prepare-only".into()], Some(root.to_owned()))
+}
+
+fn run_at(args: &[String], root_override: Option<PathBuf>) -> Result<()> {
+    let (desktop, prepare_only) = match args {
+        [] => (false, false),
+        [flag] if flag == "--desktop" => (true, false),
+        [flag] if flag == "--prepare-only" => (false, true),
+        _ => return Err("expected batch [--desktop | --prepare-only]".into()),
     };
     if desktop && !cfg!(target_os = "windows") {
         return Err("native desktop prototypes for this host are not implemented yet".into());
     }
-    let path = env::var_os("MFS_REFERENCE_ROOT")
-        .map(PathBuf::from)
+    let path = root_override
+        .or_else(|| env::var_os("MFS_REFERENCE_ROOT").map(Into::into))
         .unwrap_or_else(|| {
             repository()
                 .parent()
@@ -194,92 +203,96 @@ pub fn run(args: &[String]) -> Result<()> {
         if vendor.exists() {
             archive_files(&root, &vendor, &mut run.inputs)?;
         }
-        for (name, args) in [
-            ("release-build", vec!["build", "--release", "--locked"]),
-            ("workspace-tests", vec!["test", "--workspace", "--locked"]),
-            ("format", vec!["fmt", "--all", "--", "--check"]),
-            (
-                "clippy",
-                vec![
+        if !prepare_only {
+            for (name, args) in [
+                ("release-build", vec!["build", "--release", "--locked"]),
+                ("workspace-tests", vec!["test", "--workspace", "--locked"]),
+                ("format", vec!["fmt", "--all", "--", "--check"]),
+                (
                     "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
-            ),
-        ] {
+                    vec![
+                        "clippy",
+                        "--workspace",
+                        "--all-targets",
+                        "--locked",
+                        "--",
+                        "-D",
+                        "warnings",
+                    ],
+                ),
+            ] {
+                check(
+                    &root,
+                    &logs,
+                    &mut run,
+                    name,
+                    "cargo",
+                    &args,
+                    Some(&build_env),
+                )?;
+            }
+            // Clippy can change Cargo's fingerprint for xtask. Re-enter the running
+            // executable without asking Cargo to replace that live file on Windows.
+            let executable = env::current_exe()?;
             check(
                 &root,
                 &logs,
                 &mut run,
-                name,
-                "cargo",
-                &args,
+                "project-conventions",
+                executable.to_str().ok_or("non-UTF-8 xtask executable")?,
+                &["check"],
                 Some(&build_env),
             )?;
-        }
-        // Clippy can change Cargo's fingerprint for xtask. Re-enter the running
-        // executable without asking Cargo to replace that live file on Windows.
-        let executable = env::current_exe()?;
-        check(
-            &root,
-            &logs,
-            &mut run,
-            "project-conventions",
-            executable.to_str().ok_or("non-UTF-8 xtask executable")?,
-            &["check"],
-            Some(&build_env),
-        )?;
-        if desktop {
-            check(
-                &root,
-                &logs,
-                &mut run,
-                "windows-native-prototype",
-                "cargo",
-                &[
-                    "test",
-                    "--release",
-                    "--locked",
-                    "--test",
-                    "p0-interop",
-                    "--features",
-                    "prototype-windows-com",
-                    "--",
-                    "--include-ignored",
-                    "--test-threads=1",
-                    "--nocapture",
-                ],
-                Some(&build_env),
-            )?;
-            check(
-                &root,
-                &logs,
-                &mut run,
-                "windows-prototype-clippy",
-                "cargo",
-                &[
-                    "clippy",
-                    "--workspace",
-                    "--all-targets",
-                    "--locked",
-                    "--features",
-                    "prototype-windows-com",
-                    "--",
-                    "-D",
-                    "warnings",
-                ],
-                Some(&build_env),
-            )?;
+            if desktop {
+                check(
+                    &root,
+                    &logs,
+                    &mut run,
+                    "windows-native-prototype",
+                    "cargo",
+                    &[
+                        "test",
+                        "--release",
+                        "--locked",
+                        "--test",
+                        "p0-interop",
+                        "--features",
+                        "prototype-windows-com",
+                        "--",
+                        "--include-ignored",
+                        "--test-threads=1",
+                        "--nocapture",
+                    ],
+                    Some(&build_env),
+                )?;
+                check(
+                    &root,
+                    &logs,
+                    &mut run,
+                    "windows-prototype-clippy",
+                    "cargo",
+                    &[
+                        "clippy",
+                        "--workspace",
+                        "--all-targets",
+                        "--locked",
+                        "--features",
+                        "prototype-windows-com",
+                        "--",
+                        "-D",
+                        "warnings",
+                    ],
+                    Some(&build_env),
+                )?;
+            } else {
+                run.pending
+                    .push("Native desktop capture not requested in this batch".into());
+            }
         } else {
-            run.pending
-                .push("Native desktop capture not requested in this batch".into());
+            run.pending.push("Dependency preparation only: no product build, test, desktop capture or standalone consumer was executed.".into());
         }
     }
-    if passed(&run, "offline-inputs") {
+    if !prepare_only && passed(&run, "offline-inputs") {
         offline_smoke(&root, &deps, &inputs, &logs, &mut run)?;
     }
     let source_after = source_fingerprint(repository());
@@ -423,7 +436,7 @@ fn source_names(directory: &Path) -> Result<Vec<String>> {
         .collect()
 }
 
-fn source_fingerprint(directory: &Path) -> Result<BTreeMap<String, String>> {
+pub(crate) fn source_fingerprint(directory: &Path) -> Result<BTreeMap<String, String>> {
     let mut files = BTreeMap::new();
     for name in source_names(directory)? {
         let path = directory.join(&name);
@@ -658,6 +671,15 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
             .find(|input| input.path == path)
             .ok_or("license run does not retain its registry inventory")?;
         crate::licenses::verify(root, inventory)?;
+    }
+    if run.run_id.starts_with("p0-config-") {
+        let path = format!("runs/{}/inputs/configuration.json", run.run_id);
+        let configuration = run
+            .inputs
+            .iter()
+            .find(|input| input.path == path)
+            .ok_or("configuration run does not retain its native discovery record")?;
+        crate::configuration::verify(root, configuration)?;
     }
     Ok(())
 }

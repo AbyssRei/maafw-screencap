@@ -151,6 +151,10 @@ pub fn run(args: &[String]) -> Result<()> {
         .arg(&directory)
         .arg("-UpstreamRoot")
         .arg(&upstream)
+        .arg("-ConfigureTool")
+        .arg(env::current_exe()?)
+        .arg("-RustBatch")
+        .arg(&parent.path)
         .current_dir(&source)
         .env("CARGO_HOME", deps.join("cargo-home"))
         .env("CARGO_TARGET_DIR", deps.join("target"));

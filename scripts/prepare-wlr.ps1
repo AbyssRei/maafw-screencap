@@ -3,7 +3,9 @@
 param(
     [Parameter(Mandatory)][string]$ReferenceRoot,
     [Parameter(Mandatory)][string]$DepsRoot,
-    [Parameter(Mandatory)][string]$RunRoot
+    [Parameter(Mandatory)][string]$RunRoot,
+    [Parameter(Mandatory)][string]$ConfigureTool,
+    [Parameter(Mandatory)][string]$RustBatch
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -217,6 +219,8 @@ try{
     $library=(& readlink -f (Join-Path $prefix lib/libwayland-client.so)|Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $library)){throw 'Prepared native client library identity absent'}
     $env:MFS_P0_WAYLAND_LIBRARY=$library
+    . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family wlr
+    Save $env:MFS_BUILD_CONFIGURATION
     $runtime=Join-Path $DepsRoot ('runtime/wlr-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
     $socket=Join-Path $runtime mfs-p0-wlr
     if([Text.Encoding]::UTF8.GetByteCount($socket) -ge 108){throw 'Private Wayland socket exceeds Linux sun_path capacity'}

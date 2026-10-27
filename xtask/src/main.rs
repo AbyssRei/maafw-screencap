@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
 mod batch;
+mod configuration;
 mod dependencies;
 mod licenses;
 mod macos;
@@ -12,6 +13,9 @@ mod records;
 mod reference;
 mod review;
 mod wlr;
+
+#[path = "../../build-support/p0-configuration.rs"]
+mod build_configuration;
 
 use std::{env, error::Error, ffi::OsStr, path::Path, process::Command};
 
@@ -28,6 +32,12 @@ fn run() -> Result<()> {
     let argv: Vec<_> = env::args().skip(1).collect();
     if argv.first().is_some_and(|arg| arg == "batch") {
         return batch::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "configure") {
+        return configuration::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "configuration-check") {
+        return configuration::run_checks(&argv[1..]);
     }
     if argv.first().is_some_and(|arg| arg == "check") {
         return quality::run(&argv[1..]);
@@ -81,7 +91,9 @@ fn run() -> Result<()> {
                       cargo xtask reference catalog <reference-relative input> [--root <external directory>]\n\n\
                       cargo xtask reference licenses <Rust batch manifest> [--root <external directory>]\n\n\
                       cargo xtask check [--message-file <commit message file>]\n\
-                      cargo xtask batch [--desktop]\n\n\
+                      cargo xtask batch [--desktop | --prepare-only]\n\n\
+                      cargo xtask configure [--<family> AUTO|ON|OFF] [--offline-inputs <Rust batch manifest>] [--root <external directory>]\n\n\
+                      cargo xtask configuration-check [--offline-inputs <Rust batch manifest>]\n\n\
                       cargo xtask native [--desktop] [--offline-inputs <run manifest>]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\

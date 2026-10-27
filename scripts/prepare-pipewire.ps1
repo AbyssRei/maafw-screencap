@@ -3,7 +3,9 @@
 param(
     [Parameter(Mandatory)][string]$ReferenceRoot,
     [Parameter(Mandatory)][string]$DepsRoot,
-    [Parameter(Mandatory)][string]$RunRoot
+    [Parameter(Mandatory)][string]$RunRoot,
+    [Parameter(Mandatory)][string]$ConfigureTool,
+    [Parameter(Mandatory)][string]$RustBatch
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -169,6 +171,8 @@ try {
     $version = (& pkg-config --modversion libpipewire-0.3 | Out-String).Trim()
     if ($LASTEXITCODE -ne 0 -or $version -ne $release.tag_name) { throw 'pkg-config selected a different PipeWire library' }
     $env:MFS_P0_PIPEWIRE_VERSION = $version
+    . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family pipewire
+    Save $env:MFS_BUILD_CONFIGURATION
     $fixtureBinary = Join-Path $native mfs-p0-pipewire-source
     Step native-source-build cc @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-source.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-o',$fixtureBinary)
     $savedFixture = Join-Path $nativeArtifacts mfs-p0-pipewire-source

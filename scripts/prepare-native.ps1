@@ -5,6 +5,8 @@ param(
     [Parameter(Mandatory)][string]$DepsRoot,
     [Parameter(Mandatory)][string]$RunRoot,
     [Parameter(Mandatory)][string]$UpstreamRoot,
+    [Parameter(Mandatory)][string]$ConfigureTool,
+    [Parameter(Mandatory)][string]$RustBatch,
     [switch]$Desktop,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
@@ -332,7 +334,9 @@ try {
         Save-Input $saved
     }
     $env:MFS_P0_NATIVE_LIBRARY = $adapterLibrary
-    $rustArguments = @('test', '--release', '--locked', '--test', 'p0-native', '--features', 'prototype-windows')
+    . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family windows
+    Save-Input $env:MFS_BUILD_CONFIGURATION
+    $rustArguments = @('test', '--release', '--locked', '--test', 'p0-native', '--features', 'prototype-windows-com')
     if ($offline) { $rustArguments += @('--offline', '--config', $CargoConfig) }
     Step 'rust-native-ffi' cargo ($rustArguments + @('--', '--ignored', '--test-threads=1', '--nocapture'))
 

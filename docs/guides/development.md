@@ -19,7 +19,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Windows 默认 workspace 测试包含 4 项分配原型与 19 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
+Windows 默认 workspace 测试包含 4 项分配原型与 23 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
 
 ```powershell
 cargo test --release --test p0-interop --features prototype-windows-com -- --include-ignored --test-threads=1
@@ -46,6 +46,9 @@ cargo xtask reference verify
 cargo xtask reference catalog runs/<input-id>/capture-catalog.json # 校验外部职责/目标/用例定义
 cargo xtask reference licenses runs/<rust-batch-id>/manifest.json # 归档该目标 registry 许可证据
 cargo xtask check
+cargo xtask batch --prepare-only # 只解析/归档依赖，不编译捕获 crate
+cargo xtask configure --windows ON --pipewire OFF --wlr OFF --screen-capture-kit OFF
+cargo xtask configuration-check # 原生配置与不可构建捕获源的独立准备检查
 cargo xtask batch --desktop  # Windows 显式桌面批次；其他平台暂不加此参数
 cargo xtask native --desktop # Windows x64：VS2026/MSBuild、C++/OpenCV 互操作及独立参考
 cargo xtask pipewire-prototype # Linux x64 原生环境：私有 daemon/C 源和 Rust 取帧原型
@@ -85,6 +88,14 @@ cargo xtask native --desktop --offline-inputs runs/<prepared-run-id>/manifest.js
 实际记录格式由 `xtask/src/records.rs`、`reference.rs`、`batch.rs` 的版本化 serde 结构及校验逻辑维护，未知字段会失败。`manifest.json` 仅索引 baselines/patches/runs；已完成来源记录与运行记录不覆盖，运行中新失败保留在新目录。准备中断的目录保留以供检查，未索引目录不是有效基线。Cargo.lock 只约束同次验证与离线重建，不作为后续在线构建的版本约束。
 
 Actions 通过 `scripts/archive-evidence.ps1` 将 reference 打包为 `p0-evidence.tar`：显式枚举隐藏条目，用 PowerShell 的 .NET TarWriter 写入文件、空目录、链接及权限，再解包并执行 `reference verify` 后上传。该脚本拒绝覆盖输出，也拒绝将输出放进源 reference。下载 artifact 后先解包 tar；不要直接把展开的 reference 文件列表当成可保留上述元数据的归档。校验工具对 Git 子进程启用长路径支持，不修改宿主 Git 全局配置。实际失败状态保留在原运行记录，证据包校验通过不把失败的捕获或构建改记为通过。
+
+`batch --prepare-only` 只更新 nightly、解析/核验最新 Cargo 依赖并归档锁文件、元数据和 vendor；不编译捕获 crate，不运行测试或离线消费，不能作为构建通过记录。
+
+`configure` 为现有 P0 原型族解析 AUTO/ON/OFF，并输出外部 `build.conf` 路径与所需 Cargo features。族名为 windows、pipewire、wlr、screen-capture-kit，不代表最终 SDK 的方法/API。默认先执行上述在线准备；`--offline-inputs <Rust batch manifest>` 明确复用已归档解析，核对安装工具链及消费用 Cargo.lock，下一次在线准备仍重新检查更新。原生快照构建可用 `--consumer-lock <路径>` 指定其实际锁文件。请求、环境/原生依赖证据、源码与配置按新批次归档；ON 不满足时返回失败并保留记录，不发布可用配置。OFF 及其他平台不执行原生探测。
+
+配置中 Windows 检查 VS2026 MSVC x64 与 SDK 库；PipeWire 检查 pkg-config 的 PipeWire/SPA、原型 v1_2_0 所需版本、clang 与 libclang 文件；Wlr 检查 system libwayland-client；macOS 检查原生 SDK/framework stub。非标准 libclang 安装通过 LIBCLANG_PATH/LLVM_CONFIG_PATH 指明。探测不代替生成器实际加载、编译/链接、运行时能力、权限和真实捕获。现有原生原型入口在依赖准备后传入配置，`build.rs` 根据 TARGET/CARGO_CFG_TARGET_OS 复验本机目标、准确 feature 集及选中依赖的相同探测证据；SDK、版本或路径漂移时要求重新准备。旧格式仅保留归档解释，新原生构建使用含证据的新配置；只向 OUT_DIR 写归一化配置/声明，声明配置、环境和发现文件的增量失效输入，不在 Cargo 启动后改变后端选择。
+
+`configuration-check` 验证 OFF 的真实构建、配置/feature 不匹配拒绝、不可发现依赖下的 AUTO 禁用与 ON 失败；Windows/macOS 使用明确指向空目录的 SDK/开发目录，Linux 隔离 pkg-config 搜索目录。它还复制源码到 deps 独立消费者，先证明含 compile_error 的捕获入口无法构建，再以空 Cargo home、归档 vendor 和独立 target 编译运行该消费者的 xtask，证明准备入口不依赖可构建的捕获 crate。预期拒绝及其原记录保留，不能重标为原生取帧通过。每个原生 Actions 平台执行这些检查，结果按实际批次记录。
 
 ## 构建责任与启动顺序
 
