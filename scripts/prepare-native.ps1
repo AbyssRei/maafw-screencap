@@ -63,6 +63,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }
         $status = 'passed'
     }
@@ -185,6 +186,15 @@ try {
         $pending.Add('Explicit offline dependency snapshot used; no new online latest-version check is asserted for this native attempt.')
         $env:CARGO_NET_OFFLINE = 'true'
         if (-not $CargoConfig) { throw 'Offline Rust tests require an explicit archived-vendor configuration' }
+    } else {
+        $preparation = Join-Path $inputsRoot toolchain-preparation
+        try {
+            Step 'windows-toolchain-current' pwsh @('-NoProfile','-File',(Join-Path $PSScriptRoot prepare-windows-toolchain.ps1),'-DepsRoot',$DepsRoot,'-RecordRoot',$preparation)
+        } finally {
+            if (Test-Path -LiteralPath $preparation) {
+                Get-ChildItem -LiteralPath $preparation -Recurse -File | ForEach-Object { Save-Input $_.FullName }
+            }
+        }
     }
     $release = if ($offline) { Get-Content -LiteralPath (Prepared-File cmake-release.json) -Raw | ConvertFrom-Json } else { Api 'repos/Kitware/CMake/releases/latest' }
     $asset = @($release.assets | Where-Object name -Match 'windows-x86_64.zip$')

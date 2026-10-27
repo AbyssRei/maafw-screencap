@@ -45,12 +45,12 @@ jobs:
           if ($hostLine.Trim() -ne 'host: ${{ matrix.expected_target }}') {
             throw "Unexpected native runner target: $hostLine"
           }
+      - name: Resolve current dependencies and archive fixed sources
+        run: cargo xtask reference prepare
       - name: Prepare latest VS2026 Build Tools and Windows SDK
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
-      - name: Resolve current dependencies and archive fixed sources
-        run: cargo xtask reference prepare
       - name: Validate native macOS ScreenCaptureKit prototype
         if: runner.os == 'macOS'
         run: cargo xtask macos-prototype
