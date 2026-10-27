@@ -88,12 +88,9 @@ fn run_at(args: &[String], root_override: Option<PathBuf>) -> Result<()> {
         checks: Vec::new(),
         inputs: Vec::new(),
         pending: vec![
-            "Complete responsibility review and method/target parity matrix".into(),
-            "Independent unpatched reference executable and latest-source OpenCV adapter".into(),
-            "Complete FramePool failure/resize/permission, Desktop Duplication output/access-loss/rotation and other backend shutdown matrices".into(),
-            "Complete Linux PipeWire/Wlr format/failure matrices and macOS target/failure prototypes".into(),
-            "Three native Actions runner results, platform dependency isolation and AUTO/ON/OFF"
-                .into(),
+            "P0 exit assessment must associate the external source/method catalog, scoped licence review, minimal unpatched reference/adapter and native prototype records; this Rust batch alone does not accept P0".into(),
+            "Verify current native toolchains and local plus three-platform Actions prototype/configuration results in their actual environments".into(),
+            "Full migrated-backend U parity belongs to P1; full SDK failure/format/recovery and distribution matrices remain in their assigned later phases, not implicit extra P0 gates".into(),
         ],
     };
     // Keep the input source before any command. Edits while dependency queries

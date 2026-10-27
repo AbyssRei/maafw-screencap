@@ -77,7 +77,7 @@ Initial Windows native validation uses `x86_64-pc-windows-msvc`, CMake, VS2026 a
 
 The Windows environment preparation script queries current official VS2026/SDK releases and checks signed installer identities. Its default is read-only; explicit `-Install` requires an elevated process and uses a dedicated deps Build Tools instance plus a machine-wide SDK. The installation path awaits native validation; installer/registry success alone is not compiler or capture acceptance.
 
-Linux prototype preparation resolves the latest formal LLVM release into an isolated, integrity-checked deps installation; libclang discovery is active only for the PipeWire generator. macOS preparation matches Apple's latest formal Xcode version/build to an installed bundle using process-local developer/SDK selection. Both paths await native Actions validation. Earlier runner results do not close the identified Windows VS/SDK freshness gap.
+Linux prototype preparation resolves the latest formal LLVM release into an isolated, integrity-checked deps installation; LLVM 23.1.4 passed native PipeWire/Wlr prototype checks, with libclang active only for the PipeWire generator. macOS preparation matches Apple's latest formal Xcode version/build to an installed bundle using process-local developer/SDK selection; Xcode 27.1/SDK 27.0 has passed the native P0 capture/ownership prototype. Earlier runner results do not close the identified Windows VS/SDK freshness gap.
 
 ## Testing and Acceptance
 

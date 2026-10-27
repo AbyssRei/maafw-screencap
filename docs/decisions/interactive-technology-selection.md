@@ -65,7 +65,7 @@
 
 “不包含其他平台代码”指其他平台后端不会进入本次产品编译和链接；共享逻辑正常编译。源码分发仍保留各平台源文件。Cargo 可为所有平台解析依赖并记录到同次 lockfile，这与实际编译/链接范围不同。
 
-P0 验收：在三个原生平台分别验证模块、运行依赖、原生探测和链接隔离；验证同平台后端缺依赖时的 AUTO/ON/OFF 行为。已有独立依赖准备、原型族配置和 build.rs 目标/feature/原生证据复验；本机 Windows 已通过 OFF 构建、feature 不匹配拒绝、指定 SDK 缺失时 AUTO/ON、正常 ON 编译及捕获源不可构建时的准备独立性。新配置链路的三平台原生捕获与隔离结果仍待 Actions 验证，不能据此宣称完整 P0 通过。命令和配置范围见[开发指南](../guides/development.md#已实现的-p0-工具)。
+P0 验收：在三个原生平台分别验证模块、运行依赖、原生探测和链接隔离；验证同平台后端缺依赖时的 AUTO/ON/OFF 行为。独立依赖准备、原型族配置和 build.rs 目标/feature/原生证据复验已通过本机 Windows 与三平台 Actions：包含 OFF 构建、feature 不匹配拒绝、指定 SDK/pkg-config 缺失时 AUTO/ON、正常 ON 编译及捕获源不可构建时的准备独立性。平台结果不代替全部 P0 门禁；最新工具链的后续验证及命令范围见[开发指南](../guides/development.md#已实现的-p0-工具)。
 
 依据：
 
@@ -84,7 +84,7 @@ P0 验收：在三个原生平台分别验证模块、运行依赖、原生探�
 
 P0 验收：原生取帧、GUID/HRESULT、调用约定、COM apartment、引用计数、WinRT 接口及事件回调、注销排空、D3D/DXGI 对象与链接。发现绑定缺口时记录证据并讨论必要窄桥接，不默认为已覆盖。
 
-当前 COM 原型覆盖宿主 STA 拒绝 MTA、成功初始化的逐次配平、显式 WARP D3D11/DXGI/WinRT 的 COM 身份往返与引用保活，以及 staging 实际像素读回和独立 CPU 存储。FramePool 覆盖工厂、空帧、注册释放及受控窗口的实际事件/捕获：硬件和 WARP 为独立显式用例，各执行 20 次生命周期。rich 投影将原生成功空帧包装成空错误，迁移必须在窄 ABI 边界保持上游空帧语义；连续 MTA rundown 原型还复现了生成的进程级工厂缓存访问违规，当前用通道内显式工厂并在 uninit 前释放。它没有引入永久 MTA 引用或 CreateFreeThreaded。Desktop Duplication、完整 FramePool 异常/重建/权限矩阵仍待验证。原型命令和 feature 见[开发指南](../guides/development.md#当前仓库与本机命令)，实际结果仍按运行批次及平台外置；该原型没有迁移产品后端。
+当前 COM 原型覆盖宿主 STA 拒绝 MTA、成功初始化的逐次配平、显式 WARP D3D11/DXGI/WinRT 的 COM 身份往返与引用保活，以及 staging 实际像素读回和独立 CPU 存储。FramePool 覆盖工厂、空帧、注册释放及受控窗口的实际事件/捕获：硬件和 WARP 为独立显式用例，各执行 20 次生命周期。rich 投影将原生成功空帧包装成空错误，迁移必须在窄 ABI 边界保持上游空帧语义；连续 MTA rundown 原型还复现了生成的进程级工厂缓存访问违规，当前用通道内显式工厂并在 uninit 前释放。它没有引入永久 MTA 引用或 CreateFreeThreaded。Desktop Duplication 的 20 次硬件采集/释放原型也已通过本机和原生 Actions；完整输出/失败矩阵、FramePool 异常/重建/权限及 U 对照留在对应阶段。原型命令和 feature 见[开发指南](../guides/development.md#当前仓库与本机命令)，实际结果仍按运行批次及平台外置；该原型没有迁移产品后端。
 
 依据：[Microsoft windows-rs 官方说明](https://github.com/microsoft/windows-rs)。
 

@@ -40,11 +40,11 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 已实现的 P0 工具
 
-Linux 原型准备现在先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。此准备路径尚待原生 Actions 验证；此前通过的 Linux 原型使用 runner 自带工具链。Windows VS/SDK 与 macOS Xcode 的正式版本差距仍须处理，不将旧矩阵结果作为最新工具链验收。
+Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的完整原生与本机验证仍须完成，不将旧矩阵结果作为最新工具链验收。
 
-macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像，选中正式版仍须完成实际编译/捕获验证；此新选择路径尚待原生验证。
+macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。
 
-首次 LLVM 原生准备在包摘要校验后遇到 zstd 默认解码内存上限，失败结果已保留；第一次参数修复又暴露了 PowerShell 单项条件数组被展开为字符串、splat 按字符传参的问题，本机 argv 检查已复现。读取 zstd 包现在以显式字符串数组对清单与解压均传入 2048 MiB 上限，继续流式读取，未改回旧编译器；修复后原生验证仍待完成。
+首次 LLVM 原生准备在包摘要校验后遇到 zstd 默认解码内存上限，失败结果已保留；第一次参数修复又暴露了 PowerShell 单项条件数组被展开为字符串、splat 按字符传参的问题，本机 argv 检查已复现。读取 zstd 包现在以显式字符串数组对清单与解压均传入 2048 MiB 上限，继续流式读取，修复后已通过原生验证。
 
 Windows 环境准备可单独运行 `pwsh -NoProfile -File scripts/prepare-windows-toolchain.ps1`：查询 VS2026 stable channel 和 Microsoft SDK 正式下载页，核对安装器的 Microsoft Authenticode 签名及版本，保存外部 local 记录。默认只读，环境缺失返回 77；已在本机确认当前版本差距及两个安装器的有效签名。管理员 PowerShell 加 `-Install` 才安装：Build Tools 使用 deps 下的专用实例，SDK 为系统级安装；不请求 UAC、不重启、不关闭现有 IDE。Actions 在临时 Windows runner 上显式安装，安装执行路径仍待原生验证。安装/注册成功后仍须通过真实编译、链接及捕获，不能算 SDK 验收。
 
@@ -65,10 +65,12 @@ cargo xtask wlr-prototype      # Linux x64：真实 wlroots headless/Pixman 与 
 ```
 
 - `reference prepare` 获取固定上游与固定 PR head，核验两个提交及唯一变更文件，外置保存完整未打补丁源码归档、相关文件发现清单、许可声明记录、累计补丁和 head 文件。它只做来源准备，不应用补丁，不构建参考程序，也不生成已验收 U/P。可用 `--root <目录>` 或 `MFS_REFERENCE_ROOT` 指定独立参考根。
-- `reference verify` 校验布局版本、未知字段、必需身份、父 U、Git 对象/文件内容、完整归档与记录 SHA-256、来源清单覆盖和相对路径越界，包含 symlink/junction 的实际路径检查。完整职责审阅、方法/目标矩阵和依赖许可审计仍待完成。
+- `reference verify` 校验布局版本、未知字段、必需身份、父 U、Git 对象/文件内容、完整归档与记录 SHA-256、来源清单覆盖和相对路径越界，包含 symlink/junction 的实际路径检查。外部 catalog 已记录 99 个已审阅来源、11 条截图路径及 58 个尚未执行的 U 用例；核验记录结构不等于执行对照或完成 P0。
 - `reference catalog <reference-relative input> [--root <目录>]` 校验并归档外部职责、方法/目标与 U 用例定义。保留固定准备基线，同时要求已发现源码、公共控制单元头和 Portal 交接文件的覆盖；逐文件核对固定 Git blob、原始字节 SHA-256 和准确行锚点，核对报告及方法/目标/用例引用。未审阅文件必须明确标为 pending，定义不能引用它们；所有用例只能是 not_run，不能填入 passed 或完整阶段状态。校验后将输入、报告副本及工具源码快照写入新的外部批次，不修改旧基线。若已有本机批次的 Cargo.lock、工具链身份与当前完全一致且包含 vendor，关联其依赖快照供离线重建；未找到时明确记录缺口，准备入口不触发捕获库构建。`reference verify` 会重新执行已归档 catalog 的语义校验。这只证明记录结构和来源证据一致，不证明人工结论穷尽、原生对照执行、许可验收或 P0 完成。
 - `check` 校验 HEAD 的 Conventional Commit 标题及 workspace 版本/许可元数据；提交前可用 `--message-file <文件>` 校验拟用消息。它不代替发布阶段的 API 兼容性与版本协商验收。
 - `reference licenses <Rust batch manifest> [--root <目录>]` 从已索引的目标依赖图生成新的外部 registry 许可证据清单。核对解析节点、包身份、声明的许可表达式/文件、vendor 校验和与原始文件，复制命名为 LICENSE/COPYING/NOTICE 等的文件（包含子目录），缺少表达式或文件时分别保留待审项。新记录保存 text_documents 发现规则，避免将 copying.rs 等普通源码当作独立许可文本；显式 license-file 仍按声明收集，旧记录按其原前缀规则重检。清单覆盖该目标图中的工具、构建依赖和已选可选能力，并不等于最终产品依赖集。`reference verify` 重检清单和文件覆盖；Actions 对每个平台的实际目标图分别归档。此命令不解析 SPDX 的法律兼容性，也不替代源文件内嵌声明、原生/系统/工具链、上游/PR 和最终资产的许可审阅。
+
+固定来源及三平台实际依赖的许可范围审阅另存外部批次，明确区分 LGPL 迁移源码、Rust 绑定/工具、原生库/协议、OpenCV 验收适配及系统 SDK。cookie-factory 发布包遗漏的 MIT 文件已从其发布 VCS 提交取回并校验；objc2 旧版声明与后补全文有上游证据，历史版权声明完整性仍待发布前收口。完整 P0 按计划第 16 节判断：要求这些来源/许可边界、最小参考/适配及原生可行性证据，不把 P1 完整 U 对照或 P3/P5 全部矩阵提前作为 P0 退出条件。
 - `batch` 先更新 nightly，再更新 Cargo 解析并查询每个 registry 包的最新正式版（包括范围外主版本），归档锁文件、元数据、vendor 源码、实际源码快照和逐项日志，再执行 release build、workspace tests、fmt、Clippy 和项目约定检查。直接依赖保持全局最新版；依用户确认的绑定传递规则，已接入 PipeWire/Wayland 绑定的专属依赖链可使用已核验父约束内的最新正式版，报告同时保存全局版本、约束内版本、父声明、采用规则及升级差距。非绑定链共用版本不豁免，约束内未更新仍失败。Windows 的 `--desktop` 追加显式原型及其 Clippy。批次开始时即归档源码，结束后比较 Git HEAD、全部跟踪/未忽略源文件的路径和内容哈希；若源码变化或无法核验，明确失败并另存结束状态，防止把混合输入算作同次验收。最后将起始源码、锁文件及 vendor 复制到 deps 中独立目录，以空 Cargo home 和离线模式验证默认构建及原型编译，该消费目录没有同级 reference。失败单列且不自动重试；所有批次均明确记录 P0 仍缺失的门禁。
 
 批次依赖检查以归档 rustc 的 host 为原生 target，通过 `cargo metadata --all-features --filter-platform` 检查该 target 的完整 feature 图，并保存 `dependency-target.txt`。不将 Linux 专属 helper 的 Windows 条件依赖计入当前构建；其他平台分别由对应原生 Actions 批次检查。全局最新版与绑定专属传递约束规则仍逐包执行。
