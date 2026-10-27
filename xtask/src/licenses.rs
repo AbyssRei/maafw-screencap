@@ -49,8 +49,21 @@ struct Inventory {
     layout_version: u32,
     parent_batch: Artifact,
     target: String,
+    #[serde(default)]
+    document_policy: DocumentPolicy,
     components: Vec<Component>,
     remaining: Vec<String>,
+}
+
+// Earlier records used broad prefix discovery. Preserve their interpretation
+// without treating ordinary source modules such as copying.rs as text evidence
+// in new inventories. Neither policy establishes license applicability.
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum DocumentPolicy {
+    #[default]
+    LegacyPrefix,
+    TextDocuments,
 }
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -94,7 +107,21 @@ fn selected(metadata: &Metadata) -> Result<Vec<&Package>> {
     Ok(result)
 }
 
-fn document_path(path: &str) -> bool {
+fn document_path(path: &str, policy: DocumentPolicy) -> bool {
+    if matches!(policy, DocumentPolicy::TextDocuments) {
+        let extension = Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if [
+            "rs", "c", "h", "cc", "cpp", "hpp", "m", "mm", "py", "js", "ts", "sh", "ps1", "cmake",
+        ]
+        .contains(&extension.as_str())
+        {
+            return false;
+        }
+    }
     path.split('/').any(|part| {
         let name = part.to_ascii_lowercase();
         [
@@ -106,7 +133,14 @@ fn document_path(path: &str) -> bool {
             "unlicense",
         ]
         .iter()
-        .any(|prefix| name.starts_with(prefix))
+        .any(|prefix| {
+            name.strip_prefix(prefix).is_some_and(|suffix| {
+                matches!(policy, DocumentPolicy::LegacyPrefix)
+                    || suffix.is_empty()
+                    || suffix == "s"
+                    || suffix.starts_with(['.', '-', '_'])
+            })
+        })
     })
 }
 
@@ -183,7 +217,7 @@ fn validate(root: &Path, inventory: &Inventory) -> Result<()> {
         let mut expected: BTreeSet<_> = checksum
             .files
             .keys()
-            .filter(|path| document_path(path))
+            .filter(|path| document_path(path, inventory.document_policy))
             .cloned()
             .collect();
         if let Some(path) = &package.license_file {
@@ -265,6 +299,7 @@ pub fn run(args: &[String]) -> Result<()> {
         layout_version: records::LAYOUT_VERSION,
         parent_batch: artifact.clone(),
         target: target.trim().into(),
+        document_policy: DocumentPolicy::TextDocuments,
         components: Vec::new(),
         remaining: vec![
             "Declared SPDX expressions and named license documents are evidence, not a compatibility/distribution approval; review embedded source notices, generated code and required corresponding source/relink materials.".into(),
@@ -286,7 +321,7 @@ pub fn run(args: &[String]) -> Result<()> {
         let mut documents: BTreeSet<_> = checksum
             .files
             .keys()
-            .filter(|path| document_path(path))
+            .filter(|path| document_path(path, inventory.document_policy))
             .cloned()
             .collect();
         if let Some(path) = &package.license_file {
@@ -304,8 +339,11 @@ pub fn run(args: &[String]) -> Result<()> {
                 .ok_or("registry vendor has no package checksum")?,
             documents: Vec::new(),
         };
-        if documents.is_empty() || package.license.as_ref().is_none_or(|l| l.trim().is_empty()) {
-            inventory.remaining.push(format!("{} {} lacks a declared license expression or discovered license document; inspect its source.", package.name, package.version));
+        if package.license.as_ref().is_none_or(|l| l.trim().is_empty()) {
+            inventory.remaining.push(format!("{} {} has no declared license expression; inspect its source/repository licensing.", package.name, package.version));
+        }
+        if documents.is_empty() {
+            inventory.remaining.push(format!("{} {} has no discovered standalone license document; inspect its source/repository licensing.", package.name, package.version));
         }
         for path in documents {
             let source = records::resolve(
@@ -385,11 +423,28 @@ mod tests {
             "licenses/subproject.txt",
             "src/NOTICE.md",
         ] {
-            assert!(document_path(name), "{name}");
+            assert!(document_path(name, DocumentPolicy::TextDocuments), "{name}");
         }
-        for name in ["src/lib.rs", "test/source.rs", "Cargo.toml"] {
-            assert!(!document_path(name));
+        for name in [
+            "src/lib.rs",
+            "test/source.rs",
+            "Cargo.toml",
+            "src/copying.rs",
+            "src/tests/copying.rs",
+            "src/notices_missing.rs",
+        ] {
+            assert!(
+                !document_path(name, DocumentPolicy::TextDocuments),
+                "{name}"
+            );
         }
+        assert!(document_path(
+            "src/copying.rs",
+            DocumentPolicy::LegacyPrefix
+        ));
+        let old = serde_json::json!({"layout_version":1,"parent_batch":{"path":"parent.json","sha256":"0".repeat(64)},"target":"test","components":[],"remaining":["review pending"]});
+        let old: Inventory = serde_json::from_value(old).unwrap();
+        assert!(matches!(old.document_policy, DocumentPolicy::LegacyPrefix));
     }
     #[test]
     fn uses_only_resolved_packages_and_rejects_missing_or_duplicate_nodes() {
@@ -455,6 +510,7 @@ mod tests {
             layout_version: records::LAYOUT_VERSION,
             parent_batch: records::artifact(root, &parent).unwrap(),
             target: "test-target".into(),
+            document_policy: DocumentPolicy::TextDocuments,
             components: vec![Component {
                 package_id: "a".into(),
                 name: "a".into(),
