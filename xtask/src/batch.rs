@@ -118,8 +118,27 @@ pub fn run(args: &[String]) -> Result<()> {
         run.inputs.push(records::artifact(&root, &path)?);
     }
     if passed(&run, "dependency-update") {
+        // Resolve the graph that can actually be built on this native runner.
+        // An unfiltered graph includes, for example, Windows-only dependencies
+        // of Linux-only helpers and invents shared nonbinding upgrade gaps.
+        // All features remain enabled; each platform has its own native batch.
+        let identity = fs::read_to_string(inputs.join("toolchain.txt"))?;
+        let target = identity
+            .lines()
+            .find_map(|line| line.strip_prefix("host: "))
+            .filter(|target| !target.is_empty())
+            .ok_or("rustc host missing; cannot select the native dependency graph")?;
+        let target_path = inputs.join("dependency-target.txt");
+        fs::write(&target_path, format!("{target}\n"))?;
+        run.inputs.push(records::artifact(&root, &target_path)?);
         let metadata = cargo_output(
-            &["metadata", "--format-version=1", "--all-features"],
+            &[
+                "metadata",
+                "--format-version=1",
+                "--all-features",
+                "--filter-platform",
+                target,
+            ],
             &build_env,
         )?;
         let metadata_path = inputs.join("cargo-metadata.json");
