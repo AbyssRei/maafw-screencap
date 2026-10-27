@@ -48,8 +48,10 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         Write-Host "${Name}: $status"
     }
 }
+. (Join-Path $PSScriptRoot prepare-apple-toolchain.ps1)
 try {
     if(-not $IsMacOS -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne 'Arm64'){throw 'Native macOS arm64 is required'}
+    Initialize-AppleToolchain -InputRoot $inputRoot
     . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family screen-capture-kit
     $inputs.Add((Artifact $env:MFS_BUILD_CONFIGURATION))
     Step host-identity uname @('-a')
@@ -60,7 +62,7 @@ try {
     Step compiler-identity xcrun @('clang','--version')
     $env:MACOSX_DEPLOYMENT_TARGET='14.0'
     $configuration=Join-Path $inputRoot native-configuration.json
-    Json $configuration ([ordered]@{target='aarch64-apple-darwin';deployment_target=$env:MACOSX_DEPLOYMENT_TARGET;scope='P0 objc2/ScreenCaptureKit controlled-window sample-buffer capture and callback ownership only';sdk=(& xcrun --sdk macosx --show-sdk-version|Out-String).Trim();developer_dir=(& xcode-select -p|Out-String).Trim()})
+    Json $configuration ([ordered]@{target='aarch64-apple-darwin';deployment_target=$env:MACOSX_DEPLOYMENT_TARGET;scope='P0 objc2/ScreenCaptureKit controlled-window sample-buffer capture and callback ownership only';sdk=(& xcrun --sdk macosx --show-sdk-version|Out-String).Trim();developer_dir=$env:DEVELOPER_DIR;sdkroot=$env:SDKROOT})
     $inputs.Add((Artifact $configuration))
     $messages=Join-Path $inputRoot compiler-artifacts.jsonl
     $log=Join-Path $logsRoot native-build.log
@@ -101,7 +103,7 @@ try {
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase='P0';phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@('P0 feasibility only; full target/format/failure matrix, original C++ parity, latest Apple SDK policy verification and complete platform gates remain outstanding.','Screen Recording/desktop unavailability is missing environment, never capture acceptance. No TCC database or host permission setting is modified.','Rust dependency and convention gates remain required even when this diagnostic native probe passes.')
+        pending=@('P0 feasibility only; full target/format/failure matrix, original C++ parity and complete platform gates remain outstanding. Formal Xcode selection is distinct from successful SDK use and native execution.','Screen Recording/desktop unavailability is missing environment, never capture acceptance. No TCC database or host permission setting is modified.','Rust dependency and convention gates remain required even when this diagnostic native probe passes.')
     })
 }
 if($failed -or @($checks|Where-Object status -NE passed).Count){exit 1}

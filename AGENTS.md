@@ -75,7 +75,7 @@ Use latest direct dependency releases and check new major versions; cache hits n
 
 Initial Windows native validation uses `x86_64-pc-windows-msvc`, CMake, VS2026 and MSBuild. VS2022/Ninja require separate implementation and validation; they are not already supported combinations.
 
-Linux prototype preparation resolves the latest formal LLVM release into an isolated, integrity-checked deps installation; libclang discovery is active only for the PipeWire generator. This path awaits native Actions validation. Earlier runner results do not close the identified Windows VS/SDK and macOS Xcode freshness gaps.
+Linux prototype preparation resolves the latest formal LLVM release into an isolated, integrity-checked deps installation; libclang discovery is active only for the PipeWire generator. macOS preparation matches Apple's latest formal Xcode version/build to an installed bundle using process-local developer/SDK selection. Both paths await native Actions validation. Earlier runner results do not close the identified Windows VS/SDK freshness gap.
 
 ## Testing and Acceptance
 

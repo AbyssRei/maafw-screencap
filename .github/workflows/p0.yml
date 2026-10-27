@@ -22,7 +22,7 @@ jobs:
           - os: ubuntu-latest
             expected_target: x86_64-unknown-linux-gnu
             desktop: ''
-          - os: macos-latest
+          - os: xcode-27
             expected_target: aarch64-apple-darwin
             desktop: ''
     runs-on: ${{ matrix.os }}

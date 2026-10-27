@@ -42,6 +42,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 Linux 原型准备现在先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。此准备路径尚待原生 Actions 验证；此前通过的 Linux 原型使用 runner 自带工具链。Windows VS/SDK 与 macOS Xcode 的正式版本差距仍须处理，不将旧矩阵结果作为最新工具链验收。
 
+macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像，选中正式版仍须完成实际编译/捕获验证；此新选择路径尚待原生验证。
+
 ```powershell
 cargo xtask reference prepare
 cargo xtask reference verify
