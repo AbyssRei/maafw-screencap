@@ -90,7 +90,7 @@ P0 验收：原生取帧、GUID/HRESULT、调用约定、COM apartment、引用�
 
 ## R1-03 U/P OpenCV 验收适配器
 
-状态：用户已确认 A，P0 原型待验收。
+状态：用户已确认 A；P0 最小 C++/OpenCV 适配、FFI/持帧/退出与独立未打补丁 GDI 参考捕获已通过原生验证，完整 U/P 对照留在 P1/P2。
 
 主要使用 C++ + OpenCV，沿上游 `cv::Mat`、`core`/`imgproc` 操作、参数和顺序建立对照。C++ 转换适配只参与显式启用的验收路径，捕获流程仍由 Rust 实现。
 
@@ -102,7 +102,7 @@ P0/P1 验收：独立原始输出与转换结果、stride/方向/ROI/颜色、�
 
 ## R2-01 Linux 原生绑定
 
-状态：用户已确认 A，P0 原型待验收。
+状态：用户已确认 A；P0 PipeWire/Wlr 最小原生取帧、独立持帧、退出和配置隔离已验证，完整 U/P 对照留在 P1/P2。
 
 优先采用 `pipewire` 和 `wayland-client` 高层绑定，并显式启用 `wayland-backend` 的 `client_system`，使 U/P 沿用系统 libwayland。必要语义未覆盖时局部使用 `pipewire-sys`、`wayland-sys` 或最小 C shim；不默认改用纯 Rust 协议实现。
 
