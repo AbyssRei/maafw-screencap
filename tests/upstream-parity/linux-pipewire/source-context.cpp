@@ -5,6 +5,7 @@
 #include "Screencap/PipeWireScreencap.cpp"
 #include <pipewire/pipewire.h>
 #include <opencv2/imgproc.hpp>
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <charconv>
@@ -70,6 +71,29 @@ size_t count_entries(const char* path) {
     size_t count=0;
     for([[maybe_unused]] const auto& entry:std::filesystem::directory_iterator(path)) { ++count; }
     return count;
+}
+std::vector<std::string> task_ids() {
+    std::vector<std::string> tasks;
+    for(const auto& entry:std::filesystem::directory_iterator("/proc/self/task")) {
+        tasks.push_back(entry.path().filename().string());
+    }
+    std::sort(tasks.begin(),tasks.end());
+    return tasks;
+}
+void task_snapshot(const std::filesystem::path& directory,const std::string& label,const std::vector<std::string>& tasks) {
+    std::ofstream output(directory/("tasks-"+label+".txt"));
+    require(output.good(),"cannot write task diagnostic");
+    output<<"tasks observed="<<tasks.size()<<'\n';
+    for(const auto& tid:tasks) {
+        for(const char* name:{"comm","stat","status","wchan"}) {
+            const auto path=std::filesystem::path("/proc/self/task")/tid/name;
+            std::ifstream input(path);
+            output<<path<<" open="<<input.good()<<'\n';
+            if(input) { output<<input.rdbuf()<<'\n'; }
+        }
+    }
+    output.close();
+    require(output.good(),"cannot close task diagnostic");
 }
 int connect_socket(const char* path) {
     sockaddr_un address{};
@@ -154,6 +178,74 @@ void early_fd_error(const char* path) {
     // Ownership on early error is observed, not assumed from the type/contract.
     std::cout<<"connect_fd_early_error result=null errno="<<result_errno<<" input_fd_open="<<open<<" observed\n";
 }
+class AddIoFault {
+public:
+    AddIoFault(pw_loop* loop,int fd): interface_(&loop->utils->iface), original_(interface_->cb.funcs), expected_fd_(fd) {
+        require(active_==nullptr && original_!=nullptr,"invalid isolated add_io fault premise");
+        methods_=*static_cast<const spa_loop_utils_methods*>(original_);
+        require(methods_.add_io!=nullptr,"native add_io method is absent");
+        original_add_io_=methods_.add_io;
+        methods_.add_io=reject;
+        active_=this;
+        // Explicit test-only interception on an owned, non-running main loop.
+        // Keep native callback data and all other methods unchanged. Restore
+        // before context/loop teardown; no product method table is modified.
+        interface_->cb.funcs=&methods_;
+    }
+    ~AddIoFault() { interface_->cb.funcs=original_;active_=nullptr; }
+    AddIoFault(const AddIoFault&)=delete;
+    AddIoFault& operator=(const AddIoFault&)=delete;
+    uint32_t calls() const { return calls_; }
+private:
+    static spa_source* reject(void* data,int fd,uint32_t mask,bool close,spa_source_io_func_t callback,void* user) noexcept {
+        auto* fault=active_;
+        if(!fault) { errno=EINVAL;return nullptr; }
+        if(fd!=fault->expected_fd_) { return fault->original_add_io_(data,fd,mask,close,callback,user); }
+        if(fault->calls_==UINT32_MAX) { errno=EOVERFLOW;return nullptr; }
+        ++fault->calls_;
+        errno=ENOMEM;
+        return nullptr;
+    }
+    inline static AddIoFault* active_=nullptr;
+    spa_interface* interface_;
+    const void* original_;
+    spa_loop_utils_methods methods_{};
+    decltype(spa_loop_utils_methods::add_io) original_add_io_=nullptr;
+    int expected_fd_;
+    uint32_t calls_=0;
+};
+void fd_add_io_error(const char* path) {
+    ProbeSocket input{connect_socket(path)};
+    input.cookie=socket_cookie(input.fd);
+    int result_errno=0;
+    bool open=false;
+    uint32_t calls=0;
+    {
+        ProbeInit initialized;
+        ProbeGraph graph;
+        graph.loop=pw_main_loop_new(nullptr);
+        require(graph.loop!=nullptr,"add_io probe loop creation failed");
+        graph.context=pw_context_new(pw_main_loop_get_loop(graph.loop),nullptr,0);
+        require(graph.context!=nullptr,"add_io probe context creation failed");
+        AddIoFault fault(pw_main_loop_get_loop(graph.loop),input.fd);
+        input.offered=true;
+        errno=0;
+        graph.core=pw_context_connect_fd(graph.context,input.fd,nullptr,0);
+        result_errno=errno;
+        calls=fault.calls();
+        require(graph.core==nullptr && result_errno==ENOMEM && calls==1,"late fd error did not reach the intercepted native add_io boundary");
+        errno=0;
+        open=fcntl(input.fd,F_GETFD)>=0;
+        if(open) { require(socket_cookie(input.fd)==input.cookie,"late native failure reused the input descriptor"); }
+        else { require(errno==EBADF,"cannot observe late-error input descriptor"); }
+    } // restore vtable, then native graph/loop/global cleanup, in that order
+    errno=0;
+    const bool after=fcntl(input.fd,F_GETFD)>=0;
+    if(after) { require(socket_cookie(input.fd)==input.cookie,"native teardown reused the failed input descriptor"); }
+    else { require(errno==EBADF,"cannot observe descriptor after native teardown"); }
+    std::cout<<"connect_fd_add_io_error result=null errno="<<result_errno<<" input_fd_open="<<open
+        <<" after_teardown_fd_open="<<after<<" intercepted_calls="<<calls<<" observed\n";
+}
 struct SourceOwner {
     void operator()(Source* source) const noexcept {
         delete source; // original destructor stops/destroys its resources
@@ -207,6 +299,10 @@ int main(int argc,char** argv) {
             early_fd_error(argv[2]);
             return 0;
         }
+        if(argc==3 && std::string_view(argv[1])=="--fd-add-io-error") {
+            fd_add_io_error(argv[2]);
+            return 0;
+        }
         require(argc==4,"usage: source-context <private socket> <node ID> <artifact directory>");
         const std::string_view id=argv[2];
         uint32_t node=0;
@@ -219,6 +315,7 @@ int main(int argc,char** argv) {
         cv::cvtColor(raw,converted,cv::COLOR_RGB2BGR);
         const size_t base_fds=count_entries("/proc/self/fd");
         const size_t base_threads=count_entries("/proc/self/task");
+        task_snapshot(artifacts,"baseline",task_ids());
         std::vector<HeldImage> held;
         held.reserve(60);
         uint32_t previous=0;
@@ -252,14 +349,26 @@ int main(int argc,char** argv) {
                     <<" output=known_bgr fixture_marker="<<marker<<" marker_relation="<<relation<<" api_replay=not_exposed\n";
                 previous=marker;
             }
+            if(cycle==0) { task_snapshot(artifacts,"first-live",task_ids()); }
             source->close();
             require(!source->connected(),"original source still connected after close");
             source.reset();
             errno=0;
             require(fcntl(fd,F_GETFD)==-1 && errno==EBADF,"source input socket still open after destruction");
-            const size_t fds=count_entries("/proc/self/fd"),threads=count_entries("/proc/self/task");
+            const size_t fds=count_entries("/proc/self/fd");
+            const auto tasks=task_ids();
+            const size_t threads=tasks.size();
             std::cout<<"source closed cycle="<<cycle<<" fds="<<fds<<" baseline_fds="<<base_fds
                 <<" threads="<<threads<<" baseline_threads="<<base_threads<<'\n';
+            if(fds!=base_fds || threads!=base_threads) {
+                std::cerr<<"source native resource mismatch fixed before diagnostic observations\n";
+                const auto label="cycle-"+std::to_string(cycle);
+                task_snapshot(artifacts,label+"-mismatch",tasks);
+                for(int delay:{1,10,100}) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+                    task_snapshot(artifacts,label+"-after-"+std::to_string(delay)+"ms",task_ids());
+                }
+            }
             require(fds==base_fds && threads==base_threads,"source native resource count mismatch");
             for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"retained source sample identity changed"); }
         }
