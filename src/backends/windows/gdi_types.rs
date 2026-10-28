@@ -3,20 +3,7 @@
 use super::native::*;
 use std::collections::TryReserveError;
 
-/// P1's private conversion boundary. It runs before the source GDI cleanup.
-/// The converter must own its result independently of this borrowed input.
-pub(crate) trait BgraConverter {
-    type Image;
-    type Error;
-    fn bgra_to_bgr(&mut self, input: BgraView<'_>) -> Result<Self::Image, Self::Error>;
-}
-
-pub(crate) struct BgraView<'a> {
-    pub pixels: &'a [u8],
-    pub width: i32,
-    pub height: i32,
-    pub stride: usize,
-}
+pub(crate) use super::pixels::{BgraConverter, BgraView};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct NativeFailure {

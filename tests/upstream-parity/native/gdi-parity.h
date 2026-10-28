@@ -32,6 +32,9 @@ MFS_PARITY_EXPORT int32_t mfs_gdi_parity_reference(void* hwnd, MfsParityImage* o
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_convert(const uint8_t* data, size_t length,
     int32_t width, int32_t height, size_t stride, uint32_t fault, MfsParityImage* output);
 MFS_PARITY_EXPORT void mfs_gdi_parity_release(void* owner);
+// Independent cv::Mat::clone, including source FramePool's two clone points.
+// Owner must originate in this loaded module. fault=1 contains a clone error.
+MFS_PARITY_EXPORT int32_t mfs_gdi_parity_clone(void* owner, uint32_t fault, MfsParityImage* output);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_layout(uint64_t* output, size_t capacity);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_window(int32_t width, int32_t height, MfsParityWindow* output);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_paint(void* hwnd, uint32_t phase);

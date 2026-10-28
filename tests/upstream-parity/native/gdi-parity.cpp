@@ -92,6 +92,19 @@ void mfs_gdi_parity_release(void* owner)
     delete static_cast<Image*>(owner);
 }
 
+int32_t mfs_gdi_parity_clone(void* owner, uint32_t fault, MfsParityImage* output)
+{
+    if (!output) { return 1; }
+    *output = {};
+    if (!owner || fault > 1) { return 1; }
+    try {
+        if (fault) { throw cv::Exception(cv::Error::StsBadArg, "injected clone error", "FramePool parity", __FILE__, __LINE__); }
+        return transfer(mfs_parity::image_pixels(owner).clone(), output);
+    }
+    catch (const std::bad_alloc&) { return 3; }
+    catch (...) { return 2; }
+}
+
 int32_t mfs_gdi_parity_layout(uint64_t* output, size_t capacity)
 {
     constexpr std::array<uint64_t, 13> layout {

@@ -5,7 +5,8 @@
     any(
         feature = "windows-gdi",
         feature = "windows-print-window",
-        feature = "windows-screen-dc"
+        feature = "windows-screen-dc",
+        feature = "windows-frame-pool"
     )
 ))]
 mod windows;

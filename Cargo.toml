@@ -11,6 +11,7 @@ default = []
 windows-gdi = ["dep:windows-bindgen", "dep:windows-link"]
 windows-print-window = ["dep:windows-bindgen", "dep:windows-link"]
 windows-screen-dc = ["dep:windows-bindgen", "dep:windows-link"]
+windows-frame-pool = ["dep:windows-bindgen", "dep:windows-link", "dep:windows-core", "dep:windows-future"]
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows-com = ["prototype-windows", "dep:windows-core", "dep:windows-future"]
 prototype-linux-pipewire = ["dep:pipewire"]
@@ -19,7 +20,7 @@ prototype-macos = ["dep:objc2", "dep:block2", "dep:objc2-foundation", "dep:objc2
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows-link = { version = "0.100", optional = true }
-# This prototype consumes projected interfaces; it does not author COM classes.
+# P0 and private FramePool consume projected interfaces, not authored COM classes.
 windows-core = { version = "0.100", optional = true, default-features = false, features = ["std"] }
 windows-future = { version = "0.100", optional = true }
 

@@ -19,8 +19,8 @@ pub fn run(args: &[String]) -> Result<()> {
 
 pub fn run_parity(args: &[String]) -> Result<()> {
     let kind = match args.first().map(String::as_str) {
-        Some(kind @ ("gdi" | "print-window" | "screen-dc")) => kind,
-        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc> [--offline-inputs <native run manifest>]".into()),
+        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool")) => kind,
+        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool> [--offline-inputs <native run manifest>]".into()),
     };
     let mut native_args = vec!["--desktop".to_owned()];
     native_args.extend_from_slice(&args[1..]);
@@ -40,6 +40,7 @@ pub fn run_context(args: &[String]) -> Result<()> {
 
 fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     let frame_context = parity == Some("frame-pool-context");
+    let frame_parity = parity == Some("frame-pool");
     let gdi_parity = parity.is_some() && !frame_context;
     let print_parity = parity == Some("print-window");
     let screen_parity = parity == Some("screen-dc");
@@ -145,6 +146,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "p1-screen-dc-windows"
         } else if frame_context {
             "p1-frame-pool-context-windows"
+        } else if frame_parity {
+            "p1-frame-pool-windows"
         } else if gdi_parity {
             "p1-gdi-windows"
         } else {
@@ -169,6 +172,20 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if frame_parity {
+        let scope = inputs.join("frame-pool-scope.md");
+        fs::write(
+            &scope,
+            "# P1 partial FramePool migration\n\n\
+            Retain original caller-thread first-use initialization, hardware D3D11CreateDeviceAndSwapChain flags zero/R8G8B8A8, Create/BGRA/one-buffer, size-change full uninit/init, old-frame drain/Close, 2ms polling under 2000ms, timeout cache clone, mapped client ROI and conversion/cache clone before Unmap. Uninit retains cache/device/context/swapchain; final destruction releases them in source member order. Caught boolean failures and escaping WinRT exceptions preserve different partial-state behavior. Three optional property requests retain metadata order and native five-second completion-handler event wait; late delegates independently own state without accessing the capture owner.\n\n\
+            Isolated original executable observes four fresh caller contexts. Rust runs in three separate processes (uninitialized/MTA/STA) against those exact original image bytes, with two sample calls, independent cache/result clones, retained pixels after native/window close, callback-event release, apartment/DPI evidence and GDI regression. Source-only dispatcher context is not Rust dispatcher parity.\n\n\
+            Safety adaptations: checked geometry/layout/content bounds and compatible CopyResource descriptors; copy only initialized target BGRA rows into fallible CPU storage, excluding mapped padding. This additional target copy is counted, not advertised as removed work. Explicit factories avoid the projection global raw cache; SDK-style implicit MTA and broad DLL fallback are preserved. Factory ownership/cache behavior needs further lifetime/failure validation; old WGC unload AV remains unresolved.\n\n\
+            Pending: repeated complete lifecycles, Rust dispatcher, native failure/cleanup and initialization-exception interposition, queued-frame/timeout/cache failure matrices, resize/DPI/borders/secondary windows/permissions, pseudo-minimize wrapper and manager/selection chain. No complete backend, U/P1 exit, public SDK, P2 patch or P3 FreeThreaded/worker is accepted. All previous failures remain archived.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if frame_context {
         let scope = inputs.join("frame-pool-context-scope.md");
         fs::write(
@@ -278,6 +295,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if frame_context {
         process.arg("-FramePoolContext");
     }
+    if frame_parity {
+        process.arg("-FramePoolParity");
+    }
     if let Some(input) = &offline {
         process
             .arg("-OfflineManifest")
@@ -328,6 +348,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "P1 ScreenDC component"
         } else if frame_context {
             "P1 original FramePool caller context"
+        } else if frame_parity {
+            "P1 FramePool component"
         } else if gdi_parity {
             "P1 GDI component"
         } else {
