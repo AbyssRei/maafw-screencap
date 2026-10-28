@@ -1,0 +1,8 @@
+# Private U connect caller-DPI effect, distinct from P3 host restoration.
+SetThreadDpiAwarenessContext
+DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+# Caller-context probes for the explicitly enabled private native tests.
+DPI_AWARENESS_CONTEXT_UNAWARE
+GetThreadDpiAwarenessContext
+AreDpiAwarenessContextsEqual
+GetCurrentThreadId

@@ -51,6 +51,10 @@ cargo xtask upstream-parity screen-dc
 cargo xtask upstream-parity screen-dc --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-parity frame-pool
 cargo xtask upstream-parity frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-parity desktop-dup
+cargo xtask upstream-parity desktop-dup --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-parity manager
+cargo xtask upstream-parity manager --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-context frame-pool
 cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
@@ -130,11 +134,24 @@ DesktopDup 和 DesktopDupWindow 已有私有迁移，入口为 `cargo xtask upst
 
 完整动态桌面不做全帧逐字节对照；原源码偶然返回正确像素也不能证明其越界生命周期有效。全量原生故障、精确调用/预热脚本、原源码重复生命周期、多适配器/显示器查找失败回退/旋转/access loss/格式、移动/遮挡/DPI、精确 Unmap 拦截和 manager 链仍未验收。该迁移不启用 P3 的新工厂或 DuplicateOutput1。
 
-首次 DesktopDup 原生 Actions 在 Rust 第 8 轮通过当轮像素/归还检查后，失败于夹具的 `marker[1] > 1` 断言，未完成剩余生命周期。该计数包含首次同步绘制，旧断言实际额外要求一次定时回调；原生取帧也可消费初始图像、指针或其他窗口更新，不能从取帧次数推得额外回调。夹具现记录实际绘制计数，保留首次绘制、标记存在与绘制错误检查，保持每次原生 Acquire/Release、严格目标像素和持帧断言；不增加捕获等待或重试。原始日志及失败批次保留；修正后的本机正式批次通过 25 项检查，显式补齐首次绘制检查后的三个重建原源码模式、20 次 Rust 生命周期及 Clippy 也通过。修正后的原生 Actions 验证仍待完成，不能把旧失败改记为通过。
+首次 DesktopDup 原生 Actions 在 Rust 第 8 轮通过当轮像素/归还检查后，失败于夹具的 `marker[1] > 1` 断言，未完成剩余生命周期。该计数包含首次同步绘制，旧断言实际额外要求一次定时回调；原生取帧也可消费初始图像、指针或其他窗口更新，不能从取帧次数推得额外回调。夹具现记录实际绘制计数，保留首次绘制、标记存在与绘制错误检查，保持每次原生 Acquire/Release、严格目标像素和持帧断言；不增加捕获等待或重试。原始日志及失败批次保留；修正后的本机正式批次通过 25 项检查，显式补齐首次绘制检查后的三个重建原源码模式、20 次 Rust 生命周期及 Clippy 也通过。修正后的原生 Actions 也通过全部 25 项；旧失败仍保持失败。
 
 另一轮 FramePool 原生 Actions 在原源码 MTA 场景返回图像并完成关闭后持帧，但已归档的 96×64 BGR 图有 2048 个错误像素：右下 `(32,32)` 至 `(95,63)` 的第三色块全黑；其余三个调用环境的原图符合图样。这是原源码像素断言失败，不能归为环境缺失，也不能称为整张黑图。具体绘制、透明度、调用环境或其他原因尚未确定；此次审阅没有重新取帧，其他批次通过不撤销该失败。
 
 后续另一批原生 Actions 的原图也已审阅：四个原源码最小化包装场景均为全零 BGR，普通可见场景匹配图样。它证实该批次实际返回黑图，仍不证明所有平台环境下的透明度或绘制原因；四项已知颜色失败保持失败，Rust 字节/状态匹配只作诊断。
+
+截图 manager 的私有迁移入口为 `cargo xtask upstream-parity manager`，可显式复用 `--offline-inputs`。`windows-manager` feature 组合六种已有 Windows 捕获能力；默认产品构建仍不编译验收适配器。固定 `Win32ControlUnitMgr` 的截图函数体、原 enum 及所选 MaaUtils `duration_since` 在原生构建目录提取，仅归一化换行。声明 shim 与 input=None stub 明确排除输入实现；不是完整原控制单元类的编译。原后台键守护在未配置按键时不启动线程，inactive 空集直接返回；该边界审计仍不验证输入对象的分配/锁/通知故障。
+
+Rust 保留连接时先清除旧捕获 owner、再设置调用线程 PMv2 DPI、随后验证 HWND 的顺序；成功设置后按 U 保留该上下文，P3 的宿主上下文恢复尚未引入。None 允许连接但没有截图 owner，未知位独占选择失败。先构造全部选中候选，再依次预热与独立测速；预热失败仍测速，成功测量按毫秒截断，严格小于才替换优胜者。预热/测速临时图像在原条件结束处释放，计时包含测速图像销毁；未选中 owner 随后释放，胜出 owner 保留。`Some(empty Mat)` 是成功空结果，调用失败保持此前输出，后续截图不因 connected 查询失效而提前截断，也不静默换法。
+
+122 个原源码脚本在真实 MSVC `unordered_map`/`shared_ptr` 和 OpenCV Mat 分配/释放上观察顺序，平台、后端、时钟显式脚本化；涵盖全部 64 种方法位组合、异常/失败、毫秒截断同耗时、临时析构成本、输出保留及重新连接。本机已通过；这不是跨工具链的 unordered_map 顺序保证。Rust 用有界唯一 owner 槽位转移胜出后端，不复制 C++ 容器/控制块分配；原生回调/worker 状态仍由原后端独立保活，不据串行调用声明 Send/Sync。原分配故障的完整等价性仍待验收。
+
+独立 GDI-only 原源码函数体入口实际调用原 GDI 类与调用线程 DPI API，其他原生方法显式不可用；仅添加线程/DPI/次数探针，并抑制 manager 日志。20 次配对源码/Rust manager 生命周期已通过本机严格奇数宽 BGR、两次连接取图加一次交付、GDI 资源及原生/窗口/模块关闭后的持帧。夹具以物理尺寸创建，分别从 unaware 调用者进入原源码/Rust manager；测试在外部恢复上下文。单方法探针和脚本时钟不证明真实混合方法的速度选择；完整六方法/包装副作用、胜出/淘汰原生错误清理、兼容模式 DPI、framework 转发和全平台 P1 仍待完成。
+
+首次 manager 正式批次的 GDI 回归有两项因验收符号缺失而未执行：Rust 编译全部能力后，旧通用探针提前请求了该次 GDI-only 模块未选中的 ScreenDC 符号。该失败批次保留。GDI 与 ScreenDC 现使用显式探针入口，目标符号在各自开始原生故障状态前核验；修正后的 GDI 七项、ScreenDC 四项及 manager 两个入口已分别通过本机检查。后续正式 manager 批次的 20 项检查全部通过，包含 122 个脚本和 20 次真实 GDI 生命周期；记录仍为 P1/incomplete。正式 manager 批次串行运行独立回归/脚本/生命周期，保留每项失败而不中断其他独立证据，整批仍以任一失败为失败。
+
+修正标记计数后的 DesktopDup 原生 Actions 已通过全部 25 项，实际 20 轮标记绘制计数包含 1；此前失败保留。该轮 PrintWindow 30 项和 ScreenDC 19 项通过，FramePool 仍为 32 项通过、四项最小化原源码颜色失败。补充诊断 ZIP 已核对发布摘要，所含记录引用已校验；它不代替完整工程归档，也不撤销其他失败。
+
 ## 已实现的 P0 工具
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
