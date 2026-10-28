@@ -59,12 +59,19 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     $downloadRoot=Join-Path $DepsRoot downloads/opencv
     New-Item -ItemType Directory -Path $downloadRoot -Force|Out-Null
     $cvOptions=@('-DBUILD_LIST=core,imgproc','-DBUILD_SHARED_LIBS=OFF','-DBUILD_TESTS=OFF','-DBUILD_PERF_TESTS=OFF','-DBUILD_EXAMPLES=OFF','-DBUILD_opencv_apps=OFF','-DWITH_PROTOBUF=OFF','-DWITH_FLATBUFFERS=OFF','-DWITH_IPP=ON','-DBUILD_IPP_IW=ON')
+    # OpenCV 5 registers optional codec export targets during global discovery,
+    # even when imgcodecs is excluded; their archives are then never built.
+    # This diagnostic writes raw bytes and uses only core/imgproc. Disable only
+    # those unused image-I/O dependencies, retaining CPU/IPP/HAL optimization.
+    $unusedCodecs=@('AVIF','JPEG','JPEGXL','WEBP','OPENJPEG','JASPER','OPENEXR','PNG','SPNG','TIFF','GDAL','GDCM')
+    $cvOptions+=@($unusedCodecs|ForEach-Object{"-DWITH_$($_)=OFF"})
     $configuration=Join-Path $refInputs native-configuration.json
     Json $configuration ([ordered]@{
         opencv_release=$cvRelease.tag_name;opencv_commit=$cvCommit;drm_tag=$selected.name;drm_commit=$selected.commit.id
         pipewire_version=$env:MFS_P0_PIPEWIRE_VERSION;pipewire_library=$env:MFS_P1_PIPEWIRE_LIBRARY;cc=$env:CC;cxx=$env:CXX
         compiler=(& $env:CXX --version|Out-String);cmake=(& cmake --version|Out-String)
         options=$cvOptions;scope='Native original PipeWire screenshot class with exact extracted screenshot base, private namespace/logging overlays; no Rust native parity or full framework acceptance.'
+        codec_policy='Only core/imgproc operations and raw pixel artifacts are used. Disable unused image-I/O discovery to avoid exported-but-unbuilt codec archives; do not disable CPU/IPP/HAL optimization.'
     })
     Save $configuration
     $identity=(Get-FileHash -LiteralPath $configuration).Hash.ToLowerInvariant()

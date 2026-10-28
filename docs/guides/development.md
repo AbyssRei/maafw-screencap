@@ -162,7 +162,9 @@ Rust 保留连接时先清除旧捕获 owner、再设置调用线程 PMv2 DPI、
 
 新的原生 Rust 切片包含 daemon 建连、先启动 loop 再 connect、固定 4096 字节 POD builder、稳定事件/状态地址、真实 loop 锁和返回值保留的相对等待、逐次归还前驱 buffer、只按请求复制最新 SHM、停止线程后注销并释放对象。完整原 cpp 现在不改内容地 include 到测试翻译单元，以调用其 static 格式 helper；另用原 buffer POD 表达式保存三个协商 POD，与 Rust 逐字节比较。独立 Rust 用例要求 20 次生命周期/60 张 raw RGB、inactive、返回计数、fd/线程归零和原样持帧；RawAudit 只保留 RGB，不执行 OpenCV 转换，因此没有宣布原生 BGR 对照通过。该切片首次 Linux 编译/运行仍待 CI；Portal fd、无既有指针的映射、DMA-BUF、完整格式/故障/共享缓存矩阵仍待迁移。
 
-CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标行与填充隔离、空指针拒绝、独占存储复用及跨关闭/跨线程持帧。负 stride、非零 chunk offset、损坏标志和短跨度显式拒绝，未静默提前套用 P3 的 offset 语义。已有持帧者时分配新 CPU owner，保留单次行复制；这是修复原 Mat 缓存可写别名的安全适配，需独立核验原生行为和成本。原生实现保留每构造一次 raw pw_init、析构无 deinit 的 U 策略；测试配平仅发生在完整 native teardown 之后，禁止与高层 binding 的 OnceLock 初始化便利构造函数混用。
+CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标行与填充隔离、空指针拒绝、独占存储复用及清除缓存后的跨线程持帧。负 stride、非零 chunk offset、损坏标志和短跨度显式拒绝，未静默提前套用 P3 的 offset 语义。已有持帧者时分配新 CPU owner，保留单次行复制；这是修复原 Mat 缓存可写别名的安全适配，需独立核验原生行为和成本。原生实现保留每构造一次 raw pw_init、析构无 deinit 的 U 策略；测试配平仅发生在完整 native teardown 之后，禁止与高层 binding 的 OnceLock 初始化便利构造函数混用。
+
+首批 Linux 源码 context 在参考程序 CMake 配置时失败：OpenCV 5 的 core/imgproc 静态包导出尚未构建的 libtiff archive；完整原源码编译、fd 错误观察和截图都没有执行。该失败保留外置，现已明确关闭此 raw-pixel 诊断不使用的图像编解码依赖，同时继续要求 IPP/CPU 优化；修正后的原生结果待验证。回调首个故障、buffer 归还错误和 core disconnect 清理错误分别记录。Linux 轻量日志/原图诊断在完整工程归档前上传，便于定位真实失败。
 
 源码入口安排 20 次独立 fd/init/三次截图/inactive/close 生命周期，按原 API 检查 60 张已知 BGR 和 fd/线程数，原对象关闭后继续持帧并跨线程读取；每张可解释布局的原图在颜色断言前保存。图样携带生产端序号并使各行内容随序号变化，持帧需保持原序号和像素；重复/倒退仅记诊断，不把它推断为原 API 的回放状态。转换库初始化在捕获资源基线之外，原构造函数的 `pw_init` 由测试在原对象完全销毁后额外 `pw_deinit`；这不证明原析构本身配平初始化。另在独立进程观察真实 `connect_fd` 早期错误的描述符状态，只在原生对象清理后按 socket cookie 回收仍匹配的 socket，不预设所有错误都会消费 fd。入口核对实际头文件/运行时版本及动态符号所在库。原 API 不暴露捕获时间/回放状态，耗时只记诊断。它仍不是 Rust 原生 driver、完整 C++/Rust 对照、framework/input、格式/故障/DMA-BUF 矩阵或 P1 验收。
 
