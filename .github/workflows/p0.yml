@@ -113,6 +113,18 @@ jobs:
       - name: Verify archived inputs and results
         if: always()
         run: cargo xtask reference verify
+      - name: Upload Windows component diagnostics
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-windows-component-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/*.bgr
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/geometry.txt
+          if-no-files-found: warn
       - name: Archive engineering evidence
         if: always()
         shell: pwsh
