@@ -327,12 +327,48 @@ fn distinguishes_optional_popup_failure_from_conversion_exception() -> Result<()
     let baseline = adapter.objects();
     let owners = adapter.image_owners()?;
     for fail_at in [1, 2] {
+        let source = adapter.print_conversion_reference(fixture.hwnd(), fail_at)?;
+        assert_eq!(
+            source.image.err(),
+            Some(2),
+            "source conversion must escape popup fallback"
+        );
+        assert_eq!(source.calls, u64::from(fail_at));
+        assert_eq!(source.baseline, u64::from(baseline));
+        assert_eq!(source.at_conversion[0], u64::from(baseline + 3));
+        assert_eq!(
+            source.at_conversion[1],
+            if fail_at == 2 {
+                u64::from(baseline + 3)
+            } else {
+                0
+            }
+        );
+        assert_eq!(
+            source.after_capture,
+            u64::from(baseline),
+            "source must unwind its GDI resources"
+        );
+        assert_eq!(
+            source.image_owners, owners,
+            "source must not export an image after a conversion exception"
+        );
+        assert_eq!(source.overflow, 0);
+        let bgr_allocations = u64::from(fail_at == 2);
+        assert_eq!(source.bgr_allocations, bgr_allocations);
+        assert_eq!(source.bgr_releases, bgr_allocations);
+        assert_eq!(source.bgr_bytes, bgr_allocations * 37 * 23 * 3);
+        assert_eq!(source.bgr_freed_bytes, source.bgr_bytes);
+        assert_eq!(
+            source.allocator_errors, 0,
+            "source BGR output must release before the probe ends"
+        );
         let mut converter = Observed {
             adapter: &adapter,
             baseline,
             conversions: 0,
             overlays: 0,
-            fail_at,
+            fail_at: usize::try_from(fail_at)?,
         };
         let result = PrintWindowCapture::new(fixture.hwnd()).capture(&mut converter);
         assert!(matches!(result.image, Err(CaptureError::Conversion(2))));
@@ -340,13 +376,17 @@ fn distinguishes_optional_popup_failure_from_conversion_exception() -> Result<()
             result.popup_failure.is_none(),
             "conversion exceptions must abort the whole source operation"
         );
-        assert_eq!(converter.conversions, fail_at);
+        assert_eq!(converter.conversions, usize::try_from(fail_at)?);
         assert_eq!(converter.overlays, 0);
         assert_eq!(adapter.objects(), baseline);
         assert_eq!(
             adapter.image_owners()?,
             owners,
             "main image drops if popup conversion throws"
+        );
+        println!(
+            "PrintWindow conversion exception parity: fail_at={fail_at}, GDI cleanup/exported owners balanced, source BGR allocations={}, releases={}, bytes={}, freed_bytes={}",
+            source.bgr_allocations, source.bgr_releases, source.bgr_bytes, source.bgr_freed_bytes
         );
     }
     let hwnd = fixture.hwnd();
@@ -358,5 +398,23 @@ fn distinguishes_optional_popup_failure_from_conversion_exception() -> Result<()
         assert!(result.main_cleanup.0.iter().all(Option::is_none));
         assert!(result.popup_cleanup.0.iter().all(Option::is_none));
     }
+    let mut main_only = adapter.print_fixture((25, 17), (5, 3), 0)?;
+    let main_baseline = adapter.objects();
+    let unreached = adapter.print_conversion_reference(main_only.hwnd(), 2)?;
+    assert_eq!(
+        unreached.image.err(),
+        Some(4),
+        "an unreached injected fault must not export the observed Mat"
+    );
+    assert_eq!(unreached.calls, 1);
+    assert_eq!(unreached.after_capture, u64::from(main_baseline));
+    assert_eq!(unreached.image_owners, owners);
+    assert_eq!((unreached.bgr_allocations, unreached.bgr_releases), (1, 1));
+    assert_eq!(
+        (unreached.bgr_bytes, unreached.bgr_freed_bytes),
+        (2553, 2553)
+    );
+    assert_eq!(unreached.allocator_errors, 0);
+    main_only.close()?;
     Ok(())
 }

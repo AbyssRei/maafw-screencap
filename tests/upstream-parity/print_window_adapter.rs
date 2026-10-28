@@ -21,7 +21,66 @@ type Stats = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
 type OverlayImage =
     unsafe extern "C" fn(*mut c_void, *mut c_void, i32, i32, i32, i32, i32, i32) -> i32;
 
+pub struct ConversionReference {
+    pub image: Result<Image, i32>,
+    pub calls: u64,
+    pub baseline: u64,
+    pub at_conversion: [u64; 2],
+    pub after_capture: u64,
+    pub image_owners: u64,
+    pub overflow: u64,
+    pub bgr_allocations: u64,
+    pub bgr_releases: u64,
+    pub bgr_bytes: u64,
+    pub bgr_freed_bytes: u64,
+    pub allocator_errors: u64,
+}
+
 impl Adapter {
+    pub fn print_conversion_reference(
+        &self,
+        hwnd: *mut c_void,
+        fail_at: u32,
+    ) -> Result<ConversionReference, Box<dyn Error>> {
+        type Reference =
+            unsafe extern "C" fn(*mut c_void, u32, *mut ImageSpan, *mut u64, usize) -> i32;
+        // SAFETY: Exact private print-parity.h signature, with the module held
+        // through the source exception boundary and image adoption.
+        let reference: Reference =
+            unsafe { self.module.symbol(c"mfs_print_conversion_reference")? };
+        let mut image = ImageSpan::default();
+        let mut observations = [0_u64; 12];
+        // SAFETY: Fully initialized writable outputs of their stated capacity.
+        let status = unsafe {
+            reference(
+                hwnd,
+                fail_at,
+                &mut image,
+                observations.as_mut_ptr(),
+                observations.len(),
+            )
+        };
+        if observations[11] & 2 != 0 {
+            // An unexpected native BGR allocation still references the probe
+            // allocator's code/data. Preserve the module before reporting the
+            // failed ownership assertion; never unload a possible late release.
+            std::mem::forget(Arc::clone(&self.module));
+        }
+        Ok(ConversionReference {
+            image: self.adopt(status, image),
+            calls: observations[0],
+            baseline: observations[1],
+            at_conversion: [observations[2], observations[3]],
+            after_capture: observations[4],
+            image_owners: observations[5],
+            overflow: observations[6],
+            bgr_allocations: observations[7],
+            bgr_releases: observations[8],
+            bgr_bytes: observations[9],
+            bgr_freed_bytes: observations[10],
+            allocator_errors: observations[11],
+        })
+    }
     pub fn print_intersection(
         &self,
         canvas: (i32, i32),

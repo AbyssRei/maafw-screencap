@@ -41,6 +41,17 @@ MFS_PARITY_EXPORT int32_t mfs_print_parity_intersection(int32_t canvas_width, in
 // 36 u64 values: read count, overflow, mode, DC count, then two 16-value reads.
 MFS_PARITY_EXPORT int32_t mfs_print_probe_reference(void* hwnd, uint32_t mode,
     MfsParityImage* image, uint64_t* observations, size_t capacity);
+// Conversion-only source interposition. fail_at is 1 (main) or 2 (popup).
+// An unreached fault returns 4 and destroys the unexpected successful image.
+// Twelve u64 values: call count, GDI baseline, main/popup conversion GDI counts,
+// GDI count after capture/unwind, exported image owners, unexpected-call flag,
+// BGR allocations/releases/bytes/freed bytes, allocator error/outstanding flags.
+// Reject overlap/reentry. Fault modes use a per-output module-owned allocator
+// and never export its Mat. If outstanding bit 2 is reported, retain the module
+// for any late release; do not claim successful cleanup. Input
+// BGRA/default allocator allocations are outside these BGR-output counters.
+MFS_PARITY_EXPORT int32_t mfs_print_conversion_reference(void* hwnd, uint32_t fail_at,
+    MfsParityImage* image, uint64_t* observations, size_t capacity);
 #ifdef __cplusplus
 }
 #endif
