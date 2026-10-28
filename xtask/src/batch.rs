@@ -650,7 +650,9 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
                 .inputs
                 .iter()
                 .filter(|input| {
-                    input.path.starts_with("baselines/u/") && input.path.ends_with("/manifest.json")
+                    (input.path.starts_with("baselines/u/")
+                        || input.path.starts_with("baselines/f/"))
+                        && input.path.ends_with("/manifest.json")
                 })
                 .count()
                 == 1
@@ -767,7 +769,10 @@ mod tests {
                     records::artifact(&fixture.0, &baseline).unwrap(),
                 ],
             };
-            for (index, accepted) in [true, false, false, false].into_iter().enumerate() {
+            for (index, accepted) in [true, false, false, false, true, false]
+                .into_iter()
+                .enumerate()
+            {
                 match index {
                     1 => run.phase_status = "complete".into(),
                     2 => {
@@ -779,6 +784,19 @@ mod tests {
                             .push(records::artifact(&fixture.0, &baseline).unwrap());
                         run.inputs.remove(0);
                     }
+                    4 => {
+                        let fork = fixture.0.join("baselines/f/source/manifest.json");
+                        fs::create_dir_all(fork.parent().unwrap()).unwrap();
+                        fs::write(&fork, "Fixture F parent identity, not native acceptance.\n")
+                            .unwrap();
+                        run.inputs = vec![
+                            records::artifact(&fixture.0, &scope).unwrap(),
+                            records::artifact(&fixture.0, &fork).unwrap(),
+                        ];
+                    }
+                    5 => run
+                        .inputs
+                        .push(records::artifact(&fixture.0, &baseline).unwrap()),
                     _ => {}
                 }
                 let manifest = fixture.0.join(format!("{kind}-component-{index}.json"));

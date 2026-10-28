@@ -60,6 +60,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         });
     let root = records::external_root(&path)?;
     crate::reference::verify(&root)?;
+    let source_index: Index = records::read(&root.join("manifest.json"))?;
+    let source_baseline = crate::reference::selected(&root, &source_index)?;
     // Freeze one updated Rust resolution before building/testing the explicitly
     // selected native acceptance adapter. This remains independent of capture.
     if offline_input.is_none() {
@@ -120,7 +122,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             );
         }
     }
-    let baseline = records::verify(&root, &index.baselines[0])?;
+    let baseline = records::verify(&root, &source_baseline)?;
     let upstream = baseline.parent().unwrap().join("reference/upstream");
     let directory = root.join("runs").join(format!(
         "{}-{}",
@@ -155,12 +157,12 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         fs::write(
             &scope,
             "# P1 GDI migration component scope\n\n\
-             Fixed unpatched GdiScreencap.{h,cpp} and HwndUtils.hpp::window_size/conversion order; parent U identity is retained in this run.\n\
+             Pinned GdiScreencap.{h,cpp} and HwndUtils.hpp::window_size/conversion order; the selected F parent identity is retained in this run.\n\
              U-WIN-GDI-01 partial: controlled asymmetric BGR pixels, odd widths, conversion before GDI cleanup, retained CPU output and twenty cycles. Nondefault display depth remains unexecuted.\n\
              U-WIN-GDI-02 native scenarios: null/destroyed/empty/iconic HWND, DC/bitmap/select/copy/read/convert failures, each cleanup failure and a compound primary-plus-cleanup failure. Fault-instrumented original and the same Rust capture share real GDI boundary responses; compare order/results, report residuals before separate fixture recovery and verify CPU owner releases.\n\
              Safe defect observations: the instrumented reference initializes input for positive short-return/layout probes; Rust rejects incomplete reads and failed metadata queries. A real 24-bit DDB may be rejected at SelectObject on the current 32-bit device; this is not a nondefault-depth display capture.\n\
              Safety adaptations: checked arithmetic/narrowing and fallible initialized allocation; GetObjectW validates the original packed one-plane 32-bit DDB assumption; short GetBitmapBits reads and invalid SelectObject sentinels are rejected. These are not DIB modernization.\n\
-             No manager/selection/forwarding or other backend case is closed. Actual native outcomes remain in the check logs; no complete GDI backend, U snapshot, P1 exit, public SDK, PR or P3 feature is asserted by this component run.\n",
+             No manager/selection/forwarding or other backend case is closed. Actual native outcomes remain in the check logs; no complete GDI backend, F snapshot, P1 exit, public SDK, PR or P3 feature is asserted by this component run.\n",
         )?;
         source_snapshot
             .inputs
@@ -171,7 +173,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         fs::write(
             &scope,
             "# P1 PrintWindow migration component scope\n\n\
-             Fixed unpatched PrintWindowScreencap.{h,cpp}; the GDI regression scope is retained separately.\n\
+             Pinned PrintWindowScreencap.{h,cpp}; the GDI regression scope is retained separately.\n\
              U-WIN-PRINT-01/02 partial: owned WM_PAINT/WM_PRINTCLIENT class and real PrintWindow(3), main/popup BGR conversion before cleanup, composition after both cleanups, negative/partial/outside/hidden/absent and zero-size popup scenes, twenty fixture lifecycles each, retained CPU ownership. Actual rendering message counts remain observable; no single message path is assumed. Four hundred compiled OpenCV/Rust rectangle boundaries preserve representable empty/clipped results.\n\
              A real child target inside a larger root also runs six scenes for twenty fixture lifecycles each: no root popup, visible/negative/outside root-owned popup, hidden and zero-width popup. Exact child pixels/dimensions, root != target, conversion/composition counts, cleanup and retained CPU output distinguish the child from its root. Hidden fixture setup verifies the resulting native visibility. The fixture independently owns its callback module; an explicit native close after Adapter destruction verifies code/context retention through class unregistration. Forgetting the guard retains that lease rather than unloading live callback code.\n\
              Twenty-nine ordinary native fault scenarios compare isolated exact original function bodies with Rust: main/popup client rectangle, DC/bitmap/selection/PrintWindow/read/conversion failures, each cleanup failure and compound primary/cleanup failures. The ledger retains both HWND resource sets, records residuals before separate fixture recovery and compares attempts/errors/CPU owners without treating that recovery as successful product cleanup. Six additional read-deselect/reselect/short-scanline scenarios classify safety adaptations; the instrumented short-read source input is fully defined. Successful GetLastError values remain raw observations, not guaranteed error contracts.\n\
@@ -179,7 +181,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
              The private PseudoMinimizeHelper and PrintWindow wrapper migration preserves synchronous ensure, 100ms polling, partial apply failures, foreground/target-loss observation, inactive restoration and join-before-stop restoration/re-minimization. Twenty-two exact original-body scripts use explicit fake scheduling and compare native calls, sleep requests, failure codes and state snapshots; they do not prove OS thread ownership or desktop pixels. Separate real-worker synchronization checks join order. Native fixtures now own distinct UI threads and real message loops, reading statistics and performing window/class shutdown on those owners, then joining before context/module release. Initial setup draining is bounded; partial construction and Adapter-first destruction check worker/module ownership. Layered/nonlayered stop/inactive and target-loss lifecycles each retain strict known pixels and CPU owners after shutdown. Earlier same-thread layered failures remain archived; independent pumped-owner controls correct the fixture without changing capture/helper calls, waits or conversion timing. Foreground recovery is a separate exact native case; verified missing foreground control is missing_environment, never a passing case, and other independent checks continue. No input injection or activation bypass is added. Earlier popup failures remain unresolved despite later non-reproduction. No helper/wrapper or PrintWindow exit is asserted.\n\
              Safety adaptation: temporarily deselect bitmap only around GetDIBits to meet its documented precondition, reselect before original conversion point, retain final restore/delete/delete/release. A real native selected-object witness verifies both boundaries. DWORD-aligned initialized u32 storage, checked CPU spans/scanline counts and signed geometry reject unsafe source assumptions; no CreateDIBSection/P3 migration is introduced.\n\
              An earlier formal native run returned a black original popup bitmap while the subsequent Rust capture rendered the fixture pattern. Same-bitmap selected/unselected/repeated/raw reads confirmed black contents; later query/flush controls and an exact earlier-fixture replay did not reproduce it and do not establish a fix. Preserve that unresolved parity failure independently of this run's check outcomes; no PrintWindow component exit is asserted.\n\
-             No full backend, U snapshot, P1 exit, public SDK, manager, PR or later product feature is accepted by this record.\n",
+             No full backend, F snapshot, P1 exit, public SDK, manager, PR or later product feature is accepted by this record.\n",
         )?;
         source_snapshot
             .inputs
@@ -259,7 +261,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if let Some(input) = offline {
         run.inputs.push(input);
     }
-    run.inputs.push(index.baselines[0].clone());
+    run.inputs.push(source_baseline);
     run.inputs.push(records::artifact(&root, &result)?);
     run.inputs.extend(source_snapshot.inputs);
     let manifest = directory.join("manifest.json");

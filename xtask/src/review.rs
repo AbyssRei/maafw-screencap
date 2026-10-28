@@ -51,7 +51,8 @@ impl Method {
 #[serde(deny_unknown_fields)]
 struct Catalog {
     layout_version: u32,
-    parent_u: Artifact,
+    #[serde(alias = "parent_u")]
+    parent_source: Artifact,
     reports: Vec<Report>,
     sources: Vec<Source>,
     methods: Vec<MethodDefinition>,
@@ -356,7 +357,7 @@ pub(crate) fn verify(root: &Path, artifact: &Artifact) -> Result<usize> {
 }
 
 fn validate(root: &Path, catalog: &Catalog) -> Result<usize> {
-    let context = reference::review_context(root, &catalog.parent_u)?;
+    let context = reference::review_context(root, &catalog.parent_source)?;
     let pending = validate_graph(catalog, &context.required_sources)?;
     for report in &catalog.reports {
         records::verify(root, &report.artifact)?;
@@ -467,12 +468,12 @@ pub fn run(args: &[String]) -> Result<()> {
     records::create_json(&archived, &catalog)?;
     let artifact = records::artifact(&root, &archived)?;
     verify(&root, &artifact)?;
-    run.inputs.extend([artifact, catalog.parent_u.clone()]);
+    run.inputs.extend([artifact, catalog.parent_source.clone()]);
     let log = directory.join("catalog-validation.log");
     fs::write(
         &log,
         format!(
-            "Validated {} sources, {} capture routes and {} unexecuted U case definitions; {pending} source reviews pending.\nExact Git objects, SHA-256, line anchors, report hashes and target/case references checked.\nNo native parity execution, license acceptance or P0 completion is asserted.\n",
+            "Validated {} sources, {} capture routes and {} unexecuted case definitions; {pending} source reviews pending.\nExact Git objects, SHA-256, line anchors, report hashes and target/case references checked.\nNo native parity execution, license acceptance or phase completion is asserted.\n",
             catalog.sources.len(),
             catalog.methods.len(),
             catalog.cases.len()
@@ -488,7 +489,7 @@ pub fn run(args: &[String]) -> Result<()> {
     batch::verify(&root, &records::artifact(&root, &manifest)?)?;
     batch::register(&root, &manifest)?;
     println!(
-        "Catalog archived at {}. {pending} source reviews pending; every U case remains unexecuted and P0 remains incomplete.",
+        "Catalog archived at {}. {pending} source reviews pending; every submitted case remains unexecuted and no phase completion is asserted.",
         manifest.display()
     );
     Ok(())

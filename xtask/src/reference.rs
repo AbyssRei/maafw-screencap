@@ -16,6 +16,10 @@ const HEAD: &str = "f603a04633b0e43a8bbcb94ddef60fc349ad29a1";
 const COMMITS: [&str; 2] = ["54b116aa89f70e5ae156c05120cabaddca7702a8", HEAD];
 const PATCH_FILE: &str = "source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp";
 
+#[path = "reference_fork.rs"]
+mod fork;
+pub(crate) use fork::{prepare as prepare_fork, selected};
+
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Baseline {
@@ -340,12 +344,37 @@ pub fn prepare(path: &Path) -> Result<()> {
 }
 
 pub fn verify(path: &Path) -> Result<()> {
+    verify_impl(path, true)
+}
+
+fn verify_sources(path: &Path) -> Result<()> {
+    verify_impl(path, false)
+}
+
+fn verify_impl(path: &Path, include_runs: bool) -> Result<()> {
     let root = records::external_root(path)?;
     let index: Index = records::read(&root.join("manifest.json"))?;
     records::version(index.layout_version)?;
-    if index.baselines.len() != 1 || index.patches.len() != 1 {
-        return Err("P0 index requires one fixed U preparation baseline and one PR patch".into());
+    let legacy = index
+        .baselines
+        .iter()
+        .filter(|entry| entry.path.starts_with("baselines/u/"))
+        .collect::<Vec<_>>();
+    let legacy_patches = index
+        .patches
+        .iter()
+        .filter(|entry| entry.path == "patches/pr-1587/manifest.json")
+        .collect::<Vec<_>>();
+    if legacy.len() != 1
+        || legacy_patches.len() != 1
+        || index.baselines.len() != index.patches.len()
+    {
+        return Err(
+            "source index requires the historical U/PR pair and one patch for each F revision"
+                .into(),
+        );
     }
+    let legacy_parent = legacy[0];
     let mut paths = BTreeSet::new();
     for artifact in index
         .baselines
@@ -358,10 +387,12 @@ pub fn verify(path: &Path) -> Result<()> {
         }
         records::verify(&root, artifact)?;
     }
-    for artifact in &index.runs {
-        crate::batch::verify(&root, artifact)?;
+    if include_runs {
+        for artifact in &index.runs {
+            crate::batch::verify(&root, artifact)?;
+        }
     }
-    let baseline_path = records::verify(&root, &index.baselines[0])?;
+    let baseline_path = records::verify(&root, legacy_parent)?;
     let baseline: Baseline = records::read(&baseline_path)?;
     records::version(baseline.layout_version)?;
     if baseline.kind != "u"
@@ -420,7 +451,7 @@ pub fn verify(path: &Path) -> Result<()> {
     let audit: LicenseAudit = records::read(&records::verify(&root, &baseline.license_audit)?)?;
     records::version(audit.layout_version)?;
     records::verify(&root, &audit.upstream_license)?;
-    let patch: Patch = records::read(&records::verify(&root, &index.patches[0])?)?;
+    let patch: Patch = records::read(&records::verify(&root, legacy_patches[0])?)?;
     records::version(patch.layout_version)?;
     if patch.base != BASE
         || patch.head != HEAD
@@ -428,8 +459,8 @@ pub fn verify(path: &Path) -> Result<()> {
         || patch.files != [PATCH_FILE]
         || patch.head_sources.len() != 1
         || patch.head_sources[0].original_path != PATCH_FILE
-        || patch.parent_u.path != index.baselines[0].path
-        || patch.parent_u.sha256 != index.baselines[0].sha256
+        || patch.parent_u.path != legacy_parent.path
+        || patch.parent_u.sha256 != legacy_parent.sha256
         || patch.pull_request != "https://github.com/MaaXYZ/MaaFramework/pull/1587"
     {
         return Err("fixed PR identity, range or parent U does not match".into());
@@ -453,6 +484,7 @@ pub fn verify(path: &Path) -> Result<()> {
     for source in &patch.head_sources {
         verify_source(&root, &upstream, HEAD, source)?;
     }
+    fork::verify_all(&root, &index, legacy_parent)?;
     println!(
         "Verified {} source files, full upstream archive, inventory, license record and cumulative PR patch.\nP0 preparation only; native capture and phase acceptance have not been asserted.",
         baseline.sources.len()
@@ -486,6 +518,9 @@ pub(crate) fn review_context(root: &Path, parent: &Artifact) -> Result<ReviewCon
         .any(|entry| entry.path == parent.path && entry.sha256 == parent.sha256)
     {
         return Err("catalog parent is not an indexed fixed U preparation baseline".into());
+    }
+    if parent.path.starts_with("baselines/f/") {
+        return fork::review_context(root, parent);
     }
     let path = records::verify(root, parent)?;
     let baseline: Baseline = records::read(&path)?;

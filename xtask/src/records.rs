@@ -28,6 +28,8 @@ pub struct Index {
     pub baselines: Vec<Artifact>,
     pub patches: Vec<Artifact>,
     pub runs: Vec<Artifact>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_baseline: Option<Artifact>,
 }
 
 pub fn read<T: DeserializeOwned>(path: &Path) -> Result<T> {

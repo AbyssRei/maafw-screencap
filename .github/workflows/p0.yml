@@ -46,7 +46,12 @@ jobs:
             throw "Unexpected native runner target: $hostLine"
           }
       - name: Resolve current dependencies and archive fixed sources
-        run: cargo xtask reference prepare
+        shell: pwsh
+        run: |
+          cargo xtask reference prepare
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo xtask reference prepare-fork --revision client-exact-ee2569a5 --head ee2569a531666a1911b4c306e4c7f734b6bcb774
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify Windows SDK servicing cache identity
         shell: pwsh
         run: ./tests/prototypes/sdk_cache.ps1

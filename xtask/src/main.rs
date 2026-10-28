@@ -31,6 +31,9 @@ fn main() {
 
 fn run() -> Result<()> {
     let argv: Vec<_> = env::args().skip(1).collect();
+    if argv.starts_with(&["reference".into(), "prepare-fork".into()]) {
+        return reference::prepare_fork(&argv[2..]);
+    }
     if argv.first().is_some_and(|arg| arg == "batch") {
         return batch::run(&argv[1..]);
     }
