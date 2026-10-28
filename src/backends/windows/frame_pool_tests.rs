@@ -29,6 +29,86 @@ impl Drop for HostInitialization {
     }
 }
 
+// Harness-only current-thread queue. Capture still runs synchronously without
+// pumping. Only shutdown dispatches messages, after every capture owner closes.
+#[cfg(feature = "prototype-windows-com")]
+struct HostDispatcher(Option<host::DispatcherQueueController>);
+#[cfg(feature = "prototype-windows-com")]
+impl HostDispatcher {
+    fn new() -> Result<Self, Box<dyn std::error::Error>> {
+        // SAFETY: A fresh test thread owns its successful MTA initialization;
+        // current-thread queue creation does not request an apartment change.
+        let controller = unsafe {
+            host::CreateDispatcherQueueController(host::DispatcherQueueOptions {
+                dwSize: u32::try_from(size_of::<host::DispatcherQueueOptions>())?,
+                threadType: host::DQTYPE_THREAD_CURRENT,
+                apartmentType: host::DQTAT_COM_NONE,
+            })?
+        };
+        Ok(Self(Some(controller.cast()?)))
+    }
+
+    fn close(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let Some(controller) = self.0.as_ref() else {
+            return Ok(());
+        };
+        // Any native shutdown failure aborts this test process; do not reissue
+        // shutdown, unload an active queue, or turn an observation timeout into
+        // permission to abandon the caller's owned native thread.
+        let result = (|| -> Result<bool, Box<dyn std::error::Error>> {
+            let operation = controller.ShutdownQueueAsync()?;
+            let began = Instant::now();
+            let mut over_budget = false;
+            while operation.Status()? == windows_future::AsyncStatus::Started {
+                let mut message = host::MSG::default();
+                // SAFETY: Read and dispatch only this harness thread's queue.
+                while unsafe {
+                    host::PeekMessageW(&mut message, None, 0, 0, u32::try_from(host::PM_REMOVE)?)
+                }
+                .as_bool()
+                {
+                    if message.message == u32::try_from(host::WM_QUIT)? {
+                        return Err("unexpected WM_QUIT during dispatcher shutdown".into());
+                    }
+                    unsafe {
+                        let _ = host::TranslateMessage(&message);
+                        host::DispatchMessageW(&message);
+                    }
+                }
+                over_budget |= began.elapsed() > Duration::from_secs(5);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            operation.GetResults()?;
+            Ok(over_budget)
+        })();
+        match result {
+            Ok(over_budget) => {
+                self.0.take();
+                println!("Rust dispatcher_shutdown=completed over_budget={over_budget}");
+                if over_budget {
+                    return Err("dispatcher shutdown exceeded observation budget".into());
+                }
+                Ok(())
+            }
+            Err(error) => {
+                eprintln!("native dispatcher shutdown failed: {error}");
+                std::process::abort();
+            }
+        }
+    }
+}
+#[cfg(feature = "prototype-windows-com")]
+impl Drop for HostDispatcher {
+    fn drop(&mut self) {
+        if let Err(error) = self.close() {
+            // Queue completion has already been established for this branch;
+            // retain a failed test result even on an earlier assertion unwind.
+            eprintln!("dispatcher cleanup exceeded observation budget: {error}");
+            std::process::abort();
+        }
+    }
+}
+
 #[test]
 fn preserves_source_edge_clamping_and_rejects_geometry_overflow() {
     let client = RECT {
@@ -175,8 +255,8 @@ fn captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners(
     let mut owned = HostInitialization(false);
     match mode.as_str() {
         "uninitialized" => {}
-        "mta" | "sta" => {
-            let kind = if mode == "mta" {
+        "mta" | "mta-dispatcher" | "sta" => {
+            let kind = if mode != "sta" {
                 host::RO_INIT_MULTITHREADED
             } else {
                 host::RO_INIT_SINGLETHREADED
@@ -187,8 +267,13 @@ fn captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners(
             }
             owned.0 = true;
         }
-        _ => return Err("supported Rust test contexts: uninitialized, mta, sta".into()),
+        _ => return Err("supported contexts: uninitialized, mta, mta-dispatcher, sta".into()),
     }
+    let mut dispatcher = if mode == "mta-dispatcher" {
+        Some(HostDispatcher::new()?)
+    } else {
+        None
+    };
     let reference = std::env::var_os("MFS_FRAMEPOOL_REFERENCE_PIXELS")
         .ok_or("original framepool pixels required")?;
     let reference = std::path::PathBuf::from(reference);
@@ -249,6 +334,9 @@ fn captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners(
     assert_eq!(second.native_owners(), 1);
     assert_eq!(wgc::LIVE_COMPLETIONS.load(Ordering::Acquire), 0);
     assert_eq!(wgc::EVENT_CLOSE_ERROR.load(Ordering::Acquire), 0);
+    if let Some(dispatcher) = dispatcher.as_mut() {
+        dispatcher.close()?;
+    }
     // Only independent CPU images remain at caller uninitialization. Native
     // capture/session/frame/device/factory owners have all been released.
     drop(owned);
@@ -266,6 +354,82 @@ fn captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners(
     assert!(
         unsafe { host::AreDpiAwarenessContextsEqual(dpi, host::GetThreadDpiAwarenessContext()) }
             .as_bool()
+    );
+    Ok(())
+}
+
+#[cfg(feature = "prototype-windows-com")]
+#[test]
+#[ignore = "explicit twenty native FramePool lifecycles; original image and native adapter required"]
+fn retains_pixels_across_twenty_complete_framepool_lifecycles()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::backends::windows::parity_adapter::{Adapter, Image};
+    let reference = std::env::var_os("MFS_FRAMEPOOL_REFERENCE_PIXELS")
+        .ok_or("original framepool pixels required")?;
+    let reference = std::path::PathBuf::from(reference);
+    if !reference.is_absolute() {
+        return Err("source pixels path must be absolute".into());
+    }
+    let expected = std::fs::read(reference)?;
+    assert_eq!(expected.len(), 96 * 64 * 3);
+    // SAFETY: Explicit successful initialization reference on this fresh test
+    // thread. It is released only after all captures and dispatcher shutdown.
+    unsafe { host::RoInitialize(host::RO_INIT_MULTITHREADED).ok()? };
+    let owned = HostInitialization(true);
+    let dpi = unsafe { host::GetThreadDpiAwarenessContext() };
+    let mut dispatcher = HostDispatcher::new()?;
+    let adapter = Adapter::load()?;
+    let baseline = adapter.image_owners()?;
+    let drop_errors = DROP_CLOSE_ERROR_COUNT.load(Ordering::Acquire);
+    let mut retained = Vec::new();
+    for cycle in 0..20_u64 {
+        let mut fixture = adapter.render_fixture(96, 64)?;
+        let mut capture: FramePoolCapture<Image> = FramePoolCapture::new(fixture.hwnd());
+        let mut converter = adapter.converter(0);
+        let attempt = capture.capture(&mut converter);
+        println!("FramePool lifecycle={cycle} {:?}", attempt.evidence);
+        assert!(attempt.evidence.cleanup.iter().all(Option::is_none));
+        assert!(!attempt.evidence.replayed);
+        assert_eq!(attempt.evidence.target_copy_bytes, 96 * 64 * 4);
+        let image = attempt
+            .image
+            .map_err(|error| format!("cycle {cycle}: {error:?}"))?;
+        assert_eq!(image.dimensions(), (96, 64));
+        assert_eq!(image.bytes(), expected);
+        assert_eq!((converter.conversions, converter.clones), (1, 1));
+        assert_ne!(image.address(), capture.cached.as_ref().unwrap().address());
+        assert_eq!(adapter.image_owners()?, baseline + cycle + 2);
+        assert!(capture.uninit().cleanup.iter().all(Option::is_none));
+        assert!(capture.uninit().cleanup.iter().all(Option::is_none));
+        assert!(capture.pool.is_none() && capture.session.is_none() && capture.item.is_none());
+        assert!(capture.cached.is_some() && capture.device.is_some());
+        drop(capture);
+        fixture.close()?;
+        assert_eq!(adapter.image_owners()?, baseline + cycle + 1);
+        assert_eq!(wgc::LIVE_COMPLETIONS.load(Ordering::Acquire), 0);
+        assert_eq!(wgc::EVENT_CLOSE_ERROR.load(Ordering::Acquire), 0);
+        assert_eq!(DROP_CLOSE_ERROR_COUNT.load(Ordering::Acquire), drop_errors);
+        retained.push(image);
+        for image in &retained {
+            assert_eq!(image.bytes(), expected);
+        }
+    }
+    drop(adapter);
+    dispatcher.close()?;
+    assert!(
+        unsafe { host::AreDpiAwarenessContextsEqual(dpi, host::GetThreadDpiAwarenessContext()) }
+            .as_bool()
+    );
+    drop(owned);
+    for image in &retained {
+        assert_eq!(image.bytes(), expected);
+    }
+    let last = retained.pop().unwrap();
+    drop(retained);
+    assert_eq!(last.native_owners(), baseline + 1);
+    assert_eq!(last.bytes(), expected);
+    println!(
+        "twenty FramePool capture/session/device/window lifecycles complete; all CPU images retained through shutdown"
     );
     Ok(())
 }
