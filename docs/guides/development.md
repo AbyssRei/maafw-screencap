@@ -49,7 +49,13 @@ cargo xtask upstream-parity print-window
 cargo xtask upstream-parity print-window --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-parity screen-dc
 cargo xtask upstream-parity screen-dc --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-context frame-pool
+cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
+
+`upstream-context frame-pool` 是独立的上游调用环境观察，尚无 Rust FramePool 对照实现。它把固定原 `FramePoolScreencap` 编译为独立 executable，分别在未初始化 COM、显式 MTA、MTA 加当前线程 dispatcher、STA 四个新进程中各调用一次原捕获，不在捕获内部添加 pump、等待或重试。自有绘图窗口有独立 UI owner/message loop；记录调用前后及原对象销毁后的 COM type/qualifier、原始 BGR、已知内部像素、耗时与窗口 owner。仅配平显式成功取得的初始化引用，dispatcher 在真实 shutdown 完成后退出。每个模式独立保存成功/失败，后续模式继续执行；完整原生、依赖、来源及许可材料进入外部 P1 incomplete 批次。
+
+首轮本机四个独立进程都返回 96×64 BGR，已知内部像素正确，四张完整原图的哈希一致；未初始化模式最初为 `CO_E_NOTINITIALIZED`，调用后为 implicit MTA，原对象销毁后仍保留。显式 MTA/STA 的自有初始化引用释放后恢复未初始化。这个结果记录了 C++/WinRT 激活路径的宿主副作用，不能据此要求 U 提前采用 P3 的固定 MTA worker，也不表示 dispatcher、权限、等待/缓存、格式、缩放、尺寸变化或 Rust FramePool 的完整矩阵已验证。先前 WGC 工厂缓存的 DLL 卸载访问违规仍保留；独立进程观察不撤销该失败。
 
 本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空/最小化窗口与被封住的转换异常。故障对照以隔离命名空间编译原始函数体，通过真实 GDI 对象记录创建、复制、转换及清理的原生边界响应；14 组正常/故障/组合场景分别核对主错误、清理错误、调用顺序及 CPU owner 释放。夹具先记录捕获实现遗留的资源，再单独回收，不能据此声称产品在原生清理失败后已成功关闭。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
 

@@ -11,6 +11,7 @@ param(
     [switch]$GdiParity,
     [switch]$PrintWindowParity,
     [switch]$ScreenDcParity,
+    [switch]$FramePoolContext,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -29,13 +30,17 @@ $nativeMissingEnvironment = $false
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 $screenEvidence = ''
+$frameContextEvidence = ''
+if ($FramePoolContext -and (-not $Desktop -or $GdiParity)) { throw 'FramePool context observation requires its independent explicit desktop entry.' }
 if ($ScreenDcParity) {
-    $pending.Add('ScreenDC is a partial P1 component. Exact-original window helpers and scripted capture/resource boundaries are distinct from native desktop evidence. Original source-only presentation controls retain before/after outcomes; fixture readiness does not modify capture or retry failed pixels. Occlusion, real native failure/cleanup, movement/resize and complete method/manager acceptance remain outstanding. Earlier visible-content and resource-baseline fixture failures remain archived.')
+    $pending.Add('ScreenDC is a partial P1 component. Exact-original window helpers, scripted capture boundaries, real DC/bitmap/conversion fault checks and visible pixels remain distinct evidence. Original source-only presentation controls retain before/after outcomes. The owned topmost/transition-disabled scene records point/root visibility around capture, without changing capture/helper calls or waits and without retry. Occlusion, remaining query failures, movement/resize, actual nondefault depth and complete method/manager acceptance remain outstanding. All previous black/gray pixel, resource-baseline and harness I/O failures remain archived.')
 }
 if ($PrintWindowParity) {
     $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
-if ($GdiParity) {
+if ($FramePoolContext) {
+    $pending.Add('This P1 task observes only the unmodified C++ FramePool source in four isolated caller contexts. It implements no Rust FramePool backend or SDK and does not accept Rust parity, full pixels/format/resize/permission/cache/timeout semantics or P1. Process-isolated factory/MTA state, known interior pixels and COM observations remain specific to this native environment.')
+} elseif ($GdiParity) {
     $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
 } else {
     $pending.Add('This P0 native task does not independently accept the complete preparation phase; associate the source/method/license and other platform records in the external exit assessment.')
@@ -414,10 +419,11 @@ try {
     [string[]]$parityOptions = @(if ($GdiParity) { '-DMFS_BUILD_GDI_PARITY=ON' })
     if ($PrintWindowParity) { $parityOptions += '-DMFS_BUILD_PRINT_PARITY=ON' }
     if ($ScreenDcParity) { $parityOptions += '-DMFS_BUILD_SCREEN_PARITY=ON' }
+    if ($FramePoolContext) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_REFERENCE=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$FramePoolContext))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -425,6 +431,9 @@ try {
     Step 'reference-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_reference_u', '--parallel', '8')
     if ($GdiParity) {
         Step 'gdi-parity-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_gdi_parity', '--parallel', '8')
+    }
+    if ($FramePoolContext) {
+        Step 'frame-pool-context-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_framepool_reference', '--parallel', '8')
     }
     foreach ($name in @('CMakeCache.txt', 'toolchain-Release.txt')) {
         $saved = Join-Path $inputsRoot "reference-$name"
@@ -435,6 +444,21 @@ try {
         $saved = Join-Path $artifacts $name
         Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved
         Save-Input $saved
+    }
+    if ($FramePoolContext) {
+        $programPath = Join-Path $artifacts mfs_framepool_reference.exe
+        Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_reference.exe) -Destination $programPath
+        Save-Input $programPath
+        $frameContextEvidence = Join-Path $artifacts frame-pool-context
+        New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
+        $contextFailures = [Collections.Generic.List[string]]::new()
+        foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
+            $modeRoot = Join-Path $frameContextEvidence $modeName
+            New-Item -ItemType Directory -Path $modeRoot | Out-Null
+            try { Step "frame-pool-source-$modeName" $programPath @($modeName, $modeRoot) }
+            catch { $contextFailures.Add($_.Exception.Message) }
+        }
+        if ($contextFailures.Count -gt 0) { throw ($contextFailures -join "`n") }
     }
     if ($GdiParity) {
         $parityLibrary = Join-Path $artifacts mfs_gdi_parity.dll
@@ -508,8 +532,11 @@ finally {
     if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
         Get-ChildItem -LiteralPath $screenEvidence -File | ForEach-Object { Save-Input $_.FullName }
     }
+    if ($frameContextEvidence -and (Test-Path -LiteralPath $frameContextEvidence)) {
+        Get-ChildItem -LiteralPath $frameContextEvidence -Recurse -File | ForEach-Object { Save-Input $_.FullName }
+    }
     Write-NewJson (Join-Path $RunRoot native-result.json) ([ordered]@{
-        layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
+        layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity -or $FramePoolContext) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
         checks = @($checks.ToArray()); pending = @($pending.ToArray()); inputs = @($inputs.ToArray())
     })
 }

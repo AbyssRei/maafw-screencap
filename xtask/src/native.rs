@@ -27,8 +27,20 @@ pub fn run_parity(args: &[String]) -> Result<()> {
     run_native(&native_args, Some(kind))
 }
 
+pub fn run_context(args: &[String]) -> Result<()> {
+    if args.first().map(String::as_str) != Some("frame-pool") {
+        return Err(
+            "expected upstream-context frame-pool [--offline-inputs <native run manifest>]".into(),
+        );
+    }
+    let mut native_args = vec!["--desktop".to_owned()];
+    native_args.extend_from_slice(&args[1..]);
+    run_native(&native_args, Some("frame-pool-context"))
+}
+
 fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
-    let gdi_parity = parity.is_some();
+    let frame_context = parity == Some("frame-pool-context");
+    let gdi_parity = parity.is_some() && !frame_context;
     let print_parity = parity == Some("print-window");
     let screen_parity = parity == Some("screen-dc");
     let mut desktop = false;
@@ -129,6 +141,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "p1-print-window-windows"
         } else if screen_parity {
             "p1-screen-dc-windows"
+        } else if frame_context {
+            "p1-frame-pool-context-windows"
         } else if gdi_parity {
             "p1-gdi-windows"
         } else {
@@ -146,13 +160,25 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             .unwrap()
             .to_string_lossy()
             .into_owned(),
-        phase: if gdi_parity { "P1" } else { "P0" }.into(),
+        phase: if parity.is_some() { "P1" } else { "P0" }.into(),
         phase_status: "incomplete".into(),
         checks: Vec::new(),
         pending: Vec::new(),
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if frame_context {
+        let scope = inputs.join("frame-pool-context-scope.md");
+        fs::write(
+            &scope,
+            "# P1 original FramePool caller-context observation\n\n\
+             Compile the fixed unmodified FramePoolScreencap class into an isolated executable. Run uninitialized, explicit MTA, MTA with current-thread dispatcher, and STA in four new processes; each executes exactly one original capture, without harness pumping/retry inside capture. Record initial/before/after/destruction/final COM type/qualifier, native owner identities, elapsed capture time, source image and known interior pixels. Dispatcher shutdown pumps until actual completion; only successful explicit RoInitialize references are balanced. The source's implicit process MTA is observed, never silently undone.\n\n\
+             No Rust FramePool backend or public SDK is implemented by this command. C++/WinRT process factory state is isolated across contexts. This evidence establishes only this source's tested caller/runtime premise, not universal dispatcher requirements, full FramePool pixels/format/resize/timeout/cache/permission semantics, Rust parity, or P1 acceptance. All failed contexts and other historical failures remain distinct.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if screen_parity {
         let scope = inputs.join("screen-dc-scope.md");
         fs::write(
@@ -162,7 +188,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
              Compiled exact-original headers are observed synchronously: 11 continuous cooldown steps and two direct topmost cases; 16 geometry, three window-size, four style and four DPI cases. Overflow safety cases never execute undefined C++ arithmetic. Scripted native capture tests separately check warning continuation, client-left/top input, negative source origin, native/short-read/conversion failures, independent cleanup errors and unwind cleanup. These scripted boundaries are not real native failure acceptance.\n\n\
              Desktop test requests 20 paired original/Rust captures with exact known pixels, retained CPU outputs and real GDI counts after capture/window close. Fixture-only controls distinguish cold CreateWindow process initialization from capture accounting. Source-only before/after submission/presentation observations retain both images. A later formal run failed both-source/Rust and post-barrier source black-image assertions; those raw images and failures remain archived. The fixture now reuses a dedicated WM_PAINT/UI owner with joined shutdown, without compiling the PrintWindow backend in a ScreenDC-only target. Strict pixels and capture calls/waits remain unchanged, without retry. Outcomes must verify this changed fixture premise; a DwmFlush result alone does not prove readiness.\n\n\
              Thirteen instrumented exact-original native DC/bitmap/conversion control/failure/compound cases preserve reached faults, primary/cleanup errors and residual counts before separate fixture recovery. Three short-read/metadata/24-bit-DDB safety classifications, actual null/destroyed/zero-width client checks and a helper-only cold-process resource control are separate from visible-pixel assertions. No instrumented output is repaired or accepted as a real nondefault display.\n\n\
-             Exact-commit Actions later observed source uniform gray with foreground true at cycle 1, subsequent Rust known pixels, and gray in original-only post-presentation control. A fixture-only optional mode now disables that owned window's DWM transitions while hidden, requiring success before first show and retaining existing PrintWindow modes/observation prefixes. This is an experimental steady-scene premise, not a confirmed root-cause fix or changed capture wait. New visible native evidence remains required; all previous failures remain preserved.\n\n\
+             Exact-commit Actions later observed source uniform gray with foreground true at cycle 1, subsequent Rust known pixels, and gray in original-only post-presentation control. Transition disabling alone still failed locally after wake and on Actions. Read-only point/root observations separately found another window over a new fixture before source capture; visible style and later foreground snapshots do not prove an unobscured source. The fixture now requests its own topmost root and disables transitions while hidden, retaining existing PrintWindow modes/observation prefixes. Point/root/foreground/cloak/geometry observations surround source/Rust samples. One awake local nineteen-check entry passed twenty strict paired pixel/resource/retention cycles plus the twenty-cycle source presentation control. This establishes only that controlled scene; it is not universal occlusion acceptance or a changed product capture/helper/wait. All previous failures remain preserved.\n\n\
              Occlusion, remaining native window-query/failure/cleanup matrices, asynchronous move/resize, nondefault depth, helper compatible-mode path, complete method/manager chains and full P1 acceptance remain outstanding. Native outcomes are platform/run specific.\n",
         )?;
         source_snapshot
@@ -247,6 +273,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if screen_parity {
         process.arg("-ScreenDcParity");
     }
+    if frame_context {
+        process.arg("-FramePoolContext");
+    }
     if let Some(input) = &offline {
         process
             .arg("-OfflineManifest")
@@ -295,6 +324,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "P1 PrintWindow component"
         } else if screen_parity {
             "P1 ScreenDC component"
+        } else if frame_context {
+            "P1 original FramePool caller context"
         } else if gdi_parity {
             "P1 GDI component"
         } else {
