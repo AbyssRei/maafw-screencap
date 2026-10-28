@@ -1,8 +1,12 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Private fixed-upstream consumer control flow. Native stream/setup, POD and
-//! buffer processing are not implemented by this module yet.
+//! Private fixed-upstream consumer control, checked CPU ownership and an
+//! unfinished native daemon/SHM driver. Full platform/P1 acceptance is pending.
 use std::time::Duration;
+
+mod buffer;
+#[cfg(all(target_os = "linux", feature = "linux-pipewire"))]
+mod native;
 
 /// Symbolic formats, not SPA numeric values or a public format/ABI contract.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,6 +28,14 @@ pub(crate) enum Conversion {
     Yuy2,
 }
 impl Format {
+    fn channels(self) -> Option<usize> {
+        match self {
+            Self::Bgra | Self::Bgrx | Self::Rgba | Self::Rgbx => Some(4),
+            Self::Rgb | Self::Bgr => Some(3),
+            Self::Yuy2 => Some(2),
+            Self::Unknown => None,
+        }
+    }
     fn conversion(self) -> Option<Option<Conversion>> {
         Some(match self {
             Self::Bgra | Self::Bgrx => Some(Conversion::Bgra),

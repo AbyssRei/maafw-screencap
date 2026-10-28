@@ -1,6 +1,8 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include "Screencap/PipeWireScreencap.h"
+// Compile the complete unedited original translation unit here, so its static
+// negotiation helpers are available to the explicit POD oracle below.
+#include "Screencap/PipeWireScreencap.cpp"
 #include <pipewire/pipewire.h>
 #include <opencv2/imgproc.hpp>
 #include <array>
@@ -170,11 +172,37 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
     for(int y=0;y<HEIGHT;++y) { output.write(reinterpret_cast<const char*>(image.ptr(y)),row); }
     require(output.good(),"cannot write source pixel artifact");
 }
+void save_pods(const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    alignas(8) uint8_t bytes[4096]={};
+    spa_pod_builder builder=SPA_POD_BUILDER_INIT(bytes,sizeof(bytes));
+    const spa_pod* dmabuf=MfsOriginalPipeWire::make_video_format_pod(builder,true);
+    const spa_pod* shm=MfsOriginalPipeWire::make_video_format_pod(builder,false);
+    // Same buffer-dataType POD expression as original pw_connect_stream.
+    int32_t data_types=(1<<SPA_DATA_MemFd)|(1<<SPA_DATA_DmaBuf);
+    const spa_pod* buffers=static_cast<const spa_pod*>(spa_pod_builder_add_object(
+        &builder,SPA_TYPE_OBJECT_ParamBuffers,SPA_PARAM_Buffers,
+        SPA_PARAM_BUFFERS_dataType,SPA_POD_CHOICE_FLAGS_Int(data_types),0));
+    const std::array<const spa_pod*,3> pods={dmabuf,shm,buffers};
+    for(size_t index=0;index<pods.size();++index) {
+        require(pods[index]!=nullptr,"source POD builder failed");
+        const size_t size=SPA_POD_SIZE(pods[index]);
+        require(size<=sizeof(bytes),"source POD exceeds builder storage");
+        std::ofstream output(directory/("param-"+std::to_string(index)+".pod"),std::ios::binary);
+        output.write(reinterpret_cast<const char*>(pods[index]),static_cast<std::streamsize>(size));
+        require(output.good(),"cannot save original POD");
+    }
+    std::cout<<"original PipeWire negotiation pods=3 saved\n";
+}
 }
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
         verify_runtime();
+        if(argc==3 && std::string_view(argv[1])=="--pods") {
+            save_pods(argv[2]);
+            return 0;
+        }
         if(argc==3 && std::string_view(argv[1])=="--fd-error") {
             early_fd_error(argv[2]);
             return 0;
