@@ -24,6 +24,7 @@
 #include <vector>
 #include <fcntl.h>
 #include <dlfcn.h>
+#include <pthread.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -95,6 +96,38 @@ void task_snapshot(const std::filesystem::path& directory,const std::string& lab
     }
     output.close();
     require(output.good(),"cannot close task diagnostic");
+}
+void observe_joined_tasks(const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    task_snapshot(directory,"join-control-baseline",task_ids());
+    size_t residual=0;
+    for(size_t cycle=0;cycle<10000;++cycle) {
+        pid_t tid=-1;
+        int name_error=-1;
+        std::thread worker([&] {
+            name_error=pthread_setname_np(pthread_self(),"mfs-join-probe");
+            tid=gettid();
+        });
+        worker.join(); // std::thread throws if the real pthread_join fails.
+        require(tid>0 && name_error==0,"joined thread identity unavailable");
+        const auto tasks=task_ids();
+        if(std::find(tasks.begin(),tasks.end(),std::to_string(tid))==tasks.end()) { continue; }
+        ++residual;
+        if(residual<=20) {
+            std::cout<<"joined task still enumerated cycle="<<cycle<<" tid="<<tid<<'\n';
+            task_snapshot(directory,"joined-"+std::to_string(cycle),tasks);
+        }
+        if(residual==1) {
+            for(int delay:{1,10,100}) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+                task_snapshot(directory,"joined-first-after-"+std::to_string(delay)+"ms",task_ids());
+            }
+        }
+    }
+    task_snapshot(directory,"join-control-final",task_ids());
+    // Observational control only: zero and nonzero residuals are both retained.
+    // It cannot excuse a failed capture test or serve as cleanup acceptance.
+    std::cout<<"native joined-task observation cycles=10000 residual_enumerations="<<residual<<" observed\n";
 }
 int connect_socket(const char* path) {
     sockaddr_un address{};
@@ -375,6 +408,10 @@ int main(int argc,char** argv) {
         }
         if(argc==3 && std::string_view(argv[1])=="--format-fixtures") {
             save_format_fixtures(argv[2]);
+            return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--joined-task-observation") {
+            observe_joined_tasks(argv[2]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--fd-error") {
