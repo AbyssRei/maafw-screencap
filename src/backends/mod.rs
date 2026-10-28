@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // The portable consumer algorithm is tested on the host; that is not Linux
-// native capture acceptance. Stream/setup and native processing remain pending.
+// native capture acceptance. Native daemon/SHM work has a separate explicit probe.
 #[cfg(any(all(target_os = "linux", feature = "linux-pipewire"), test))]
 mod linux;
 #[cfg(all(

@@ -28,6 +28,7 @@ $fixtureOut = $null
 $fixtureError = $null
 $failed = $false
 $referenceArtifacts = $null
+$rustArtifacts = $null
 
 function Artifact([string]$Path) {
     $relative = [IO.Path]::GetRelativePath($ReferenceRoot, $Path).Replace('\', '/')
@@ -55,11 +56,20 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'rust-pipewire-consumer-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;') {
             throw 'Expected four portable consumer tests; the external source oracle remains explicitly ignored on this Linux entry'
         }
+        if ($Name -eq 'rust-pipewire-row-ownership' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;') {
+            throw 'Expected four checked row/storage tests, separate from native stream capture'
+        }
         if ($Name -eq 'original-pipewire-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire source cycles=20 captures=60 retained=60 passed') {
             throw 'Expected twenty original PipeWire source lifecycles and sixty retained images'
         }
         if ($Name -eq 'pipewire-fd-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_early_error result=null errno=\d+ input_fd_open=[01] observed') {
             throw 'Expected the real native early-error descriptor observation'
+        }
+        if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
+            throw 'Expected three original negotiation PODs'
+        }
+        if ($Name -eq 'rust-pipewire-daemon-shm' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed') {
+            throw 'Expected twenty Rust daemon/SHM lifecycles and sixty retained raw RGB samples'
         }
         $status = 'passed'
     } finally {
@@ -194,6 +204,7 @@ try {
     # cases separately from the real P0 stream probe below. No native driver
     # or source oracle is claimed by these four tests.
     Step rust-pipewire-consumer-control cargo @('test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::tests::','--','--test-threads=1','--nocapture')
+    Step rust-pipewire-row-ownership cargo @('test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::buffer::tests::','--','--test-threads=1','--nocapture')
     $fixtureBinary = Join-Path $native mfs-p0-pipewire-source
     Step native-source-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-source.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$fixtureBinary)
     $savedFixture = Join-Path $nativeArtifacts mfs-p0-pipewire-source
@@ -207,6 +218,14 @@ try {
         $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
         New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
         Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';pattern='asymmetric RGB bars with row/column/channel/producer-serial xor; RGB(0,0) holds 24-bit serial';scope='Fixture serial/retention observed; original API capture time and replay status are not exposed. Repeated markers are diagnostic, not rejected.'})
+        $podDirectory=Join-Path $referenceArtifacts negotiation
+        $rustArtifacts=Join-Path $RunRoot linux-x64/rust-shm/artifacts
+        New-Item -ItemType Directory -Path $rustArtifacts -Force|Out-Null
+        $env:MFS_P1_PIPEWIRE_RUST_ARTIFACTS=$rustArtifacts
+        $env:MFS_P1_PIPEWIRE_POD_ORACLE=$podDirectory
+        Json (Join-Path $rustArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Raw native driver probe; RawAudit preserves RGB and does not implement OpenCV conversion or source/BGR parity.'})
+        try { Step pipewire-source-negotiation-pods $sourceExecutable @('--pods',$podDirectory) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
     }
     # Linux sockaddr_un.sun_path has 108 bytes including the terminator. Keep
     # live sockets outside the long content-addressed native build directory.
@@ -266,6 +285,8 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step original-pipewire-source-context timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,$referenceArtifacts) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-daemon-shm timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::','--','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
     }
 } catch {
     $failed = $true
@@ -274,13 +295,15 @@ try {
     $checks.Add([ordered]@{name='pipewire-preparation';status='failed';log=(Artifact $log)})
     Write-Host $_.Exception.ToString()
 } finally {
-    if($referenceArtifacts){Get-ChildItem -LiteralPath $referenceArtifacts -File|ForEach-Object{Save $_.FullName}}
+    foreach($directory in @($referenceArtifacts,$rustArtifacts)){
+        if($directory){Get-ChildItem -LiteralPath $directory -File -Recurse|ForEach-Object{Save $_.FullName}}
+    }
     StopOwned source $fixture $fixtureOut $fixtureError
     StopOwned daemon $server $serverOut $serverError
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Private PipeWire consumer compilation and four portable unit tests are separate from native capture; no native migrated driver executes on this entry.',($SourceReference ? 'Original-source context selected: complete fixed PipeWireScreencap header/cpp, exact extracted screenshot base, private namespace/logging overlays, asymmetric padded-RGB fixture. Twenty FD/init/three-output/inactive/close cycles check sixty known BGR results and retained images, FD/thread observations. Harness global deinit is outside the original destructor. Timings are diagnostic; the source API does not expose freshness/replay. P0 Rust native probe is not run against this distinct pattern; its normal entry is separate. No native Rust parity, full framework/input compilation, failure/mapping/format matrices or complete P1 acceptance.' : 'Original-source context not selected. The default P0 RGB-bar producer and native Rust stream probe remain separate from later source/Rust parity.'),'Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
+        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Four portable consumer tests and four checked row/storage tests are separate from native capture.',($SourceReference ? 'Original-source context selected: complete fixed PipeWireScreencap header/cpp included unedited in one translation unit, exact extracted screenshot base, private namespace/logging overlays, asymmetric padded-RGB fixture. Twenty FD/init/three-output/inactive/close source cycles require sixty known BGR results and retained images plus FD/thread observations. Separate native Rust daemon/SHM probe requires twenty cycles/sixty raw RGB outputs with exact negotiation POD bytes, queue ownership and held CPU samples. RawAudit preserves RGB, so source/OpenCV BGR parity is not established. Both raw global initializations are balanced by test-only deinit after destruction. Timings are diagnostic; source API freshness/replay is not exposed. Portal FD, owned mapping/DMA-BUF, full format/failure/alias matrices, framework/input and complete P1 remain pending. P0 Rust native probe stays a separate default-pattern entry.' : 'Original-source context/driver probe not selected. The default P0 RGB-bar producer and native Rust stream prototype remain separate from later source/Rust parity.'),'Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
     })
 }
 if($failed -or @($checks | Where-Object status -EQ failed).Count) { exit 1 }
