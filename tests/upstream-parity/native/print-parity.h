@@ -16,6 +16,8 @@ typedef struct MfsPrintFixture {
 // Existing PrintWindow modes 0/1/2 retain their original setup. This flag is
 // restricted to the no-popup top-level ScreenDC scene, never product capture.
 #define MFS_RENDER_DISABLE_TRANSITIONS 0x100u
+// Independent visible-scene fixture premise; does not grant foreground rights.
+#define MFS_RENDER_TOPMOST 0x200u
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,9 +42,11 @@ MFS_PARITY_EXPORT int32_t mfs_print_parity_child_fixture(int32_t width, int32_t 
 // Failure leaves a partial owner alive. Do not free its context/unload code.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_close(void** owner);
 // First 11 observation slots retain their existing meaning. Capacity >=12
-// additionally returns whether this fixture disabled transitions before show.
+// additionally returns whether this fixture disabled transitions before show;
+// capacity >=13 adds whether its owned root requested the topmost scene flag.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_stats(void* owner, uint64_t* output, size_t capacity);
-// The nine layout slots are unchanged; capacity >=10 adds the fixture-mode flag.
+// The nine layout slots are unchanged; capacity >=10 adds the transitions flag,
+// and capacity >=11 adds the independent topmost-scene flag.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_layout(uint64_t* output, size_t capacity);
 // 0: nonempty, 1: empty, 2: invalid dimensions/offset. Six int32 outputs are
 // source x/y, destination x/y, width/height. This uses the source cv::Rect path.

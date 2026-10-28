@@ -81,6 +81,21 @@ pub(crate) struct Adapter {
 
 impl Adapter {
     #[cfg(feature = "windows-screen-dc")]
+    pub fn screen_window_observation(
+        &self,
+        window: *mut c_void,
+    ) -> Result<[u64; 16], Box<dyn Error>> {
+        type Observe = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
+        // SAFETY: Exact screen-parity.h signature; read-only native queries and
+        // an exact initialized writable array. No input pointers are retained.
+        let observe: Observe = unsafe { self.module.symbol(c"mfs_screen_window_observation")? };
+        let mut output = [0; 16];
+        if unsafe { observe(window, output.as_mut_ptr(), output.len()) } != 0 {
+            return Err("screen window observation failed".into());
+        }
+        Ok(output)
+    }
+    #[cfg(feature = "windows-screen-dc")]
     pub fn screen_present(&self) -> Result<[i32; 2], Box<dyn Error>> {
         type Present = unsafe extern "C" fn(*mut i32, usize) -> i32;
         // SAFETY: Exact private fixture signature, no object/context retained.
