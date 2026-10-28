@@ -136,12 +136,33 @@ impl Adapter {
         offset: (i32, i32),
         mode: u32,
     ) -> Result<Fixture<'_>, Box<dyn Error>> {
+        self.create_print_fixture(popup, offset, mode, false)
+    }
+    pub fn print_child_fixture(
+        &self,
+        popup: (i32, i32),
+        offset: (i32, i32),
+        mode: u32,
+    ) -> Result<Fixture<'_>, Box<dyn Error>> {
+        self.create_print_fixture(popup, offset, mode, true)
+    }
+    fn create_print_fixture(
+        &self,
+        popup: (i32, i32),
+        offset: (i32, i32),
+        mode: u32,
+        child_target: bool,
+    ) -> Result<Fixture<'_>, Box<dyn Error>> {
         // SAFETY: Every signature follows print-parity.h; resolve close before
         // creating any callback/context so partial failures remain owned.
         let (layout, create, close, stats): (Layout, CreateFixture, CloseFixture, Stats) = unsafe {
             (
                 self.module.symbol(c"mfs_print_parity_layout")?,
-                self.module.symbol(c"mfs_print_parity_fixture")?,
+                self.module.symbol(if child_target {
+                    c"mfs_print_parity_child_fixture"
+                } else {
+                    c"mfs_print_parity_fixture"
+                })?,
                 self.module.symbol(c"mfs_print_parity_close")?,
                 self.module.symbol(c"mfs_print_parity_stats")?,
             )

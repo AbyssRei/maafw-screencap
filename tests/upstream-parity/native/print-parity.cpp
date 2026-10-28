@@ -26,8 +26,10 @@ struct Fixture {
     wchar_t name[64] {};
     bool registered = false;
     HWND main = nullptr;
+    HWND child = nullptr;
     HWND popup = nullptr;
     Pattern main_pattern {};
+    Pattern child_pattern {};
     Pattern popup_pattern { true };
 };
 
@@ -118,15 +120,18 @@ int32_t mfs_print_parity_overlay(void* destination, void* source, int32_t sx, in
     catch (...) { return 2; }
 }
 
-int32_t mfs_print_parity_fixture(int32_t width, int32_t height, int32_t pw, int32_t ph,
-    int32_t offset_x, int32_t offset_y, uint32_t mode, MfsPrintFixture* output)
+static int32_t create_fixture(int32_t width, int32_t height, int32_t pw, int32_t ph,
+    int32_t offset_x, int32_t offset_y, uint32_t mode, bool child_target, MfsPrintFixture* output)
 {
     if (!output) { return 1; }
     *output = {};
-    const int64_t px = 260LL + offset_x;
-    const int64_t py = 180LL + offset_y;
+    const int64_t px = 260LL + offset_x + (child_target ? 7 : 0);
+    const int64_t py = 180LL + offset_y + (child_target ? 5 : 0);
+    const int64_t root_width = static_cast<int64_t>(width) + (child_target ? 24 : 0);
+    const int64_t root_height = static_cast<int64_t>(height) + (child_target ? 18 : 0);
     if (width <= 0 || height <= 0 || pw < 0 || ph < 0 || mode > 2
-        || px < INT_MIN || px > INT_MAX || py < INT_MIN || py > INT_MAX) { return 1; }
+        || px < INT_MIN || px > INT_MAX || py < INT_MIN || py > INT_MAX
+        || root_width > INT_MAX || root_height > INT_MAX) { return 1; }
     auto* fixture = new (std::nothrow) Fixture;
     if (!fixture) { return 3; }
     output->owner = fixture; // All subsequent failures retain explicit cleanup ownership.
@@ -141,14 +146,23 @@ int32_t mfs_print_parity_fixture(int32_t width, int32_t height, int32_t pw, int3
     if (!RegisterClassExW(&window_class)) { return 1; }
     fixture->registered = true;
     fixture->main = CreateWindowExW(0, fixture->name, L"mfs PrintWindow main", WS_POPUP | WS_VISIBLE,
-        260, 180, width, height, nullptr, nullptr, fixture->module, &fixture->main_pattern);
+        260, 180, static_cast<int>(root_width), static_cast<int>(root_height), nullptr, nullptr,
+        fixture->module, &fixture->main_pattern);
     if (!fixture->main) { return 1; }
     output->hwnd = fixture->main;
     RECT client {};
-    if (!GetClientRect(fixture->main, &client) || client.right != width || client.bottom != height) { return 1; }
+    if (!GetClientRect(fixture->main, &client) || client.right != root_width || client.bottom != root_height) { return 1; }
+    UpdateWindow(fixture->main);
+    if (child_target) {
+        fixture->child = CreateWindowExW(0, fixture->name, L"mfs PrintWindow child", WS_CHILD | WS_VISIBLE,
+            7, 5, width, height, fixture->main, nullptr, fixture->module, &fixture->child_pattern);
+        if (!fixture->child) { return 1; }
+        output->hwnd = fixture->child;
+        if (!GetClientRect(fixture->child, &client) || client.right != width || client.bottom != height) { return 1; }
+        UpdateWindow(fixture->child);
+    }
     output->width = client.right;
     output->height = client.bottom;
-    UpdateWindow(fixture->main);
     if (mode != 0) {
         fixture->popup = CreateWindowExW(0, fixture->name, L"mfs PrintWindow popup", WS_POPUP | WS_VISIBLE,
             static_cast<int>(px), static_cast<int>(py), pw, ph, fixture->main, nullptr,
@@ -161,13 +175,27 @@ int32_t mfs_print_parity_fixture(int32_t width, int32_t height, int32_t pw, int3
         UpdateWindow(fixture->popup);
         SetActiveWindow(fixture->popup);
         if (GetLastActivePopup(fixture->main) != fixture->popup) { return 1; }
-        if (mode == 2) { ShowWindow(fixture->popup, SW_HIDE); }
+        if (mode == 2 && (!SetWindowPos(fixture->popup, nullptr, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW)
+            || IsWindowVisible(fixture->popup))) { return 1; }
     }
     // PrintWindow's RENDERFULLCONTENT path consumes the rendered window. The
     // fixture must finish initial GDI/compositor presentation before either side
     // captures, including a main window with no activating owned popup.
-    if (!GdiFlush() || FAILED(DwmFlush()) || fixture->main_pattern.failed || fixture->popup_pattern.failed) { return 1; }
+    if (!GdiFlush() || FAILED(DwmFlush()) || fixture->main_pattern.failed
+        || fixture->child_pattern.failed || fixture->popup_pattern.failed) { return 1; }
     return 0;
+}
+
+int32_t mfs_print_parity_fixture(int32_t width, int32_t height, int32_t pw, int32_t ph,
+    int32_t offset_x, int32_t offset_y, uint32_t mode, MfsPrintFixture* output)
+{
+    return create_fixture(width, height, pw, ph, offset_x, offset_y, mode, false, output);
+}
+int32_t mfs_print_parity_child_fixture(int32_t width, int32_t height, int32_t pw, int32_t ph,
+    int32_t offset_x, int32_t offset_y, uint32_t mode, MfsPrintFixture* output)
+{
+    return create_fixture(width, height, pw, ph, offset_x, offset_y, mode, true, output);
 }
 
 int32_t mfs_print_parity_close(void** owner)
@@ -178,6 +206,10 @@ int32_t mfs_print_parity_close(void** owner)
     if (fixture->popup) {
         if (!DestroyWindow(fixture->popup)) { return 1; }
         fixture->popup = nullptr;
+    }
+    if (fixture->child) {
+        if (!DestroyWindow(fixture->child)) { return 1; }
+        fixture->child = nullptr;
     }
     if (fixture->main) {
         if (!DestroyWindow(fixture->main)) { return 1; }
@@ -196,15 +228,16 @@ int32_t mfs_print_parity_stats(void* owner, uint64_t* output, size_t capacity)
 {
     if (!owner || !output || capacity < 5) { return 1; }
     const auto& fixture = *static_cast<Fixture*>(owner);
-    output[0] = fixture.main_pattern.paints;
-    output[1] = fixture.main_pattern.prints;
+    const auto& target = fixture.child ? fixture.child_pattern : fixture.main_pattern;
+    output[0] = target.paints;
+    output[1] = target.prints;
     output[2] = fixture.popup_pattern.paints;
     output[3] = fixture.popup_pattern.prints;
-    output[4] = fixture.main_pattern.failed || fixture.popup_pattern.failed;
+    output[4] = fixture.main_pattern.failed || fixture.child_pattern.failed || fixture.popup_pattern.failed;
     if (capacity >= 11) {
-        output[5] = fixture.main_pattern.paint_wparam;
-        output[6] = fixture.main_pattern.paint_dc;
-        output[7] = fixture.main_pattern.paint_bitmap;
+        output[5] = target.paint_wparam;
+        output[6] = target.paint_dc;
+        output[7] = target.paint_bitmap;
         output[8] = fixture.popup_pattern.paint_wparam;
         output[9] = fixture.popup_pattern.paint_dc;
         output[10] = fixture.popup_pattern.paint_bitmap;

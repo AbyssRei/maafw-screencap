@@ -27,6 +27,12 @@ MFS_PARITY_EXPORT int32_t mfs_print_parity_overlay(void* destination, void* sour
 MFS_PARITY_EXPORT int32_t mfs_print_parity_fixture(int32_t width, int32_t height,
     int32_t popup_width, int32_t popup_height, int32_t offset_x, int32_t offset_y,
     uint32_t mode, MfsPrintFixture* output);
+// Same target dimensions, with hwnd now a real child at (7,5) inside a larger
+// root. The optional popup remains owned by the root; offsets are child-relative.
+// Opaque owner/close and all partial-failure responsibilities are unchanged.
+MFS_PARITY_EXPORT int32_t mfs_print_parity_child_fixture(int32_t width, int32_t height,
+    int32_t popup_width, int32_t popup_height, int32_t offset_x, int32_t offset_y,
+    uint32_t mode, MfsPrintFixture* output);
 // Failure leaves a partial owner alive. Do not free its context/unload code.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_close(void** owner);
 MFS_PARITY_EXPORT int32_t mfs_print_parity_stats(void* owner, uint64_t* output, size_t capacity);

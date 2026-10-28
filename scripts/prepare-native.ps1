@@ -26,7 +26,7 @@ $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($PrintWindowParity) {
-    $pending.Add('PrintWindow is a partial P1 component. Original capture/cleanup fault injection, root-child and complete window-state/native-failure matrices remain pending. An earlier original-reference black-bitmap parity failure remains unresolved; later non-reproduction does not close it. A temporary GetDIBits deselection is an explicit native-precondition adaptation, not P3 DIB modernization.')
+    $pending.Add('PrintWindow is a partial P1 component. Original capture/cleanup fault injection and complete window-state/native-failure matrices remain pending. An earlier original-reference black-bitmap parity failure remains unresolved; later non-reproduction does not close it. A temporary GetDIBits deselection is an explicit native-precondition adaptation, not P3 DIB modernization.')
 }
 if ($GdiParity) {
     $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
