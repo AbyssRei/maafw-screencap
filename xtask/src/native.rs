@@ -14,6 +14,19 @@ use std::{
 };
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_native(args, false)
+}
+
+pub fn run_parity(args: &[String]) -> Result<()> {
+    if args.first().map(String::as_str) != Some("gdi") {
+        return Err("implemented parity entry: upstream-parity gdi [--offline-inputs <native run manifest>]".into());
+    }
+    let mut native_args = vec!["--desktop".to_owned()];
+    native_args.extend_from_slice(&args[1..]);
+    run_native(&native_args, true)
+}
+
+fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
     let mut desktop = false;
     let mut offline_input = None;
     let mut args = args.iter();
@@ -32,7 +45,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
     }
     if !cfg!(target_os = "windows") || env::consts::ARCH != "x86_64" {
-        return Err("C++/OpenCV P0 preparation currently supports Windows x64 only".into());
+        return Err("C++/OpenCV native preparation currently supports Windows x64 only".into());
     }
     let path = env::var_os("MFS_REFERENCE_ROOT")
         .map(PathBuf::from)
@@ -107,7 +120,12 @@ pub fn run(args: &[String]) -> Result<()> {
     let baseline = records::verify(&root, &index.baselines[0])?;
     let upstream = baseline.parent().unwrap().join("reference/upstream");
     let directory = root.join("runs").join(format!(
-        "p0-native-windows-{}",
+        "{}-{}",
+        if gdi_parity {
+            "p1-gdi-windows"
+        } else {
+            "p0-native-windows"
+        },
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     ));
     fs::create_dir(&directory)?;
@@ -120,13 +138,28 @@ pub fn run(args: &[String]) -> Result<()> {
             .unwrap()
             .to_string_lossy()
             .into_owned(),
-        phase: "P0".into(),
+        phase: if gdi_parity { "P1" } else { "P0" }.into(),
         phase_status: "incomplete".into(),
         checks: Vec::new(),
         pending: Vec::new(),
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if gdi_parity {
+        let scope = inputs.join("gdi-scope.md");
+        fs::write(
+            &scope,
+            "# P1 GDI migration component scope\n\n\
+             Fixed unpatched GdiScreencap.{h,cpp} and HwndUtils.hpp::window_size/conversion order; parent U identity is retained in this run.\n\
+             U-WIN-GDI-01 partial: controlled asymmetric BGR pixels, odd widths, conversion before GDI cleanup, retained CPU output and twenty cycles. Nondefault display depth remains unexecuted.\n\
+             U-WIN-GDI-02 partial: null/destroyed/empty HWND and contained conversion exception with cleanup balance; deterministic DC/bitmap/select/read failure injection and iconic HWND remain unexecuted.\n\
+             Safety adaptations: checked arithmetic/narrowing and fallible initialized allocation; GetObjectW validates the original packed one-plane 32-bit DDB assumption; short GetBitmapBits reads and invalid SelectObject sentinels are rejected. These are not DIB modernization.\n\
+             No manager/selection/forwarding or other backend case is closed. No complete GDI case, U snapshot, P1 exit, public SDK, PR or P3 feature is asserted by this component run.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     let lock = parent_run
         .inputs
         .iter()
@@ -160,6 +193,9 @@ pub fn run(args: &[String]) -> Result<()> {
         .env("CARGO_TARGET_DIR", deps.join("target"));
     if desktop {
         process.arg("-Desktop");
+    }
+    if gdi_parity {
+        process.arg("-GdiParity");
     }
     if let Some(input) = &offline {
         process
@@ -203,7 +239,11 @@ pub fn run(args: &[String]) -> Result<()> {
     let artifact = records::artifact(&root, &manifest)?;
     batch::verify(&root, &artifact)?;
     batch::register(&root, &manifest)?;
-    println!("Native P0 evidence archived at {}", manifest.display());
+    println!(
+        "Native {} evidence archived at {}",
+        if gdi_parity { "P1 GDI component" } else { "P0" },
+        manifest.display()
+    );
     if !status.success() || run.checks.iter().any(|check| check.status != "passed") {
         return Err("native preparation failed; the exact attempt and logs were preserved".into());
     }

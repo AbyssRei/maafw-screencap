@@ -55,6 +55,11 @@ fn main() {
                 std::env::var_os("CARGO_FEATURE_PROTOTYPE_WINDOWS").is_some(),
             )
             .expect("prepared Cargo feature selection");
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
+        assert!(
+            std::env::var_os("CARGO_FEATURE_WINDOWS_GDI").is_none() || selected.enabled[0],
+            "windows-gdi cannot be enabled when the prepared Windows family is OFF"
+        );
         for (family, enabled) in selected.enabled.iter().enumerate() {
             if *enabled {
                 let mut evidence = Vec::new();
@@ -85,6 +90,31 @@ fn main() {
     println!("cargo::rerun-if-env-changed=CARGO_CFG_TARGET_OS");
     println!("cargo::rerun-if-changed=build-support/windows-prototype.txt");
     println!("cargo::rerun-if-changed=build-support/windows-com-prototype.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-gdi.txt");
+    #[cfg(feature = "windows-gdi")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        assert_eq!(
+            std::env::var("TARGET").as_deref(),
+            Ok("x86_64-pc-windows-msvc"),
+            "the initial Windows GDI migration requires x86_64-pc-windows-msvc"
+        );
+        let out =
+            std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("windows_gdi.rs");
+        let input = std::fs::read_to_string("build-support/windows-gdi.txt").unwrap();
+        let mut args = vec![
+            "--out",
+            out.to_str().unwrap(),
+            "--flat",
+            "--sys",
+            "--filter",
+        ];
+        args.extend(
+            input
+                .lines()
+                .filter(|line| !line.is_empty() && !line.starts_with('#')),
+        );
+        windows_bindgen::bindgen(args);
+    }
     #[cfg(feature = "prototype-windows")]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())

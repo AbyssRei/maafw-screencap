@@ -1,10 +1,10 @@
 # 开发、构建与验证
 
-日期：2026-10-28。状态：P0 准备阶段已按计划第 16 节验收，P1 尚未开始。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
+日期：2026-10-28。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
 
 ## 当前仓库与本机命令
 
-产品入口仍是 Rust 2024 Hello World binary。独立 workspace xtask 与 P0 测试已实现，尚无迁移后端、产品捕获库或 binding。`.github/workflows/p0.yml` 定义三个原生 runner 的工具验证和现有原型；Linux 已验证私有 PipeWire 流；macOS 已验证受控窗口 ScreenCaptureKit 主线程原型。P0 汇总退出审阅结合固定来源/许可范围、职责与用例定义、本机最新工具链原生验证和三平台证据，已确认准备门禁通过；完整 U 对照仍待 P1。单次原型批次的 incomplete 和待办保留该任务的局部/历史范围，不独立表达整个阶段结论。命令从仓库根执行，本机只验证宿主 OS，不以 WSL 代替 Linux 验收。
+默认入口仍是 Rust 2024 Hello World binary。内部 library 已实现首个窗口 GDI 迁移与显式局部对照入口，尚无完整 U、公共 SDK 或 binding；独立 workspace xtask 与 P0 原型继续可用。`.github/workflows/p0.yml` 定义三个原生 runner 的工具验证和现有原型；Linux 已验证私有 PipeWire 流；macOS 已验证受控窗口 ScreenCaptureKit 主线程原型。P0 汇总退出审阅结合固定来源/许可范围、职责与用例定义、本机最新工具链原生验证和三平台证据，已确认准备门禁通过；完整 U 对照仍待 P1。单次原型批次的 incomplete 和待办保留该任务的局部/历史范围，不独立表达整个阶段结论。命令从仓库根执行，本机只验证宿主 OS，不以 WSL 代替 Linux 验收。
 
 先更新 nightly，再改写 CARGO_HOME；若已经改写，使用 `rustup update nightly --no-self-update`。随后将可清理缓存及构建输出放入同级 deps：
 
@@ -19,7 +19,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Windows 默认 workspace 测试包含 4 项分配原型与 25 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
+Windows 默认 workspace 测试包含 4 项分配原型与 26 项工具测试，Unix 另运行一项 symlink 越界测试。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
 
 ```powershell
 cargo test --release --test p0-interop --features prototype-windows-com -- --include-ignored --test-threads=1
@@ -37,6 +37,19 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 同一 feature 还包含显式 Desktop Duplication 原型，已通过本机硬件及原生 Actions 验证。自有窗口从首次呈现起使用本轮已知颜色，在默认硬件设备的实际 adapter 中选择包含目标区域的输出，以旧 `DuplicateOutput` 入口执行 20 次设备/输出/采集生命周期；没有切换到 P3 的 DuplicateOutput1。每次有限等待、按原生 RowPitch 仅复制自有窗口内部像素，在 Unmap 前取得独立 CPU 存储，检查成功 ReleaseFrame 后再次释放得到 INVALID_CALL，并验证第一帧跨后续原生生命周期保留及最终跨线程消费。记录 adapter、目标尺寸、pitch、原生 LastPresentTime 与 AccumulatedFrames；不改变线程 DPI 上下文。初次夹具先呈现另一颜色导致旧帧断言失败，证据保留；修正首次绘制颜色后通过，没有按像素失败重试。该原型明确要求未旋转输出，未覆盖多 adapter/输出切换、ACCESS_LOST、完整超时与格式矩阵，也不是固定上游 DesktopDup 的行为对照。
 
 这些原型不提供产品截图 API，不构成六种 Windows 方法、完整 Desktop Duplication/FramePool 异常/重建/权限矩阵、混合 DPI 或多显示器验收；P3 的 DIB 现代化与全虚拟桌面路径均未提前实施。四项基础 COM 测试不需要桌面交互，默认在选择该 feature 后执行；GDI、两个实际 WGC 和 Desktop Duplication 用例仍须显式启用 ignored 测试。具体本机和 runner 结果分别以外部运行记录为准，缺硬件/桌面或捕获能力不能记为捕获通过。
+
+## 当前 P1 迁移与对照
+
+窗口 GDI 的内部实现位于 `src/backends/windows/gdi.rs`，通过 `windows-gdi` 编译能力启用；没有对外发布 Rust/C SDK 接口。它保持 GetDC、兼容 DC/位图、BitBlt、GetBitmapBits 及转换前后的资源顺序。转换由调用点的私有适配边界执行；默认产品不链接 OpenCV。受检算术、初始化的 fallible CPU 分配、原生 32 位布局与完整读取校验属于显式记录的安全适配，没有提前迁至 P3 的 DIB 路径。
+
+```text
+cargo xtask upstream-parity gdi
+cargo xtask upstream-parity gdi --offline-inputs runs/<prepared-native-run>/manifest.json
+```
+
+本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空窗口与被封住的转换异常。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
+
+这只覆盖 U-WIN-GDI-01/02 的部分场景；非默认显示深度、iconic 窗口、DC/位图/选择/读取故障注入以及管理器/转发仍待完成，不能把组件成功标为完整 GDI 用例或 P1 验收。完整目录中的其他后端继续按 P1 迁移。
 
 ## 已实现的 P0 工具
 
@@ -80,9 +93,9 @@ cargo xtask wlr-prototype      # Linux x64：真实 wlroots headless/Pixman 与 
 
 批次依赖检查以归档 rustc 的 host 为原生 target，通过 `cargo metadata --all-features --filter-platform` 检查该 target 的完整 feature 图，并保存 `dependency-target.txt`。不将 Linux 专属 helper 的 Windows 条件依赖计入当前构建；其他平台分别由对应原生 Actions 批次检查。全局最新版与绑定专属传递约束规则仍逐包执行。
 
-`xtask` 不依赖捕获 package，默认 Cargo 构建只构建产品入口。普通构建不读取 reference，不链接 OpenCV。当前 `build.rs` 仅在目标 Windows 且显式选择原型 feature 时读取维护的过滤输入，向 OUT_DIR 生成私有 Win32 sys 声明及 COM/WinRT rich 投影；其他平台复用对应原生绑定，并已实现原型族的 AUTO/ON/OFF 配置与目标复验；迁移后的产品后端尚未实现。
+`xtask` 不依赖捕获 package，默认 Cargo 构建只构建产品入口。普通构建不读取 reference，不链接 OpenCV。当前 `build.rs` 仅在目标 Windows 且显式选择原型 feature 时读取维护的过滤输入，向 OUT_DIR 生成私有 Win32 sys 声明及 COM/WinRT rich 投影；其他平台复用对应原生绑定，并已实现原型族的 AUTO/ON/OFF 配置与目标复验；当前只有窗口 GDI 开始迁移，其余后端和完整管理器调用链尚未完成。
 
-`native` 是显式原生验收入口，当前仅实现 Windows x64 + VS2026/MSBuild，需要 Git、curl、GitHub CLI 和 PowerShell。它先完成本次 Rust 批次，再在线解析 CMake、OpenCV 和 Boost 最新正式版，以及 MaaUtils 正式版或无正式版时的维护分支。原生源码、工具归档、配置、SDK/编译器身份、日志和产物仍在 reference/deps，产品基础构建不触发这些步骤。OpenCV 只选择所需模块及其传递依赖，保留 CPU 分发、SIMD 与 IPP/HAL，并验证实际配置；未选择的 DNN/OCR 依赖不进入参考构建。
+`native` 是显式原生验收入口，当前仅实现 Windows x64 + VS2026/MSBuild，需要 Git、curl、GitHub CLI 和 PowerShell。它先完成本次 Rust 批次，再在线解析 CMake、OpenCV 和 Boost 最新正式版，以及 MaaUtils 正式版或无正式版时的维护分支。原生源码、工具归档、配置、SDK/编译器身份、日志和产物仍在 reference/deps，产品基础构建不触发这些步骤。CMake 的 ASM 编译器以显式 FILEPATH 缓存类型传入，并在重复配置后核查身份，避免缓存复用时被未定类型覆盖。OpenCV 只选择所需模块及其传递依赖，保留 CPU 分发、SIMD 与 IPP/HAL，并验证实际配置；未选择的 DNN/OCR 依赖不进入参考构建。
 
 `pipewire-prototype` 在原生 Linux x64 上执行，自有 C 视频源、20 次流生命周期及完整退出已通过原生 Actions；早期 SPA 夹具清理断言和各次失败证据仍保留在外部批次，本机 Windows 不执行或声称 Linux 验收。入口解析 PipeWire 官方最新 release 与 Python 工具正式版，从源码构建隔离前缀，归档源码、wheels、配置和日志；创建独立 runtime/socket、无宿主设备的 daemon 和独立自有 C 视频源（RGB 行距 96 字节，目标每行 84 字节，填充显式初始化）。私有 0700 socket 显式使用无需 session manager 的访问模式，不参与宿主授权。Rust 测试执行 20 次连接/停止，每次通过移交的 fd 和明确 node ID 接入，检查 RGB 协商、受检 stride/offset、32 个真实样本、原生缓冲重复使用与逐次归还、回调线程、注销/stop 及 CPU 持帧。高层绑定用于 loop/context/stream/POD；借助窄 sys 缓冲租约保存底层 queue 返回码，panic 被封在 Rust 回调内。原生源和 daemon 由编排进程启动和依次停止，分别要求自然处理 SIGTERM 后退出 0，不接受强制结束或提前退出；已验证生产端和消费端各 640 次 dequeue/queue 配平，逐次原生缓冲复用与 CPU 像素断言通过，不访问宿主默认 remote。该入口暂不提供离线重放；Rust 门禁失败时可继续收集诊断原型结果，但最终命令仍失败，不能当成已验收。Portal 桌面来源、DMA-BUF 及完整格式/失败矩阵均未覆盖；Wlr 由独立原型验证。
 

@@ -1,4 +1,4 @@
-name: P0 preparation and prototypes
+name: Native preparation and P1 GDI parity
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   prepare-and-validate:
-    name: P0 tools (${{ matrix.os }})
+    name: Native checks (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -67,11 +67,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask wlr-prototype
-      - name: Validate Windows native interop and independent reference
+      - name: Validate Windows GDI migration and native interop
         if: runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo xtask native --desktop
+        run: cargo xtask upstream-parity gdi
       - name: Inventory registry licenses and verify prototype configuration
         shell: pwsh
         run: |

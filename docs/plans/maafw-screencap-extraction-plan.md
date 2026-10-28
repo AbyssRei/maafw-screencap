@@ -1,6 +1,6 @@
 # maafw-screencap Rust 独立截图库设计与实施计划
 
-日期：2026-10-28。状态：P0 准备阶段已按第 16 节验收，P1 尚未开始；已有独立 xtask、外部固定来源/补丁记录校验、标准库分配原型、Windows 受控窗口 GDI、COM apartment、D3D/DXGI/WinRT 读回及 FramePool 实际捕获/事件原型，Linux PipeWire 自有 C 源夹具的取帧、持帧、20 次流生命周期及源/daemon 完整退出已通过原生 Actions，仍未覆盖 Portal 桌面与 DMA-BUF；macOS ScreenCaptureKit 主线程原型的 20 次受控窗口取帧、持帧与完成/晚到回调释放已通过原生 Actions；Wlr 真实 headless/Pixman 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；Actions 原生矩阵已定义，结果按平台记录。本机最新 VS2026/SDK 的原生编译、适配/独立参考捕获和配置复验也已通过，P0 汇总审阅记录外置保存。产品入口仍为 Hello World，完整上游迁移、SDK 及发布资产尚待实施与验收；已实现命令与原型限制见[开发指南](../guides/development.md)。
+日期：2026-10-28。状态：P0 准备阶段已按第 16 节验收，P1 实施中，已开始窗口 GDI 迁移与局部对照；已有独立 xtask、外部固定来源/补丁记录校验、标准库分配原型、Windows 受控窗口 GDI、COM apartment、D3D/DXGI/WinRT 读回及 FramePool 实际捕获/事件原型，Linux PipeWire 自有 C 源夹具的取帧、持帧、20 次流生命周期及源/daemon 完整退出已通过原生 Actions，仍未覆盖 Portal 桌面与 DMA-BUF；macOS ScreenCaptureKit 主线程原型的 20 次受控窗口取帧、持帧与完成/晚到回调释放已通过原生 Actions；Wlr 真实 headless/Pixman 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；Actions 原生矩阵已定义，结果按平台记录。本机最新 VS2026/SDK 的原生编译、适配/独立参考捕获和配置复验也已通过，P0 汇总审阅记录外置保存。默认 binary 仍为 Hello World，内部 library 已开始迁移；完整上游基线、公共 SDK 及发布资产尚待实施与验收；已实现命令与原型限制见[开发指南](../guides/development.md)。
 
 已确认技术路线、取舍与后续实施决策见[交互式技术选型记录](../decisions/interactive-technology-selection.md)。阅读入口及各主题权威来源见[文档导航](../README.md)。该记录属于仓库内的项目设计文档；本机环境、来源审计和实际验收材料按第 6.2 节外置保存。
 

@@ -83,7 +83,7 @@ U/P 的内部交接不冻结此产品接口。需要兑现原转换调用时点�
 
 ## 目标项目结构
 
-以下是随阶段建立的目标结构。当前产品入口仍为 `src/main.rs` 的 Hello World，另有 P0 的独立 xtask、私有声明生成输入、原型测试及 Actions 矩阵；实际可用入口见[开发指南](../guides/development.md)。不预建空后端、桥接、测试或示例，不把目录存在当作实现完成。
+以下是随阶段建立的目标结构。当前默认 binary 仍为 `src/main.rs` 的 Hello World；内部 library 已开始 P1 窗口 GDI 迁移，另有独立 xtask、私有声明生成输入、原型/局部对照及 Actions 矩阵；实际可用入口见[开发指南](../guides/development.md)。不预建空后端、桥接、测试或示例，不把目录存在当作实现完成。
 
 ```text
 maafw-screencap/

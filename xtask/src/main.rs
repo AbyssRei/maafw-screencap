@@ -46,6 +46,9 @@ fn run() -> Result<()> {
     if argv.first().is_some_and(|arg| arg == "native") {
         return native::run(&argv[1..]);
     }
+    if argv.first().is_some_and(|arg| arg == "upstream-parity") {
+        return native::run_parity(&argv[1..]);
+    }
     if argv.first().is_some_and(|arg| arg == "pipewire-prototype") {
         return pipewire::run(&argv[1..]);
     }
@@ -96,6 +99,7 @@ fn run() -> Result<()> {
                       cargo xtask configure [--<family> AUTO|ON|OFF] [--offline-inputs <Rust batch manifest>] [--root <external directory>]\n\n\
                       cargo xtask configuration-check [--offline-inputs <Rust batch manifest>]\n\n\
                       cargo xtask native [--desktop] [--offline-inputs <run manifest>]\n\n\
+                      cargo xtask upstream-parity gdi [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\
                       cargo xtask wlr-prototype       # native Linux x64 only\n\n\

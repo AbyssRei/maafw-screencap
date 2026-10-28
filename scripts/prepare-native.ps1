@@ -8,6 +8,7 @@ param(
     [Parameter(Mandatory)][string]$ConfigureTool,
     [Parameter(Mandatory)][string]$RustBatch,
     [switch]$Desktop,
+    [switch]$GdiParity,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -22,7 +23,11 @@ $logsRoot = Join-Path $configRoot logs
 $checks = [Collections.Generic.List[object]]::new()
 $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
-$pending.Add('P0 remains incomplete: COM/WinRT/D3D, Linux/macOS capture, complete source/method review and all platform gates are separate requirements.')
+if ($GdiParity) {
+    $pending.Add('P1 remains incomplete. This GDI component covers only the explicitly listed portions of U-WIN-GDI-01/02; nondefault display depth, iconic HWND, deterministic native failure injection, manager/forwarding and every other backend remain outstanding.')
+} else {
+    $pending.Add('This P0 native task does not independently accept the complete preparation phase; associate the source/method/license and other platform records in the external exit assessment.')
+}
 $offline = -not [string]::IsNullOrEmpty($OfflineManifest)
 $prepared = if ($offline) { Get-Content -LiteralPath $OfflineManifest -Raw | ConvertFrom-Json } else { $null }
 $sourceIdentities = @{}
@@ -378,9 +383,13 @@ try {
 
     $boost = Boost-Source
     $build = Join-Path $nativeRoot "r-$([DateTime]::UtcNow.Ticks)"
+    $parityOptions = if ($GdiParity) { @('-DMFS_BUILD_GDI_PARITY=ON') } else { @() }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
-        "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator)
+        "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     Step 'reference-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_reference_u', '--parallel', '8')
+    if ($GdiParity) {
+        Step 'gdi-parity-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_gdi_parity', '--parallel', '8')
+    }
     foreach ($name in @('CMakeCache.txt', 'toolchain-Release.txt')) {
         $saved = Join-Path $inputsRoot "reference-$name"
         Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
@@ -390,6 +399,20 @@ try {
         $saved = Join-Path $artifacts $name
         Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved
         Save-Input $saved
+    }
+    if ($GdiParity) {
+        $parityLibrary = Join-Path $artifacts mfs_gdi_parity.dll
+        Copy-Item -LiteralPath (Join-Path $build Release/mfs_gdi_parity.dll) -Destination $parityLibrary
+        Save-Input $parityLibrary
+        $env:MFS_GDI_PARITY_LIBRARY = $parityLibrary
+        $parityArguments = @('test', '--release', '--locked', '--lib', '--features', 'windows-gdi,prototype-windows-com')
+        $clippyArguments = @('clippy', '--workspace', '--all-targets', '--locked', '--features', 'windows-gdi,prototype-windows-com')
+        if ($offline) {
+            $parityArguments += @('--offline', '--config', $CargoConfig)
+            $clippyArguments += @('--offline', '--config', $CargoConfig)
+        }
+        Step 'gdi-original-parity' cargo ($parityArguments + @('--', 'backends::windows::gdi::', '--include-ignored', '--test-threads=1', '--nocapture'))
+        Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
     }
     $licenses = Join-Path $artifacts licenses
     New-Item -ItemType Directory -Path $licenses -Force | Out-Null
@@ -421,7 +444,7 @@ catch {
 }
 finally {
     Write-NewJson (Join-Path $RunRoot native-result.json) ([ordered]@{
-        layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = 'P0'; phase_status = 'incomplete'
+        layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
         checks = @($checks.ToArray()); pending = @($pending.ToArray()); inputs = @($inputs.ToArray())
     })
 }

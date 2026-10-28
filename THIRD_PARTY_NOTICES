@@ -1,0 +1,25 @@
+MaaFramework
+============
+
+Repository: https://github.com/MaaXYZ/MaaFramework
+Migration source: commit 0fc6025c2fc224a171b57d89505e8d47acd2a8b1
+Project licence: GNU Lesser General Public License version 3.
+This extraction follows LGPL-3.0-or-later, as stated in LICENSE; the full
+LGPL v3 and GPL v3 texts are supplied in LICENSE and licenses/GPL-3.0.txt.
+
+src/backends/windows/gdi.rs is a Rust migration of:
+  source/MaaWin32ControlUnit/Screencap/GdiScreencap.h
+  source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp
+  source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp (window_size/conversion order)
+
+These original files do not contain additional per-file copyright or licence
+notices. Their original source identities and licence materials are retained
+in the external provenance records. The Rust migration preserves the original
+native path and conversion point; it adds checked sizes, bitmap layout/full-read
+validation, fallible CPU allocation and separate cleanup error evidence.
+
+The explicit native acceptance targets compile original MaaFramework and
+MaaUtils sources and link OpenCV/Boost from external preparation inputs. Their
+applicable licence/notice materials accompany those acceptance artifacts.
+They are excluded from default product builds. This file is not the completed
+asset-specific distribution notice inventory, which is verified in P5.

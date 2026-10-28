@@ -19,12 +19,13 @@ set(OpenCV_ARCH x64)
 set(OpenCV_RUNTIME vc18)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 option(MFS_BUILD_REFERENCE "Build the independent unpatched reference executable" ON)
+option(MFS_BUILD_GDI_PARITY "Build the private GDI reference/conversion and window fixture" OFF)
 
 add_library(mfs_p0_adapter SHARED interop.cpp)
 target_link_libraries(mfs_p0_adapter PRIVATE ${OpenCV_LIBS})
 target_include_directories(mfs_p0_adapter PRIVATE ${OpenCV_INCLUDE_DIRS})
 
-if(MFS_BUILD_REFERENCE)
+if(MFS_BUILD_REFERENCE OR MFS_BUILD_GDI_PARITY)
 foreach(input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_BOOST_ROOT)
     if(NOT IS_DIRECTORY "${${input}}")
         message(FATAL_ERROR "Explicit external input ${input} is required")
@@ -48,6 +49,7 @@ target_include_directories(mfs_reference_utils PUBLIC "${MFS_MAAUTILS_ROOT}/incl
 target_link_libraries(mfs_reference_utils PUBLIC Boost::regex PRIVATE ${OpenCV_LIBS} Boost::uuid Psapi)
 target_compile_definitions(mfs_reference_utils PRIVATE BOOST_ALL_NO_LIB)
 
+if(MFS_BUILD_REFERENCE)
 add_executable(mfs_reference_u
     reference.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp")
@@ -56,6 +58,18 @@ target_include_directories(mfs_reference_u PRIVATE
     "${MFS_UPSTREAM_ROOT}/source/include"
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit")
 target_link_libraries(mfs_reference_u PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
+endif()
+if(MFS_BUILD_GDI_PARITY)
+add_library(mfs_gdi_parity SHARED
+    gdi-parity.cpp
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp")
+target_include_directories(mfs_gdi_parity PRIVATE
+    "${MFS_UPSTREAM_ROOT}/include"
+    "${MFS_UPSTREAM_ROOT}/source/include"
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit"
+    ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mfs_gdi_parity PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
+endif()
 endif()
 
 file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/toolchain-$<CONFIG>.txt" CONTENT

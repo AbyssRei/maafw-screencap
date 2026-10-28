@@ -636,8 +636,23 @@ pub(crate) fn register(root: &Path, manifest: &Path) -> Result<()> {
 pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
     let run: Run = records::read(&records::verify(root, artifact)?)?;
     records::version(run.layout_version)?;
-    if run.phase != "P0" || run.phase_status != "incomplete" || run.checks.is_empty() {
-        return Err("unsupported P0 run record".into());
+    let supported_phase = run.phase == "P0"
+        || (run.phase == "P1"
+            && run.run_id.starts_with("p1-gdi-windows-")
+            && run
+                .inputs
+                .iter()
+                .filter(|input| {
+                    input.path.starts_with("baselines/u/") && input.path.ends_with("/manifest.json")
+                })
+                .count()
+                == 1
+            && run
+                .inputs
+                .iter()
+                .any(|input| input.path == format!("runs/{}/inputs/gdi-scope.md", run.run_id)));
+    if !supported_phase || run.phase_status != "incomplete" || run.checks.is_empty() {
+        return Err("unsupported preparation/component run record".into());
     }
     for artifact in run
         .inputs
@@ -699,6 +714,75 @@ mod tests {
             let target = self.0.canonicalize().unwrap();
             assert!(target.starts_with(&base) && target != base);
             fs::remove_dir_all(target).unwrap();
+        }
+    }
+
+    #[test]
+    fn component_evidence_requires_scope_and_parent_and_cannot_accept_a_phase() {
+        let root = env::temp_dir().join(format!(
+            "mfs-component-record-{}-{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&root).unwrap();
+        let fixture = SourceFixture(root);
+        let scope = fixture
+            .0
+            .join("runs/p1-gdi-windows-fixture/inputs/gdi-scope.md");
+        let baseline = fixture.0.join("baselines/u/source/manifest.json");
+        fs::create_dir_all(scope.parent().unwrap()).unwrap();
+        fs::create_dir_all(baseline.parent().unwrap()).unwrap();
+        fs::write(&scope, "Partial component scope, not a phase acceptance.\n").unwrap();
+        fs::write(
+            &baseline,
+            "Fixture parent identity; not a real U baseline.\n",
+        )
+        .unwrap();
+        let log = fixture.0.join("component.log");
+        fs::write(&log, "Fixture component check.\n").unwrap();
+        let mut run = Run {
+            layout_version: records::LAYOUT_VERSION,
+            run_id: "p1-gdi-windows-fixture".into(),
+            phase: "P1".into(),
+            phase_status: "incomplete".into(),
+            checks: vec![Check {
+                name: "fixture".into(),
+                status: "passed".into(),
+                log: records::artifact(&fixture.0, &log).unwrap(),
+            }],
+            pending: vec!["Full U remains unexecuted.".into()],
+            inputs: vec![
+                records::artifact(&fixture.0, &scope).unwrap(),
+                records::artifact(&fixture.0, &baseline).unwrap(),
+            ],
+        };
+        for (index, accepted) in [true, false, false, false].into_iter().enumerate() {
+            match index {
+                1 => run.phase_status = "complete".into(),
+                2 => {
+                    run.phase_status = "incomplete".into();
+                    run.inputs.pop();
+                }
+                3 => {
+                    run.inputs
+                        .push(records::artifact(&fixture.0, &baseline).unwrap());
+                    run.inputs.remove(0);
+                }
+                _ => {}
+            }
+            let manifest = fixture.0.join(format!("component-{index}.json"));
+            records::create_json(&manifest, &run).unwrap();
+            assert_eq!(
+                verify(
+                    &fixture.0,
+                    &records::artifact(&fixture.0, &manifest).unwrap()
+                )
+                .is_ok(),
+                accepted
+            );
         }
     }
 

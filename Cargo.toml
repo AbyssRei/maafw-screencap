@@ -8,6 +8,7 @@ license = "LGPL-3.0-or-later"
 
 [features]
 default = []
+windows-gdi = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows-com = ["prototype-windows", "dep:windows-core", "dep:windows-future"]
 prototype-linux-pipewire = ["dep:pipewire"]

@@ -52,6 +52,9 @@ try {
     $offConfig=Configure all-off $off
     $env:MFS_BUILD_CONFIGURATION=$offConfig
     Check off-build cargo @('check','--release','--locked','--no-default-features')|Out-Null
+    if($IsWindows) {
+        Check rejects-gdi-when-windows-off cargo @('check','--release','--locked','--no-default-features','--features','windows-gdi') 'windows-gdi cannot be enabled when the prepared Windows family is OFF'|Out-Null
+    }
     $foreignFeature=if($IsMacOS){'prototype-linux-wlr'}else{'prototype-macos'}
     Check rejects-feature-mismatch cargo @('check','--release','--locked','--no-default-features','--features',$foreignFeature) 'Cargo features differ from the explicit prepared configuration'|Out-Null
     Remove-Item Env:MFS_BUILD_CONFIGURATION
@@ -105,6 +108,11 @@ try {
     'compile_error!("P0_CAPTURE_MUST_NOT_BUILD_DURING_PREPARATION"); fn main() {}'|Set-Content -LiteralPath $invalidSource -Encoding utf8
     $inputs.Add((Artifact $invalidSource))
     Copy-Item -LiteralPath $invalidSource -Destination (Join-Path $consumer src/main.rs)
+    # With a library present, breaking only main.rs would still let a hidden
+    # xtask -> capture library dependency compile. Make the actual library fail.
+    if(Test-Path -LiteralPath (Join-Path $consumer src/lib.rs)) {
+        Copy-Item -LiteralPath $invalidSource -Destination (Join-Path $consumer src/lib.rs)
+    }
     Check consumer-git-init git @('-C',$consumer,'init','--quiet')|Out-Null
     Check consumer-git-add git @('-C',$consumer,'-c','core.longpaths=true','-c','core.autocrlf=false','add','.')|Out-Null
     Check consumer-git-commit git @('-C',$consumer,'-c','user.name=Configuration Fixture','-c','user.email=configuration@invalid','commit','--quiet','-m','test(p0): create unbuildable capture consumer')|Out-Null
