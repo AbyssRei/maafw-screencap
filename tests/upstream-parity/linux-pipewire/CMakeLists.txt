@@ -28,5 +28,10 @@ target_include_directories(mfs_pipewire_source_context PRIVATE
     "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit" "${MFS_DRM_INCLUDE}"
     ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mfs_pipewire_source_context PRIVATE PkgConfig::PIPEWIRE Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+add_library(mfs_pipewire_opencv SHARED conversion-adapter.cpp)
+target_include_directories(mfs_pipewire_opencv PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mfs_pipewire_opencv PRIVATE Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+target_link_options(mfs_pipewire_opencv PRIVATE "LINKER:--exclude-libs,ALL")
+set_target_properties(mfs_pipewire_opencv PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "Complete fixed PipeWireScreencap header/cpp compiled without source edits. Only the exact screenshot base declaration is extracted; input/ConfigBase/meojson are excluded. Common/Conf selects a private namespace and logging is suppressed in explicit overlay headers. Native PipeWire/SPA/DRM and OpenCV remain real. This source context is not Rust parity or full framework acceptance. The harness balances each source constructor's global pw_init after destruction; the original destructor itself does not call pw_deinit.\n")
