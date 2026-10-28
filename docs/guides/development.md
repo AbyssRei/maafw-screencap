@@ -168,7 +168,7 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 源码入口安排 20 次独立 fd/init/三次截图/inactive/close 生命周期，按原 API 检查 60 张已知 BGR 和 fd/线程数，原对象关闭后继续持帧并跨线程读取；每张可解释布局的原图在颜色断言前保存。图样携带生产端序号并使各行内容随序号变化，持帧需保持原序号和像素；重复/倒退仅记诊断，不把它推断为原 API 的回放状态。转换库初始化在捕获资源基线之外，原构造函数的 `pw_init` 由测试在原对象完全销毁后额外 `pw_deinit`；这不证明原析构本身配平初始化。另在独立进程观察真实 `connect_fd` 早期错误的描述符状态，只在原生对象清理后按 socket cookie 回收仍匹配的 socket，不预设所有错误都会消费 fd。入口核对实际头文件/运行时版本及动态符号所在库。原 API 不暴露捕获时间/回放状态，耗时只记诊断。它仍不是 Rust 原生 driver、完整 C++/Rust 对照、framework/input、格式/故障/DMA-BUF 矩阵或 P1 验收。
 
-## 已实现的 P0 工具
+首轮实际 Linux 执行已通过三个协商 POD 的 Rust/原源码字节比较，并观察到 connect_fd 早期失败 errno95 后输入 socket 仍打开；这不等于一般产品 fd 失败所有权已解决。随后原 C++ 与 Rust 都在协商时超时：私有 daemon 不含 session manager，P0 曾显式创建 link，完整 U 的 AUTOCONNECT 请求则没有被外部路由。生产端以零帧在正常 SIGTERM 清理后返回1，两个捕获失败及停源失败均保留。现增加独立自有路由监督器，仅核对指定 mfs-p0-fixture ID 和完整节点信息中的上游 media.name/node.target/autoconnect，管理这对 port0 的非 linger link；不选择宿主/默认来源、不重试失败 link，也不改产品属性/等待。监督器的 native 结果待验，P0 原有显式 link 路径不变。
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 

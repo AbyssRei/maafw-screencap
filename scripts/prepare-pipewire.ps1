@@ -26,6 +26,10 @@ $serverError = $null
 $fixture = $null
 $fixtureOut = $null
 $fixtureError = $null
+$routeSupervisor = $null
+$routeOut = $null
+$routeError = $null
+$routeReady = $null
 $failed = $false
 $referenceArtifacts = $null
 $rustArtifacts = $null
@@ -227,6 +231,11 @@ try {
     Copy-Item -LiteralPath $fixtureBinary -Destination $savedFixture
     Save $savedFixture
     if($SourceReference){
+        $routeBinary=Join-Path $native mfs-p1-pipewire-route
+        Step native-route-supervisor-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-route.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$routeBinary)
+        $saved=Join-Path $nativeArtifacts mfs-p1-pipewire-route
+        Copy-Item -LiteralPath $routeBinary -Destination $saved
+        Save $saved
         $env:MFS_P1_PIPEWIRE_LIBRARY=(& readlink -f (Join-Path $prefix lib/libpipewire-0.3.so)|Out-String).Trim()
         if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $env:MFS_P1_PIPEWIRE_LIBRARY -PathType Leaf)){throw 'Cannot identify the selected native PipeWire library'}
         . (Join-Path $PSScriptRoot prepare-pipewire-reference.ps1)
@@ -295,6 +304,27 @@ try {
     if ($nodes.Count -ne 1) { throw 'Expected exactly the owned SPA fixture node' }
     $env:MFS_P0_PIPEWIRE_SOCKET = $socket
     $env:MFS_P0_PIPEWIRE_NODE_ID = [string]$nodes[0].id
+    if($SourceReference){
+        # The P0 test creates links itself. Complete U consumers request
+        # AUTOCONNECT and require an external routing premise. Supply only the
+        # owned source/client route here, without changing backend properties.
+        $routeReady=Join-Path $logsRoot route-ready.txt
+        $routeStart=[Diagnostics.ProcessStartInfo]::new($routeBinary)
+        $routeStart.UseShellExecute=$false
+        $routeStart.RedirectStandardOutput=$true
+        $routeStart.RedirectStandardError=$true
+        $routeStart.ArgumentList.Add($env:MFS_P0_PIPEWIRE_NODE_ID)
+        $routeStart.ArgumentList.Add($routeReady)
+        $routeSupervisor=[Diagnostics.Process]::Start($routeStart)
+        $routeOut=$routeSupervisor.StandardOutput.ReadToEndAsync()
+        $routeError=$routeSupervisor.StandardError.ReadToEndAsync()
+        $until=[DateTime]::UtcNow.AddSeconds(10)
+        while(-not(Test-Path -LiteralPath $routeReady)){
+            if($routeSupervisor.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Owned exact-source route supervisor did not become ready'}
+            Start-Sleep -Milliseconds 20
+        }
+        Save $routeReady
+    }
     if(-not $SourceReference){
         Step rust-pipewire-capture cargo @('test','--release','--locked','--test','p0-interop','--features','prototype-linux-pipewire','--','--include-ignored','--test-threads=1','--nocapture')
     }
@@ -328,12 +358,13 @@ try {
     foreach($directory in @($referenceArtifacts,$rustArtifacts,$bgrArtifacts)){
         if($directory){Get-ChildItem -LiteralPath $directory -File -Recurse|ForEach-Object{Save $_.FullName}}
     }
+    StopOwned route-supervisor $routeSupervisor $routeOut $routeError
     StopOwned source $fixture $fixtureOut $fixtureError
     StopOwned daemon $server $serverOut $serverError
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Four portable consumer tests and four checked row/storage tests are separate from native capture.',($SourceReference ? 'Original-source context selected: complete fixed PipeWireScreencap header/cpp included unedited in one translation unit, exact extracted screenshot base, private namespace/logging overlays, asymmetric padded-RGB fixture. Twenty FD/init/three-output/inactive/close source cycles require sixty known BGR results and retained images plus FD/thread observations. Separate native Rust daemon/SHM probe requires twenty cycles/sixty raw RGB outputs with exact negotiation POD bytes, queue ownership and held CPU samples. RawAudit preserves RGB. Separate private OpenCV ABI/exception/failure-output checks plus twenty lifecycles/sixty owning BGR images and twenty native unlock witnesses are required by an independent probe, not accepted by the raw entry. Its witness adds waiting, so timings are not source latency parity. Opaque Mat/loader mobility and full source/OpenCV parity remain pending. Both raw global initializations are balanced by test-only deinit after destruction. Timings are diagnostic; source API freshness/replay is not exposed. Portal FD, owned mapping/DMA-BUF, full format/failure/alias matrices, framework/input and complete P1 remain pending. P0 Rust native probe stays a separate default-pattern entry.' : 'Original-source context/driver probe not selected. The default P0 RGB-bar producer and native Rust stream prototype remain separate from later source/Rust parity.'),'Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
+        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding. SourceReference routing is supplied by a separately owned, exact-producer/consumer supervisor on the private daemon; product AUTOCONNECT/waiting/properties and P0 explicit links are not changed.','Four portable consumer tests and four checked row/storage tests are separate from native capture.',($SourceReference ? 'Original-source context selected: complete fixed PipeWireScreencap header/cpp included unedited in one translation unit, exact extracted screenshot base, private namespace/logging overlays, asymmetric padded-RGB fixture. Twenty FD/init/three-output/inactive/close source cycles require sixty known BGR results and retained images plus FD/thread observations. Separate native Rust daemon/SHM probe requires twenty cycles/sixty raw RGB outputs with exact negotiation POD bytes, queue ownership and held CPU samples. RawAudit preserves RGB. Separate private OpenCV ABI/exception/failure-output checks plus twenty lifecycles/sixty owning BGR images and twenty native unlock witnesses are required by an independent probe, not accepted by the raw entry. Its witness adds waiting, so timings are not source latency parity. Opaque Mat/loader mobility and full source/OpenCV parity remain pending. Both raw global initializations are balanced by test-only deinit after destruction. Timings are diagnostic; source API freshness/replay is not exposed. Portal FD, owned mapping/DMA-BUF, full format/failure/alias matrices, framework/input and complete P1 remain pending. P0 Rust native probe stays a separate default-pattern entry.' : 'Original-source context/driver probe not selected. The default P0 RGB-bar producer and native Rust stream prototype remain separate from later source/Rust parity.'),'Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
     })
 }
 if($failed -or @($checks | Where-Object status -EQ failed).Count) { exit 1 }
