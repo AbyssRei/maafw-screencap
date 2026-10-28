@@ -39,7 +39,7 @@ $geometryEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
 if ($DesktopDupParity) {
-    $pending.Add('Partial P1 DesktopDup/Window migration. Preserve original default hardware/factory/enumeration/fallback, DuplicateOutput, 2000ms waits, up to three discarded alpha warmups followed by a separate final capture, access-lost state and cleanup order. The original mapped Mat escapes Unmap/ReleaseFrame: safe Rust adds and counts a full-output BGRA copy while mapped, keeping BGR conversion after native release. Window target isolation adds an explicit BGR copy after full conversion and ROI. Isolated source calls and twenty mixed Rust lifecycles compare controlled target pixels and ownership; dynamic full desktops are not globally byte-compared. Native faults, exact call scripts, source repeated lifecycles, fallback/multioutput/rotation/access loss/format, window/DPI/helper and manager matrices remain pending. No complete backend/U/P1 acceptance.')
+    $pending.Add('Partial P1 DesktopDup/Window migration. Preserve original default hardware/factory/enumeration/fallback, DuplicateOutput, 2000ms waits, up to three discarded alpha warmups followed by a separate final capture, access-lost state and cleanup order. The original mapped Mat escapes Unmap/ReleaseFrame: safe Rust adds and counts a full-output BGRA copy while mapped, keeping BGR conversion after native release. Window target isolation adds an explicit BGR copy after full conversion and ROI. Isolated source calls, null-HWND adapter 0/output 0 and twenty mixed Rust lifecycles compare controlled target pixels and ownership; dynamic full desktops are not globally byte-compared. Real conversion-boundary ReleaseFrame probes and contained conversion exceptions are distinct from exact Unmap interception. Native faults, exact call scripts, source repeated lifecycles, monitor-lookup fallback/multioutput/rotation/access loss/format, window/DPI/helper and manager matrices remain pending. No complete backend/U/P1 acceptance.')
 }
 if ($FramePoolContext -and (-not $Desktop -or $GdiParity)) { throw 'FramePool context observation requires its independent explicit desktop entry.' }
 if ($ScreenDcParity) {
@@ -112,6 +112,26 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($Name -eq 'screen-window-helper-original-parity' -and $exitCode -eq 0) {
+            $observed = Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 5 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('corrected fork geometry cases=55 source_and_rust=110 exact_client_exemption=1 work_area_preserved=1 offsets_have_no_slack=1 native_capture=0 passed')) {
+                throw 'Expected all five helper tests and fifty-five actual corrected-fork source/Rust cases'
+            }
+        }
+        if ($Name -in @('desktop-dup-source-default-output','desktop-dup-rust-default-output')) {
+            $observed = Get-Content -LiteralPath $logPath -Raw
+            $sourceMissing = $Name -eq 'desktop-dup-source-default-output' -and $exitCode -eq 77
+            $rustMissing = $Name -eq 'desktop-dup-rust-default-output' -and $exitCode -eq 101 -and
+                $observed -match '(?m)^test result: FAILED\. 0 passed; 1 failed; 0 ignored;' -and
+                $observed -notmatch 'panicked at'
+            if (($sourceMissing -or $rustMissing) -and $observed.Contains('MFS_MISSING_ENVIRONMENT:default_output_fixture')) {
+                $status = 'missing_environment'
+                $script:nativeMissingEnvironment = $true
+                $pending.Add('The independent adapter 0/output 0 preflight did not contain the controlled fixture on an attached desktop output. Null-HWND native pixels remain unaccepted in this environment; no alternate output was selected.')
+                return
+            }
+        }
         if ($Name -eq 'pseudo-foreground-parity') {
             $observed = Get-Content -LiteralPath $logPath -Raw
             if ($exitCode -eq 101 -and
@@ -133,7 +153,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact native FramePool case did not execute one test'
             }
         }
-        if ($Name -eq 'desktop-dup-rust-lifecycles' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
+        if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }
         $status = 'passed'
@@ -487,7 +507,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_desktop_dup_reference.exe) -Destination $desktopProgram
         Save-Input $desktopProgram
         $desktopEvidence = Join-Path $artifacts desktop-dup-source
-        foreach ($modeName in @('desktop','window')) {
+        foreach ($modeName in @('desktop','window','default-output')) {
             $modeDirectory = Join-Path $desktopEvidence $modeName
             New-Item -ItemType Directory -Path $modeDirectory -Force | Out-Null
             try { Step "desktop-dup-source-$modeName" $desktopProgram @($modeName,$modeDirectory) }
@@ -570,13 +590,17 @@ try {
         $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
         if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
         $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
-        if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase) }
+        $desktopDefaultCase = 'backends::windows::desktop_dup::tests::selects_adapter_zero_output_zero_for_null_hwnd_and_retains_cpu_pixels'
+        $desktopConversionCase = 'backends::windows::desktop_dup::tests::releases_acquired_frame_before_external_conversion_and_conversion_exception'
+        if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
         if ($DesktopDupParity) {
             $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence
             Step 'desktop-dup-rust-lifecycles' cargo ($parityArguments + @('--',$desktopCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Step 'desktop-dup-rust-default-output' cargo ($parityArguments + @('--',$desktopDefaultCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Step 'desktop-dup-rust-conversion-boundary' cargo ($parityArguments + @('--',$desktopConversionCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
         }
         if ($FramePoolParity) {
             Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
