@@ -19,8 +19,8 @@ pub fn run(args: &[String]) -> Result<()> {
 
 pub fn run_parity(args: &[String]) -> Result<()> {
     let kind = match args.first().map(String::as_str) {
-        Some(kind @ ("gdi" | "print-window")) => kind,
-        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window> [--offline-inputs <native run manifest>]".into()),
+        Some(kind @ ("gdi" | "print-window" | "screen-dc")) => kind,
+        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc> [--offline-inputs <native run manifest>]".into()),
     };
     let mut native_args = vec!["--desktop".to_owned()];
     native_args.extend_from_slice(&args[1..]);
@@ -30,6 +30,7 @@ pub fn run_parity(args: &[String]) -> Result<()> {
 fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     let gdi_parity = parity.is_some();
     let print_parity = parity == Some("print-window");
+    let screen_parity = parity == Some("screen-dc");
     let mut desktop = false;
     let mut offline_input = None;
     let mut args = args.iter();
@@ -126,6 +127,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         "{}-{}",
         if print_parity {
             "p1-print-window-windows"
+        } else if screen_parity {
+            "p1-screen-dc-windows"
         } else if gdi_parity {
             "p1-gdi-windows"
         } else {
@@ -150,6 +153,20 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if screen_parity {
+        let scope = inputs.join("screen-dc-scope.md");
+        fs::write(
+            &scope,
+            "# P1 ScreenDC migration component scope\n\n\
+             Fixed unpatched ScreenDCScreencap and ForegroundUtils/HwndUtils; U retains rcWork, source sleep requests, global DWORD cooldown and original asynchronous window adjustment. Foreground/geometry warning results do not abort capture. A null target is invalid; GetDC/ReleaseDC use the null screen owner and BitBlt uses the client screen origin. Conversion precedes native cleanup, with the same shared GetBitmapBits safety checks as window GDI. No P2 adjustment or P3 SDK/DIB behavior is introduced.\n\n\
+             Compiled exact-original headers are observed synchronously: 11 continuous cooldown steps and two direct topmost cases; 16 geometry, three window-size, four style and four DPI cases. Overflow safety cases never execute undefined C++ arithmetic. Scripted native capture tests separately check warning continuation, client-left/top input, negative source origin, native/short-read/conversion failures, independent cleanup errors and unwind cleanup. These scripted boundaries are not real native failure acceptance.\n\n\
+             Desktop test requests 20 paired original/Rust captures with exact known pixels, retained CPU outputs and real GDI counts after capture/window close. Fixture-only controls distinguish cold CreateWindow process initialization from capture accounting. Source-only before/after submission/presentation observations retain both images. A later formal run failed both-source/Rust and post-barrier source black-image assertions; those raw images and failures remain archived. The fixture now reuses a dedicated WM_PAINT/UI owner with joined shutdown, without compiling the PrintWindow backend in a ScreenDC-only target. Strict pixels and capture calls/waits remain unchanged, without retry. Outcomes must verify this changed fixture premise; a DwmFlush result alone does not prove readiness.\n\n\
+             Occlusion, real native failure/cleanup matrices, asynchronous move/resize, nondefault depth, helper compatible-mode path, complete method/manager chains and full P1 acceptance remain outstanding. Native outcomes are platform/run specific.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if gdi_parity {
         let scope = inputs.join("gdi-scope.md");
         fs::write(
@@ -225,6 +242,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if print_parity {
         process.arg("-PrintWindowParity");
     }
+    if screen_parity {
+        process.arg("-ScreenDcParity");
+    }
     if let Some(input) = &offline {
         process
             .arg("-OfflineManifest")
@@ -271,6 +291,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         "Native {} evidence archived at {}",
         if print_parity {
             "P1 PrintWindow component"
+        } else if screen_parity {
+            "P1 ScreenDC component"
         } else if gdi_parity {
             "P1 GDI component"
         } else {

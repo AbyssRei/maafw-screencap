@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #[cfg(all(
     target_os = "windows",
-    any(feature = "windows-gdi", feature = "windows-print-window")
+    any(
+        feature = "windows-gdi",
+        feature = "windows-print-window",
+        feature = "windows-screen-dc"
+    )
 ))]
 mod windows;

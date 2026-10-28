@@ -8,7 +8,7 @@
         all(
             test,
             target_os = "windows",
-            feature = "windows-gdi",
+            any(feature = "windows-gdi", feature = "windows-screen-dc"),
             feature = "prototype-windows"
         )
     ),
@@ -26,7 +26,11 @@ mod platform;
     test,
     target_os = "windows",
     feature = "prototype-windows",
-    any(feature = "windows-gdi", feature = "windows-print-window")
+    any(
+        feature = "windows-gdi",
+        feature = "windows-print-window",
+        feature = "windows-screen-dc"
+    )
 ))]
 #[path = "../tests/common/mod.rs"]
 mod test_support;

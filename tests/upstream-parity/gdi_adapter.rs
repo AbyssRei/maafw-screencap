@@ -25,6 +25,9 @@ pub(crate) mod print_query;
 pub(crate) mod print_window;
 #[path = "gdi_probe.rs"]
 pub(crate) mod probe;
+#[cfg(feature = "windows-screen-dc")]
+#[path = "screen_fixture.rs"]
+pub(crate) mod screen_fixture;
 
 #[allow(
     non_snake_case,
@@ -77,6 +80,27 @@ pub(crate) struct Adapter {
 }
 
 impl Adapter {
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn screen_present(&self) -> Result<[i32; 2], Box<dyn Error>> {
+        type Present = unsafe extern "C" fn(*mut i32, usize) -> i32;
+        // SAFETY: Exact private fixture signature, no object/context retained.
+        let present: Present = unsafe { self.module.symbol(c"mfs_screen_fixture_present")? };
+        let mut output = [0; 2];
+        if unsafe { present(output.as_mut_ptr(), output.len()) } != 0 {
+            return Err("screen presentation observation failed".into());
+        }
+        Ok(output)
+    }
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn screen_reference(&self, hwnd: *mut c_void) -> Result<Image, i32> {
+        // SAFETY: Exact private image signature, synchronous source capture;
+        // the image owner retains this module independently after adoption.
+        let reference: Reference =
+            unsafe { self.module.symbol(c"mfs_screen_parity_reference") }.map_err(|_| -1)?;
+        let mut output = ImageSpan::default();
+        let status = unsafe { reference(hwnd, &mut output) };
+        self.adopt(status, output)
+    }
     pub fn image_owners(&self) -> Result<u64, Box<dyn Error>> {
         type ImageOwners = unsafe extern "C" fn() -> u64;
         // SAFETY: Exact private signature; atomic query has no pointer inputs.

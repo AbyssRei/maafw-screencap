@@ -21,6 +21,10 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
 option(MFS_BUILD_REFERENCE "Build the independent unpatched reference executable" ON)
 option(MFS_BUILD_GDI_PARITY "Build the private GDI reference/conversion and window fixture" OFF)
 option(MFS_BUILD_PRINT_PARITY "Include the original PrintWindow and owned rendering fixture" OFF)
+option(MFS_BUILD_SCREEN_PARITY "Include original ScreenDC and window-helper observation" OFF)
+if(MFS_BUILD_SCREEN_PARITY AND NOT MFS_BUILD_GDI_PARITY)
+    message(FATAL_ERROR "ScreenDC parity requires the selected common image adapter")
+endif()
 if(MFS_BUILD_PRINT_PARITY AND NOT MFS_BUILD_GDI_PARITY)
     message(FATAL_ERROR "PrintWindow parity uses the explicitly selected common image adapter")
 endif()
@@ -77,6 +81,16 @@ target_include_directories(mfs_gdi_parity PRIVATE
 target_link_libraries(mfs_gdi_parity PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
 file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp" MFS_GDI_CPP_PATH)
 target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_GDI_CPP="${MFS_GDI_CPP_PATH}")
+if(MFS_BUILD_SCREEN_PARITY)
+target_sources(mfs_gdi_parity PRIVATE window-script.cpp screen-parity.cpp
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/ScreenDCScreencap.cpp")
+target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
+if(NOT MFS_BUILD_PRINT_PARITY)
+    # Reuse the existing renderer and its UI owner without compiling the
+    # PrintWindow backend, pseudo helper, conversion or failure probes.
+    target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-thread.cpp)
+endif()
+endif()
 if(MFS_BUILD_PRINT_PARITY)
 target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-read-probe.cpp print-query-probe.cpp
     print-conversion-probe.cpp print-fault-reference.cpp pseudo-script.cpp print-pseudo.cpp print-thread.cpp

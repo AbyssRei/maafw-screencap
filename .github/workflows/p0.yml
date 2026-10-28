@@ -67,11 +67,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask wlr-prototype
-      - name: Validate Windows GDI and PrintWindow migration and native interop
+      - name: Validate Windows GDI, PrintWindow and ScreenDC migration and native interop
         if: runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo xtask upstream-parity print-window
+        run: |
+          cargo xtask upstream-parity print-window
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo xtask upstream-parity screen-dc
       - name: Inventory registry licenses and verify prototype configuration
         shell: pwsh
         run: |
