@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
-#[cfg(feature = "windows-gdi")]
+#[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
 use crate::backends::windows::gdi_api::GdiApi;
 use crate::backends::windows::{
     gdi_api::DcApi,
@@ -89,6 +89,8 @@ type Begin = unsafe extern "C" fn(u32) -> i32;
 type End = unsafe extern "C" fn(*mut Report) -> i32;
 type GetApi = unsafe extern "C" fn(*mut Api) -> i32;
 type ProbeReference = unsafe extern "C" fn(*mut c_void, u32, *mut ImageSpan, *mut Report) -> i32;
+#[cfg(feature = "windows-screen-dc")]
+type ScreenCopy = unsafe extern "C" fn(*mut c_void, i32, i32, *mut c_void, i32, i32) -> i32;
 
 impl Adapter {
     pub(super) fn verify_probe_layout(&self) -> Result<(), Box<dyn Error>> {
@@ -159,6 +161,10 @@ impl Adapter {
         // SAFETY: Exact native layout was verified and get_api initialized every
         // function pointer. No partial/error output is interpreted as Rust values.
         let api = unsafe { api.assume_init() };
+        #[cfg(feature = "windows-screen-dc")]
+        // SAFETY: Exact additional screen-parity.h signature, resolved before
+        // begin so a missing symbol cannot leave a native active probe behind.
+        let screen_copy = unsafe { self.module.symbol(c"mfs_screen_probe_copy")? };
         // SAFETY: Begin is caller-thread-affine; Probe retains that module and
         // cannot be sent/shared because its Adapter contains raw native handles.
         if unsafe { begin(failures) } != 0 {
@@ -169,6 +175,8 @@ impl Adapter {
             api,
             end,
             active: true,
+            #[cfg(feature = "windows-screen-dc")]
+            screen_copy,
         })
     }
 
@@ -187,6 +195,22 @@ impl Adapter {
         let status = unsafe { reference(hwnd, failures, &mut image, &mut report) };
         Ok((self.adopt(status, image), report))
     }
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn screen_reference_probe(
+        &self,
+        hwnd: *mut c_void,
+        failures: u32,
+    ) -> Result<(Result<Image, i32>, Report), Box<dyn Error>> {
+        self.verify_probe_layout()?;
+        // SAFETY: Exact screen-parity.h signature; both writable descriptors
+        // match verified native layouts and the module remains live.
+        let reference: ProbeReference =
+            unsafe { self.module.symbol(c"mfs_screen_probe_reference")? };
+        let mut image = ImageSpan::default();
+        let mut report = Report::default();
+        let status = unsafe { reference(hwnd, failures, &mut image, &mut report) };
+        Ok((self.adopt(status, image), report))
+    }
 }
 
 pub struct Probe<'a> {
@@ -194,6 +218,8 @@ pub struct Probe<'a> {
     api: Api,
     end: End,
     active: bool,
+    #[cfg(feature = "windows-screen-dc")]
+    screen_copy: ScreenCopy,
 }
 
 impl Probe<'_> {
@@ -252,7 +278,7 @@ unsafe impl DcApi for Probe<'_> {
 }
 
 // SAFETY: Same-thread native probe table preserves the GDI read/write spans.
-#[cfg(feature = "windows-gdi")]
+#[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
 unsafe impl GdiApi for Probe<'_> {
     unsafe fn copy(&self, destination: HDC, width: i32, height: i32, source: HDC) -> i32 {
         unsafe { (self.api.copy)(destination, width, height, source) }
@@ -262,5 +288,23 @@ unsafe impl GdiApi for Probe<'_> {
     }
     unsafe fn read(&self, bitmap: HBITMAP, length: i32, output: *mut c_void) -> i32 {
         unsafe { (self.api.read)(bitmap, length, output) }
+    }
+}
+
+#[cfg(feature = "windows-screen-dc")]
+// SAFETY: Same-thread native table retains real DC/bitmap ownership. Copy uses
+// the screen origin directly and borrows no native objects beyond the call.
+unsafe impl crate::backends::windows::gdi_api::ScreenDcApi for Probe<'_> {
+    unsafe fn copy_screen(
+        &self,
+        destination: HDC,
+        width: i32,
+        height: i32,
+        source: HDC,
+        x: i32,
+        y: i32,
+    ) -> i32 {
+        // SAFETY: Caller retains both DCs and selected destination bitmap.
+        unsafe { (self.screen_copy)(destination, width, height, source, x, y) }
     }
 }

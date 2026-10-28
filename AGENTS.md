@@ -25,6 +25,8 @@ The pumped-owner follow-up still failed both black-image assertions despite obse
 
 Keep each detailed rule in its authority; this file summarizes constraints and links to them. User authorization and preferences from the current task still apply; do not invent another approval requirement for work already authorized.
 
+ScreenDC now has thirteen real native DC/bitmap/conversion failure/control cases, three separately classified short-read/metadata/24-bit-DDB cases, native null/destroyed/empty target checks and an independent helper-only resource-initialization control; four owning native-failure tests pass without implying visible pixels. Exact-commit Actions subsequently passed PrintWindow but failed ScreenDC at cycle 1: foreground true, original uniform gray, subsequent Rust known pixels, and gray in original-only post-presentation control. This is not evidence of the local power-off explanation. A fixture-only per-window transition-disable mode is being validated: configure while hidden, require successful native setting before first show, preserve old PrintWindow modes and C observation prefixes, and retain strict pixels/capture waits. Setter/module/resource checks pass; do not call animation the root cause or the visible fixture fixed before new evidence. All previous failures remain archived.
+
 ## Phase Order and Scope
 
 Follow **P0 preparation → P1 complete upstream migration U → P2 fixed PR #1587 patch P → P3 SDK/correctness and planned native migrations → P4/P5 strategies, bindings and assets → P6 measured optimization**. All platform backends and direct screenshot helper/manager paths must pass P1 before P2 starts. Do not start final SDK implementation or additional behavior changes before P2 acceptance.

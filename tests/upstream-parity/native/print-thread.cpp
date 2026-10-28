@@ -30,7 +30,7 @@ struct Owner {
     Command command = Command::none;
     MfsPrintFixture fixture {};
     HWND anchor = nullptr;
-    std::array<uint64_t, 11> stats {};
+    std::array<uint64_t, 12> stats {};
     std::array<uint64_t, 5> activation {};
 };
 struct Arguments {

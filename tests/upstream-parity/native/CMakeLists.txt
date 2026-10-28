@@ -82,9 +82,11 @@ target_link_libraries(mfs_gdi_parity PRIVATE mfs_reference_utils ${OpenCV_LIBS} 
 file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp" MFS_GDI_CPP_PATH)
 target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_GDI_CPP="${MFS_GDI_CPP_PATH}")
 if(MFS_BUILD_SCREEN_PARITY)
-target_sources(mfs_gdi_parity PRIVATE window-script.cpp screen-parity.cpp
+target_sources(mfs_gdi_parity PRIVATE window-script.cpp screen-parity.cpp screen-probe-reference.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/ScreenDCScreencap.cpp")
 target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
+file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/ScreenDCScreencap.cpp" MFS_SCREEN_CPP_PATH)
+target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_SCREEN_CPP="${MFS_SCREEN_CPP_PATH}")
 if(NOT MFS_BUILD_PRINT_PARITY)
     # Reuse the existing renderer and its UI owner without compiling the
     # PrintWindow backend, pseudo helper, conversion or failure probes.

@@ -1,6 +1,9 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+#[cfg(feature = "prototype-windows")]
+#[path = "screen_dc_fault_tests.rs"]
+mod native_failures;
 #[path = "screen_dc_synthetic.rs"]
 mod synthetic;
 
