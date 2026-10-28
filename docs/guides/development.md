@@ -50,6 +50,8 @@ Windows 环境准备可单独运行 `pwsh -NoProfile -File scripts/prepare-windo
 
 编译器/SDK 的目录名与实际补丁版本分别记录。例如本轮工具目录仍为 MSVC 14.51.36231，但真实 C++ 编译器版本为 19.51.36260.0；SDK 目录为 10.0.28000.0，安装的 servicing release 为 10.0.28000.2957。以归档的编译器检测、文件身份和正式版准备记录判断实际版本，不按目录名要求重复升级。
 
+Windows 原生依赖缓存将选中 SDK 的安装补丁版本与根路径纳入身份，避免 SDK 原地更新头文件而目录及 kernel32.lib 不变时复用旧 OpenCV 构建。`pwsh -NoProfile -File tests/prototypes/sdk_cache.ps1` 验证同目录补丁更新会改变身份，其他 SDK 系列、重复项与枚举顺序不会影响选中身份；此便携检查不运行原生捕获。
+
 ```powershell
 cargo xtask reference prepare
 cargo xtask reference verify

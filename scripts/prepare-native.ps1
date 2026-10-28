@@ -44,6 +44,21 @@ function Artifact([string]$Path) {
 
 function Save-Input([string]$Path) { $inputs.Add((Artifact $Path)) }
 
+function Select-SdkReleases([string]$DirectoryVersion, [object[]]$Products) {
+    $directory = [version]$DirectoryVersion
+    $matching = foreach ($product in $Products) {
+        if (-not $product.PSObject.Properties['DisplayName'] -or
+            -not $product.PSObject.Properties['DisplayVersion']) { continue }
+        if ($product.DisplayName -cmatch '^Windows Software Development Kit - Windows (\d+\.\d+\.\d+\.\d+)$') {
+            $release = [version]$Matches[1]
+            if ($release.Major -eq $directory.Major -and $release.Minor -eq $directory.Minor -and $release.Build -eq $directory.Build) {
+                [pscustomobject][ordered]@{sdk_release=$release.ToString();product_version=[string]$product.DisplayVersion}
+            }
+        }
+    }
+    return @($matching | Sort-Object sdk_release,product_version -Unique)
+}
+
 function Prepared-File([string]$Name) {
     $matches = @($prepared.inputs | Where-Object { $_.path.EndsWith("/inputs/$Name") })
     if ($matches.Count -ne 1) { throw "Prepared input $Name is missing or ambiguous" }
@@ -240,6 +255,11 @@ try {
         Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' -and (Test-Path (Join-Path $_.FullName 'um/x64/kernel32.lib')) } |
         Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
     if (-not $sdk) { throw 'An installed x64 Windows SDK is required' }
+    # Servicing releases replace files within the same 10.0.<build>.0 tree.
+    # The directory/kernel32 identity alone cannot invalidate an OpenCV cache
+    # when only headers or other SDK components change.
+    $sdkProducts = @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
+    [object[]]$sdkReleases = @(Select-SdkReleases $sdk.Name $sdkProducts)
 
     $opencvRelease = if ($offline) { Get-Content -LiteralPath (Prepared-File opencv-release.json) -Raw | ConvertFrom-Json } else { Api 'repos/opencv/opencv/releases/latest' }
     $opencvReleasePath = Join-Path $inputsRoot opencv-release.json
@@ -281,7 +301,9 @@ try {
         opencv_downloads = $opencvDownloads; offline = $offline
         vs_version = $vs.installationVersion; vs_instance = $vs.instanceId; toolset = $toolset
         compiler_sha256 = (Get-FileHash -LiteralPath (Join-Path $vs.installationPath "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe") -Algorithm SHA256).Hash.ToLowerInvariant()
+        compiler_file_version = (Get-Item -LiteralPath $compiler).VersionInfo.FileVersion
         sdk = $sdk.Name; generator = 'Visual Studio 18 2026'; arch = 'x64'; options = $options
+        sdk_root = $sdkRoot; sdk_installed_releases = $sdkReleases
         sdk_kernel32_sha256 = (Get-FileHash -LiteralPath (Join-Path $sdk.FullName 'um/x64/kernel32.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
         cmake_binary_sha256 = (Get-FileHash -LiteralPath $cmake -Algorithm SHA256).Hash.ToLowerInvariant()
         cpu_policy = 'OpenCV upstream default CPU baseline, dispatch, SIMD and applicable HAL/third-party optimizations retained'

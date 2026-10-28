@@ -47,6 +47,9 @@ jobs:
           }
       - name: Resolve current dependencies and archive fixed sources
         run: cargo xtask reference prepare
+      - name: Verify Windows SDK servicing cache identity
+        shell: pwsh
+        run: ./tests/prototypes/sdk_cache.ps1
       - name: Prepare latest VS2026 Build Tools and Windows SDK
         if: runner.os == 'Windows'
         shell: pwsh
