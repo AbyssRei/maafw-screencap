@@ -10,6 +10,10 @@ MFS_PARITY_EXPORT int32_t mfs_screen_parity_reference(void* window, MfsParityIma
 // Two outputs: native GdiFlush BOOL and DwmFlush HRESULT. Status 1 only denotes
 // invalid output storage; native failure remains in the respective output.
 MFS_PARITY_EXPORT int32_t mfs_screen_fixture_present(int32_t* output, size_t capacity);
+// Read-only diagnostic, 16 u64 slots: valid/visible/iconic, foreground/target,
+// point window/root/target root, cloaked HRESULT/value, origin x/y, client w/h,
+// extended style and DWORD tick. Signed coordinates/HRESULT use i64 bit values.
+MFS_PARITY_EXPORT int32_t mfs_screen_window_observation(void* window, uint64_t* output, size_t capacity);
 // Same resource ledger/failure bits as GDI; window helper/query calls remain
 // native and are outside this DC/bitmap ledger. Residual recovery is separate.
 MFS_PARITY_EXPORT int32_t mfs_screen_probe_reference(void* window, uint32_t failures,
