@@ -28,6 +28,10 @@ MFS_PARITY_EXPORT int32_t mfs_print_thread_activation_info(void* owner, uint64_t
 // Creates an independent activation anchor on this same UI owner, then applies
 // the existing minimize/layer setup there. SetActiveWindow must use that queue.
 MFS_PARITY_EXPORT int32_t mfs_print_thread_prepare(void* owner, uint32_t layered);
+// Diagnostic fixture control only: reproduce layered/transparent restoration
+// with alpha 0 or 255, optionally forcing an owner-thread redraw/presentation.
+// No screenshot call is retried or altered. Not a product helper operation.
+MFS_PARITY_EXPORT int32_t mfs_print_thread_restore_control(void* owner, uint32_t alpha, uint32_t repaint);
 #ifdef __cplusplus
 }
 #endif

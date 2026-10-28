@@ -97,6 +97,28 @@ impl Fixture {
     pub fn hwnd(&self) -> *mut c_void {
         self.span.hwnd
     }
+    #[cfg(feature = "windows-frame-pool")]
+    pub fn prepare_pseudo(&mut self, layered: bool) -> Result<(), Box<dyn Error>> {
+        type Prepare = unsafe extern "C" fn(*mut c_void, u32) -> i32;
+        // SAFETY: Exact print-thread.h ABI; setup runs on the actual UI owner.
+        let prepare: Prepare = unsafe { self.module.symbol(c"mfs_print_thread_prepare")? };
+        let code = unsafe { prepare(self.span.owner, u32::from(layered)) };
+        if code != 0 {
+            return Err(format!("pseudo fixture preparation failed: {code}").into());
+        }
+        Ok(())
+    }
+    #[cfg(feature = "windows-frame-pool")]
+    pub fn pseudo_state(&self) -> Result<[u64; 6], Box<dyn Error>> {
+        type State = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
+        // SAFETY: Exact print-pseudo.h ABI, initialized six-element output.
+        let state: State = unsafe { self.module.symbol(c"mfs_print_pseudo_state")? };
+        let mut output = [0; 6];
+        if unsafe { state(self.span.hwnd, output.as_mut_ptr(), output.len()) } != 0 {
+            return Err("pseudo fixture state query failed".into());
+        }
+        Ok(output)
+    }
     pub fn thread_info(&self) -> Result<[u64; 4], Box<dyn Error>> {
         type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
         // SAFETY: Matching header signature; the live worker/owner is retained.

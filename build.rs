@@ -122,14 +122,21 @@ fn main() {
             )
             .write();
     }
-    #[cfg(any(feature = "windows-print-window", feature = "windows-screen-dc"))]
+    #[cfg(any(
+        feature = "windows-print-window",
+        feature = "windows-screen-dc",
+        feature = "windows-frame-pool"
+    ))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
             .join("windows_window_coordination.rs");
         let mut input = String::new();
         for (enabled, path) in [
             (
-                cfg!(feature = "windows-print-window"),
+                cfg!(any(
+                    feature = "windows-print-window",
+                    feature = "windows-frame-pool"
+                )),
                 "build-support/windows-window-coordination.txt",
             ),
             (

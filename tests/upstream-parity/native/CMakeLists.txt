@@ -75,9 +75,10 @@ endif()
 if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     # An executable isolates C++/WinRT's process factory/MTA state. This is a
     # source-only environment observation, not Rust FramePool parity acceptance.
-    add_executable(mfs_framepool_reference framepool-reference.cpp print-parity.cpp print-thread.cpp
-        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp")
-    target_compile_definitions(mfs_framepool_reference PRIVATE MAA_FRAMEPOOL_SCREENCAP_AVAILABLE=1)
+    add_executable(mfs_framepool_reference framepool-reference.cpp print-parity.cpp print-thread.cpp pseudo-fixture.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.cpp")
+    target_compile_definitions(mfs_framepool_reference PRIVATE MAA_FRAMEPOOL_SCREENCAP_AVAILABLE=1 MFS_FRAMEPOOL_PSEUDO_FIXTURE=1)
     target_include_directories(mfs_framepool_reference PRIVATE
         "${MFS_UPSTREAM_ROOT}/include"
         "${MFS_UPSTREAM_ROOT}/source/include"
@@ -104,6 +105,12 @@ if(MFS_BUILD_FRAMEPOOL_PARITY AND NOT MFS_BUILD_PRINT_PARITY AND NOT MFS_BUILD_S
     target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-thread.cpp)
     target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
 endif()
+if(MFS_BUILD_FRAMEPOOL_PARITY AND NOT MFS_BUILD_PRINT_PARITY)
+    target_sources(mfs_gdi_parity PRIVATE pseudo-fixture.cpp pseudo-script.cpp)
+    target_compile_definitions(mfs_gdi_parity PRIVATE MFS_FRAMEPOOL_PSEUDO_FIXTURE=1)
+    file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.cpp" MFS_PSEUDO_CPP_PATH)
+    target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_PSEUDO_CPP="${MFS_PSEUDO_CPP_PATH}")
+endif()
 if(MFS_BUILD_SCREEN_PARITY)
 target_sources(mfs_gdi_parity PRIVATE window-script.cpp screen-parity.cpp screen-probe-reference.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/ScreenDCScreencap.cpp")
@@ -118,7 +125,7 @@ endif()
 endif()
 if(MFS_BUILD_PRINT_PARITY)
 target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-read-probe.cpp print-query-probe.cpp
-    print-conversion-probe.cpp print-fault-reference.cpp pseudo-script.cpp print-pseudo.cpp print-thread.cpp
+    print-conversion-probe.cpp print-fault-reference.cpp pseudo-script.cpp print-pseudo.cpp pseudo-fixture.cpp print-thread.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.cpp"
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp")
 target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)

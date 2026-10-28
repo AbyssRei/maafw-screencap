@@ -1,6 +1,6 @@
 # 开发、构建与验证
 
-日期：2026-10-28。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
+日期：2026-10-29。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
 
 ## 当前仓库与本机命令
 
@@ -68,6 +68,12 @@ cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-r
 原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积，真实零客户区原生矩阵仍待补齐。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
 
 Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像素，再在 UI owner 上销毁目标并完成 join；下一次捕获在窗口有效性检查立即失败，不继续轮询、转换或替换旧缓存。显式 session/pool 关闭通过，关闭后 CPU 图像仍有效。此项保留上游失败时的部分状态；完整原 C++ 目标销毁/故障全过程对照仍待完成。
+
+`frame_pool_pseudo.rs` 已迁移原 FramePool 伪最小化包装，复用同一个 helper，并在 inner 的 session/pool/device/cache 析构前完整销毁 helper，保留 stop/join/恢复的先后顺序；`windows-frame-pool` 无须启用 PrintWindow。独立原 executable 另有五个包装场景：普通可见，以及普通/layered 窗口的最小化后 stop/inactive。参考文件记录图像和四个时点的原生样式、alpha、iconic、前台及客户区尺寸。Rust 对照执行 20 次包装生命周期，比较图像字节、样式/透明度/最小化及尺寸、独立 image owner 和关闭后像素；前台位单独记录，最小化夹具要求目标不是前台，不将跨进程的前台权限当作等价保证。
+
+首个本机包装批次保留四项原源码彩色图样失败：最小化包装得到 96×64 全黑 BGR，普通可见场景正确；其 20 次 Rust 字节/状态对照匹配仍只是诊断，不能覆盖已知图样失败。独立夹具控制在同一 UI owner 上以 alpha=0/255 各测试有/无强制重绘：零透明度两种情况均黑，重绘后观察到 WM_PAINT；不透明两种情况均取得已知图样。该证据仅支持本机的透明度相关原因，不推导所有系统的 WGC 行为，也不修改上游 alpha=0、原捕获顺序或像素断言。正式编排保留 source check 的 failed 和批次非通过，并继续独立回归及字节/状态诊断。完整包装、前台恢复及 P1 门禁仍未关闭。
+
+共享夹具准备/状态函数拆为独立 TU 后，PrintWindow 普通窗口回归又在 inactive 第 15 轮出现严格像素失败：源码图样正确，Rust 有 1725 个字节不同，部分区域为黑色。完整断言数组已原样提取为外部 BGR 文件；未重跑捕获。函数体与拆分前逐字一致，只证明这两个函数的逻辑未改，不足以排除回归或解释该次失败；完整 PrintWindow 验收仍未通过。
 
 安全适配明确计入差异：验证 [CopyResource 所需描述符关系](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-copyresource)、ContentSize、ROI、RowPitch 和整数范围，仅复制初始化的目标 BGRA 行供私有转换器使用，避免将未定义的映射 padding 构造成 Rust slice。转换及 cache clone 仍在 Unmap 前；这新增一次目标 BGRA CPU 复制，不能描述为消除工作。工厂使用显式 owner，保留 SDK 的 implicit MTA 和任意激活 HRESULT 失败后的 DLL 层级尝试，避免投影的全局裸指针缓存；相应寿命和失败矩阵仍需扩充。border 请求保留 Completed handler + manual-reset event 的原 5 秒等待，超时不取消原生操作，晚到 delegate 只持有独立状态，不访问捕获对象。SDK 工厂/等待算法的 Microsoft 版权与 [MIT 文本](../../licenses/cppwinrt-MIT.txt)随产品保留，所用头文件身份与副本进入外部批次。此局部实现和检查不接受完整后端或 P1。
 

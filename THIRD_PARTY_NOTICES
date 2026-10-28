@@ -17,10 +17,11 @@ src/backends/windows/print_window.rs is a Rust migration of:
   source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp
 
 src/platform/windows/pseudo_minimize.rs and
-src/backends/windows/print_window_pseudo.rs are Rust migrations of:
+src/backends/windows/print_window_pseudo.rs and frame_pool_pseudo.rs are Rust migrations of:
   source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.h
   source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.cpp
   source/MaaWin32ControlUnit/Screencap/PrintWindowWithPseudoMinimizeScreencap.h
+  source/MaaWin32ControlUnit/Screencap/FramePoolWithPseudoMinimizeScreencap.h
 
 The helper retains its synchronous pre-capture action, 100ms monitor polling,
 original partial-failure behavior, and join-before-restore shutdown order.
