@@ -12,13 +12,15 @@ use std::{
 };
 
 #[cfg(feature = "windows-print-window")]
+#[path = "print_fault_probe.rs"]
+pub(crate) mod print_fault;
+#[cfg(feature = "windows-print-window")]
 #[path = "print_query_probe.rs"]
 pub(crate) mod print_query;
 #[cfg(feature = "windows-print-window")]
 #[path = "print_window_adapter.rs"]
 pub(crate) mod print_window;
 #[path = "gdi_probe.rs"]
-#[cfg(feature = "windows-gdi")]
 pub(crate) mod probe;
 
 #[allow(

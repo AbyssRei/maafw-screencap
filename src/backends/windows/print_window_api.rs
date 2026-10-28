@@ -31,6 +31,16 @@ pub(super) unsafe trait PrintApi: DcApi {
     unsafe fn visible(&self, hwnd: HWND) -> i32;
     unsafe fn origin(&self, hwnd: HWND, point: *mut POINT) -> i32;
     unsafe fn print(&self, hwnd: HWND, dc: HDC) -> i32;
+    unsafe fn unselect_for_read(&self, dc: HDC, previous: HGDIOBJ) -> HGDIOBJ {
+        // SAFETY: Same owned DC/object contract as DcApi::select. This is the
+        // temporary read precondition, distinct from final resource restoration.
+        unsafe { self.select(dc, previous) }
+    }
+    unsafe fn reselect_after_read(&self, dc: HDC, bitmap: HBITMAP) -> HGDIOBJ {
+        // SAFETY: The independently owned bitmap and DC remain live on this
+        // caller thread, and conversion must observe this selected bitmap.
+        unsafe { self.select(dc, bitmap) }
+    }
     unsafe fn dibits(
         &self,
         dc: HDC,

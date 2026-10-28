@@ -79,7 +79,7 @@ file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/Gd
 target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_GDI_CPP="${MFS_GDI_CPP_PATH}")
 if(MFS_BUILD_PRINT_PARITY)
 target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-read-probe.cpp print-query-probe.cpp
-    print-conversion-probe.cpp
+    print-conversion-probe.cpp print-fault-reference.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp")
 target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
 file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp" MFS_PRINT_CPP_PATH)

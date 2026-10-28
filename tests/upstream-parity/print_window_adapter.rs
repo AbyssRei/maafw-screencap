@@ -135,7 +135,7 @@ impl Adapter {
         popup: (i32, i32),
         offset: (i32, i32),
         mode: u32,
-    ) -> Result<Fixture<'_>, Box<dyn Error>> {
+    ) -> Result<Fixture, Box<dyn Error>> {
         self.create_print_fixture(popup, offset, mode, false)
     }
     pub fn print_child_fixture(
@@ -143,7 +143,7 @@ impl Adapter {
         popup: (i32, i32),
         offset: (i32, i32),
         mode: u32,
-    ) -> Result<Fixture<'_>, Box<dyn Error>> {
+    ) -> Result<Fixture, Box<dyn Error>> {
         self.create_print_fixture(popup, offset, mode, true)
     }
     fn create_print_fixture(
@@ -152,7 +152,7 @@ impl Adapter {
         offset: (i32, i32),
         mode: u32,
         child_target: bool,
-    ) -> Result<Fixture<'_>, Box<dyn Error>> {
+    ) -> Result<Fixture, Box<dyn Error>> {
         // SAFETY: Every signature follows print-parity.h; resolve close before
         // creating any callback/context so partial failures remain owned.
         let (layout, create, close, stats): (Layout, CreateFixture, CloseFixture, Stats) = unsafe {
@@ -188,7 +188,7 @@ impl Adapter {
             return Err("PrintWindow C/Rust layout differs".into());
         }
         let mut fixture = Fixture {
-            adapter: self,
+            module: Arc::clone(&self.module),
             span: FixtureSpan::default(),
             close,
             stats,
@@ -230,6 +230,10 @@ impl PrintConverter for Converter<'_> {
         source: &Image,
         rectangle: Overlay,
     ) -> Result<(), i32> {
+        if self.adapter.module.0 != destination.module.0 || self.adapter.module.0 != source.module.0
+        {
+            return Err(-1);
+        }
         // SAFETY: Exact private header signature, from this same retained DLL.
         let overlay: OverlayImage =
             unsafe { self.adapter.module.symbol(c"mfs_print_parity_overlay") }.map_err(|_| -1)?;
@@ -254,14 +258,17 @@ impl PrintConverter for Converter<'_> {
     }
 }
 
-pub(crate) struct Fixture<'a> {
-    adapter: &'a Adapter,
+pub(crate) struct Fixture {
+    // Native windows retain callback code outside Rust. An owned module lease
+    // survives Adapter destruction, and forgetting this guard leaks the lease
+    // together with its native context rather than unloading a live WindowProc.
+    module: Arc<Module>,
     span: FixtureSpan,
     close: CloseFixture,
     stats: Stats,
     failed_close: bool,
 }
-impl Fixture<'_> {
+impl Fixture {
     pub fn hwnd(&self) -> *mut c_void {
         self.span.hwnd
     }
@@ -291,14 +298,37 @@ impl Fixture<'_> {
         Ok(())
     }
 }
-impl Drop for Fixture<'_> {
+impl Drop for Fixture {
     fn drop(&mut self) {
         if let Err(error) = self.close() {
             // Native callback/context may remain registered. Retain its code
             // explicitly rather than unloading a live WindowProc; report failure
             // without retrying or claiming cleanup/fixture acceptance.
-            std::mem::forget(Arc::clone(&self.adapter.module));
+            std::mem::forget(Arc::clone(&self.module));
             eprintln!("{error}; partial fixture/module retained for safety");
         }
     }
+}
+
+#[test]
+#[ignore = "explicit native window callback code/context ownership"]
+fn keeps_callback_module_until_window_registration_is_closed() -> Result<(), Box<dyn Error>> {
+    let adapter = Adapter::load()?;
+    let module = Arc::downgrade(&adapter.module);
+    let mut fixture = adapter.print_child_fixture((25, 17), (5, 3), 1)?;
+    drop(adapter);
+    assert!(
+        module.upgrade().is_some(),
+        "native window registration must retain its code"
+    );
+    assert_eq!(fixture.stats()?[4], 0);
+    // DestroyWindow invokes this DLL's WindowProc for all three fixture windows;
+    // successful close drains them and unregisters the class before data release.
+    fixture.close()?;
+    drop(fixture);
+    assert!(
+        module.upgrade().is_none(),
+        "closed fixture must release its module lease"
+    );
+    Ok(())
 }

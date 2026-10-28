@@ -1,8 +1,10 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+#[cfg(feature = "windows-gdi")]
+use crate::backends::windows::gdi_api::GdiApi;
 use crate::backends::windows::{
-    gdi_api::{DcApi, GdiApi},
+    gdi_api::DcApi,
     native::{HBITMAP, HDC, HGDIOBJ, HWND, RECT},
 };
 use std::mem::MaybeUninit;
@@ -89,7 +91,7 @@ type GetApi = unsafe extern "C" fn(*mut Api) -> i32;
 type ProbeReference = unsafe extern "C" fn(*mut c_void, u32, *mut ImageSpan, *mut Report) -> i32;
 
 impl Adapter {
-    fn verify_probe_layout(&self) -> Result<(), Box<dyn Error>> {
+    pub(super) fn verify_probe_layout(&self) -> Result<(), Box<dyn Error>> {
         // SAFETY: Exact signatures from gdi-probe.h; the module is retained.
         let layout: Layout = unsafe { self.module.symbol(c"mfs_gdi_probe_layout")? };
         let mut actual = [0_u64; 26];
@@ -250,6 +252,7 @@ unsafe impl DcApi for Probe<'_> {
 }
 
 // SAFETY: Same-thread native probe table preserves the GDI read/write spans.
+#[cfg(feature = "windows-gdi")]
 unsafe impl GdiApi for Probe<'_> {
     unsafe fn copy(&self, destination: HDC, width: i32, height: i32, source: HDC) -> i32 {
         unsafe { (self.api.copy)(destination, width, height, source) }

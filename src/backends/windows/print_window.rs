@@ -221,7 +221,7 @@ fn capture_window_inner<A: PrintApi, C: PrintConverter>(
     pixels.resize(words, 0_u32);
     // SAFETY: Explicit safety adaptation: GetDIBits requires an unselected
     // bitmap. Retain the original final restoration/cleanup responsibilities.
-    let unselected = unsafe { api.select(resources.memory_dc, resources.previous) };
+    let unselected = unsafe { api.unselect_for_read(resources.memory_dc, resources.previous) };
     handle(unselected, "SelectObject.before-GetDIBits")?;
     // SAFETY: Complete initialized top-down 32-bit span; positive height fits
     // u32, and the bitmap is now absent from its exclusively owned memory DC.
@@ -245,7 +245,7 @@ fn capture_window_inner<A: PrintApi, C: PrintConverter>(
     }
     // SAFETY: Restore the source's selected-bitmap state before conversion.
     // A failed reselect is reported; ordinary cleanup still restores the old one.
-    let selected = unsafe { api.select(resources.memory_dc, resources.bitmap) };
+    let selected = unsafe { api.reselect_after_read(resources.memory_dc, resources.bitmap) };
     handle(selected, "SelectObject.after-GetDIBits")?;
     // SAFETY: Every u32 is initialized and all bit patterns are valid. This
     // immutable byte view covers exactly the checked, independently owned span

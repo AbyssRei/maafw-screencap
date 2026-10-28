@@ -6,6 +6,8 @@ use std::error::Error;
 
 #[path = "print_window_child_tests.rs"]
 mod child_targets;
+#[path = "print_window_fault_tests.rs"]
+mod native_failures;
 #[path = "print_window_read_tests.rs"]
 mod read_boundary;
 

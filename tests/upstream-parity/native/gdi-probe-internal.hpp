@@ -21,3 +21,8 @@ LONG mfs_probe_GetBitmapBits(HBITMAP bitmap, LONG length, void* output);
 BOOL mfs_probe_DeleteObject(HGDIOBJ bitmap);
 BOOL mfs_probe_DeleteDC(HDC dc);
 int mfs_probe_ReleaseDC(HWND hwnd, HDC dc);
+#if defined(MFS_UPSTREAM_PRINT_CPP)
+BOOL mfs_probe_PrintWindow(HWND hwnd, HDC dc, UINT flags);
+int mfs_probe_GetDIBits(HDC dc, HBITMAP bitmap, UINT start, UINT lines, void* output,
+    BITMAPINFO* info, UINT colors);
+#endif
