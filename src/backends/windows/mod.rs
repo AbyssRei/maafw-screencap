@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #[cfg(feature = "windows-frame-pool")]
 mod frame_pool;
+#[cfg(feature = "windows-frame-pool")]
+mod frame_pool_pseudo;
 #[cfg(feature = "windows-gdi")]
 mod gdi;
 #[cfg(any(

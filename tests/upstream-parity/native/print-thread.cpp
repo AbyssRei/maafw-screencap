@@ -3,6 +3,7 @@
 #include "print-thread.h"
 #include "print-pseudo.h"
 #include "MaaUtils/SafeWindows.hpp"
+#include <dwmapi.h>
 #include <algorithm>
 #include <array>
 #include <condition_variable>
@@ -12,7 +13,7 @@
 
 namespace {
 constexpr UINT command_message = WM_APP + 0x71;
-enum class Command { none, stats, close, activate, prepare };
+enum class Command { none, stats, close, activate, prepare, restore_control };
 struct Owner {
     std::thread worker;
     std::mutex mutex;
@@ -115,7 +116,7 @@ void run(Owner& owner, Arguments arguments) noexcept
                     result = foreground == owner.fixture.hwnd ? 0 : 5;
                 }
                 else if (command == Command::prepare) {
-#if defined(MFS_UPSTREAM_PRINT_CPP)
+#if defined(MFS_UPSTREAM_PRINT_CPP) || defined(MFS_FRAMEPOOL_PSEUDO_FIXTURE)
                     if (!owner.anchor) {
                         owner.anchor = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"mfs activation anchor",
                             WS_POPUP | WS_VISIBLE, 700, 500, 37, 23, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
@@ -125,6 +126,25 @@ void run(Owner& owner, Arguments arguments) noexcept
 #else
                     result = 1; // ScreenDC reuses rendering/owner lifetime only.
 #endif
+                }
+                else if (command == Command::restore_control) {
+                    const HWND hwnd = static_cast<HWND>(owner.fixture.hwnd);
+                    const BYTE alpha = static_cast<BYTE>(parameter & 255u);
+                    SetLastError(0);
+                    const LONG_PTR old = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+                    result = (!old && GetLastError()) ? 2 : 0;
+                    if (result == 0) {
+                        SetLastError(0);
+                        if (!SetWindowLongPtrW(hwnd, GWL_EXSTYLE, old | WS_EX_LAYERED | WS_EX_TRANSPARENT) && GetLastError()) { result = 2; }
+                    }
+                    if (result == 0 && !SetLayeredWindowAttributes(hwnd, 0, alpha, LWA_ALPHA)) { result = 2; }
+                    if (result == 0) {
+                        ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+                        if (parameter & 256u) {
+                            if (!RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN)
+                                || !GdiFlush() || FAILED(DwmFlush())) { result = 2; }
+                        }
+                    }
                 }
                 {
                     std::lock_guard lock(owner.mutex);
@@ -252,6 +272,12 @@ int32_t mfs_print_thread_prepare(void* context, uint32_t layered)
 {
     if (!context || layered > 1) { return 1; }
     try { return request(*static_cast<Owner*>(context), Command::prepare, layered); }
+    catch (...) { return 3; }
+}
+int32_t mfs_print_thread_restore_control(void* context, uint32_t alpha, uint32_t repaint)
+{
+    if (!context || (alpha != 0 && alpha != 255) || repaint > 1) { return 1; }
+    try { return request(*static_cast<Owner*>(context), Command::restore_control, alpha | (repaint << 8)); }
     catch (...) { return 3; }
 }
 int32_t mfs_print_thread_info(void* context, uint64_t* output, size_t capacity)
