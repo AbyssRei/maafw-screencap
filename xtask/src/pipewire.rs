@@ -13,8 +13,19 @@ use std::{
 };
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_native(args, false)
+}
+
+pub fn run_reference(args: &[String]) -> Result<()> {
+    run_native(args, true)
+}
+
+fn run_native(args: &[String], reference: bool) -> Result<()> {
     if !args.is_empty() || !cfg!(target_os = "linux") || env::consts::ARCH != "x86_64" {
-        return Err("pipewire-prototype requires a native Linux x64 host and no arguments".into());
+        return Err(
+            "PipeWire prototype/source context requires a native Linux x64 host and no arguments"
+                .into(),
+        );
     }
     let path = env::var_os("MFS_REFERENCE_ROOT")
         .map(Into::into)
@@ -27,6 +38,9 @@ pub fn run(args: &[String]) -> Result<()> {
     let root = records::external_root(&path)?;
     crate::reference::verify(&root)?;
     let before: Index = records::read(&root.join("manifest.json"))?;
+    let source_baseline = reference
+        .then(|| crate::reference::selected(&root, &before))
+        .transpose()?;
     let rust_result = batch::run(&[]);
     let index: Index = records::read(&root.join("manifest.json"))?;
     if index.runs.len() <= before.runs.len() {
@@ -35,7 +49,12 @@ pub fn run(args: &[String]) -> Result<()> {
     let parent = index.runs.last().unwrap().clone();
     let rust_run: batch::Run = records::read(&records::verify(&root, &parent)?)?;
     let directory = root.join("runs").join(format!(
-        "p0-pipewire-linux-{}",
+        "{}-{}",
+        if reference {
+            "p1-pipewire-context-linux"
+        } else {
+            "p0-pipewire-linux"
+        },
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     ));
     fs::create_dir(&directory)?;
@@ -48,13 +67,24 @@ pub fn run(args: &[String]) -> Result<()> {
             .unwrap()
             .to_string_lossy()
             .into_owned(),
-        phase: "P0".into(),
+        phase: if reference { "P1" } else { "P0" }.into(),
         phase_status: "incomplete".into(),
         checks: Vec::new(),
         inputs: Vec::new(),
         pending: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut snapshot)?;
+    if reference {
+        let scope = inputs.join("pipewire-context-scope.md");
+        fs::write(
+            &scope,
+            "# P1 original PipeWire native source context\n\nCompile the fixed complete PipeWireScreencap header/cpp on native Linux x64 against the selected latest PipeWire/SPA and OpenCV core/imgproc, retaining IPP/CPU optimizations. Extract only the original screenshot base declaration to exclude input/ConfigBase/meojson; explicit private namespace and suppressed logging are test build adaptations, not full framework or timing parity. Native DRM declarations come from the latest formal libdrm source.\n\nUse the owned asymmetric padded-RGB native producer and private daemon. The P0 native Rust bar probe is a separate entry, not run on this pattern. Observe the real connect_fd early-error descriptor state in an isolated process, with cleanup restricted to the same socket cookie after native teardown. Twenty independent fd/connect/init/three-call/inactive/close/destruction cycles check known BGR pixels, source connected state, fd closure and observed process fd/thread baselines. Retain sixty CPU Mat images through source close and validate across another thread. Save target-only source images before pixel assertions. The harness balances source constructor pw_init only after original destruction; original destructor still lacks pw_deinit. The source public API does not expose freshness/replay; elapsed times are diagnostic.\n\nBuild, load/linkage, actual source output, private Rust consumer unit checks and P0 native Rust stream probe are separate evidence. A native Rust migrated driver, original/Rust native parity, portal/desktop authorization, POD/failure/format/mapping/DMA-BUF/held-BGR-alias matrices and complete all-platform U/P1 remain unimplemented or unvalidated. No P2/P3 or public SDK acceptance.\n",
+        )?;
+        snapshot.inputs.push(records::artifact(&root, &scope)?);
+        snapshot
+            .inputs
+            .push(source_baseline.as_ref().unwrap().clone());
+    }
     let source = inputs.join("product-source");
     let lock = rust_run
         .inputs
@@ -67,7 +97,8 @@ pub fn run(args: &[String]) -> Result<()> {
         .inputs
         .push(records::artifact(&root, &destination)?);
     let deps = repository().parent().unwrap().join("maafw-screencap-deps");
-    let status = Command::new("pwsh")
+    let mut process = Command::new("pwsh");
+    process
         .args(["-NoProfile", "-File"])
         .arg(source.join("scripts/prepare-pipewire.ps1"))
         .arg("-ReferenceRoot")
@@ -79,7 +110,15 @@ pub fn run(args: &[String]) -> Result<()> {
         .arg("-ConfigureTool")
         .arg(env::current_exe()?)
         .arg("-RustBatch")
-        .arg(&parent.path)
+        .arg(&parent.path);
+    if reference {
+        let baseline = records::verify(&root, source_baseline.as_ref().unwrap())?;
+        process
+            .arg("-SourceReference")
+            .arg("-UpstreamRoot")
+            .arg(baseline.parent().unwrap().join("reference/upstream"));
+    }
+    let status = process
         .current_dir(&source)
         .env("CARGO_HOME", deps.join("cargo-home"))
         .env("CARGO_TARGET_DIR", deps.join("target"))
@@ -94,14 +133,17 @@ pub fn run(args: &[String]) -> Result<()> {
     batch::verify(&root, &records::artifact(&root, &manifest)?)?;
     batch::register(&root, &manifest)?;
     println!(
-        "PipeWire prototype evidence archived at {}",
+        "PipeWire native context/prototype evidence archived at {}",
         manifest.display()
     );
     // A failed dependency/convention gate is retained even when native probes
     // run successfully to collect useful diagnostic evidence. Never waive it.
     rust_result?;
     if !status.success() || run.checks.iter().any(|check| check.status != "passed") {
-        return Err("PipeWire prototype checks failed; all attempted results were retained".into());
+        return Err(
+            "PipeWire native context/prototype checks failed; all attempted results were retained"
+                .into(),
+        );
     }
     Ok(())
 }

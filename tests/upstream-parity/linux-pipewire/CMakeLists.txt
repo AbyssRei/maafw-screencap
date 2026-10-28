@@ -1,0 +1,30 @@
+cmake_minimum_required(VERSION 4.2)
+project(mfs_pipewire_source_context LANGUAGES CXX)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_CROSSCOMPILING OR
+   NOT CMAKE_SIZEOF_VOID_P EQUAL 8 OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    message(FATAL_ERROR "This source context requires native Linux x64")
+endif()
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(OpenCV_STATIC ON)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
+pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+if(NOT PIPEWIRE_VERSION STREQUAL MFS_PIPEWIRE_VERSION)
+    message(FATAL_ERROR "Reference selected a different PipeWire version")
+endif()
+find_path(MFS_DRM_INCLUDE drm/drm_fourcc.h PATHS "${MFS_DRM_SOURCE}/include" NO_DEFAULT_PATH REQUIRED)
+set(_mfs_capture "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Screencap/PipeWireScreencap.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_mfs_capture}")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/pipewire-base-source.cmake")
+add_executable(mfs_pipewire_source_context source-context.cpp "${_mfs_capture}")
+target_compile_definitions(mfs_pipewire_source_context PRIVATE _GNU_SOURCE)
+target_include_directories(mfs_pipewire_source_context PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/overlay" "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+    "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit" "${MFS_DRM_INCLUDE}"
+    ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mfs_pipewire_source_context PRIVATE PkgConfig::PIPEWIRE Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
+    "Complete fixed PipeWireScreencap header/cpp compiled without source edits. Only the exact screenshot base declaration is extracted; input/ConfigBase/meojson are excluded. Common/Conf selects a private namespace and logging is suppressed in explicit overlay headers. Native PipeWire/SPA/DRM and OpenCV remain real. This source context is not Rust parity or full framework acceptance. The harness balances each source constructor's global pw_init after destruction; the original destructor itself does not call pw_deinit.\n")

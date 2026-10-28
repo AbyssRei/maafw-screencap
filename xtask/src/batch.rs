@@ -652,6 +652,8 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         Some("manager-scope.md")
     } else if run.run_id.starts_with("p1-pipewire-control-windows-") {
         Some("pipewire-control-scope.md")
+    } else if run.run_id.starts_with("p1-pipewire-context-linux-") {
+        Some("pipewire-context-scope.md")
     } else {
         None
     };
@@ -749,17 +751,18 @@ mod tests {
         ));
         fs::create_dir(&root).unwrap();
         let fixture = SourceFixture(root);
-        for kind in [
-            "gdi",
-            "print-window",
-            "screen-dc",
-            "frame-pool-context",
-            "frame-pool",
-            "desktop-dup",
-            "manager",
-            "pipewire-control",
+        for (kind, platform) in [
+            ("gdi", "windows"),
+            ("print-window", "windows"),
+            ("screen-dc", "windows"),
+            ("frame-pool-context", "windows"),
+            ("frame-pool", "windows"),
+            ("desktop-dup", "windows"),
+            ("manager", "windows"),
+            ("pipewire-control", "windows"),
+            ("pipewire-context", "linux"),
         ] {
-            let run_id = format!("p1-{kind}-windows-fixture");
+            let run_id = format!("p1-{kind}-{platform}-fixture");
             let scope = fixture
                 .0
                 .join(format!("runs/{run_id}/inputs/{kind}-scope.md"));

@@ -43,7 +43,7 @@ $geometryEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
 if ($PipeWireControl) {
-    $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 68 scripts and 112 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
+    $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 74 scripts and 118 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
 }
 if ($ManagerParity) {
     $pending.Add('Partial screenshot-only Windows manager migration, input excluded. Exact fixed-source bodies and enum plus MaaUtils duration_since are compiled with explicit platform/backend/clock and input=None stubs; real MSVC container/Mat owner behavior is compared in 122 scripts. A separate actual GDI-only source-body manager and twenty Rust lifecycles validate caller DPI, two connect captures and one published capture, strict pixels, GDI resources and retained image owners. Native competing/mixed methods and wrappers, complete framework forwarding, compatibility DPI, full native failures and all-platform F/P1 remain unaccepted. Source logging is suppressed in the test shim; the GDI-only entry probes are not native competing-method latency evidence. Previous failures remain failed.')
@@ -171,7 +171,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
-            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or $observed -notmatch 'exact-source PipeWire control cases=68 operations=112') { throw 'Expected one PipeWire model test with 68 cases and 112 operations' }
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or $observed -notmatch 'exact-source PipeWire control cases=74 operations=118') { throw 'Expected one PipeWire model test with 74 cases and 118 operations' }
         }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }

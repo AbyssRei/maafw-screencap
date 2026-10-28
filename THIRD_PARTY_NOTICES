@@ -94,6 +94,14 @@ and symbolic format IDs plus real OpenCV Mat ownership/conversion. This is not
 the complete original Linux class or native PipeWire acceptance. The oracle
 and OpenCV stay outside the default product dependency tree.
 
+The explicit tests/upstream-parity/linux-pipewire source context compiles the
+fixed complete PipeWireScreencap header/source externally, with an exact extracted
+screenshot base declaration and explicit private namespace/logging overlays.
+Input/ConfigBase and the rest of the framework are excluded. Native PipeWire/SPA,
+DRM declarations and OpenCV remain real; their source/license inputs are archived
+with that diagnostic batch. This target is not a native Rust capture backend or
+part of default product builds and SDK assets.
+
 Microsoft C++/WinRT
 =================
 

@@ -154,7 +154,7 @@ fn timeout() -> Plan {
     Plan {
         steps: vec![Step {
             elapsed: 3_000_000_000,
-            result: -110,
+            result: 110, // native relative timed_wait returns positive ETIMEDOUT
             event: 0,
             token: 0,
             format: Format::Unknown,
@@ -230,15 +230,22 @@ fn retains_whole_second_waits_across_spurious_wakeups() {
     driver.plan = Plan {
         steps: vec![
             Step {
-                elapsed: 2_100_000_000,
+                elapsed: 100_000_000,
                 result: 0,
                 event: 0,
                 token: 0,
                 format: Format::Bgr,
             },
             Step {
+                elapsed: 2_000_000_000,
+                result: 110,
+                event: 0,
+                token: 0,
+                format: Format::Bgr,
+            },
+            Step {
                 elapsed: 1_000_000_000,
-                result: -110,
+                result: 110,
                 event: 0,
                 token: 0,
                 format: Format::Bgr,
@@ -257,7 +264,7 @@ fn retains_whole_second_waits_across_spurious_wakeups() {
         .filter(|(kind, _)| *kind == 5)
         .copied()
         .collect();
-    assert_eq!(waits, [(5, 3), (5, 1)]);
+    assert_eq!(waits, [(5, 3), (5, 2), (5, 1)]);
 }
 
 #[test]
@@ -342,7 +349,7 @@ fn cases() -> Vec<Case> {
         });
     }
     for event in 0..=4 {
-        for result in [0, -110] {
+        for result in [0, -5, 110] {
             let plan = Plan {
                 steps: vec![Step {
                     elapsed: 3_000_000_000,
@@ -364,6 +371,40 @@ fn cases() -> Vec<Case> {
             });
         }
     }
+    cases.push(Case {
+        name: "positive-timeout-before-steady-deadline".into(),
+        connected: true,
+        native: true,
+        format: Format::Bgr,
+        token: 23,
+        timeouts: 0,
+        plans: vec![Plan {
+            steps: vec![
+                Step {
+                    elapsed: 100_000_000,
+                    result: 0,
+                    event: 0,
+                    token: 0,
+                    format: Format::Unknown,
+                },
+                Step {
+                    elapsed: 2_000_000_000,
+                    result: 110,
+                    event: 0,
+                    token: 0,
+                    format: Format::Unknown,
+                },
+                Step {
+                    elapsed: 1_000_000_000,
+                    result: 110,
+                    event: 0,
+                    token: 0,
+                    format: Format::Unknown,
+                },
+            ],
+            ..Plan::default()
+        }],
+    });
     for connected in [false, true] {
         for native in [false, true] {
             cases.push(Case {
