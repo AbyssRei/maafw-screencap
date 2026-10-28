@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::{
     gdi_api::DcApi,
-    gdi_types::{Cleanup, NativeFailure},
+    gdi_types::{CaptureError, Cleanup, NativeFailure},
     native::*,
 };
 use std::{mem, ptr::null_mut};
@@ -70,5 +70,15 @@ impl<A: DcApi> Drop for Resources<'_, A> {
         // Unwind fallback never panics or allocates. Ordinary returns expose
         // every cleanup failure separately in Attempt::cleanup.
         let _ = self.release();
+    }
+}
+pub(super) fn require_handle<T, E>(
+    handle: *mut T,
+    operation: &'static str,
+) -> Result<(), CaptureError<E>> {
+    if handle.is_null() || handle.addr() == usize::MAX {
+        Err(CaptureError::Native(NativeFailure::last(operation)))
+    } else {
+        Ok(())
     }
 }

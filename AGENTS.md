@@ -8,6 +8,8 @@ The private PseudoMinimize helper and PrintWindow wrapper preserve synchronous e
 
 Read these authorities before changing the corresponding area:
 
+ScreenDC now has a private independent feature and explicit `xtask upstream-parity screen-dc` component entry, with unpatched default ForegroundUtils/HwndUtils helpers. Compiled original-header observation covers native call/sleep/geometry semantics; scripted capture/resource faults remain separate from native desktop acceptance. Local presented-window parity passed twenty paired captures with strict known pixels, real GDI counts and retained CPU images. Fixture-only controls locate cold window initialization outside capture accounting; source-only before/after presentation controls reproduce stale visible content and establish fixture readiness without changing capture or retrying failed pixels. Both earlier failures remain archived. Occlusion, real native fault/cleanup, move/resize, compatible-mode scale, complete method/helper/manager and P1 acceptance remain incomplete.
+
 | Authority | Responsibility |
 | --- | --- |
 | [Documentation index](docs/README.md) | Actual documents, their status, and maintenance rules |
@@ -16,6 +18,10 @@ Read these authorities before changing the corresponding area:
 | [Architecture](docs/design/architecture.md) and [execution model](docs/design/execution-model.md) | State ownership, platform execution channels, callbacks, window coordination |
 | [Frame](docs/contracts/frame.md), [lifecycle](docs/contracts/lifecycle.md), and [C ABI](docs/contracts/c-abi.md) | Proposed caller guarantees; concrete SDK contracts are finalized in P3 |
 | [Development guide](docs/guides/development.md) | Commands available now and build/test responsibilities to implement later |
+
+The later formal ScreenDC component run failed two black-image assertions after GDI regression: both source/Rust were black, including source-only after the presentation barrier. All raw images/logs remain archived; earlier isolated passes do not supersede this failure. ScreenDC fixtures now reuse the existing dedicated rendering/UI owner, without compiling the PrintWindow backend in ScreenDC-only native targets. Validate that changed fixture premise separately and retain strict pixels; do not assume DwmFlush alone establishes readiness.
+
+The pumped-owner follow-up still failed both black-image assertions despite observed WM_PAINT and valid owner identities; do not claim a fixture fix. Read-only idle/power/foreground evidence suggests a powered-off display, pending user confirmation, and does not retroactively reclassify assertion failures. Independent callback-module lifetime and scripted helpers pass. The PrintWindow-only filtered regression also retained cold-process resource and original-popup black-image failures; its Print-enabled source branch is unchanged by the fixture-sharing guards. No component/phase acceptance or successful PrintWindow regression is asserted.
 
 Keep each detailed rule in its authority; this file summarizes constraints and links to them. User authorization and preferences from the current task still apply; do not invent another approval requirement for work already authorized.
 

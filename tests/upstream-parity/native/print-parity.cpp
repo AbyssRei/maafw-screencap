@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "print-parity.h"
 #include "gdi-probe-internal.hpp"
+#if defined(MFS_UPSTREAM_PRINT_CPP)
 #include "Screencap/PrintWindowScreencap.h"
+#endif
 #include <array>
 #include <algorithm>
 #include <climits>
@@ -84,14 +86,17 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
     return DefWindowProcW(hwnd, message, wparam, lparam);
 }
 
+#if defined(MFS_UPSTREAM_PRINT_CPP)
 bool region(int32_t x, int32_t y, int32_t width, int32_t height, const cv::Mat& image)
 {
     return x >= 0 && y >= 0 && width > 0 && height > 0
         && static_cast<int64_t>(x) + width <= image.cols
         && static_cast<int64_t>(y) + height <= image.rows;
 }
+#endif
 }
 
+#if defined(MFS_UPSTREAM_PRINT_CPP)
 int32_t mfs_print_parity_reference(void* hwnd, MfsParityImage* output)
 {
     if (!output) { return 1; }
@@ -119,6 +124,8 @@ int32_t mfs_print_parity_overlay(void* destination, void* source, int32_t sx, in
     catch (const std::bad_alloc&) { return 3; }
     catch (...) { return 2; }
 }
+
+#endif
 
 static int32_t create_fixture(int32_t width, int32_t height, int32_t pw, int32_t ph,
     int32_t offset_x, int32_t offset_y, uint32_t mode, bool child_target, MfsPrintFixture* output)
@@ -257,6 +264,7 @@ int32_t mfs_print_parity_layout(uint64_t* output, size_t capacity)
     return 0;
 }
 
+#if defined(MFS_UPSTREAM_PRINT_CPP)
 int32_t mfs_print_parity_intersection(int32_t cw, int32_t ch, int32_t pw, int32_t ph,
     int64_t ox, int64_t oy, int32_t* output, size_t capacity)
 {
@@ -279,3 +287,4 @@ int32_t mfs_print_parity_intersection(int32_t cw, int32_t ch, int32_t pw, int32_
     output[5] = destination.height;
     return 0;
 }
+#endif

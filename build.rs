@@ -57,9 +57,11 @@ fn main() {
             .expect("prepared Cargo feature selection");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_SCREEN_DC");
         assert!(
             (std::env::var_os("CARGO_FEATURE_WINDOWS_GDI").is_none()
-                && std::env::var_os("CARGO_FEATURE_WINDOWS_PRINT_WINDOW").is_none())
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_PRINT_WINDOW").is_none()
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_SCREEN_DC").is_none())
                 || selected.enabled[0],
             "Windows capture backends cannot be enabled when the prepared Windows family is OFF"
         );
@@ -97,12 +99,26 @@ fn main() {
     println!("cargo::rerun-if-changed=build-support/windows-print-window.txt");
     println!("cargo::rerun-if-changed=build-support/windows-gdi-common.txt");
     println!("cargo::rerun-if-changed=build-support/windows-window-coordination.txt");
-    #[cfg(feature = "windows-print-window")]
+    println!("cargo::rerun-if-changed=build-support/windows-screen-window.txt");
+    #[cfg(any(feature = "windows-print-window", feature = "windows-screen-dc"))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
             .join("windows_window_coordination.rs");
-        let input =
-            std::fs::read_to_string("build-support/windows-window-coordination.txt").unwrap();
+        let mut input = String::new();
+        for (enabled, path) in [
+            (
+                cfg!(feature = "windows-print-window"),
+                "build-support/windows-window-coordination.txt",
+            ),
+            (
+                cfg!(feature = "windows-screen-dc"),
+                "build-support/windows-screen-window.txt",
+            ),
+        ] {
+            if enabled {
+                input.push_str(&std::fs::read_to_string(path).unwrap());
+            }
+        }
         let mut args = vec![
             "--out",
             out.to_str().unwrap(),
@@ -117,7 +133,11 @@ fn main() {
         );
         windows_bindgen::bindgen(args);
     }
-    #[cfg(any(feature = "windows-gdi", feature = "windows-print-window"))]
+    #[cfg(any(
+        feature = "windows-gdi",
+        feature = "windows-print-window",
+        feature = "windows-screen-dc"
+    ))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         assert_eq!(
             std::env::var("TARGET").as_deref(),
@@ -129,7 +149,7 @@ fn main() {
         let mut input = std::fs::read_to_string("build-support/windows-gdi-common.txt").unwrap();
         for (enabled, path) in [
             (
-                cfg!(feature = "windows-gdi"),
+                cfg!(any(feature = "windows-gdi", feature = "windows-screen-dc")),
                 "build-support/windows-gdi.txt",
             ),
             (

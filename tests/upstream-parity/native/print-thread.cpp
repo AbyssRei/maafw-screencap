@@ -115,12 +115,16 @@ void run(Owner& owner, Arguments arguments) noexcept
                     result = foreground == owner.fixture.hwnd ? 0 : 5;
                 }
                 else if (command == Command::prepare) {
+#if defined(MFS_UPSTREAM_PRINT_CPP)
                     if (!owner.anchor) {
                         owner.anchor = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"mfs activation anchor",
                             WS_POPUP | WS_VISIBLE, 700, 500, 37, 23, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
                         if (owner.anchor) { UpdateWindow(owner.anchor); }
                     }
                     result = owner.anchor ? mfs_print_pseudo_prepare(owner.fixture.hwnd, owner.anchor, parameter) : 1;
+#else
+                    result = 1; // ScreenDC reuses rendering/owner lifetime only.
+#endif
                 }
                 {
                     std::lock_guard lock(owner.mutex);

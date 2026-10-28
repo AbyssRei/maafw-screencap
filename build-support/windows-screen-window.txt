@@ -1,0 +1,34 @@
+# Copyright (C) 2026 AbyssRei
+# SPDX-License-Identifier: LGPL-3.0-or-later
+HWND
+HMONITOR
+RECT
+POINT
+MONITORINFO
+GetLastError
+IsWindow
+IsIconic
+IsZoomed
+GetForegroundWindow
+SetForegroundWindow
+GetTickCount
+SetWindowPos
+HWND_TOP
+HWND_TOPMOST
+HWND_NOTOPMOST
+SWP_NOMOVE
+SWP_NOSIZE
+SWP_SHOWWINDOW
+SWP_NOZORDER
+SWP_NOACTIVATE
+SWP_ASYNCWINDOWPOS
+MonitorFromWindow
+MONITOR_DEFAULTTONEAREST
+GetMonitorInfoW
+GetWindowRect
+GetClientRect
+ClientToScreen
+GetDpiForWindow
+GetWindowLongPtrW
+GWL_STYLE
+WS_POPUP
