@@ -485,3 +485,67 @@ fn releases_mapping_and_result_owner_when_cache_clone_throws()
     );
     Ok(())
 }
+
+#[cfg(feature = "prototype-windows-com")]
+#[test]
+#[ignore = "explicit native target destruction after a real FramePool capture"]
+fn preserves_cached_pixels_and_native_state_after_target_is_destroyed()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::backends::windows::parity_adapter::{Adapter, Image};
+    // SAFETY: Own only this successful caller-thread initialization reference.
+    unsafe { host::RoInitialize(host::RO_INIT_MULTITHREADED).ok()? };
+    let owned = HostInitialization(true);
+    let adapter = Adapter::load()?;
+    let baseline = adapter.image_owners()?;
+    let mut fixture = adapter.render_fixture(96, 64)?;
+    let mut capture: FramePoolCapture<Image> = FramePoolCapture::new(fixture.hwnd());
+    let mut converter = adapter.converter(0);
+    let first = capture.capture(&mut converter);
+    assert!(first.evidence.cleanup.iter().all(Option::is_none));
+    let first = first
+        .image
+        .map_err(|error| format!("first capture: {error:?}"))?;
+    assert_eq!(first.dimensions(), (96, 64));
+    // Known interior comes from the independent fixture renderer. Full source
+    // byte parity remains in the process-isolated original-image cases.
+    for y in 8..56 {
+        for x in 8..88 {
+            let expected = if x < 32 {
+                [0x1f, 0x53, 0xa7]
+            } else if y < 32 {
+                [0xb9, 0x4d, 0x27]
+            } else {
+                [0x3b, 0xe2, 0x81]
+            };
+            let offset = (y * 96 + x) * 3;
+            assert_eq!(first.bytes()[offset..offset + 3], expected);
+        }
+    }
+    let saved = first.bytes().to_vec();
+    let cache_address = capture.cached.as_ref().unwrap().address();
+    fixture.close()?; // Actual owner-thread destroy and completed worker join.
+    assert!(!unsafe { IsWindow(Some(capture.window)) }.as_bool());
+    let lost = capture.capture(&mut converter);
+    assert!(matches!(lost.image, Err(Error::InvalidWindow)));
+    assert_eq!(
+        (lost.evidence.polls, lost.evidence.target_copy_bytes),
+        (0, 0)
+    );
+    assert!(!lost.evidence.replayed);
+    assert!(lost.evidence.cleanup.iter().all(Option::is_none));
+    assert!(capture.pool.is_some() && capture.session.is_some() && capture.item.is_some());
+    assert_eq!(capture.cached.as_ref().unwrap().address(), cache_address);
+    assert_eq!(capture.cached.as_ref().unwrap().bytes(), saved);
+    assert_eq!((converter.conversions, converter.clones), (1, 1));
+    assert_eq!(adapter.image_owners()?, baseline + 2);
+    let closed = capture.uninit();
+    println!("FramePool destroyed-target cleanup: {closed:?}");
+    assert!(closed.cleanup.iter().all(Option::is_none));
+    drop(capture);
+    drop(owned);
+    assert_eq!(first.bytes(), saved);
+    assert_eq!(adapter.image_owners()?, baseline + 1);
+    assert_eq!(wgc::LIVE_COMPLETIONS.load(Ordering::Acquire), 0);
+    assert_eq!(wgc::EVENT_CLOSE_ERROR.load(Ordering::Acquire), 0);
+    Ok(())
+}

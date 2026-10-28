@@ -67,6 +67,8 @@ cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-r
 
 原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积，真实零客户区原生矩阵仍待补齐。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
 
+Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像素，再在 UI owner 上销毁目标并完成 join；下一次捕获在窗口有效性检查立即失败，不继续轮询、转换或替换旧缓存。显式 session/pool 关闭通过，关闭后 CPU 图像仍有效。此项保留上游失败时的部分状态；完整原 C++ 目标销毁/故障全过程对照仍待完成。
+
 安全适配明确计入差异：验证 [CopyResource 所需描述符关系](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-copyresource)、ContentSize、ROI、RowPitch 和整数范围，仅复制初始化的目标 BGRA 行供私有转换器使用，避免将未定义的映射 padding 构造成 Rust slice。转换及 cache clone 仍在 Unmap 前；这新增一次目标 BGRA CPU 复制，不能描述为消除工作。工厂使用显式 owner，保留 SDK 的 implicit MTA 和任意激活 HRESULT 失败后的 DLL 层级尝试，避免投影的全局裸指针缓存；相应寿命和失败矩阵仍需扩充。border 请求保留 Completed handler + manual-reset event 的原 5 秒等待，超时不取消原生操作，晚到 delegate 只持有独立状态，不访问捕获对象。SDK 工厂/等待算法的 Microsoft 版权与 [MIT 文本](../../licenses/cppwinrt-MIT.txt)随产品保留，所用头文件身份与副本进入外部批次。此局部实现和检查不接受完整后端或 P1。
 
 本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空/最小化窗口与被封住的转换异常。故障对照以隔离命名空间编译原始函数体，通过真实 GDI 对象记录创建、复制、转换及清理的原生边界响应；14 组正常/故障/组合场景分别核对主错误、清理错误、调用顺序及 CPU owner 释放。夹具先记录捕获实现遗留的资源，再单独回收，不能据此声称产品在原生清理失败后已成功关闭。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
