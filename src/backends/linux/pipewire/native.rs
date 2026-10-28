@@ -15,7 +15,10 @@ use std::{
     mem,
     panic::{AssertUnwindSafe, catch_unwind},
     ptr,
-    sync::atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicI32, AtomicU32, AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 #[path = "native_pod.rs"]
@@ -50,7 +53,7 @@ struct Callbacks {
     state: UnsafeCell<State>,
     fault: AtomicU32,
     queue_error: AtomicI32,
-    dequeued: AtomicU64,
+    dequeued: Arc<AtomicU64>,
     returned: AtomicU64,
     copies: AtomicU64,
     allocated: AtomicU64,
@@ -297,7 +300,7 @@ impl Native {
             state: UnsafeCell::new(State::default()),
             fault: AtomicU32::new(0),
             queue_error: AtomicI32::new(0),
-            dequeued: AtomicU64::new(0),
+            dequeued: Arc::try_new(AtomicU64::new(0))?,
             returned: AtomicU64::new(0),
             copies: AtomicU64::new(0),
             allocated: AtomicU64::new(0),

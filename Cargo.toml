@@ -37,6 +37,10 @@ wayland-protocols-wlr = { version = "0.3", optional = true, features = ["client"
 rustix = { version = "1", optional = true, features = ["fs", "event"] }
 memmap2 = { version = "0.9", optional = true }
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+# Loader ABI for explicit private OpenCV acceptance adapters, never core runtime.
+libc = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = { version = "0.6", optional = true }
 block2 = { version = "0.6", optional = true }
