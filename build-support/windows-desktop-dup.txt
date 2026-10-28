@@ -18,6 +18,7 @@ IDXGIOutput1::DuplicateOutput
 IDXGIOutputDuplication::{AcquireNextFrame,ReleaseFrame}
 IDXGIResource::{}
 DXGI_ERROR_ACCESS_LOST
+DXGI_ERROR_INVALID_CALL
 MonitorFromWindow
 MONITOR_DEFAULTTONEAREST
 GetClientRect

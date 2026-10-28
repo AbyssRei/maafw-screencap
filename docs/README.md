@@ -9,7 +9,7 @@ P1 另已加入独立 ScreenDC 内部实现和默认路径的 ForegroundUtils/Hw
 FramePool 也已开始独立内部迁移与显式 `upstream-parity frame-pool` 局部对照：本机四个 Rust 调用环境匹配原图，缓存克隆与关闭后持帧已有实际证据，另有 20 次 Rust 完整取帧/关闭生命周期与 dispatcher 完成退出。伪最小化包装也已迁移，但本机原源码最小化场景的彩色图样检查返回黑图，匹配的 Rust 字节/状态仅记诊断；完整源码重复/故障生命周期、原生错误/重建、包装验收和 manager 仍待完成；不构成公共 SDK 或阶段验收。
 
 
-DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` 入口。本机两个原源码进程和 20 次混合 Rust 生命周期通过受控目标图样及持帧；原映射 Mat 生命周期缺陷由明确计量的安全复制适配，完整原生故障、选源/旋转和 manager 仍待验收。
+DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` 入口。本机三个原源码进程（含空 HWND 的 adapter 0/output 0）、20 次混合 Rust 生命周期及独立转换/异常边界检查通过受控目标图样、帧归还与持帧；原映射 Mat 生命周期缺陷由明确计量的安全复制适配，完整原生故障、多输出/旋转和 manager 仍待验收。
 
 | 文档 | 职责及当前状态 |
 | --- | --- |

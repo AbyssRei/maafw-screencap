@@ -9,6 +9,7 @@
 #include <chrono>
 #include <stdexcept>
 #include <opencv2/core.hpp>
+#include <wrl/client.h>
 namespace {
 struct Fixture {
     MfsPrintFixture value {};
@@ -43,7 +44,7 @@ int wmain(int argc, wchar_t** argv)
     if (argc != 3) { return 1; }
     const std::wstring_view mode(argv[1]);
     const std::filesystem::path output(argv[2]);
-    if ((mode != L"desktop" && mode != L"window") || !output.is_absolute() || !std::filesystem::is_directory(output)) { return 1; }
+    if ((mode != L"desktop" && mode != L"window" && mode != L"default-output") || !output.is_absolute() || !std::filesystem::is_directory(output)) { return 1; }
     try {
         Fixture fixture;
         const auto created = mfs_print_thread_fixture(96,64,0,0,0,0,MFS_RENDER_DISABLE_TRANSITIONS | MFS_RENDER_TOPMOST,&fixture.value);
@@ -55,6 +56,27 @@ int wmain(int argc, wchar_t** argv)
         POINT origin {};
         RECT client {};
         if (!GetMonitorInfoW(MonitorFromWindow(target,MONITOR_DEFAULTTONEAREST),&monitor) || !GetClientRect(target,&client) || !ClientToScreen(target,&origin)) { return 2; }
+        if (mode==L"default-output") {
+            // Independent preflight: upstream's "primary" means adapter 0 /
+            // output 0, which is not assumed to be the OS primary monitor.
+            Microsoft::WRL::ComPtr<IDXGIFactory> factory;
+            Microsoft::WRL::ComPtr<IDXGIAdapter> adapter;
+            Microsoft::WRL::ComPtr<IDXGIOutput> selected;
+            DXGI_OUTPUT_DESC description {};
+            if (FAILED(CreateDXGIFactory(IID_PPV_ARGS(factory.GetAddressOf()))) ||
+                FAILED(factory->EnumAdapters(0,adapter.GetAddressOf())) ||
+                FAILED(adapter->EnumOutputs(0,selected.GetAddressOf())) ||
+                FAILED(selected->GetDesc(&description))) { return 2; }
+            monitor.rcMonitor=description.DesktopCoordinates;
+            const auto& r=monitor.rcMonitor;
+            std::cout << "default_output " << r.left << ' ' << r.top << ' ' << r.right << ' ' << r.bottom
+                << " rotation=" << description.Rotation << " attached=" << description.AttachedToDesktop << std::endl;
+            if (!description.AttachedToDesktop || origin.x<r.left || origin.y<r.top ||
+                static_cast<int64_t>(origin.x)+96>r.right || static_cast<int64_t>(origin.y)+64>r.bottom) {
+                std::cout << "MFS_MISSING_ENVIRONMENT:default_output_fixture" << std::endl;
+                return 77;
+            }
+        }
         cv::Mat retained;
         const auto observe = [&](auto& source) {
             const auto start = std::chrono::steady_clock::now();
@@ -63,7 +85,7 @@ int wmain(int argc, wchar_t** argv)
             if (image) { retained = std::move(*image); }
         };
         if (mode==L"window") { MaaNS::CtrlUnitNs::DesktopDupWindowScreencap source(target); observe(source); }
-        else { MaaNS::CtrlUnitNs::DesktopDupScreencap source(target); observe(source); }
+        else { MaaNS::CtrlUnitNs::DesktopDupScreencap source(mode==L"default-output" ? nullptr : target); observe(source); }
         if (retained.empty()) { return 4; }
         save(retained,output/"image.bgr");
         std::cout << "source_image " << retained.cols << ' ' << retained.rows << ' ' << retained.step[0] << std::endl;
