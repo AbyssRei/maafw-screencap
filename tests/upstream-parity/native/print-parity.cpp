@@ -33,6 +33,7 @@ struct Fixture {
     Pattern main_pattern {};
     Pattern child_pattern {};
     Pattern popup_pattern { true };
+    bool transitions_disabled = false;
 };
 
 void draw(HWND hwnd, HDC dc, Pattern& pattern) noexcept
@@ -132,6 +133,9 @@ static int32_t create_fixture(int32_t width, int32_t height, int32_t pw, int32_t
 {
     if (!output) { return 1; }
     *output = {};
+    const bool disable_transitions = (mode & MFS_RENDER_DISABLE_TRANSITIONS) != 0;
+    mode &= ~MFS_RENDER_DISABLE_TRANSITIONS;
+    if (disable_transitions && (mode != 0 || child_target)) { return 1; }
     const int64_t px = 260LL + offset_x + (child_target ? 7 : 0);
     const int64_t py = 180LL + offset_y + (child_target ? 5 : 0);
     const int64_t root_width = static_cast<int64_t>(width) + (child_target ? 24 : 0);
@@ -152,11 +156,20 @@ static int32_t create_fixture(int32_t width, int32_t height, int32_t pw, int32_t
     window_class.lpszClassName = fixture->name;
     if (!RegisterClassExW(&window_class)) { return 1; }
     fixture->registered = true;
-    fixture->main = CreateWindowExW(0, fixture->name, L"mfs PrintWindow main", WS_POPUP | WS_VISIBLE,
+    fixture->main = CreateWindowExW(0, fixture->name, L"mfs PrintWindow main", WS_POPUP | (disable_transitions ? 0 : WS_VISIBLE),
         260, 180, static_cast<int>(root_width), static_cast<int>(root_height), nullptr, nullptr,
         fixture->module, &fixture->main_pattern);
     if (!fixture->main) { return 1; }
     output->hwnd = fixture->main;
+    if (disable_transitions) {
+        // Configure this owned window while hidden, before its first show.
+        // No global animation setting, capture sleep or pixel retry is added.
+        const BOOL value = TRUE;
+        if (FAILED(DwmSetWindowAttribute(fixture->main, DWMWA_TRANSITIONS_FORCEDISABLED, &value, sizeof(value)))) { return 1; }
+        fixture->transitions_disabled = true;
+        ShowWindow(fixture->main, SW_SHOWNORMAL);
+        if (!IsWindowVisible(fixture->main)) { return 1; }
+    }
     RECT client {};
     if (!GetClientRect(fixture->main, &client) || client.right != root_width || client.bottom != root_height) { return 1; }
     UpdateWindow(fixture->main);
@@ -249,6 +262,7 @@ int32_t mfs_print_parity_stats(void* owner, uint64_t* output, size_t capacity)
         output[9] = fixture.popup_pattern.paint_dc;
         output[10] = fixture.popup_pattern.paint_bitmap;
     }
+    if (capacity >= 12) { output[11] = fixture.transitions_disabled; }
     return 0;
 }
 
@@ -261,6 +275,7 @@ int32_t mfs_print_parity_layout(uint64_t* output, size_t capacity)
     };
     if (!output || capacity < layout.size()) { return 1; }
     std::copy(layout.begin(), layout.end(), output);
+    if (capacity >= 10) { output[9] = MFS_RENDER_DISABLE_TRANSITIONS; }
     return 0;
 }
 

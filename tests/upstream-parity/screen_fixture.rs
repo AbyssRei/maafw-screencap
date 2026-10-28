@@ -32,7 +32,7 @@ impl Adapter {
                 self.module.symbol(c"mfs_print_thread_close")?,
             )
         };
-        let mut observed = [0_u64; 9];
+        let mut observed = [0_u64; 10];
         // SAFETY: Exact initialized writable layout array.
         if unsafe { layout(observed.as_mut_ptr(), observed.len()) } != 0 {
             return Err("render fixture layout query failed".into());
@@ -47,6 +47,7 @@ impl Adapter {
             offset_of!(Span, height),
             offset_of!(Span, popup_width),
             offset_of!(Span, popup_height),
+            0x100,
         ]
         .map(|n| u64::try_from(n).unwrap());
         if observed != expected {
@@ -60,7 +61,7 @@ impl Adapter {
         };
         // SAFETY: Exact writable descriptor; even an error may transfer a partial
         // owner, which the guard closes before releasing its callback module.
-        let status = unsafe { create(37, 23, 0, 0, 0, 0, 0, &mut fixture.span) };
+        let status = unsafe { create(37, 23, 0, 0, 0, 0, 0x100, &mut fixture.span) };
         if status != 0 {
             fixture.close()?;
             return Err(format!("render fixture create {status}").into());
@@ -75,6 +76,12 @@ impl Adapter {
         let info = fixture.thread_info()?;
         if info[0] == 0 || info[0] == info[1] || info[0] != info[2] {
             return Err("render fixture must have a separate actual UI owner".into());
+        }
+        if fixture.stats()?[11] != 1 {
+            return Err(
+                "ScreenDC fixture did not disable owned-window transitions before first show"
+                    .into(),
+            );
         }
         Ok(fixture)
     }
@@ -93,11 +100,11 @@ impl Fixture {
         }
         Ok(output)
     }
-    pub fn stats(&self) -> Result<[u64; 11], Box<dyn Error>> {
+    pub fn stats(&self) -> Result<[u64; 12], Box<dyn Error>> {
         type Stats = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
         // SAFETY: UI owner reads its own counters and replies synchronously.
         let stats: Stats = unsafe { self.module.symbol(c"mfs_print_thread_stats")? };
-        let mut output = [0; 11];
+        let mut output = [0; 12];
         if unsafe { stats(self.span.owner, output.as_mut_ptr(), output.len()) } != 0 {
             return Err("render owner statistics failed".into());
         }
