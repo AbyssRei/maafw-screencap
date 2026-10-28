@@ -112,10 +112,26 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $executable -Destination $saved
     Save $saved
     Step pipewire-reference-linkage ldd @($executable)
-    foreach($license in @((Join-Path $cvSource LICENSE),(Join-Path $drmSource COPYING))){
-        $saved=Join-Path $refInputs ((Split-Path -Leaf (Split-Path -Parent $license))+'-'+(Split-Path -Leaf $license))
-        Copy-Item -LiteralPath $license -Destination $saved
+    # libdrm's resolved source has no root COPYING. Preserve its actual project
+    # license declaration/full notice plus all canonical header notices. The
+    # complete source tar above remains an independent reconstructable input.
+    foreach($item in @(@((Join-Path $cvSource LICENSE),'opencv-LICENSE.txt'),@((Join-Path $drmSource meson.build),'libdrm-meson.build'),@((Join-Path $drmSource include/drm/README),'libdrm-headers-README.txt'))){
+        $saved=Join-Path $refInputs $item[1]
+        Copy-Item -LiteralPath $item[0] -Destination $saved
         Save $saved
     }
+    $headerNotices=Join-Path $refInputs libdrm-header-notices.tar
+    Step source-drm-header-notices tar @('-cf',$headerNotices,'-C',(Join-Path $drmSource include/drm),'.')
+    Save $headerNotices
+    $copying=Join-Path $drmSource COPYING
+    $hasCopying=Test-Path -LiteralPath $copying -PathType Leaf
+    if($hasCopying){
+        $saved=Join-Path $refInputs libdrm-COPYING
+        Copy-Item -LiteralPath $copying -Destination $saved
+        Save $saved
+    }
+    $licenseScope=Join-Path $refInputs libdrm-license-scope.txt
+    "Root COPYING present=$hasCopying. Preserve actual meson.build project license declaration/notice, complete canonical header notices including drm_fourcc.h/drm.h, header README and full source. Only native declarations are consumed; this diagnostic does not link or distribute libdrm runtime. Exact license identities remain in those archived sources; do not infer a blanket license from a missing filename."|Set-Content -LiteralPath $licenseScope -Encoding utf8
+    Save $licenseScope
     return $executable
 }
