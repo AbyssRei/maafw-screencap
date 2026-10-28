@@ -65,6 +65,7 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     # those unused image-I/O dependencies, retaining CPU/IPP/HAL optimization.
     $unusedCodecs=@('AVIF','JPEG','JPEGXL','WEBP','OPENJPEG','JASPER','OPENEXR','PNG','SPNG','TIFF','GDAL','GDCM')
     $cvOptions+=@($unusedCodecs|ForEach-Object{"-DWITH_$($_)=OFF"})
+    $cvOptions+='-DENABLE_PIC=ON'
     $configuration=Join-Path $refInputs native-configuration.json
     Json $configuration ([ordered]@{
         opencv_release=$cvRelease.tag_name;opencv_commit=$cvCommit;drm_tag=$selected.name;drm_commit=$selected.commit.id
@@ -112,6 +113,12 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $executable -Destination $saved
     Save $saved
     Step pipewire-reference-linkage ldd @($executable)
+    $adapter=Join-Path $refBuild libmfs_pipewire_opencv.so
+    $saved=Join-Path $refInputs libmfs_pipewire_opencv.so
+    Copy-Item -LiteralPath $adapter -Destination $saved
+    Save $saved
+    Step pipewire-opencv-adapter-linkage ldd @($adapter)
+    $env:MFS_P1_PIPEWIRE_OPENCV_ADAPTER=$adapter
     # libdrm's resolved source has no root COPYING. Preserve its actual project
     # license declaration/full notice plus all canonical header notices. The
     # complete source tar above remains an independent reconstructable input.

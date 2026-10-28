@@ -4,6 +4,9 @@ use super::*;
 use crate::backends::linux::pipewire::{Consumer, Conversion, Converter};
 use std::{env, ffi::CStr, fs, path::Path};
 
+#[path = "opencv_tests.rs"]
+mod opencv;
+
 struct RawAudit;
 impl Converter<RawFrame> for RawAudit {
     type Image = RawFrame;
