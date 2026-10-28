@@ -42,6 +42,73 @@ fn task_ids() -> Vec<std::ffi::OsString> {
     tasks.sort();
     tasks
 }
+#[derive(Debug)]
+struct Task {
+    id: std::ffi::OsString,
+    name: String,
+    started: u64,
+    flags: u64,
+    address_space: u64,
+    resident_pages: i64,
+}
+fn task(id: &std::ffi::OsStr) -> Option<Task> {
+    let text = match fs::read_to_string(Path::new("/proc/self/task").join(id).join("stat")) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+        Err(error) => panic!("cannot inspect task {id:?}: {error}"),
+    };
+    // proc stat fields 9/22/23/24, after the final ')' of field 2. The
+    // comm field itself can contain whitespace/parentheses; split it first.
+    let fields: Vec<_> = text
+        .rsplit_once(')')
+        .unwrap()
+        .1
+        .split_whitespace()
+        .collect();
+    Some(Task {
+        id: id.to_owned(),
+        name: text
+            .split_once('(')
+            .unwrap()
+            .1
+            .rsplit_once(')')
+            .unwrap()
+            .0
+            .to_owned(),
+        started: fields[19].parse().unwrap(),
+        flags: fields[6].parse().unwrap(),
+        address_space: fields[20].parse().unwrap(),
+        resident_pages: fields[21].parse().unwrap(),
+    })
+}
+fn live_tasks() -> Vec<Task> {
+    task_ids().iter().filter_map(|id| task(id)).collect()
+}
+fn only_retiring_tasks(
+    actual: &[std::ffi::OsString],
+    baseline: &[std::ffi::OsString],
+    live: &[Task],
+) -> bool {
+    baseline.iter().all(|id| actual.contains(id))
+        && actual.iter().filter(|id| !baseline.contains(id)).all(|id| {
+            let Some(before) = live.iter().find(|before| before.id == *id) else {
+                return false; // Never forgive an unknown task or substituted TID.
+            };
+            if before.name != "MaaScreencap" || before.flags & 0x4 != 0 || before.address_space == 0
+            {
+                return false;
+            }
+            task(id).is_none_or(|after| {
+                // PF_EXITING is kernel state, not a public capture capability.
+                // No userspace address space may survive close. A still-live
+                // worker is a failure, even if it might stop during a later wait.
+                after.started == before.started
+                    && after.flags & 0x4 != 0
+                    && after.address_space == 0
+                    && after.resident_pages == 0
+            })
+        })
+}
 fn task_snapshot(directory: &Path, label: &str, tasks: &[std::ffi::OsString]) {
     let mut output = format!("tasks observed={} ids={tasks:?}\n", tasks.len());
     for tid in tasks {
@@ -52,13 +119,55 @@ fn task_snapshot(directory: &Path, label: &str, tasks: &[std::ffi::OsString]) {
     }
     fs::write(directory.join(format!("tasks-{label}.txt")), output).unwrap();
 }
-fn assert_resources(directory: &Path, cycle: usize, fds: usize, threads: usize) {
+fn assert_resources(
+    directory: &Path,
+    cycle: usize,
+    fds: usize,
+    baseline: &[std::ffi::OsString],
+    live: &[Task],
+) {
     let actual_fds = count("/proc/self/fd");
     let tasks = task_ids();
     let actual_threads = tasks.len();
-    if actual_fds != fds || actual_threads != threads {
+    let mut settled = tasks == baseline;
+    if actual_fds == fds && !settled && only_retiring_tasks(&tasks, baseline, live) {
+        task_snapshot(
+            directory,
+            &format!("cycle-{cycle}-kernel-retirement"),
+            &tasks,
+        );
+        fs::write(
+            directory.join(format!("tasks-cycle-{cycle}-live-identities.txt")),
+            format!("{live:#?}\n"),
+        )
+        .unwrap();
+        // Native stop/join and full destruction have already completed. Wait
+        // only for known PF_EXITING/no-mm tasks to leave proc, never for live
+        // callbacks, asynchronous cleanup, an FD, or another capture attempt.
+        let start = Instant::now();
+        loop {
+            let current = task_ids();
+            if current == baseline {
+                settled = true;
+                break;
+            }
+            if !only_retiring_tasks(&current, baseline, live)
+                || start.elapsed() >= Duration::from_millis(100)
+            {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
         eprintln!(
-            "native resource mismatch cycle={cycle} fds={actual_fds}/{fds} threads={actual_threads}/{threads} ids={tasks:?}; diagnostic observations cannot change this failure"
+            "kernel task retirement cycle={cycle} immediate_tasks={actual_threads} baseline={} settled={settled} elapsed_us={}",
+            baseline.len(),
+            start.elapsed().as_micros()
+        );
+    }
+    if actual_fds != fds || !settled {
+        eprintln!(
+            "native resource mismatch cycle={cycle} fds={actual_fds}/{fds} threads={actual_threads}/{} ids={tasks:?}; diagnostic observations cannot change this failure",
+            baseline.len()
         );
         task_snapshot(directory, &format!("cycle-{cycle}-mismatch"), &tasks);
         // Observe disappearance/continued existence only AFTER fixing the failed
@@ -70,7 +179,7 @@ fn assert_resources(directory: &Path, cycle: usize, fds: usize, threads: usize) 
         }
     }
     assert_eq!(actual_fds, fds, "fd count after cycle={cycle}");
-    assert_eq!(actual_threads, threads, "thread count after cycle={cycle}");
+    assert!(settled, "unretired/unknown/live task after cycle={cycle}");
 }
 fn marker(frame: &RawFrame) -> u32 {
     assert_eq!(
@@ -151,8 +260,8 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
         expected
     );
     let fds = count("/proc/self/fd");
-    let threads = count("/proc/self/task");
-    task_snapshot(Path::new(&directory), "baseline", &task_ids());
+    let baseline = task_ids();
+    task_snapshot(Path::new(&directory), "baseline", &baseline);
     let mut held = Vec::new();
     held.try_reserve_exact(60).unwrap();
     for cycle in 0..20 {
@@ -182,6 +291,7 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
             held.push((frame, serial));
             eprintln!("native Rust SHM cycle={cycle} call={call} marker={serial} copied_rgb=1");
         }
+        let live = live_tasks();
         if cycle == 0 {
             task_snapshot(Path::new(&directory), "first-live", &task_ids());
         }
@@ -201,7 +311,7 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
         eprintln!("native Rust SHM closed cycle={cycle} evidence={evidence:?}");
         drop(native);
         drop(balance_init);
-        assert_resources(Path::new(&directory), cycle, fds, threads);
+        assert_resources(Path::new(&directory), cycle, fds, &baseline, &live);
         for (frame, serial) in &held {
             assert_eq!(marker(frame), *serial, "retained sample identity changed");
         }
