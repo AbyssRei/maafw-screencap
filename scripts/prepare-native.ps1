@@ -42,7 +42,7 @@ if ($PrintWindowParity) {
     $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
 if ($FramePoolParity) {
-    $pending.Add('FramePool is a partial P1 migration, not a backend/phase exit. Three separate Rust caller contexts compare original image bytes, clone owners, native close, callback event, apartment and DPI. Repeated lifecycles, Rust dispatcher, native failure/initialization-exception/cleanup, complete polling/cache/resize/permission/format, pseudo wrapper and manager matrices remain pending. Safety target-row copy and scoped factory ownership differ from direct mapped conversion/global projection caching and are explicitly counted/classified; old WGC unload AV remains unresolved.')
+    $pending.Add('FramePool is a partial P1 migration, not a backend/phase exit. Four separate Rust caller contexts compare original image bytes, clone owners, native close, callback event, apartment and DPI; twenty Rust capture/window/device lifecycles retain all images through completed dispatcher shutdown. Full repeated source/fault comparisons, native failure/initialization-exception/cleanup, complete polling/cache/resize/permission/format, pseudo wrapper and manager matrices remain pending. Safety target-row copy and scoped factory ownership differ from direct mapped conversion/global projection caching and are explicitly counted/classified; old WGC unload AV remains unresolved.')
 } elseif ($FramePoolContext) {
     $pending.Add('This P1 task observes only the unmodified C++ FramePool source in four isolated caller contexts. It implements no Rust FramePool backend or SDK and does not accept Rust parity, full pixels/format/resize/permission/cache/timeout semantics or P1. Process-isolated factory/MTA state, known interior pixels and COM observations remain specific to this native environment.')
 } elseif ($GdiParity) {
@@ -121,7 +121,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact foreground case did not execute one native test'
             }
         }
-        if ($Name -match '^frame-pool-rust-(uninitialized|mta|sta)$' -and $exitCode -eq 0) {
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles)$' -and $exitCode -eq 0) {
             if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact native FramePool case did not execute one test'
             }
@@ -523,17 +523,20 @@ try {
         $foregroundCase = 'backends::windows::print_window::tests::parity::pseudo_minimize::restores_original_attributes_after_real_foreground_reactivation'
         [string[]]$caseSelection = @($parityFilter, '--include-ignored', '--test-threads=1', '--nocapture')
         $frameCase = 'backends::windows::frame_pool::tests::captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners'
-        if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase) }
+        $frameLifecycleCase = 'backends::windows::frame_pool::tests::retains_pixels_across_twenty_complete_framepool_lifecycles'
+        if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
         if ($FramePoolParity) {
             Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
-            foreach ($modeName in @('uninitialized','mta','sta')) {
+            foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
                 $env:MFS_FRAMEPOOL_HOST_MODE = $modeName
                 $env:MFS_FRAMEPOOL_REFERENCE_PIXELS = Join-Path $frameContextEvidence "$modeName/source.bgr"
                 Step "frame-pool-rust-$modeName" cargo ($parityArguments + @('--', $frameCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
             }
+            $env:MFS_FRAMEPOOL_REFERENCE_PIXELS = Join-Path $frameContextEvidence 'mta-dispatcher/source.bgr'
+            Step 'frame-pool-rust-lifecycles' cargo ($parityArguments + @('--', $frameLifecycleCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
         if ($PrintWindowParity) {
             # Separate invocation preserves the required case and its native
