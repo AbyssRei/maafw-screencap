@@ -8,12 +8,13 @@
 #include <array>
 #include <condition_variable>
 #include <mutex>
+#include <limits>
 #include <new>
 #include <thread>
 
 namespace {
 constexpr UINT command_message = WM_APP + 0x71;
-enum class Command { none, stats, close, activate, prepare, restore_control };
+enum class Command { none, stats, close, activate, prepare, restore_control, updates, update_info };
 struct Owner {
     std::thread worker;
     std::mutex mutex;
@@ -31,6 +32,11 @@ struct Owner {
     Command command = Command::none;
     MfsPrintFixture fixture {};
     HWND anchor = nullptr;
+    HWND marker = nullptr;
+    bool marker_timer = false;
+    uint64_t marker_ticks = 0;
+    uint64_t marker_errors = 0;
+    std::array<uint64_t, 3> update_info {};
     std::array<uint64_t, 13> stats {};
     std::array<uint64_t, 5> activation {};
 };
@@ -42,12 +48,36 @@ struct Arguments {
 
 int32_t close_native(Owner& owner)
 {
-    int32_t status = mfs_print_parity_close(&owner.fixture.owner);
+    int32_t status = 0;
+    if (owner.marker) {
+        if (owner.marker_timer && !KillTimer(owner.marker, 1)) { status = 1; }
+        owner.marker_timer = false;
+        if (DestroyWindow(owner.marker)) { owner.marker = nullptr; }
+        else { status = 1; }
+    }
+    const auto fixture_status = mfs_print_parity_close(&owner.fixture.owner);
+    if (status == 0) { status = fixture_status; }
     if (owner.anchor) {
         if (DestroyWindow(owner.anchor)) { owner.anchor = nullptr; }
         else if (status == 0) { status = 1; }
     }
     return status;
+}
+
+void marker_frame(Owner& owner) noexcept
+{
+    bool failed = false;
+    HDC dc = GetDC(owner.marker);
+    HBRUSH brush = CreateSolidBrush((owner.marker_ticks & 1u) ? 0x001a2b3c : 0x004e5f60);
+    RECT rectangle {};
+    if (!dc || !brush || !GetClientRect(owner.marker, &rectangle)) { failed = true; }
+    else if (!FillRect(dc, &rectangle, brush)) { failed = true; }
+    if (brush && !DeleteObject(brush)) { failed = true; }
+    if (dc && ReleaseDC(owner.marker, dc) != 1) { failed = true; }
+    if (!GdiFlush() || FAILED(DwmFlush())) { failed = true; }
+    if (owner.marker_ticks != std::numeric_limits<uint64_t>::max()) { ++owner.marker_ticks; }
+    else { failed = true; }
+    if (failed && owner.marker_errors != std::numeric_limits<uint64_t>::max()) { ++owner.marker_errors; }
 }
 
 void run(Owner& owner, Arguments arguments) noexcept
@@ -84,7 +114,10 @@ void run(Owner& owner, Arguments arguments) noexcept
         bool closed = false;
         int received = 0;
         while (!closed && (received = GetMessageW(&message, nullptr, 0, 0)) > 0) {
-            if (!message.hwnd && message.message == command_message) {
+            if (owner.marker && message.hwnd == owner.marker && message.message == WM_TIMER && message.wParam == 1) {
+                marker_frame(owner);
+            }
+            else if (!message.hwnd && message.message == command_message) {
                 Command command;
                 uint32_t parameter;
                 {
@@ -145,6 +178,33 @@ void run(Owner& owner, Arguments arguments) noexcept
                                 || !GdiFlush() || FAILED(DwmFlush())) { result = 2; }
                         }
                     }
+                }
+                else if (command == Command::updates) {
+                    MONITORINFO info { sizeof(MONITORINFO) };
+                    const HWND target = static_cast<HWND>(owner.fixture.hwnd);
+                    RECT bounds {};
+                    if (owner.marker || !GetMonitorInfoW(MonitorFromWindow(target, MONITOR_DEFAULTTONEAREST), &info)
+                        || !GetWindowRect(target, &bounds)
+                        || static_cast<int64_t>(info.rcMonitor.right) - info.rcMonitor.left < 128
+                        || static_cast<int64_t>(info.rcMonitor.bottom) - info.rcMonitor.top < 96) { result = 1; }
+                    else {
+                        RECT marker { info.rcMonitor.right - 24, info.rcMonitor.bottom - 24,
+                            info.rcMonitor.right - 8, info.rcMonitor.bottom - 8 };
+                        RECT overlap {};
+                        if (IntersectRect(&overlap, &marker, &bounds)) { result = 5; }
+                        else {
+                            owner.marker = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_TOPMOST,
+                                L"STATIC", L"mfs desktop updates", WS_POPUP | WS_VISIBLE,
+                                marker.left, marker.top, 16, 16, nullptr, nullptr, GetModuleHandleW(nullptr), nullptr);
+                            owner.marker_timer = owner.marker && SetTimer(owner.marker, 1, 50, nullptr);
+                            result = owner.marker_timer ? 0 : 1;
+                            if (result == 0) { marker_frame(owner); }
+                        }
+                    }
+                }
+                else if (command == Command::update_info) {
+                    owner.update_info = { reinterpret_cast<uintptr_t>(owner.marker), owner.marker_ticks, owner.marker_errors };
+                    result = 0;
                 }
                 {
                     std::lock_guard lock(owner.mutex);
@@ -278,6 +338,25 @@ int32_t mfs_print_thread_restore_control(void* context, uint32_t alpha, uint32_t
 {
     if (!context || (alpha != 0 && alpha != 255) || repaint > 1) { return 1; }
     try { return request(*static_cast<Owner*>(context), Command::restore_control, alpha | (repaint << 8)); }
+    catch (...) { return 3; }
+}
+int32_t mfs_desktop_fixture_updates(void* context)
+{
+    if (!context) { return 1; }
+    try { return request(*static_cast<Owner*>(context), Command::updates); }
+    catch (...) { return 3; }
+}
+int32_t mfs_desktop_fixture_update_info(void* context, uint64_t* output, size_t capacity)
+{
+    if (!context || !output || capacity < 3) { return 1; }
+    try {
+        auto& owner = *static_cast<Owner*>(context);
+        const auto code = request(owner, Command::update_info);
+        if (code != 0) { return code; }
+        std::lock_guard lock(owner.mutex);
+        std::copy(owner.update_info.begin(), owner.update_info.end(), output);
+        return 0;
+    }
     catch (...) { return 3; }
 }
 int32_t mfs_print_thread_info(void* context, uint64_t* output, size_t capacity)

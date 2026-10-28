@@ -1,0 +1,25 @@
+# P1 original hardware/default device, CreateDXGIFactory and DuplicateOutput.
+D3D11CreateDevice
+D3D_DRIVER_TYPE_HARDWARE
+D3D11_SDK_VERSION
+D3D11_USAGE_STAGING
+D3D11_CPU_ACCESS_READ
+D3D11_CPU_ACCESS_WRITE
+D3D11_MAP_READ
+DXGI_FORMAT_B8G8R8A8_UNORM
+ID3D11Device::CreateTexture2D
+ID3D11DeviceContext::{CopyResource,Map,Unmap}
+ID3D11Texture2D::GetDesc
+CreateDXGIFactory
+IDXGIFactory::EnumAdapters
+IDXGIAdapter::EnumOutputs
+IDXGIOutput::GetDesc
+IDXGIOutput1::DuplicateOutput
+IDXGIOutputDuplication::{AcquireNextFrame,ReleaseFrame}
+IDXGIResource::{}
+DXGI_ERROR_ACCESS_LOST
+MonitorFromWindow
+MONITOR_DEFAULTTONEAREST
+GetClientRect
+ClientToScreen
+GetMonitorInfoW

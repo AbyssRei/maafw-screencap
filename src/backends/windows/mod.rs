@@ -1,5 +1,9 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#[cfg(feature = "windows-desktop-dup")]
+mod desktop_dup;
+#[cfg(feature = "windows-desktop-dup-window")]
+mod desktop_dup_window;
 #[cfg(feature = "windows-frame-pool")]
 mod frame_pool;
 #[cfg(feature = "windows-frame-pool")]

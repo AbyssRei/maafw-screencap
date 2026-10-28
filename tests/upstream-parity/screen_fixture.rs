@@ -94,6 +94,28 @@ impl Adapter {
     }
 }
 impl Fixture {
+    #[cfg(feature = "windows-desktop-dup")]
+    pub fn start_desktop_updates(&mut self) -> Result<(), Box<dyn Error>> {
+        type Start = unsafe extern "C" fn(*mut c_void) -> i32;
+        // SAFETY: Exact print-thread.h fixture-only owner command signature.
+        let start: Start = unsafe { self.module.symbol(c"mfs_desktop_fixture_updates")? };
+        let code = unsafe { start(self.span.owner) };
+        if code != 0 {
+            return Err(format!("desktop update fixture failed: {code}").into());
+        }
+        Ok(())
+    }
+    #[cfg(feature = "windows-desktop-dup")]
+    pub fn desktop_update_info(&self) -> Result<[u64; 3], Box<dyn Error>> {
+        type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
+        let info: Info = unsafe { self.module.symbol(c"mfs_desktop_fixture_update_info")? };
+        let mut values = [0; 3];
+        // SAFETY: Live owner, exact three-element initialized output.
+        if unsafe { info(self.span.owner, values.as_mut_ptr(), values.len()) } != 0 {
+            return Err("desktop update info failed".into());
+        }
+        Ok(values)
+    }
     pub fn hwnd(&self) -> *mut c_void {
         self.span.hwnd
     }

@@ -19,8 +19,8 @@ pub fn run(args: &[String]) -> Result<()> {
 
 pub fn run_parity(args: &[String]) -> Result<()> {
     let kind = match args.first().map(String::as_str) {
-        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool")) => kind,
-        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool> [--offline-inputs <native run manifest>]".into()),
+        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool" | "desktop-dup")) => kind,
+        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool|desktop-dup> [--offline-inputs <native run manifest>]".into()),
     };
     let mut native_args = vec!["--desktop".to_owned()];
     native_args.extend_from_slice(&args[1..]);
@@ -41,6 +41,7 @@ pub fn run_context(args: &[String]) -> Result<()> {
 fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     let frame_context = parity == Some("frame-pool-context");
     let frame_parity = parity == Some("frame-pool");
+    let desktop_parity = parity == Some("desktop-dup");
     let gdi_parity = parity.is_some() && !frame_context;
     let print_parity = parity == Some("print-window");
     let screen_parity = parity == Some("screen-dc");
@@ -148,6 +149,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "p1-frame-pool-context-windows"
         } else if frame_parity {
             "p1-frame-pool-windows"
+        } else if desktop_parity {
+            "p1-desktop-dup-windows"
         } else if gdi_parity {
             "p1-gdi-windows"
         } else {
@@ -172,6 +175,16 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if desktop_parity {
+        let scope = inputs.join("desktop-dup-scope.md");
+        fs::write(
+            &scope,
+            "# P1 partial Desktop Duplication migration\n\nOriginal default hardware D3D11CreateDevice flags zero, CreateDXGIFactory, adapter/output enumeration and primary fallback, DuplicateOutput, 2000ms acquisitions, up to three discarded last-pixel-alpha warmups followed by a distinct final acquisition, access-lost partial invalidation and native release orders. Window mode retains foreground/rcWork helpers, full-monitor BGR conversion before geometry queries and client ROI.\n\nSafety adaptations: the original returns a cv::Mat borrowing mapped staging storage after Unmap/ReleaseFrame; Rust copies initialized packed BGRA rows while mapped, then converts only after native guards release. This additional full-output CPU copy is counted. Window output additionally clones only target BGR pixels after the original full conversion/crop point; its extra copy and changed allocation/retention are explicit. Null outputs, layout/format/descriptor incompatibility and arithmetic are checked. Native scope contains no callbacks or workers and is caller-bound.\n\nAn isolated executable runs the unmodified original full/window classes once each. A separate owned marker presents alternating colors outside the static target so original warmup/final Acquire calls can receive updates. Rust tests twenty mixed full/window lifecycles, source target bytes, exact target pattern, ReleaseFrame HRESULTs, packed target storage and CPU images after native/window shutdown. Full desktop content is not compared byte-for-byte because the marker and external desktop change. Source pixel agreement does not prove its dangling mapped view is valid.\n\nPending: native faults/release failures/access loss/device/format changes, null/primary/multiadapter/output/rotation scenarios, helper/window moves/occlusion/DPI, deterministic native warmup call/alpha scripts, original repeated lifecycles, exact conversion-time native state probes and manager/selection chain. This is not full backend, U/P1, public SDK or P3 factory/DuplicateOutput1 acceptance. Prior FramePool and PrintWindow failures remain open.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if frame_parity {
         let scope = inputs.join("frame-pool-scope.md");
         fs::write(
@@ -299,6 +312,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if frame_parity {
         process.arg("-FramePoolParity");
     }
+    if desktop_parity {
+        process.arg("-DesktopDupParity");
+    }
     if let Some(input) = &offline {
         process
             .arg("-OfflineManifest")
@@ -351,6 +367,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "P1 original FramePool caller context"
         } else if frame_parity {
             "P1 FramePool component"
+        } else if desktop_parity {
+            "P1 Desktop Duplication component"
         } else if gdi_parity {
             "P1 GDI component"
         } else {

@@ -1,19 +1,22 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(feature = "windows-desktop-dup")]
+pub(crate) mod desktop_dup;
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 pub(crate) mod foreground;
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 pub(crate) mod geometry;
 #[cfg(any(feature = "windows-print-window", feature = "windows-frame-pool"))]
 pub(crate) mod pseudo_minimize;
 #[cfg(feature = "windows-frame-pool")]
 pub(crate) mod wgc;
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 pub(crate) mod window_api;
 
 #[cfg(any(
     feature = "windows-print-window",
     feature = "windows-screen-dc",
+    feature = "windows-desktop-dup-window",
     feature = "windows-frame-pool"
 ))]
 #[allow(

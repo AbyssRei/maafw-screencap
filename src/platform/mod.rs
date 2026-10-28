@@ -5,7 +5,8 @@
     any(
         feature = "windows-print-window",
         feature = "windows-screen-dc",
-        feature = "windows-frame-pool"
+        feature = "windows-frame-pool",
+        feature = "windows-desktop-dup"
     )
 ))]
 pub(crate) mod windows;

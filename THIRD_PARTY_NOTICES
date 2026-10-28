@@ -65,6 +65,15 @@ caller execution, polling/cache clone and conversion-before-Unmap. Target-row
 copying, checked content/layout and explicit factory owners are documented safety
 adaptations; this is not completed FramePool or P1 acceptance.
 
+src/backends/windows/desktop_dup.rs and desktop_dup_window.rs migrate the fixed
+DesktopDupScreencap.{h,cpp} and DesktopDupWindowScreencap.{h,cpp}. They preserve
+hardware/factory/output selection, warmups, waiting and conversion/crop order.
+The original mapped cv::Mat outlives Unmap/ReleaseFrame; the Rust migration
+instead copies defined BGRA rows while mapped, retaining the original later
+conversion point. Packed window BGR isolation adds another explicit target copy.
+These safety adaptations are counted and documented; full native/source parity
+and complete backend/P1 acceptance remain outstanding.
+
 Microsoft C++/WinRT
 =================
 
