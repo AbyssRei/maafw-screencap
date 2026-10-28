@@ -32,6 +32,11 @@ MFS_PARITY_EXPORT int32_t mfs_print_thread_prepare(void* owner, uint32_t layered
 // with alpha 0 or 255, optionally forcing an owner-thread redraw/presentation.
 // No screenshot call is retried or altered. Not a product helper operation.
 MFS_PARITY_EXPORT int32_t mfs_print_thread_restore_control(void* owner, uint32_t alpha, uint32_t repaint);
+// Desktop Duplication fixture: a separate, nonoverlapping marker on the same
+// output presents alternating colors every 50ms. Target pixels stay unchanged.
+MFS_PARITY_EXPORT int32_t mfs_desktop_fixture_updates(void* owner);
+// Marker HWND, presentation count, error count (snapshotted on the UI owner).
+MFS_PARITY_EXPORT int32_t mfs_desktop_fixture_update_info(void* owner, uint64_t* output, size_t capacity);
 #ifdef __cplusplus
 }
 #endif

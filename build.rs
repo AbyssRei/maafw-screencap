@@ -59,11 +59,13 @@ fn main() {
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_SCREEN_DC");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_FRAME_POOL");
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_DESKTOP_DUP");
         assert!(
             (std::env::var_os("CARGO_FEATURE_WINDOWS_GDI").is_none()
                 && std::env::var_os("CARGO_FEATURE_WINDOWS_PRINT_WINDOW").is_none()
                 && std::env::var_os("CARGO_FEATURE_WINDOWS_SCREEN_DC").is_none()
-                && std::env::var_os("CARGO_FEATURE_WINDOWS_FRAME_POOL").is_none())
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_FRAME_POOL").is_none()
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_DESKTOP_DUP").is_none())
                 || selected.enabled[0],
             "Windows capture backends cannot be enabled when the prepared Windows family is OFF"
         );
@@ -103,6 +105,26 @@ fn main() {
     println!("cargo::rerun-if-changed=build-support/windows-window-coordination.txt");
     println!("cargo::rerun-if-changed=build-support/windows-screen-window.txt");
     println!("cargo::rerun-if-changed=build-support/windows-frame-pool.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-desktop-dup.txt");
+    #[cfg(feature = "windows-desktop-dup")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        assert_eq!(
+            std::env::var("TARGET").as_deref(),
+            Ok("x86_64-pc-windows-msvc")
+        );
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+            .join("windows_desktop_dup.rs");
+        let input = std::fs::read_to_string("build-support/windows-desktop-dup.txt").unwrap();
+        windows_bindgen::builder()
+            .output(out)
+            .flat()
+            .filters(
+                input
+                    .lines()
+                    .filter(|line| !line.is_empty() && !line.starts_with('#')),
+            )
+            .write();
+    }
     #[cfg(feature = "windows-frame-pool")]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         assert_eq!(
@@ -125,6 +147,7 @@ fn main() {
     #[cfg(any(
         feature = "windows-print-window",
         feature = "windows-screen-dc",
+        feature = "windows-desktop-dup-window",
         feature = "windows-frame-pool"
     ))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
@@ -140,7 +163,10 @@ fn main() {
                 "build-support/windows-window-coordination.txt",
             ),
             (
-                cfg!(feature = "windows-screen-dc"),
+                cfg!(any(
+                    feature = "windows-screen-dc",
+                    feature = "windows-desktop-dup-window"
+                )),
                 "build-support/windows-screen-window.txt",
             ),
         ] {

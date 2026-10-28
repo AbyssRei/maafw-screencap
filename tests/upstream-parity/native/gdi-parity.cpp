@@ -51,6 +51,20 @@ int32_t transfer_image(cv::Mat pixels, MfsParityImage* output) { return transfer
 
 uint64_t mfs_gdi_parity_image_owners(void) { return image_owners.load(); }
 
+int32_t mfs_desktop_dup_crop(void* owner, int32_t x, int32_t y, int32_t width, int32_t height, MfsParityImage* output)
+{
+    if (!output) { return 1; }
+    *output = {};
+    if (!owner || x < 0 || y < 0 || width <= 0 || height <= 0) { return 1; }
+    try {
+        const auto& image = mfs_parity::image_pixels(owner);
+        if (static_cast<int64_t>(x) + width > image.cols || static_cast<int64_t>(y) + height > image.rows) { return 1; }
+        return transfer(image(cv::Rect(x,y,width,height)).clone(), output);
+    }
+    catch (const std::bad_alloc&) { return 3; }
+    catch (...) { return 2; }
+}
+
 int32_t mfs_gdi_parity_reference(void* hwnd, MfsParityImage* output)
 {
     if (!output) { return 1; }

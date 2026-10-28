@@ -24,6 +24,7 @@ option(MFS_BUILD_PRINT_PARITY "Include the original PrintWindow and owned render
 option(MFS_BUILD_SCREEN_PARITY "Include original ScreenDC and window-helper observation" OFF)
 option(MFS_BUILD_FRAMEPOOL_REFERENCE "Build the isolated original FramePool caller-context diagnostic" OFF)
 option(MFS_BUILD_FRAMEPOOL_PARITY "Include the rendering/conversion adapter for private Rust FramePool parity" OFF)
+option(MFS_BUILD_DESKTOP_DUP_REFERENCE "Build the isolated original DesktopDup/Window reference" OFF)
 if(MFS_BUILD_FRAMEPOOL_PARITY AND (NOT MFS_BUILD_GDI_PARITY OR NOT MFS_BUILD_FRAMEPOOL_REFERENCE))
     message(FATAL_ERROR "FramePool parity requires the explicit common adapter and isolated original reference")
 endif()
@@ -38,7 +39,7 @@ add_library(mfs_p0_adapter SHARED interop.cpp)
 target_link_libraries(mfs_p0_adapter PRIVATE ${OpenCV_LIBS})
 target_include_directories(mfs_p0_adapter PRIVATE ${OpenCV_INCLUDE_DIRS})
 
-if(MFS_BUILD_REFERENCE OR MFS_BUILD_GDI_PARITY OR MFS_BUILD_FRAMEPOOL_REFERENCE)
+if(MFS_BUILD_REFERENCE OR MFS_BUILD_GDI_PARITY OR MFS_BUILD_FRAMEPOOL_REFERENCE OR MFS_BUILD_DESKTOP_DUP_REFERENCE)
 foreach(input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_BOOST_ROOT)
     if(NOT IS_DIRECTORY "${${input}}")
         message(FATAL_ERROR "Explicit external input ${input} is required")
@@ -87,6 +88,15 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     target_link_libraries(mfs_framepool_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS}
         Gdi32 User32 Dwmapi D3D11 Dxgi WindowsApp RuntimeObject CoreMessaging)
 endif()
+if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
+    add_executable(mfs_desktop_dup_reference desktop-dup-reference.cpp print-parity.cpp print-thread.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupWindowScreencap.cpp")
+    target_include_directories(mfs_desktop_dup_reference PRIVATE
+        "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/include"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit" ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mfs_desktop_dup_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 Dwmapi D3D11 Dxgi)
+endif()
 if(MFS_BUILD_GDI_PARITY)
 add_library(mfs_gdi_parity SHARED
     gdi-parity.cpp
@@ -101,7 +111,7 @@ target_include_directories(mfs_gdi_parity PRIVATE
 target_link_libraries(mfs_gdi_parity PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
 file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp" MFS_GDI_CPP_PATH)
 target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_GDI_CPP="${MFS_GDI_CPP_PATH}")
-if(MFS_BUILD_FRAMEPOOL_PARITY AND NOT MFS_BUILD_PRINT_PARITY AND NOT MFS_BUILD_SCREEN_PARITY)
+if((MFS_BUILD_FRAMEPOOL_PARITY OR MFS_BUILD_DESKTOP_DUP_REFERENCE) AND NOT MFS_BUILD_PRINT_PARITY AND NOT MFS_BUILD_SCREEN_PARITY)
     target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-thread.cpp)
     target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
 endif()

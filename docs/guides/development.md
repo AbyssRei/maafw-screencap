@@ -119,6 +119,12 @@ ScreenDC 的真实资源故障入口以隔离命名空间编译原函数体，�
 
 新的夹具前提是在自有 ScreenDC root 上额外请求 `WS_EX_TOPMOST`，不授予前台权限；原 helper 仍可按原行为将它取消置顶。只改变夹具，保留原捕获、等待及严格像素断言，原 PrintWindow 模式与 C 接口前缀保持。一轮亮屏本机完整 backend 入口 19 项通过，包括 20 轮配对逐像素/清理/关闭后持帧，以及独立的 20 轮源码呈现前后控制；观察到各轮中心点 root 属于目标。相同受控场景随后通过两个精确提交的原生 Actions，证据及提交身份外置保存；这仍只证明该受控场景，显式遮挡/移动/深度与完整 P1 仍待验证。首次运行因未创建外部图像记录目录中断，属于保留的 harness I/O 失败；补建目录后的结果单独记录，不能覆盖之前的像素失败。
 
+
+DesktopDup 和 DesktopDupWindow 已有私有迁移，入口为 `cargo xtask upstream-parity desktop-dup`，可复用明确的 `--offline-inputs`。独立 features 为 `windows-desktop-dup`、`windows-desktop-dup-window`；后者复用底层并启用原前台/rcWork helper。它保留默认 hardware device、CreateDXGIFactory、显示器枚举/主输出回退、DuplicateOutput、每次 2000ms Acquire、最多三次底右 alpha 预热后另取最终帧、access-lost 部分清理及释放顺序。鼠标更新和实际桌面更新时间分别记原生证据，不增加 U 的新鲜度过滤。
+
+原 `screencap_impl` 的 Mat 借用 staging 映射，却在返回前 Unmap/ReleaseFrame；[Microsoft 的 Unmap 契约](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-unmap) 明确该调用会使映射指针失效。Rust 在映射有效期内复制定义的 BGRA 像素行，仍在原生映射、原纹理、帧和 desktop resource 释放之后做 BGR 转换。该全输出 CPU 复制明确计量，不能称为消除复制。Window 仍先转换全屏、再查客户区/输出并裁剪；为不暴露 ROI 间的其他桌面像素，另做目标 BGR 紧密复制，这会改变原 ROI 对全图存储的保留和分配点，属于明确的安全适配。
+
+对照 executable 在独立进程调用未修改的原 full/window 类；自有 UI owner 在目标外以 50ms 定时器交替绘制一个独立标记窗口，提供预热和最终 Acquire 所需的桌面更新，不重试捕获、不改变目标图样。原源码两种方式和 Rust 20 次混合生命周期（每种十次）已通过本机严格目标图样、ReleaseFrame HRESULT、目标独立存储及所有原生/窗口关闭后的 CPU 持帧检查；实际监视器、marker 活动及 frame/mouse 时间证据外置。完整动态桌面不做全帧逐字节对照；原源码偶然返回正确像素也不能证明其越界生命周期有效。全量原生故障、精确调用/预热脚本、原源码重复生命周期、多适配器/主输出回退/旋转/access loss/格式、移动/遮挡/DPI 和 manager 链仍未验收。该迁移不启用 P3 的新工厂或 DuplicateOutput1。
 ## 已实现的 P0 工具
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。

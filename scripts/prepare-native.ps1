@@ -13,6 +13,7 @@ param(
     [switch]$ScreenDcParity,
     [switch]$FramePoolContext,
     [switch]$FramePoolParity,
+    [switch]$DesktopDupParity,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -31,9 +32,14 @@ $nativeMissingEnvironment = $false
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
+if ($DesktopDupParity -and -not $GdiParity) { throw 'DesktopDup parity requires the explicit common adapter/regression target.' }
 $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
 $frameContextEvidence = ''
+$desktopEvidence = ''
+if ($DesktopDupParity) {
+    $pending.Add('Partial P1 DesktopDup/Window migration. Preserve original default hardware/factory/enumeration/fallback, DuplicateOutput, 2000ms waits, up to three discarded alpha warmups followed by a separate final capture, access-lost state and cleanup order. The original mapped Mat escapes Unmap/ReleaseFrame: safe Rust adds and counts a full-output BGRA copy while mapped, keeping BGR conversion after native release. Window target isolation adds an explicit BGR copy after full conversion and ROI. Isolated source calls and twenty mixed Rust lifecycles compare controlled target pixels and ownership; dynamic full desktops are not globally byte-compared. Native faults, exact call scripts, source repeated lifecycles, fallback/multioutput/rotation/access loss/format, window/DPI/helper and manager matrices remain pending. No complete backend/U/P1 acceptance.')
+}
 if ($FramePoolContext -and (-not $Desktop -or $GdiParity)) { throw 'FramePool context observation requires its independent explicit desktop entry.' }
 if ($ScreenDcParity) {
     $pending.Add('ScreenDC is a partial P1 component. Exact-original window helpers, scripted capture boundaries, real DC/bitmap/conversion fault checks and visible pixels remain distinct evidence. Original source-only presentation controls retain before/after outcomes. The owned topmost/transition-disabled scene records point/root visibility around capture, without changing capture/helper calls or waits and without retry. Occlusion, remaining query failures, movement/resize, actual nondefault depth and complete method/manager acceptance remain outstanding. All previous black/gray pixel, resource-baseline and harness I/O failures remain archived.')
@@ -126,6 +132,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact native FramePool case did not execute one test'
             }
         }
+        if ($Name -eq 'desktop-dup-rust-lifecycles' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }
         $status = 'passed'
@@ -447,10 +454,11 @@ try {
     if ($ScreenDcParity) { $parityOptions += '-DMFS_BUILD_SCREEN_PARITY=ON' }
     if ($framePoolSource) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_REFERENCE=ON' }
     if ($FramePoolParity) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_PARITY=ON' }
+    if ($DesktopDupParity) { $parityOptions += '-DMFS_BUILD_DESKTOP_DUP_REFERENCE=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -462,6 +470,7 @@ try {
     if ($framePoolSource) {
         Step 'frame-pool-context-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_framepool_reference', '--parallel', '8')
     }
+    if ($DesktopDupParity) { Step 'desktop-dup-source-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_desktop_dup_reference', '--parallel', '8') }
     foreach ($name in @('CMakeCache.txt', 'toolchain-Release.txt')) {
         $saved = Join-Path $inputsRoot "reference-$name"
         Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
@@ -471,6 +480,18 @@ try {
         $saved = Join-Path $artifacts $name
         Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved
         Save-Input $saved
+    }
+    if ($DesktopDupParity) {
+        $desktopProgram = Join-Path $artifacts mfs_desktop_dup_reference.exe
+        Copy-Item -LiteralPath (Join-Path $build Release/mfs_desktop_dup_reference.exe) -Destination $desktopProgram
+        Save-Input $desktopProgram
+        $desktopEvidence = Join-Path $artifacts desktop-dup-source
+        foreach ($modeName in @('desktop','window')) {
+            $modeDirectory = Join-Path $desktopEvidence $modeName
+            New-Item -ItemType Directory -Path $modeDirectory -Force | Out-Null
+            try { Step "desktop-dup-source-$modeName" $desktopProgram @($modeName,$modeDirectory) }
+            catch { $failed = $true; Write-Host $_.Exception.Message }
+        }
     }
     if ($framePoolSource) {
         $programPath = Join-Path $artifacts mfs_framepool_reference.exe
@@ -516,6 +537,7 @@ try {
         if ($PrintWindowParity) { $capabilities += 'windows-print-window' }
         if ($ScreenDcParity) { $capabilities += 'windows-screen-dc' }
         if ($FramePoolParity) { $capabilities += 'windows-frame-pool' }
+        if ($DesktopDupParity) { $capabilities += 'windows-desktop-dup-window' }
         $parityFeatures = $capabilities -join ','
         if ($ScreenDcParity) {
             $screenEvidence = Join-Path $artifacts screen-evidence
@@ -543,9 +565,15 @@ try {
         $frameLifecycleCase = 'backends::windows::frame_pool::tests::retains_pixels_across_twenty_complete_framepool_lifecycles'
         $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
         if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
+        $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
+        if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
+        if ($DesktopDupParity) {
+            $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence
+            Step 'desktop-dup-rust-lifecycles' cargo ($parityArguments + @('--',$desktopCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+        }
         if ($FramePoolParity) {
             Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
             foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
@@ -602,6 +630,7 @@ finally {
     if ($frameContextEvidence -and (Test-Path -LiteralPath $frameContextEvidence)) {
         Get-ChildItem -LiteralPath $frameContextEvidence -Recurse -File | ForEach-Object { Save-Input $_.FullName }
     }
+    if ($desktopEvidence -and (Test-Path -LiteralPath $desktopEvidence)) { Get-ChildItem -LiteralPath $desktopEvidence -Recurse -File | ForEach-Object { Save-Input $_.FullName } }
     Write-NewJson (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity -or $FramePoolContext) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
         checks = @($checks.ToArray()); pending = @($pending.ToArray()); inputs = @($inputs.ToArray())

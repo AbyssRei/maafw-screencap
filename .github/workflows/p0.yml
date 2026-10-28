@@ -75,6 +75,12 @@ jobs:
           cargo xtask upstream-parity print-window
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo xtask upstream-parity screen-dc
+      - name: Validate partial DesktopDup and window migration
+        if: runner.os == 'Windows'
+        run: |
+          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
+          cargo xtask upstream-parity desktop-dup --offline-inputs $index.runs[-1].path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial FramePool migration and original caller contexts
         if: runner.os == 'Windows'
         run: |
