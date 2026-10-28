@@ -68,8 +68,11 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
         }
-        if ($Name -eq 'rust-pipewire-daemon-shm' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed') {
-            throw 'Expected twenty Rust daemon/SHM lifecycles and sixty retained raw RGB samples'
+        if ($Name -eq 'rust-pipewire-daemon-shm') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected one native driver test, twenty Rust daemon/SHM lifecycles and sixty retained raw RGB samples'
+            }
         }
         $status = 'passed'
     } finally {
@@ -277,7 +280,14 @@ try {
     if(-not $SourceReference){
         Step rust-pipewire-capture cargo @('test','--release','--locked','--test','p0-interop','--features','prototype-linux-pipewire','--','--include-ignored','--test-threads=1','--nocapture')
     }
-    Step rust-pipewire-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-pipewire,linux-pipewire','--','-D','warnings')
+    try { Step rust-pipewire-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-pipewire,linux-pipewire','--','-D','warnings') }
+    catch {
+        if(-not $SourceReference){throw}
+        # Keep the failed gate while collecting independently runnable native
+        # source/driver observations. No failure becomes an overall pass.
+        $failed=$true
+        Write-Host $_.Exception.Message
+    }
     if($SourceReference){
         # Independent processes; a failed ownership premise must not erase the
         # separate original-source lifecycle evidence or become an overall pass.
