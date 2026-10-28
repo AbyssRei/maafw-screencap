@@ -110,7 +110,10 @@ int wmain(int argc, wchar_t** argv)
         const auto copy=target_pixels.clone(); // Harness retention oracle only.
         if (!fixture.close()) { return 3; }
         if (cv::norm(copy,target_pixels,cv::NORM_INF)!=0) { return 5; }
-        return pixels && marker[1]>1 && marker[2]==0 ? 0 : 5;
+        // The count includes the initial draw, not just timer callbacks.
+        // Valid source acquisitions need not wait for an additional callback:
+        // initial/pointer/other-window updates can satisfy them sooner.
+        return pixels && marker[0]!=0 && marker[1]>=1 && marker[2]==0 ? 0 : 5;
     }
     catch (const std::exception& e) { std::cerr << "source_or_harness_exception=" << e.what() << '\n'; return 3; }
     catch (...) { return 3; }
