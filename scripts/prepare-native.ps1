@@ -42,7 +42,7 @@ if ($PrintWindowParity) {
     $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
 if ($FramePoolParity) {
-    $pending.Add('FramePool is a partial P1 migration, not a backend/phase exit. Four separate Rust caller contexts compare original image bytes, clone owners, native close, callback event, apartment and DPI; twenty Rust capture/window/device lifecycles retain all images through completed dispatcher shutdown. Full repeated source/fault comparisons, native failure/initialization-exception/cleanup, complete polling/cache/resize/permission/format, pseudo wrapper and manager matrices remain pending. Safety target-row copy and scoped factory ownership differ from direct mapped conversion/global projection caching and are explicitly counted/classified; old WGC unload AV remains unresolved.')
+    $pending.Add('FramePool is a partial P1 migration, not a backend/phase exit. Four separate Rust caller contexts compare original image bytes, clone owners, native close, callback event, apartment and DPI; twenty Rust capture/window/device lifecycles retain all images through completed dispatcher shutdown. Full repeated source/fault comparisons, native failure/initialization-exception/cleanup, complete polling/cache/resize/permission/format, full pseudo-wrapper and manager matrices remain pending. The migrated pseudo wrapper shares the original helper; five isolated source image/state scenarios feed twenty Rust lifecycles. Source known-color failures remain failed and make the batch nonpassing, even when subsequent byte/state diagnostics match; a local alpha-zero black result is not capture acceptance. Safety target-row copy and scoped factory ownership differ from direct mapped conversion/global projection caching and are explicitly counted/classified; old WGC unload AV remains unresolved.')
 } elseif ($FramePoolContext) {
     $pending.Add('This P1 task observes only the unmodified C++ FramePool source in four isolated caller contexts. It implements no Rust FramePool backend or SDK and does not accept Rust parity, full pixels/format/resize/permission/cache/timeout semantics or P1. Process-isolated factory/MTA state, known interior pixels and COM observations remain specific to this native environment.')
 } elseif ($GdiParity) {
@@ -121,7 +121,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact foreground case did not execute one native test'
             }
         }
-        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles)$' -and $exitCode -eq 0) {
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo)$' -and $exitCode -eq 0) {
             if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact native FramePool case did not execute one test'
             }
@@ -486,6 +486,26 @@ try {
             catch { $contextFailures.Add($_.Exception.Message) }
         }
         if ($contextFailures.Count -gt 0) { throw ($contextFailures -join "`n") }
+        if ($FramePoolParity) {
+            $pseudoEvidence = Join-Path $frameContextEvidence 'pseudo'
+            $pseudoSourceFailures = 0
+            foreach ($scenario in @('pseudo-visible','pseudo-stop','pseudo-inactive','pseudo-layered-stop','pseudo-layered-inactive')) {
+                $modeEvidence = Join-Path $pseudoEvidence $scenario
+                New-Item -ItemType Directory -Path $modeEvidence -Force | Out-Null
+                try { Step "frame-pool-source-$scenario" $programPath @('mta',$modeEvidence,$scenario) }
+                catch {
+                    # Keep this exact source/color failure in the final result.
+                    # Continue independent regressions and byte/state diagnostics;
+                    # they cannot turn this source pixel failure into acceptance.
+                    $failed = $true
+                    $pseudoSourceFailures++
+                    Write-Host $_.Exception.Message
+                }
+            }
+            if ($pseudoSourceFailures -gt 0) {
+                Write-Host 'Original wrapper known-pixel failures retained; later matching bytes/states are diagnostic only.'
+            }
+        }
     }
     if ($GdiParity) {
         $parityLibrary = Join-Path $artifacts mfs_gdi_parity.dll
@@ -517,14 +537,15 @@ try {
         if ($ScreenDcParity) {
             Step 'screen-window-helper-original-parity' cargo ($parityArguments + @('--', 'platform::windows::window_api::', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
-        if ($PrintWindowParity) {
+        if ($PrintWindowParity -or $FramePoolParity) {
             Step 'pseudo-helper-original-parity' cargo ($parityArguments + @('--', 'platform::windows::pseudo_minimize::', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
         $foregroundCase = 'backends::windows::print_window::tests::parity::pseudo_minimize::restores_original_attributes_after_real_foreground_reactivation'
         [string[]]$caseSelection = @($parityFilter, '--include-ignored', '--test-threads=1', '--nocapture')
         $frameCase = 'backends::windows::frame_pool::tests::captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners'
         $frameLifecycleCase = 'backends::windows::frame_pool::tests::retains_pixels_across_twenty_complete_framepool_lifecycles'
-        if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase) }
+        $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
+        if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
@@ -537,6 +558,8 @@ try {
             }
             $env:MFS_FRAMEPOOL_REFERENCE_PIXELS = Join-Path $frameContextEvidence 'mta-dispatcher/source.bgr'
             Step 'frame-pool-rust-lifecycles' cargo ($parityArguments + @('--', $frameLifecycleCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            $env:MFS_FRAMEPOOL_PSEUDO_REFERENCE_ROOT = $pseudoEvidence
+            Step 'frame-pool-rust-pseudo' cargo ($parityArguments + @('--', $framePseudoCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
         if ($PrintWindowParity) {
             # Separate invocation preserves the required case and its native

@@ -4,12 +4,15 @@
 // Each caller context runs in a new process: no cached factory or implicit MTA
 // from a previous mode can establish the next mode's initial environment.
 #include "Screencap/FramePoolScreencap.h"
+#include "Screencap/FramePoolWithPseudoMinimizeScreencap.h"
 #include "print-thread.h"
+#include "print-pseudo.h"
 #include <dispatcherqueue.h>
 #include <roapi.h>
 #include <winrt/Windows.System.h>
 #include <winrt/Windows.Foundation.h>
 #include <filesystem>
+#include <array>
 #include <fstream>
 #include <iostream>
 #include <limits>
@@ -18,6 +21,30 @@
 #include <thread>
 
 namespace {
+using WindowState = std::array<uint64_t, 6>;
+WindowState window_state(void* hwnd)
+{
+    WindowState state {};
+    if (mfs_print_pseudo_state(hwnd, state.data(), state.size()) != 0) {
+        throw std::runtime_error("fixture window state query failed");
+    }
+    return state;
+}
+void save_states(const std::filesystem::path& directory, const WindowState& before,
+    const WindowState& captured, const WindowState& inactive, const WindowState& closed)
+{
+    std::ofstream file(directory / "window-states.txt");
+    file.exceptions(std::ios::badbit | std::ios::failbit);
+    const auto row = [&](const char* name, const WindowState& values) {
+        file << name;
+        for (const auto value : values) { file << ' ' << value; }
+        file << '\n';
+    };
+    row("before", before);
+    row("captured", captured);
+    row("inactive", inactive);
+    row("closed", closed);
+}
 void apartment(const char* point)
 {
     APTTYPE type = APTTYPE_CURRENT;
@@ -135,15 +162,26 @@ uint64_t digest(const cv::Mat& image)
 
 int wmain(int argc, wchar_t** argv)
 {
-    if (argc != 3) {
-        std::cerr << "usage: mfs_framepool_reference <uninitialized|mta|mta-dispatcher|sta> <existing-evidence-dir>\n";
+    if (argc != 3 && argc != 4) {
+        std::cerr << "usage: mfs_framepool_reference <uninitialized|mta|mta-dispatcher|sta> <existing-evidence-dir> [plain|pseudo-visible|pseudo-stop|pseudo-inactive|pseudo-layered-stop|pseudo-layered-inactive|control-zero|control-zero-repaint|control-opaque|control-opaque-repaint]\n";
         return 1;
     }
     const std::wstring_view mode(argv[1]);
     const std::filesystem::path output(argv[2]);
+    const std::wstring_view scenario = argc == 4 ? argv[3] : L"plain";
     if ((mode != L"uninitialized" && mode != L"mta" && mode != L"mta-dispatcher" && mode != L"sta")
+        || (scenario != L"plain" && scenario != L"pseudo-visible" && scenario != L"pseudo-stop"
+            && scenario != L"pseudo-inactive" && scenario != L"pseudo-layered-stop" && scenario != L"pseudo-layered-inactive"
+            && scenario != L"control-zero" && scenario != L"control-zero-repaint"
+            && scenario != L"control-opaque" && scenario != L"control-opaque-repaint")
         || !output.is_absolute() || !std::filesystem::is_directory(output)) { return 1; }
+    const bool pseudo = scenario.starts_with(L"pseudo-");
+    const bool control = scenario.starts_with(L"control-");
+    const bool minimized = control || (pseudo && scenario != L"pseudo-visible");
+    const bool layered = scenario.find(L"layered") != std::wstring_view::npos;
+    const bool call_inactive = scenario.find(L"inactive") != std::wstring_view::npos;
     std::wcout << L"source_only_context=" << mode << std::endl;
+    std::wcout << L"source_scenario=" << scenario << std::endl;
     apartment("initial");
     Initialization initialization;
     try {
@@ -169,12 +207,30 @@ int wmain(int argc, wchar_t** argv)
         if (mfs_print_thread_info(fixture.value.owner, owner, 4) != 0) { return 2; }
         std::cout << "fixture_owner=" << owner[0] << " caller=" << owner[1]
             << " native_owner=" << owner[2] << std::endl;
+        if (minimized) {
+            const auto prepared = mfs_print_thread_prepare(fixture.value.owner, layered ? 1u : 0u);
+            std::cout << "fixture_minimize_prepare=" << prepared << std::endl;
+            if (prepared != 0) { return prepared == 5 ? 77 : 2; }
+        }
+        if (control) {
+            const auto alpha = scenario.find(L"opaque") != std::wstring_view::npos ? 255u : 0u;
+            const auto repaint = scenario.ends_with(L"repaint") ? 1u : 0u;
+            const auto restored = mfs_print_thread_restore_control(fixture.value.owner, alpha, repaint);
+            std::cout << "fixture_control_restore=" << restored << " alpha=" << alpha << " repaint=" << repaint << std::endl;
+            if (restored != 0) { return 2; }
+            uint64_t statistics[13] {};
+            if (mfs_print_thread_stats(fixture.value.owner, statistics, 13) != 0) { return 2; }
+            std::cout << "fixture_control_stats";
+            for (const auto value : statistics) { std::cout << ' ' << value; }
+            std::cout << std::endl;
+        }
+        const auto before = window_state(fixture.value.hwnd);
+        WindowState captured {}, inactive {};
         cv::Mat retained;
         bool capture_failed = false;
         bool pixels_match = false;
         uint64_t retained_digest = 0;
-        {
-            MaaNS::CtrlUnitNs::FramePoolScreencap source(static_cast<HWND>(fixture.value.hwnd));
+        const auto observe = [&](auto& source) {
             const auto began = std::chrono::steady_clock::now();
             std::optional<cv::Mat> result;
             try {
@@ -200,8 +256,20 @@ int wmain(int argc, wchar_t** argv)
                 pixels_match = save(retained, output);
                 retained_digest = digest(retained);
             }
+            captured = window_state(fixture.value.hwnd);
+            if (call_inactive) { source.inactive(); }
+            inactive = window_state(fixture.value.hwnd);
+        };
+        if (pseudo) {
+            MaaNS::CtrlUnitNs::FramePoolWithPseudoMinimizeScreencap source(static_cast<HWND>(fixture.value.hwnd));
+            observe(source);
+        }
+        else {
+            MaaNS::CtrlUnitNs::FramePoolScreencap source(static_cast<HWND>(fixture.value.hwnd));
+            observe(source);
         }
         apartment("after_source_destructor");
+        save_states(output, before, captured, inactive, window_state(fixture.value.hwnd));
         if (!fixture.close()) { return 3; }
         std::cout << "retained_after_source_and_window_close=" << !retained.empty() << std::endl;
         if (!retained.empty() && digest(retained) != retained_digest) {
