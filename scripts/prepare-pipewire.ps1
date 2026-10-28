@@ -73,6 +73,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-fd-add-io-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_add_io_error result=null errno=\d+ input_fd_open=[01] after_teardown_fd_open=[01] intercepted_calls=1 observed') {
             throw 'Expected the actual native late connect_fd error with one explicit add_io interception'
         }
+        if ($Name -eq 'native-joined-task-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native joined-task observation cycles=10000 residual_enumerations=\d+ observed') {
+            throw 'Expected the separate native pthread-join/proc visibility observation'
+        }
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
         }
@@ -273,6 +276,8 @@ try {
         try { Step pipewire-source-format-fixtures $sourceExecutable @('--format-fixtures',$formatDirectory) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-native-formats timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::matches_original_format_pods_and_padded_conversion_bytes','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
     }
     # Linux sockaddr_un.sun_path has 108 bytes including the terminator. Keep
