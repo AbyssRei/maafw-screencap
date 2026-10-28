@@ -124,7 +124,11 @@ DesktopDup 和 DesktopDupWindow 已有私有迁移，入口为 `cargo xtask upst
 
 原 `screencap_impl` 的 Mat 借用 staging 映射，却在返回前 Unmap/ReleaseFrame；[Microsoft 的 Unmap 契约](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-unmap) 明确该调用会使映射指针失效。Rust 在映射有效期内复制定义的 BGRA 像素行，仍在原生映射、原纹理、帧和 desktop resource 释放之后做 BGR 转换。该全输出 CPU 复制明确计量，不能称为消除复制。Window 仍先转换全屏、再查客户区/输出并裁剪；为不暴露 ROI 间的其他桌面像素，另做目标 BGR 紧密复制，这会改变原 ROI 对全图存储的保留和分配点，属于明确的安全适配。
 
-对照 executable 在独立进程调用未修改的原 full/window 类；自有 UI owner 在目标外以 50ms 定时器交替绘制一个独立标记窗口，提供预热和最终 Acquire 所需的桌面更新，不重试捕获、不改变目标图样。原源码两种方式和 Rust 20 次混合生命周期（每种十次）已通过本机严格目标图样、ReleaseFrame HRESULT、目标独立存储及所有原生/窗口关闭后的 CPU 持帧检查；实际监视器、marker 活动及 frame/mouse 时间证据外置。完整动态桌面不做全帧逐字节对照；原源码偶然返回正确像素也不能证明其越界生命周期有效。全量原生故障、精确调用/预热脚本、原源码重复生命周期、多适配器/主输出回退/旋转/access loss/格式、移动/遮挡/DPI 和 manager 链仍未验收。该迁移不启用 P3 的新工厂或 DuplicateOutput1。
+对照 executable 在独立进程调用未修改的原 full/window 类；自有 UI owner 在目标外以 50ms 定时器交替绘制一个独立标记窗口，提供预热和最终 Acquire 所需的桌面更新，不重试捕获、不改变目标图样。原源码两种方式和 Rust 20 次混合生命周期（每种十次）已通过本机严格目标图样、ReleaseFrame HRESULT、目标独立存储及所有原生/窗口关闭后的 CPU 持帧检查；实际监视器、marker 活动及 frame/mouse 时间证据外置。另一个独立原源码进程与精确 Rust 用例验证空 HWND：它选择 adapter 0/output 0，不能假定该输出就是 OS 主显示器。两侧先独立查询该输出是否连接并包含测试窗口；不满足前提记为 missing_environment，不改选其他输出。本机该场景的严格目标图样、归还 HRESULT 与关闭后持帧已通过。
+
+独立转换边界用例先以诊断取帧取得真实 staging/COM 引用，随后保留原预热标记进行捕获；这次额外取帧不计为原源码调用次数对照。在正常转换和受控 C++ 异常的两个入口，真实 ReleaseFrame 均返回 DXGI_ERROR_INVALID_CALL，确认当时没有仍被获取的帧；staging 再次 Map 成功，输入 CPU 指针独立且首行相同，诊断映射在调用 C++ 转换前结束。受控 cv::Exception 保持实际捕获帧的成功归还、精确图像 owner 计数及之前图像的关闭后像素。本机正式批次已通过这些检查；再次 Map 成功不等于精确拦截 Unmap 次数。
+
+完整动态桌面不做全帧逐字节对照；原源码偶然返回正确像素也不能证明其越界生命周期有效。全量原生故障、精确调用/预热脚本、原源码重复生命周期、多适配器/显示器查找失败回退/旋转/access loss/格式、移动/遮挡/DPI、精确 Unmap 拦截和 manager 链仍未验收。该迁移不启用 P3 的新工厂或 DuplicateOutput1。
 ## 已实现的 P0 工具
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。

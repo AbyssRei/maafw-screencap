@@ -82,7 +82,7 @@ impl Raw {
 }
 
 /// Caller-thread owner, including all native cleanup. A null input selects the
-/// original primary output; a nonnull HWND follows the nearest monitor. This
+/// original adapter 0/output 0; a nonnull HWND follows the nearest monitor. This
 /// private U target convention is distinct from window GDI/ScreenDC targets.
 pub(crate) struct DesktopDupCapture {
     window: HWND,
