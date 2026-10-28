@@ -36,6 +36,7 @@ MFS_PARITY_EXPORT int32_t mfs_gdi_parity_layout(uint64_t* output, size_t capacit
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_window(int32_t width, int32_t height, MfsParityWindow* output);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_paint(void* hwnd, uint32_t phase);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_destroy(void* hwnd);
+MFS_PARITY_EXPORT int32_t mfs_gdi_parity_iconic(void* hwnd);
 MFS_PARITY_EXPORT uint32_t mfs_gdi_parity_objects(void);
 
 #ifdef __cplusplus

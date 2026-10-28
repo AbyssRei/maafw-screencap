@@ -24,7 +24,7 @@ $checks = [Collections.Generic.List[object]]::new()
 $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
 if ($GdiParity) {
-    $pending.Add('P1 remains incomplete. This GDI component covers only the explicitly listed portions of U-WIN-GDI-01/02; nondefault display depth, iconic HWND, deterministic native failure injection, manager/forwarding and every other backend remain outstanding.')
+    $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
 } else {
     $pending.Add('This P0 native task does not independently accept the complete preparation phase; associate the source/method/license and other platform records in the external exit assessment.')
 }

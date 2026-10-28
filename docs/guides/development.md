@@ -47,9 +47,9 @@ cargo xtask upstream-parity gdi
 cargo xtask upstream-parity gdi --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
 
-本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空窗口与被封住的转换异常。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
+本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空/最小化窗口与被封住的转换异常。故障对照以隔离命名空间编译原始函数体，通过真实 GDI 对象记录创建、复制、转换及清理的原生边界响应；14 组正常/故障/组合场景分别核对主错误、清理错误、调用顺序及 CPU owner 释放。夹具先记录捕获实现遗留的资源，再单独回收，不能据此声称产品在原生清理失败后已成功关闭。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
 
-这只覆盖 U-WIN-GDI-01/02 的部分场景；非默认显示深度、iconic 窗口、DC/位图/选择/读取故障注入以及管理器/转发仍待完成，不能把组件成功标为完整 GDI 用例或 P1 验收。完整目录中的其他后端继续按 P1 迁移。
+U-WIN-GDI-02 的原生失败/清理与窗口状态场景已纳入对照；U-WIN-GDI-01 仍缺真实非默认显示深度，管理器/转发与完整 P1 验收尚待完成。原生 24 位 DDB 在当前 32 位设备上可能被 SelectObject 拒绝，该观察不等于实际 24 位显示器取帧。短读探针定义原参考输入的全部字节后观察其非零即成功分支，Rust 的安全拒绝单独分类。完整目录中的其他后端继续按 P1 迁移。
 
 ## 已实现的 P0 工具
 
@@ -118,6 +118,8 @@ cargo xtask native --desktop --offline-inputs runs/<prepared-run-id>/manifest.js
 Actions 通过 `scripts/archive-evidence.ps1` 将 reference 打包为 `p0-evidence.tar`：显式枚举隐藏条目，用 PowerShell 的 .NET TarWriter 写入文件、空目录、链接及权限，再解包并执行 `reference verify` 后上传。该脚本拒绝覆盖输出，也拒绝将输出放进源 reference。下载 artifact 后先解包 tar；不要直接把展开的 reference 文件列表当成可保留上述元数据的归档。校验工具对 Git 子进程启用长路径支持，不修改宿主 Git 全局配置。实际失败状态保留在原运行记录，证据包校验通过不把失败的捕获或构建改记为通过。
 
 `batch --prepare-only` 只更新 nightly、解析/核验最新 Cargo 依赖并归档锁文件、元数据和 vendor；不编译捕获 crate，不运行测试或离线消费，不能作为构建通过记录。
+
+后续本机批次发现 WGC/WARP 原型的间歇性访问冲突，系统事件将故障地址归到已卸载的 `GraphicsCapture.dll`；该批次已失败，尚未进入 GDI 对照。调试器或独立压力诊断未复现不撤销原失败，具体根因和修复仍待确认。[WGC 维护者的相关调查](https://github.com/robmikh/Win32CaptureSample/issues/99)记录了内部异步工作与模块卸载的竞态，但目前不能据此断定本机根因。显式离线 GDI 对照只证明其指定输入和 GDI 组件，不替代该失败批次或 WGC 退出验收。
 
 `configure` 为现有 P0 原型族解析 AUTO/ON/OFF，并输出外部 `build.conf` 路径与所需 Cargo features。族名为 windows、pipewire、wlr、screen-capture-kit，不代表最终 SDK 的方法/API。默认先执行上述在线准备；`--offline-inputs <Rust batch manifest>` 明确复用已归档解析，核对安装工具链及消费用 Cargo.lock，下一次在线准备仍重新检查更新。原生快照构建可用 `--consumer-lock <路径>` 指定其实际锁文件。请求、环境/原生依赖证据、源码与配置按新批次归档；ON 不满足时返回失败并保留记录，不发布可用配置。OFF 及其他平台不执行原生探测。
 

@@ -1,6 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 mod gdi;
+mod gdi_api;
 
 #[cfg(all(test, feature = "prototype-windows"))]
 #[path = "../../../tests/upstream-parity/gdi_adapter.rs"]

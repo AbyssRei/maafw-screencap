@@ -11,6 +11,9 @@ use std::{
     sync::Arc,
 };
 
+#[path = "gdi_probe.rs"]
+pub(crate) mod probe;
+
 #[allow(
     non_snake_case,
     non_camel_case_types,
@@ -285,6 +288,17 @@ impl Window<'_> {
             0 => Ok(()),
             status => Err(status),
         }
+    }
+    pub fn minimize(&self) -> Result<(), Box<dyn Error>> {
+        type Iconic = unsafe extern "C" fn(*mut c_void) -> i32;
+        // SAFETY: Exact private header signature; this fixture owns its HWND on
+        // the current thread. No unrelated window or process context is changed.
+        let iconic: Iconic = unsafe { self.adapter.module.symbol(c"mfs_gdi_parity_iconic")? };
+        // SAFETY: Same live fixture HWND; ShowWindow/IsIconic completes locally.
+        if unsafe { iconic(self.span.hwnd) } != 0 {
+            return Err("owned window did not become iconic".into());
+        }
+        Ok(())
     }
     pub fn close(&mut self) -> Result<(), i32> {
         let hwnd = std::mem::replace(&mut self.span.hwnd, null_mut());

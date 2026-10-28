@@ -152,9 +152,10 @@ fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
             "# P1 GDI migration component scope\n\n\
              Fixed unpatched GdiScreencap.{h,cpp} and HwndUtils.hpp::window_size/conversion order; parent U identity is retained in this run.\n\
              U-WIN-GDI-01 partial: controlled asymmetric BGR pixels, odd widths, conversion before GDI cleanup, retained CPU output and twenty cycles. Nondefault display depth remains unexecuted.\n\
-             U-WIN-GDI-02 partial: null/destroyed/empty HWND and contained conversion exception with cleanup balance; deterministic DC/bitmap/select/read failure injection and iconic HWND remain unexecuted.\n\
+             U-WIN-GDI-02 native scenarios: null/destroyed/empty/iconic HWND, DC/bitmap/select/copy/read/convert failures, each cleanup failure and a compound primary-plus-cleanup failure. Fault-instrumented original and the same Rust capture share real GDI boundary responses; compare order/results, report residuals before separate fixture recovery and verify CPU owner releases.\n\
+             Safe defect observations: the instrumented reference initializes input for positive short-return/layout probes; Rust rejects incomplete reads and failed metadata queries. A real 24-bit DDB may be rejected at SelectObject on the current 32-bit device; this is not a nondefault-depth display capture.\n\
              Safety adaptations: checked arithmetic/narrowing and fallible initialized allocation; GetObjectW validates the original packed one-plane 32-bit DDB assumption; short GetBitmapBits reads and invalid SelectObject sentinels are rejected. These are not DIB modernization.\n\
-             No manager/selection/forwarding or other backend case is closed. No complete GDI case, U snapshot, P1 exit, public SDK, PR or P3 feature is asserted by this component run.\n",
+             No manager/selection/forwarding or other backend case is closed. Actual native outcomes remain in the check logs; no complete GDI backend, U snapshot, P1 exit, public SDK, PR or P3 feature is asserted by this component run.\n",
         )?;
         source_snapshot
             .inputs

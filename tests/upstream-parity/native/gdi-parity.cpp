@@ -1,8 +1,10 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "gdi-parity.h"
+#include "gdi-probe-internal.hpp"
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <limits>
 #include <memory>
 #include <new>
@@ -11,7 +13,12 @@
 #include "Screencap/GdiScreencap.h"
 
 namespace {
-struct Image { cv::Mat pixels; };
+std::atomic<uint64_t> image_owners { 0 };
+struct Image {
+    cv::Mat pixels;
+    explicit Image(cv::Mat value) : pixels(std::move(value)) { ++image_owners; }
+    ~Image() { --image_owners; }
+};
 
 bool checked_span(size_t row, size_t stride, int32_t height, size_t& span)
 {
@@ -37,6 +44,12 @@ int32_t transfer(cv::Mat pixels, MfsParityImage* output)
 }
 }
 
+namespace mfs_parity {
+int32_t transfer_image(cv::Mat pixels, MfsParityImage* output) { return transfer(std::move(pixels), output); }
+}
+
+uint64_t mfs_gdi_parity_image_owners(void) { return image_owners.load(); }
+
 int32_t mfs_gdi_parity_reference(void* hwnd, MfsParityImage* output)
 {
     if (!output) { return 1; }
@@ -60,6 +73,7 @@ int32_t mfs_gdi_parity_convert(const uint8_t* data, size_t length, int32_t width
     size_t span = 0;
     if (!checked_span(static_cast<size_t>(width) * 4, stride, height, span) || length < span) { return 1; }
     try {
+        mfs_parity::probe_conversion();
         if (fault == 1) { throw cv::Exception(cv::Error::StsBadArg, "injected parity conversion exception", "GDI parity", __FILE__, __LINE__); }
         // cv::Mat requires a non-const external pointer but cvtColor reads this
         // input only, never retaining it or aliasing it with the new BGR output.
@@ -135,6 +149,14 @@ int32_t mfs_gdi_parity_window(int32_t width, int32_t height, MfsParityWindow* ou
 int32_t mfs_gdi_parity_destroy(void* hwnd)
 {
     return hwnd && DestroyWindow(static_cast<HWND>(hwnd)) ? 0 : 1;
+}
+
+int32_t mfs_gdi_parity_iconic(void* raw_hwnd)
+{
+    HWND hwnd = static_cast<HWND>(raw_hwnd);
+    if (!hwnd || !IsWindow(hwnd)) { return 1; }
+    ShowWindow(hwnd, SW_MINIMIZE);
+    return IsIconic(hwnd) ? 0 : 1;
 }
 
 uint32_t mfs_gdi_parity_objects(void)

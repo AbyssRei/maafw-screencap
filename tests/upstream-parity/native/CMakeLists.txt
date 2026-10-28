@@ -62,6 +62,8 @@ endif()
 if(MFS_BUILD_GDI_PARITY)
 add_library(mfs_gdi_parity SHARED
     gdi-parity.cpp
+    gdi-probe.cpp
+    gdi-probe-reference.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp")
 target_include_directories(mfs_gdi_parity PRIVATE
     "${MFS_UPSTREAM_ROOT}/include"
@@ -69,6 +71,8 @@ target_include_directories(mfs_gdi_parity PRIVATE
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit"
     ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mfs_gdi_parity PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
+file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp" MFS_GDI_CPP_PATH)
+target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_GDI_CPP="${MFS_GDI_CPP_PATH}")
 endif()
 endif()
 
