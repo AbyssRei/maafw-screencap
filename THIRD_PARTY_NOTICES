@@ -5,7 +5,7 @@ Repository: https://github.com/MaaXYZ/MaaFramework
 Migration source: commit 0fc6025c2fc224a171b57d89505e8d47acd2a8b1
 Project licence: GNU Lesser General Public License version 3.
 This extraction follows LGPL-3.0-or-later, as stated in LICENSE; the full
-LGPL v3 and GPL v3 texts are supplied in LICENSE and licenses/GPL-3.0.txt.
+LGPL v3 and GPL v3 texts are both supplied in LICENSE.
 
 src/backends/windows/gdi.rs is a Rust migration of:
   source/MaaWin32ControlUnit/Screencap/GdiScreencap.h
@@ -45,7 +45,7 @@ DWORD cooldown. Atomic storage avoids the original unsynchronized shared
 DWORD access without serializing the native requests. Checked geometry rejects
 undefined integer overflow; the original compatible-mode scale path is pending.
 
-The three migrated backends share DC/bitmap cleanup and private conversion/error
+The three GDI-family backends share DC/bitmap cleanup and private conversion/error
 types in gdi_resources.rs and gdi_types.rs. PrintWindow retains the original
 GetDIBits path, temporarily unselecting its bitmap to satisfy the native API
 precondition and reselecting it before the original BGRA2BGR conversion point.
@@ -57,6 +57,23 @@ notices. Their original source identities and licence materials are retained
 in the external provenance records. The Rust migration preserves the original
 native path and conversion point; it adds checked sizes, bitmap layout/full-read
 validation, fallible CPU allocation and separate cleanup error evidence.
+
+src/backends/windows/frame_pool.rs is a partial Rust migration of the fixed
+FramePoolScreencap.{h,cpp}. It preserves the hardware swapchain, original Create,
+caller execution, polling/cache clone and conversion-before-Unmap. Target-row
+copying, checked content/layout and explicit factory owners are documented safety
+adaptations; this is not completed FramePool or P1 acceptance.
+
+Microsoft C++/WinRT
+=================
+
+Repository: https://github.com/microsoft/cppwinrt
+src/platform/windows/wgc_factory.rs adapts the activation-loader algorithm from
+the selected Windows SDK C++/WinRT winrt/base.h; wgc.rs adapts its completion
+event wait from winrt/Windows.Foundation.h. The original Microsoft copyright
+and MIT notice are preserved in that source and licenses/cppwinrt-MIT.txt; the
+Rust adaptation is also subject to the project's LGPL-3.0-or-later terms.
+The exact SDK/header identity is archived with FramePool validation inputs.
 
 The explicit native acceptance targets compile original MaaFramework and
 MaaUtils sources and link OpenCV/Boost from external preparation inputs. Their

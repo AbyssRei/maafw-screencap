@@ -6,9 +6,12 @@ pub(crate) mod foreground;
 pub(crate) mod geometry;
 #[cfg(feature = "windows-print-window")]
 pub(crate) mod pseudo_minimize;
+#[cfg(feature = "windows-frame-pool")]
+pub(crate) mod wgc;
 #[cfg(feature = "windows-screen-dc")]
 pub(crate) mod window_api;
 
+#[cfg(any(feature = "windows-print-window", feature = "windows-screen-dc"))]
 #[allow(
     non_snake_case,
     non_camel_case_types,

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Test-only consumer of native/gdi-parity.h. Layout is verified in the real DLL.
-use crate::backends::windows::gdi_types::{BgraConverter, BgraView};
+use crate::backends::windows::pixels::{BgraConverter, BgraView};
 use crate::test_support::native_module::Module;
 use std::{
     error::Error,
@@ -23,9 +23,14 @@ pub(crate) mod print_query;
 #[cfg(feature = "windows-print-window")]
 #[path = "print_window_adapter.rs"]
 pub(crate) mod print_window;
+#[cfg(any(
+    feature = "windows-gdi",
+    feature = "windows-print-window",
+    feature = "windows-screen-dc"
+))]
 #[path = "gdi_probe.rs"]
 pub(crate) mod probe;
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-frame-pool"))]
 #[path = "screen_fixture.rs"]
 pub(crate) mod screen_fixture;
 
@@ -188,6 +193,9 @@ impl Adapter {
             adapter: self,
             fault,
             observed_objects: None,
+            conversions: 0,
+            clones: 0,
+            clone_fault_at: None,
         }
     }
 
@@ -210,12 +218,16 @@ pub(crate) struct Converter<'a> {
     adapter: &'a Adapter,
     fault: u32,
     pub observed_objects: Option<u32>,
+    pub conversions: usize,
+    pub clones: usize,
+    pub clone_fault_at: Option<usize>,
 }
 
 impl BgraConverter for Converter<'_> {
     type Image = Image;
     type Error = i32;
     fn bgra_to_bgr(&mut self, input: BgraView<'_>) -> Result<Image, i32> {
+        self.conversions = self.conversions.checked_add(1).ok_or(-1)?;
         self.observed_objects = Some(self.adapter.objects());
         let mut span = ImageSpan::default();
         // SAFETY: Borrowed BGRA input stays valid through this synchronous call;
@@ -233,6 +245,22 @@ impl BgraConverter for Converter<'_> {
             )
         };
         self.adapter.adopt(status, span)
+    }
+}
+
+#[cfg(feature = "windows-frame-pool")]
+impl crate::backends::windows::frame_pool::Converter for Converter<'_> {
+    fn clone_image(&mut self, image: &Image) -> Result<Image, i32> {
+        type CloneImage = unsafe extern "C" fn(*mut c_void, u32, *mut ImageSpan) -> i32;
+        self.clones = self.clones.checked_add(1).ok_or(-1)?;
+        // SAFETY: Resolve the exact private header signature in the input's
+        // real owning module, which can differ from the active converter's.
+        let clone: CloneImage =
+            unsafe { image.module.symbol(c"mfs_gdi_parity_clone") }.map_err(|_| -1)?;
+        let mut output = ImageSpan::default();
+        let fail = u32::from(self.clone_fault_at == Some(self.clones));
+        let status = unsafe { clone(image.span.owner, fail, &mut output) };
+        Image::adopt(&image.module, image.release, status, output)
     }
 }
 
@@ -290,6 +318,17 @@ impl Image {
         // SAFETY: adopt checked the descriptor's complete readable span; the
         // private native owner and loader remain live through this borrow.
         unsafe { std::slice::from_raw_parts(self.span.data, self.span.length) }
+    }
+    #[cfg(feature = "windows-frame-pool")]
+    pub fn address(&self) -> usize {
+        self.span.data as usize
+    }
+    #[cfg(feature = "windows-frame-pool")]
+    pub fn native_owners(&self) -> u64 {
+        type Owners = unsafe extern "C" fn() -> u64;
+        // SAFETY: Exact gdi-probe.h observation, module retained by this image.
+        let owners: Owners = unsafe { self.module.symbol(c"mfs_gdi_parity_image_owners") }.unwrap();
+        unsafe { owners() }
     }
 }
 
