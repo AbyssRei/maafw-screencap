@@ -650,6 +650,8 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         Some("desktop-dup-scope.md")
     } else if run.run_id.starts_with("p1-manager-windows-") {
         Some("manager-scope.md")
+    } else if run.run_id.starts_with("p1-pipewire-control-windows-") {
+        Some("pipewire-control-scope.md")
     } else {
         None
     };
@@ -753,6 +755,7 @@ mod tests {
             "frame-pool",
             "desktop-dup",
             "manager",
+            "pipewire-control",
         ] {
             let run_id = format!("p1-{kind}-windows-fixture");
             let scope = fixture
