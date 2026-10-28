@@ -3,6 +3,8 @@
 #[cfg(feature = "windows-gdi")]
 mod gdi;
 mod gdi_api;
+#[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
+mod gdi_read;
 mod gdi_resources;
 mod gdi_types;
 #[cfg(feature = "windows-print-window")]
@@ -11,6 +13,8 @@ mod print_window;
 mod print_window_api;
 #[cfg(feature = "windows-print-window")]
 mod print_window_pseudo;
+#[cfg(feature = "windows-screen-dc")]
+mod screen_dc;
 
 #[cfg(all(test, feature = "prototype-windows"))]
 #[path = "../../../tests/upstream-parity/gdi_adapter.rs"]

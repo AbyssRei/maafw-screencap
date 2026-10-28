@@ -10,6 +10,7 @@ param(
     [switch]$Desktop,
     [switch]$GdiParity,
     [switch]$PrintWindowParity,
+    [switch]$ScreenDcParity,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -26,6 +27,11 @@ $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
 $nativeMissingEnvironment = $false
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
+if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
+$screenEvidence = ''
+if ($ScreenDcParity) {
+    $pending.Add('ScreenDC is a partial P1 component. Exact-original window helpers and scripted capture/resource boundaries are distinct from native desktop evidence. Original source-only presentation controls retain before/after outcomes; fixture readiness does not modify capture or retry failed pixels. Occlusion, real native failure/cleanup, movement/resize and complete method/manager acceptance remain outstanding. Earlier visible-content and resource-baseline fixture failures remain archived.')
+}
 if ($PrintWindowParity) {
     $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
@@ -407,10 +413,11 @@ try {
     $build = Join-Path $nativeRoot "r-$([DateTime]::UtcNow.Ticks)"
     [string[]]$parityOptions = @(if ($GdiParity) { '-DMFS_BUILD_GDI_PARITY=ON' })
     if ($PrintWindowParity) { $parityOptions += '-DMFS_BUILD_PRINT_PARITY=ON' }
+    if ($ScreenDcParity) { $parityOptions += '-DMFS_BUILD_SCREEN_PARITY=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -434,14 +441,30 @@ try {
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_gdi_parity.dll) -Destination $parityLibrary
         Save-Input $parityLibrary
         $env:MFS_GDI_PARITY_LIBRARY = $parityLibrary
-        $parityFeatures = if ($PrintWindowParity) { 'windows-gdi,windows-print-window,prototype-windows-com' } else { 'windows-gdi,prototype-windows-com' }
+        $capabilities = @('windows-gdi', 'prototype-windows-com')
+        if ($PrintWindowParity) { $capabilities += 'windows-print-window' }
+        if ($ScreenDcParity) { $capabilities += 'windows-screen-dc' }
+        $parityFeatures = $capabilities -join ','
+        if ($ScreenDcParity) {
+            $screenEvidence = Join-Path $artifacts screen-evidence
+            New-Item -ItemType Directory -Path $screenEvidence | Out-Null
+            $env:MFS_SCREEN_EVIDENCE = $screenEvidence
+            $geometryEvidence = Join-Path $artifacts corrected-fork-geometry
+            New-Item -ItemType Directory -Path $geometryEvidence | Out-Null
+            $env:MFS_F_GEOMETRY_ARTIFACTS = $geometryEvidence
+        }
         $parityArguments = @('test', '--release', '--locked', '--lib', '--features', $parityFeatures)
         $clippyArguments = @('clippy', '--workspace', '--all-targets', '--locked', '--features', $parityFeatures)
         if ($offline) {
             $parityArguments += @('--offline', '--config', $CargoConfig)
             $clippyArguments += @('--offline', '--config', $CargoConfig)
         }
-        $parityFilter = if ($PrintWindowParity) { 'backends::windows::' } else { 'backends::windows::gdi::' }
+        # Shared GDI readback tests moved to their owning module; select all
+        # compiled Windows backend modules so GDI-only runs retain those checks.
+        $parityFilter = 'backends::windows::'
+        if ($ScreenDcParity) {
+            Step 'screen-window-helper-original-parity' cargo ($parityArguments + @('--', 'platform::windows::window_api::', '--include-ignored', '--test-threads=1', '--nocapture'))
+        }
         if ($PrintWindowParity) {
             Step 'pseudo-helper-original-parity' cargo ($parityArguments + @('--', 'platform::windows::pseudo_minimize::', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
@@ -485,6 +508,9 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
+        Get-ChildItem -LiteralPath $screenEvidence -File | ForEach-Object { Save-Input $_.FullName }
+    }
     Write-NewJson (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
         checks = @($checks.ToArray()); pending = @($pending.ToArray()); inputs = @($inputs.ToArray())

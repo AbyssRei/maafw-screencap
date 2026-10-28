@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::native::*;
-#[cfg(feature = "windows-gdi")]
+#[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
 use std::ffi::c_void;
 
 /// The native boundary used by the same GDI capture/resource implementation.
@@ -24,7 +24,7 @@ pub(super) unsafe trait DcApi {
     unsafe fn release_dc(&self, hwnd: HWND, dc: HDC) -> i32;
 }
 
-#[cfg(feature = "windows-gdi")]
+#[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
 /// # Safety
 /// DcApi ownership applies; copy/object/read use exactly the stated writable spans.
 pub(super) unsafe trait GdiApi: DcApi {
@@ -72,7 +72,7 @@ unsafe impl DcApi for SystemGdi {
     }
 }
 
-#[cfg(feature = "windows-gdi")]
+#[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
 // SAFETY: Direct Win32 calls preserve the checked spans and native ownership.
 unsafe impl GdiApi for SystemGdi {
     unsafe fn copy(&self, destination: HDC, width: i32, height: i32, source: HDC) -> i32 {
@@ -86,5 +86,38 @@ unsafe impl GdiApi for SystemGdi {
     unsafe fn read(&self, bitmap: HBITMAP, length: i32, output: *mut c_void) -> i32 {
         // SAFETY: Caller supplies exactly the checked writable byte span.
         unsafe { GetBitmapBits(bitmap, length, output) }
+    }
+}
+
+#[cfg(feature = "windows-screen-dc")]
+/// # Safety
+/// GdiApi ownership applies. The destination bitmap covers the positive width
+/// and height; source coordinates are screen-DC coordinates, without rebasing.
+pub(super) unsafe trait ScreenDcApi: GdiApi {
+    unsafe fn copy_screen(
+        &self,
+        destination: HDC,
+        width: i32,
+        height: i32,
+        source: HDC,
+        x: i32,
+        y: i32,
+    ) -> i32;
+}
+
+#[cfg(feature = "windows-screen-dc")]
+// SAFETY: Direct Win32 operation, with the same handles/bounds as the source.
+unsafe impl ScreenDcApi for SystemGdi {
+    unsafe fn copy_screen(
+        &self,
+        destination: HDC,
+        width: i32,
+        height: i32,
+        source: HDC,
+        x: i32,
+        y: i32,
+    ) -> i32 {
+        // SAFETY: Caller retains both DCs and a selected destination bitmap.
+        unsafe { BitBlt(destination, 0, 0, width, height, source, x, y, SRCCOPY) }
     }
 }

@@ -4,6 +4,8 @@
 
 ## 阅读顺序与权威来源
 
+P1 另已加入独立 ScreenDC 内部实现和默认路径的 ForegroundUtils/HwndUtils 迁移；原头文件脚本对照与本机局部可见像素/清理检查已有证据，正式入口为 `cargo xtask upstream-parity screen-dc`。夹具资源初始化和呈现时序的原失败保留，遮挡/真实故障矩阵与完整后端/阶段验收仍未完成。
+
 | 文档 | 职责及当前状态 |
 | --- | --- |
 | [实施计划](plans/maafw-screencap-extraction-plan.md) | 项目范围、U/P/E 顺序、依赖政策、参考资料布局、后端要求、验收与发布门禁；计划已确认，实施待完成 |

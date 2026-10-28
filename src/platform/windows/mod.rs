@@ -1,6 +1,13 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#[cfg(feature = "windows-screen-dc")]
+pub(crate) mod foreground;
+#[cfg(feature = "windows-screen-dc")]
+pub(crate) mod geometry;
+#[cfg(feature = "windows-print-window")]
 pub(crate) mod pseudo_minimize;
+#[cfg(feature = "windows-screen-dc")]
+pub(crate) mod window_api;
 
 #[allow(
     non_snake_case,

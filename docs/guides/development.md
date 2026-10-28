@@ -47,6 +47,8 @@ cargo xtask upstream-parity gdi
 cargo xtask upstream-parity gdi --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-parity print-window
 cargo xtask upstream-parity print-window --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-parity screen-dc
+cargo xtask upstream-parity screen-dc --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
 
 本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空/最小化窗口与被封住的转换异常。故障对照以隔离命名空间编译原始函数体，通过真实 GDI 对象记录创建、复制、转换及清理的原生边界响应；14 组正常/故障/组合场景分别核对主错误、清理错误、调用顺序及 CPU owner 释放。夹具先记录捕获实现遗留的资源，再单独回收，不能据此声称产品在原生清理失败后已成功关闭。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
@@ -72,6 +74,16 @@ PrintWindow 的内部迁移位于 `src/backends/windows/print_window.rs`，由�
 伪最小化 helper 已迁入 `src/platform/windows/pseudo_minimize.rs`，PrintWindow 包装保留构造时启动、截图前同步 ensure、`inactive` 与析构停用的原顺序。标准 Arc 保活监视状态，调用方 owner 不宣称 Send/Sync；监视线程只执行原有窗口查询与属性恢复，保持 100 ms 轮询，stop 完成 join 后再恢复属性并按原条件重新最小化。原生调用和等待期间不持有状态锁。固定大小证据按操作分别保存首末失败及次数，并保留全局首末错误，避免早期失败遮蔽样式和透明度两个恢复错误，ShowWindow 的零返回单独记录为先前可见性，不误称操作失败。部分应用失败后不新增回滚；`inactive` 恢复后不重新最小化，目标消失后不自动重启监视线程。
 
 22 组原 C++ 函数体脚本对照覆盖原样式/透明度、各失败短路、监视恢复/目标消失、重复 start/stop 与 inactive，逐项比较调用、100 ms 等待请求和状态快照。脚本明确替换线程调度，不能证明真实线程退出；单独的真实线程同步测试检查 join 完成前不恢复属性。旧同线程夹具在 layered 还原后的待绘制阶段捕获到旧标题内容；重绘/flush 控制及原失败均保留外置。相同原始 helper/capture 面对独立运行消息循环的 UI owner 时已通过已知图样对照，夹具的激活锚点也须由同一 UI owner 设置，不能从捕获线程调用 SetActiveWindow 代替。未修改产品 helper 的等待、转换或 ShowWindow 调用。普通/layered 窗口分别覆盖 stop/inactive 各 20 次生命周期，目标销毁各 20 次，逐像素、样式/透明度、真实线程退出和关闭后持帧均单独验证。前台恢复在独立的精确测试入口执行；若原生 SetForegroundWindow 返回零且其他进程保留前台，编排记录 missing_environment，继续独立检查并使批次保持非通过，不使用输入注入或绕过权限。该情况不能记作恢复成功。此前弹窗黑图的独立 A/B/A 控制仍可能不复现，不能据此宣称其根因已修复；完整 helper/wrapper 和 PrintWindow 验收仍未完成。
+
+ScreenDC 的内部实现位于 `src/backends/windows/screen_dc.rs`，独立 `windows-screen-dc` feature 不要求编入 PrintWindow。它保留前台/几何 helper 失败后继续捕获、原 `rcWork` 校正、未使用但仍须执行的窗口矩形查询、屏幕 DC 客户区坐标、GetBitmapBits 与清理前转换；null HWND 不表示全桌面。窗口 GDI 与 ScreenDC 共用原读回代码，PrintWindow 的 GetDIBits 路径仍独立。所有原生资源在同步调用线程创建、使用和销毁，没有新增 Send/Sync 保证。
+
+`screen-dc` 显式编译原 ScreenDC 类及原窗口 helper 头文件，保留 GDI 回归。脚本对照检查 11 个连续冷却步骤、2 个直接置顶调用、16 个几何、3 个尺寸、4 个样式与 4 个缩放案例；溢出检查不执行原 C++ 未定义算术。另有脚本化捕获/清理边界测试，不能作为真实原生故障验收。本机 20 轮呈现就绪后的源码/Rust 客户区逐像素、资源计数及窗口关闭后 CPU 持帧已通过；完整正式批次和其他平台结果仍以外部记录为准。
+
+首次 ScreenDC 桌面检查暴露两个夹具问题，原失败保留：冷进程创建窗口初始化 9 个后续保留的 GDI 对象，独立无捕获控制确认捕获基线须在窗口创建后；后续第 9 轮原源码读到其他桌面内容，仅原源码的 20 轮呈现前/后控制又观察到 2 轮呈现前非夹具像素，呈现后均正确。夹具以 GdiFlush/DwmFlush 建立一次就绪前提，捕获实现、等待和像素断言不变，不重试失败。前台请求被拒绝仍可得到可见像素，不等于前台恢复成功。遮挡、真实原生失败清理、异步移动/缩放、非默认深度和完整 helper/manager 验收仍待完成，不能声明 ScreenDC 或 P1 已验收。
+
+随后完整 ScreenDC 组件批次在 GDI 回归之后复现两项黑图失败：源码/Rust 均为黑图，原源码在单次呈现屏障后仍为黑图；日志和四张原始图像均已归档，前述单独运行的通过不能覆盖该失败。当前夹具改为复用已有 WM_PAINT 绘图和专用 UI owner/message loop，在该 owner 上查询统计和关闭，再 join 退出；ScreenDC 的原生验收目标不编译 PrintWindow 后端或伪最小化。捕获调用及逐像素断言不变，必须重新核对这一夹具前提，不能将单次 DwmFlush 当作已充分证明的就绪保证。
+
+专用 UI owner 的后续完整后端顺序检查也出现同样两项黑图失败，尽管绘图消息、owner 身份和无绘图错误已核对；不能声称该夹具改动修复黑图。只读桌面证据显示已超过关屏时限、前台窗口为空，熄屏目前仅为待用户确认的原因推断，未据此重分类断言失败。独立 callback-module 保活至 join 退出、原窗口 helper 与伪最小化脚本检查通过。PrintWindow 单独过滤的回归又记录了冷进程计数与原弹窗黑图失败；其条件编译的 PrintWindow 分支与此前源码等价，实际失败仍保留，不能记为回归通过。
 
 ## 已实现的 P0 工具
 

@@ -640,6 +640,8 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         Some("gdi-scope.md")
     } else if run.run_id.starts_with("p1-print-window-windows-") {
         Some("print-window-scope.md")
+    } else if run.run_id.starts_with("p1-screen-dc-windows-") {
+        Some("screen-dc-scope.md")
     } else {
         None
     };
@@ -737,7 +739,7 @@ mod tests {
         ));
         fs::create_dir(&root).unwrap();
         let fixture = SourceFixture(root);
-        for kind in ["gdi", "print-window"] {
+        for kind in ["gdi", "print-window", "screen-dc"] {
             let run_id = format!("p1-{kind}-windows-fixture");
             let scope = fixture
                 .0
