@@ -89,6 +89,10 @@ ScreenDC 的真实资源故障入口以隔离命名空间编译原函数体，�
 
 精确提交的原生 Actions 又记录了不同的可见内容失败：第一轮源码/Rust 图样正确，第二轮前台为 true，但源码首先读到统一灰色 `[12,12,12]`，Rust 随后正确，原源码呈现前/后控制同轮也为灰色。不能用本机熄屏推断解释这一 runner 结果。当前仅增加一个待验证的夹具控制：自有 ScreenDC 测试窗口在隐藏时设置 `DWMWA_TRANSITIONS_FORCEDISABLED`，成功后才首次显示；保持 PrintWindow 的既有模式、捕获等待及逐像素断言，既不改全局动画设置，也不重试失败。私有 C 接口原有布局/统计前缀保持，尾部反映该设置。设置、module 保活、四项原生故障和 PrintWindow 两项前缀/退出检查已通过；动画是否为根因及这个控制能否稳定可见像素，仍需新原生证据，所有旧失败保留。
 
+后续结果未证实仅禁动画有效：用户确认并唤醒本机熄屏后，禁动画的完整 backend 入口仍为 16 项通过、2 项灰图失败；相应提交的 Actions 也仍失败。只读诊断又在一轮源码捕获前观察到客户区中心由另一窗口占据，随后目标抬升才取得正确像素。[IsWindowVisible](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-iswindowvisible) 仅表示可见样式，不保证无遮挡；[WindowFromPoint](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-windowfrompoint) 的点窗口/root 与源码捕获前后的前台、cloaked、坐标和样式一起保留。原 helper 共享的 5 秒冷却不保证为每个新窗口再次请求前台，不能用 Rust 返回后的前台值推断原源码取帧瞬间的可见性。
+
+新的夹具前提是在自有 ScreenDC root 上额外请求 `WS_EX_TOPMOST`，不授予前台权限；原 helper 仍可按原行为将它取消置顶。只改变夹具，保留原捕获、等待及严格像素断言，原 PrintWindow 模式与 C 接口前缀保持。一轮亮屏本机完整 backend 入口 19 项通过，包括 20 轮配对逐像素/清理/关闭后持帧，以及独立的 20 轮源码呈现前后控制；观察到各轮中心点 root 属于目标。这只证明该受控场景，新夹具的托管结果、显式遮挡/移动/深度与完整 P1 仍待验证。首次运行因未创建外部图像记录目录中断，属于保留的 harness I/O 失败；补建目录后的结果单独记录，不能覆盖之前的像素失败。
+
 ## 已实现的 P0 工具
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。

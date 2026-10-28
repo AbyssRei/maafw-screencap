@@ -4,6 +4,35 @@ use super::*;
 #[cfg(feature = "prototype-windows")]
 #[path = "screen_dc_fault_tests.rs"]
 mod native_failures;
+
+#[cfg(feature = "prototype-windows")]
+#[test]
+#[ignore = "explicit source-only visibility diagnostic, not capture acceptance"]
+fn observes_point_window_roots_around_original_screen_samples()
+-> Result<(), Box<dyn std::error::Error>> {
+    use crate::backends::windows::parity_adapter::Adapter;
+    let adapter = Adapter::load()?;
+    for cycle in 0..3 {
+        let mut fixture = adapter.screen_fixture()?;
+        let before = adapter.screen_window_observation(fixture.hwnd())?;
+        let image = adapter
+            .screen_reference(fixture.hwnd())
+            .map_err(|s| format!("source {s}"))?;
+        let after = adapter.screen_window_observation(fixture.hwnd())?;
+        let pixel = first_nonfixture_pixel(&image);
+        println!(
+            "source-only visibility cycle {cycle}: before={before:?}, after={after:?}, nonfixture_pixel={pixel:?}"
+        );
+        record_image(&format!("visibility-{cycle}-source"), &image)?;
+        assert_eq!(before[0], 1);
+        assert_eq!(before[1], 1);
+        assert_eq!(before[2], 0);
+        // Point/root and pixel observations are retained without converting
+        // this diagnosis into a passing visible-pixel acceptance claim.
+        fixture.close()?;
+    }
+    Ok(())
+}
 #[path = "screen_dc_synthetic.rs"]
 mod synthetic;
 
@@ -89,6 +118,7 @@ fn observes_original_screen_pixels_before_and_after_fixture_presentation_barrier
     let mut transitions = 0;
     for cycle in 0..20 {
         let mut window = adapter.screen_fixture()?;
+        let visible_a = adapter.screen_window_observation(window.hwnd())?;
         let before = adapter
             .screen_reference(window.hwnd())
             .map_err(|s| format!("source A {s}"))?;
@@ -96,12 +126,13 @@ fn observes_original_screen_pixels_before_and_after_fixture_presentation_barrier
         let after = adapter
             .screen_reference(window.hwnd())
             .map_err(|s| format!("source B {s}"))?;
+        let visible_b = adapter.screen_window_observation(window.hwnd())?;
         record_image(&format!("source-control-{cycle}-before"), &before)?;
         record_image(&format!("source-control-{cycle}-after"), &after)?;
         let a = first_nonfixture_pixel(&before);
         let b = first_nonfixture_pixel(&after);
         println!(
-            "source-only presentation cycle {cycle}: before={a:?}, barrier={barrier:?}, after={b:?}"
+            "source-only presentation cycle {cycle}: before={a:?}, barrier={barrier:?}, after={b:?}, visibility_before={visible_a:?}, visibility_after={visible_b:?}"
         );
         assert_eq!(barrier, [1, 0], "fixture submission/presentation evidence");
         assert_eq!(
@@ -191,12 +222,18 @@ fn compares_original_visible_client_pixels_and_retains_cpu_images_after_close()
             window.thread_info()?
         );
         let mut capture = ScreenDcCapture::new(window.hwnd());
+        let before_source = adapter.screen_window_observation(window.hwnd())?;
         let reference = adapter
             .screen_reference(window.hwnd())
             .map_err(|s| format!("source capture status {s}, cycle {cycle}"))?;
+        let after_source = adapter.screen_window_observation(window.hwnd())?;
         assert_eq!(adapter.objects(), baseline, "original ScreenDC cleanup");
         let mut converter = adapter.converter(0);
         let attempt = capture.capture(&mut converter);
+        let after_rust = adapter.screen_window_observation(window.hwnd())?;
+        println!(
+            "ScreenDC cycle {cycle} visibility: before_source={before_source:?}, after_source={after_source:?}, after_rust={after_rust:?}"
+        );
         assert!(
             attempt.cleanup.0.iter().all(Option::is_none),
             "{:?}",
