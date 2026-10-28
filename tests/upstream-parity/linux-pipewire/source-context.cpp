@@ -18,6 +18,8 @@
 #include <iostream>
 #include <limits>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <string_view>
 #include <thread>
@@ -81,6 +83,65 @@ std::vector<std::string> task_ids() {
     }
     std::sort(tasks.begin(),tasks.end());
     return tasks;
+}
+struct Task {
+    std::string id,name;
+    uint64_t started,flags,address_space;
+    int64_t resident_pages;
+};
+std::optional<Task> task(const std::string& id) {
+    errno=0;
+    std::ifstream input(std::filesystem::path("/proc/self/task")/id/"stat");
+    if(!input) { require(errno==ENOENT,"cannot inspect proc task");return std::nullopt; }
+    std::string text;
+    std::getline(input,text);
+    require(input.good() || input.eof(),"cannot read proc task stat");
+    const auto end=text.rfind(')');
+    require(end!=std::string::npos,"invalid proc task comm field");
+    std::istringstream body(text.substr(end+1));
+    std::vector<std::string> fields;
+    std::string field;
+    while(body>>field) { fields.push_back(field); }
+    require(fields.size()>=22,"short proc task stat");
+    auto number=[&](size_t index){
+        uint64_t result=0;
+        const auto& word=fields[index];
+        const auto parsed=std::from_chars(word.data(),word.data()+word.size(),result);
+        require(parsed.ec==std::errc{} && parsed.ptr==word.data()+word.size(),"invalid proc task number");
+        return result;
+    };
+    // Fields 9/22/23/24, after the final ')' of comm (which can contain spaces).
+    int64_t resident=0;
+    const auto& word=fields[21];
+    const auto parsed=std::from_chars(word.data(),word.data()+word.size(),resident);
+    require(parsed.ec==std::errc{} && parsed.ptr==word.data()+word.size(),"invalid proc task RSS");
+    const auto begin=text.find('(');
+    require(begin!=std::string::npos && begin<end,"invalid proc task name");
+    return Task{id,text.substr(begin+1,end-begin-1),number(19),number(6),number(20),resident};
+}
+std::vector<Task> live_tasks() {
+    std::vector<Task> result;
+    for(const auto& id:task_ids()) { if(auto value=task(id)) { result.push_back(std::move(*value)); } }
+    return result;
+}
+bool only_retiring_tasks(const std::vector<std::string>& actual,const std::vector<std::string>& baseline,const std::vector<Task>& live) {
+    for(const auto& id:baseline) {
+        if(std::find(actual.begin(),actual.end(),id)==actual.end()) { return false; }
+    }
+    for(const auto& id:actual) {
+        if(std::find(baseline.begin(),baseline.end(),id)!=baseline.end()) { continue; }
+        const auto before=std::find_if(live.begin(),live.end(),[&](const Task& value){return value.id==id;});
+        if(before==live.end() || before->name!="MaaScreencap" ||
+           (before->flags&0x4) || before->address_space==0) { return false; }
+        if(auto after=task(id)) {
+            // Only a known same-generation PF_EXITING task with no userspace
+            // address space can finish kernel retirement here. Never a live
+            // worker, an unknown TID, or asynchronous callback/native cleanup.
+            if(after->started!=before->started || !(after->flags&0x4) ||
+               after->address_space!=0 || after->resident_pages!=0) { return false; }
+        }
+    }
+    return true;
 }
 void task_snapshot(const std::filesystem::path& directory,const std::string& label,const std::vector<std::string>& tasks) {
     std::ofstream output(directory/("tasks-"+label+".txt"));
@@ -433,8 +494,9 @@ int main(int argc,char** argv) {
         cv::Mat raw(HEIGHT,WIDTH,CV_8UC3,cv::Scalar(1,2,3)),converted;
         cv::cvtColor(raw,converted,cv::COLOR_RGB2BGR);
         const size_t base_fds=count_entries("/proc/self/fd");
-        const size_t base_threads=count_entries("/proc/self/task");
-        task_snapshot(artifacts,"baseline",task_ids());
+        const auto base_tasks=task_ids();
+        const size_t base_threads=base_tasks.size();
+        task_snapshot(artifacts,"baseline",base_tasks);
         std::vector<HeldImage> held;
         held.reserve(60);
         uint32_t previous=0;
@@ -468,6 +530,7 @@ int main(int argc,char** argv) {
                     <<" output=known_bgr fixture_marker="<<marker<<" marker_relation="<<relation<<" api_replay=not_exposed\n";
                 previous=marker;
             }
+            const auto live=live_tasks();
             if(cycle==0) { task_snapshot(artifacts,"first-live",task_ids()); }
             source->close();
             require(!source->connected(),"original source still connected after close");
@@ -479,7 +542,32 @@ int main(int argc,char** argv) {
             const size_t threads=tasks.size();
             std::cout<<"source closed cycle="<<cycle<<" fds="<<fds<<" baseline_fds="<<base_fds
                 <<" threads="<<threads<<" baseline_threads="<<base_threads<<'\n';
-            if(fds!=base_fds || threads!=base_threads) {
+            bool settled=tasks==base_tasks;
+            if(fds==base_fds && !settled && only_retiring_tasks(tasks,base_tasks,live)) {
+                const auto label="cycle-"+std::to_string(cycle);
+                task_snapshot(artifacts,label+"-kernel-retirement",tasks);
+                std::ofstream identities(artifacts/("tasks-"+label+"-live-identities.txt"));
+                for(const auto& value:live) {
+                    identities<<value.id<<' '<<value.name<<' '<<value.started<<' '<<value.flags<<' '<<value.address_space<<' '<<value.resident_pages<<'\n';
+                }
+                identities.close();
+                require(identities.good(),"cannot archive live task identities");
+                const auto start=std::chrono::steady_clock::now();
+                // Full source close/destruction already finished. This is a
+                // bounded kernel/proc retirement observation, never a capture
+                // retry, wait for active callbacks, or deferred FD cleanup.
+                for(;;) {
+                    const auto current=task_ids();
+                    if(current==base_tasks) { settled=true;break; }
+                    if(!only_retiring_tasks(current,base_tasks,live) ||
+                       std::chrono::steady_clock::now()-start>=std::chrono::milliseconds(100)) { break; }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+                std::cout<<"kernel task retirement cycle="<<cycle<<" immediate_tasks="<<threads<<" baseline="<<base_threads
+                    <<" settled="<<settled<<" elapsed_us="
+                    <<std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count()<<'\n';
+            }
+            if(fds!=base_fds || !settled) {
                 std::cerr<<"source native resource mismatch fixed before diagnostic observations\n";
                 const auto label="cycle-"+std::to_string(cycle);
                 task_snapshot(artifacts,label+"-mismatch",tasks);
@@ -488,7 +576,7 @@ int main(int argc,char** argv) {
                     task_snapshot(artifacts,label+"-after-"+std::to_string(delay)+"ms",task_ids());
                 }
             }
-            require(fds==base_fds && threads==base_threads,"source native resource count mismatch");
+            require(fds==base_fds && settled,"source native resource count mismatch or unretired/unknown/live task");
             for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"retained source sample identity changed"); }
         }
         std::exception_ptr cross_thread_error;
