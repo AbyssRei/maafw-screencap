@@ -63,7 +63,7 @@ impl Callbacks {
     }
     fn add(&self, counter: &AtomicU64, amount: u64) {
         if counter
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
                 v.checked_add(amount)
             })
             .is_err()
