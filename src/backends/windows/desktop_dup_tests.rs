@@ -306,7 +306,12 @@ fn matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles()
             assert!(sample.copied_bytes > 0);
         }
         let marker = fixture.desktop_update_info()?;
-        assert!(marker[0] != 0 && marker[1] > 1);
+        println!("DesktopDup fixture marker cycle={cycle} {marker:?}");
+        assert_ne!(marker[0], 0);
+        assert!(marker[1] >= 1); // start performed the initial synchronous draw
+        // Acquisitions may consume initial, pointer or other window updates
+        // before another 50ms timer callback. The count includes the initial
+        // draw; extra callbacks are not required for strict pixels above.
         assert_eq!(marker[2], 0);
         fixture.close()?;
         assert_eq!(
