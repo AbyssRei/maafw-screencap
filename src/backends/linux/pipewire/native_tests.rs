@@ -146,6 +146,7 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
         let evidence = native.evidence();
         assert_eq!(evidence.fault, 0, "{evidence:?}");
         assert_eq!(evidence.queue_error, 0, "{evidence:?}");
+        assert_eq!(evidence.core_disconnect_error, 0, "{evidence:?}");
         assert_eq!(evidence.dequeued, evidence.returned, "{evidence:?}");
         assert_eq!(evidence.copies, 3, "{evidence:?}");
         assert_eq!(

@@ -56,6 +56,11 @@ struct Callbacks {
     allocated: AtomicU64,
 }
 impl Callbacks {
+    fn fail(&self, code: u32) {
+        let _ = self
+            .fault
+            .compare_exchange(0, code, Ordering::AcqRel, Ordering::Acquire);
+    }
     fn add(&self, counter: &AtomicU64, amount: u64) {
         if counter
             .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |v| {
@@ -63,14 +68,14 @@ impl Callbacks {
             })
             .is_err()
         {
-            self.fault.store(2, Ordering::Release);
+            self.fail(2);
         }
     }
     fn boundary(&self, operation: impl FnOnce()) {
         if catch_unwind(AssertUnwindSafe(operation)).is_err() {
             // No exception crosses native C. This scalar path cannot allocate;
             // source error callbacks do not signal, so U still uses its timeout.
-            self.fault.store(1, Ordering::Release);
+            self.fail(1);
         }
     }
 }
@@ -133,7 +138,7 @@ unsafe extern "C" fn on_param(data: *mut c_void, id: u32, param: *const spa::sys
             return;
         };
         if width > i32::MAX as u32 || height > i32::MAX as u32 {
-            callbacks.fault.store(3, Ordering::Release);
+            callbacks.fail(3);
             return;
         }
         // SAFETY: Actual loop lock excludes consumer/other callbacks; this
@@ -213,7 +218,7 @@ unsafe extern "C" fn on_process(data: *mut c_void) {
         {
             // Explicit unfinished memory-path rejection. In particular an
             // existing DMA-BUF pointer does not bypass the pending sync audit.
-            callbacks.fault.store(4, Ordering::Release);
+            callbacks.fail(4);
             return;
         }
         // SAFETY: The chunk descriptor, when present, belongs to the SPA lease.
@@ -258,7 +263,7 @@ unsafe extern "C" fn on_process(data: *mut c_void) {
                     sys::pw_thread_loop_signal(callbacks.loop_.get(), false);
                 }
             }
-            Err(error) => callbacks.fault.store(copy_fault(error), Ordering::Release),
+            Err(error) => callbacks.fail(copy_fault(error)),
         }
     });
 }
@@ -276,6 +281,7 @@ pub(super) struct Native {
 pub(super) struct Evidence {
     pub fault: u32,
     pub queue_error: i32,
+    pub core_disconnect_error: i32,
     pub dequeued: u64,
     pub returned: u64,
     pub copies: u64,
@@ -407,6 +413,7 @@ impl Native {
         Evidence {
             fault: self.callbacks.fault.load(Ordering::Acquire),
             queue_error: self.callbacks.queue_error.load(Ordering::Acquire),
+            core_disconnect_error: self.resources.core_disconnect_error,
             dequeued: self.callbacks.dequeued.load(Ordering::Acquire),
             returned: self.callbacks.returned.load(Ordering::Acquire),
             copies: self.callbacks.copies.load(Ordering::Acquire),
