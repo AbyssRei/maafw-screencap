@@ -38,11 +38,23 @@ pub fn run_context(args: &[String]) -> Result<()> {
     run_native(&native_args, Some("frame-pool-context"))
 }
 
+pub fn run_model(args: &[String]) -> Result<()> {
+    if args.first().map(String::as_str) != Some("pipewire") {
+        return Err(
+            "expected upstream-model pipewire [--offline-inputs <native run manifest>]".into(),
+        );
+    }
+    let mut native_args = vec!["--desktop".to_owned()];
+    native_args.extend_from_slice(&args[1..]);
+    run_native(&native_args, Some("pipewire-control"))
+}
+
 fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     let frame_context = parity == Some("frame-pool-context");
     let frame_parity = parity == Some("frame-pool");
     let desktop_parity = parity == Some("desktop-dup");
     let manager_parity = parity == Some("manager");
+    let pipewire_control = parity == Some("pipewire-control");
     let gdi_parity = parity.is_some() && !frame_context;
     let print_parity = parity == Some("print-window");
     let screen_parity = parity == Some("screen-dc");
@@ -154,6 +166,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "p1-desktop-dup-windows"
         } else if manager_parity {
             "p1-manager-windows"
+        } else if pipewire_control {
+            "p1-pipewire-control-windows"
         } else if gdi_parity {
             "p1-gdi-windows"
         } else {
@@ -178,6 +192,16 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if pipewire_control {
+        let scope = inputs.join("pipewire-control-scope.md");
+        fs::write(
+            &scope,
+            "# P1 partial PipeWire consumer control model\n\nPrivate consumer control flow, not native Linux capture. Compile exact fixed-source loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with newline normalization only. Explicit fake native loop/clock and symbolic format IDs; real OpenCV Mat ownership and conversion. Compare 68 cases/112 operations: whole-second wait truncation and spurious wakeups, ignored native activation errors, fresh versus three timeout replays/fourth rejection, empty cache, source disconnected predicate, inactive/reactivation, format selection, conversion after unlock, contained conversion exceptions and BGR shared-owner move. Additional checked clock/counter arithmetic remains a safety adaptation outside source undefined-overflow parity.\n\nThis does not compile the full original Linux class, prove SPA numeric values or native lock/callback/stream/buffer/teardown. A future native driver must exclude callbacks while locked and release/reacquire around timed_wait without leaving Rust references into callback-mutated state. Native setup/POD/process/SHM/DMA-BUF, caller mobility, initialization ownership, source manager and complete U remain pending; existing Linux runtime evidence remains P0 only. No P1/Linux-backend acceptance or P2/P3 implementation. Dependency preparation and Windows GDI regressions in this host batch are separate checks.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if manager_parity {
         let scope = inputs.join("manager-scope.md");
         fs::write(
@@ -331,6 +355,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if manager_parity {
         process.arg("-ManagerParity");
     }
+    if pipewire_control {
+        process.arg("-PipeWireControl");
+    }
     if let Some(input) = &offline {
         process
             .arg("-OfflineManifest")
@@ -387,6 +414,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "P1 Desktop Duplication component"
         } else if manager_parity {
             "P1 screenshot-manager component"
+        } else if pipewire_control {
+            "P1 portable PipeWire consumer model (no Linux native acceptance)"
         } else if gdi_parity {
             "P1 GDI component"
         } else {

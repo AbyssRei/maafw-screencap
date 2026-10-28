@@ -55,6 +55,13 @@ fn main() {
                 std::env::var_os("CARGO_FEATURE_PROTOTYPE_WINDOWS").is_some(),
             )
             .expect("prepared Cargo feature selection");
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_LINUX_PIPEWIRE");
+        assert!(
+            os != "linux"
+                || std::env::var_os("CARGO_FEATURE_LINUX_PIPEWIRE").is_none()
+                || selected.enabled[1],
+            "PipeWire consumer cannot be enabled when the prepared PipeWire family is OFF"
+        );
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_SCREEN_DC");

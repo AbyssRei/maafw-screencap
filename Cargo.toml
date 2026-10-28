@@ -15,6 +15,8 @@ windows-frame-pool = ["dep:windows-bindgen", "dep:windows-link", "dep:windows-co
 windows-desktop-dup = ["dep:windows-bindgen", "dep:windows-link", "dep:windows-core"]
 windows-desktop-dup-window = ["windows-desktop-dup"]
 windows-manager = ["windows-gdi", "windows-print-window", "windows-screen-dc", "windows-frame-pool", "windows-desktop-dup-window"]
+# Partial private consumer algorithm; native PipeWire migration is unfinished.
+linux-pipewire = ["dep:pipewire"]
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows-com = ["prototype-windows", "dep:windows-core", "dep:windows-future"]
 prototype-linux-pipewire = ["dep:pipewire"]
