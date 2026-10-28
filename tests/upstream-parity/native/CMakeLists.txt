@@ -22,6 +22,7 @@ option(MFS_BUILD_REFERENCE "Build the independent selected-source reference exec
 option(MFS_BUILD_GDI_PARITY "Build the private GDI reference/conversion and window fixture" OFF)
 option(MFS_BUILD_PRINT_PARITY "Include the original PrintWindow and owned rendering fixture" OFF)
 option(MFS_BUILD_SCREEN_PARITY "Include original ScreenDC and window-helper observation" OFF)
+option(MFS_BUILD_FRAMEPOOL_REFERENCE "Build the isolated original FramePool caller-context diagnostic" OFF)
 if(MFS_BUILD_SCREEN_PARITY AND NOT MFS_BUILD_GDI_PARITY)
     message(FATAL_ERROR "ScreenDC parity requires the selected common image adapter")
 endif()
@@ -33,7 +34,7 @@ add_library(mfs_p0_adapter SHARED interop.cpp)
 target_link_libraries(mfs_p0_adapter PRIVATE ${OpenCV_LIBS})
 target_include_directories(mfs_p0_adapter PRIVATE ${OpenCV_INCLUDE_DIRS})
 
-if(MFS_BUILD_REFERENCE OR MFS_BUILD_GDI_PARITY)
+if(MFS_BUILD_REFERENCE OR MFS_BUILD_GDI_PARITY OR MFS_BUILD_FRAMEPOOL_REFERENCE)
 foreach(input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_BOOST_ROOT)
     if(NOT IS_DIRECTORY "${${input}}")
         message(FATAL_ERROR "Explicit external input ${input} is required")
@@ -66,6 +67,20 @@ target_include_directories(mfs_reference_u PRIVATE
     "${MFS_UPSTREAM_ROOT}/source/include"
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit")
 target_link_libraries(mfs_reference_u PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
+endif()
+if(MFS_BUILD_FRAMEPOOL_REFERENCE)
+    # An executable isolates C++/WinRT's process factory/MTA state. This is a
+    # source-only environment observation, not Rust FramePool parity acceptance.
+    add_executable(mfs_framepool_reference framepool-reference.cpp print-parity.cpp print-thread.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp")
+    target_compile_definitions(mfs_framepool_reference PRIVATE MAA_FRAMEPOOL_SCREENCAP_AVAILABLE=1)
+    target_include_directories(mfs_framepool_reference PRIVATE
+        "${MFS_UPSTREAM_ROOT}/include"
+        "${MFS_UPSTREAM_ROOT}/source/include"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit"
+        ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mfs_framepool_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS}
+        Gdi32 User32 Dwmapi D3D11 Dxgi WindowsApp RuntimeObject CoreMessaging)
 endif()
 if(MFS_BUILD_GDI_PARITY)
 add_library(mfs_gdi_parity SHARED
