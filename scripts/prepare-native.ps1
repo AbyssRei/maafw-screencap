@@ -286,7 +286,7 @@ try {
     # build with MINGW/pthread/.a requirements. Use the same installed compiler
     # as C/C++; this does not disable separate NASM or CPU-dispatched kernels.
     $compiler = Join-Path $vs.installationPath "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
-    $options = @("-DCMAKE_ASM_COMPILER=$compiler", '-DBUILD_LIST=core,imgproc,imgcodecs', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_WITH_STATIC_CRT=OFF',
+    $options = @("-DCMAKE_ASM_COMPILER:FILEPATH=$compiler", '-DBUILD_LIST=core,imgproc,imgcodecs', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_WITH_STATIC_CRT=OFF',
         '-DBUILD_TESTS=OFF', '-DBUILD_PERF_TESTS=OFF', '-DBUILD_EXAMPLES=OFF', '-DBUILD_opencv_apps=OFF',
         '-DWITH_PROTOBUF=OFF', '-DWITH_FLATBUFFERS=OFF', '-DWITH_IPP=ON', '-DBUILD_IPP_IW=ON')
     $opencvDownloads = Join-Path $DepsRoot downloads/opencv
@@ -327,7 +327,11 @@ try {
     $opencvBuild = Join-Path $nativeRoot b
     $opencvInstall = Join-Path $nativeRoot i
     $generator = @('-G', 'Visual Studio 18 2026', '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($vs.installationPath)", "-DCMAKE_SYSTEM_VERSION=$($sdk.Name)")
-    Step 'opencv-configure' $cmake (@('-S', $opencv, '-B', $opencvBuild, "-DCMAKE_INSTALL_PREFIX=$opencvInstall", "-DOPENCV_DOWNLOAD_PATH=$opencvDownloads") + $generator + $options)
+    $opencvConfigureArguments = @('-S', $opencv, '-B', $opencvBuild, "-DCMAKE_INSTALL_PREFIX=$opencvInstall", "-DOPENCV_DOWNLOAD_PATH=$opencvDownloads") + $generator + $options
+    Step 'opencv-configure' $cmake $opencvConfigureArguments
+    # An untyped -D compiler path can reset FILEPATH to UNINITIALIZED only on
+    # cache reuse. Exercise the second configure before validating its identity.
+    Step 'opencv-reconfigure' $cmake $opencvConfigureArguments
     $opencvCache = Join-Path $inputsRoot OpenCV-CMakeCache.txt
     Copy-Item -LiteralPath (Join-Path $opencvBuild CMakeCache.txt) -Destination $opencvCache
     Save-Input $opencvCache
