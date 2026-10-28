@@ -28,9 +28,12 @@ pub fn run_parity(args: &[String]) -> Result<()> {
 }
 
 pub fn run_context(args: &[String]) -> Result<()> {
+    if args.first().map(String::as_str) == Some("pipewire") {
+        return crate::pipewire::run_reference(&args[1..]);
+    }
     if args.first().map(String::as_str) != Some("frame-pool") {
         return Err(
-            "expected upstream-context frame-pool [--offline-inputs <native run manifest>]".into(),
+            "expected upstream-context frame-pool [--offline-inputs <native run manifest>] or upstream-context pipewire (native Linux x64)".into(),
         );
     }
     let mut native_args = vec!["--desktop".to_owned()];
@@ -196,7 +199,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         let scope = inputs.join("pipewire-control-scope.md");
         fs::write(
             &scope,
-            "# P1 partial PipeWire consumer control model\n\nPrivate consumer control flow, not native Linux capture. Compile exact fixed-source loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with newline normalization only. Explicit fake native loop/clock and symbolic format IDs; real OpenCV Mat ownership and conversion. Compare 68 cases/112 operations: whole-second wait truncation and spurious wakeups, ignored native activation errors, fresh versus three timeout replays/fourth rejection, empty cache, source disconnected predicate, inactive/reactivation, format selection, conversion after unlock, contained conversion exceptions and BGR shared-owner move. Additional checked clock/counter arithmetic remains a safety adaptation outside source undefined-overflow parity.\n\nThis does not compile the full original Linux class, prove SPA numeric values or native lock/callback/stream/buffer/teardown. A future native driver must exclude callbacks while locked and release/reacquire around timed_wait without leaving Rust references into callback-mutated state. Native setup/POD/process/SHM/DMA-BUF, caller mobility, initialization ownership, source manager and complete U remain pending; existing Linux runtime evidence remains P0 only. No P1/Linux-backend acceptance or P2/P3 implementation. Dependency preparation and Windows GDI regressions in this host batch are separate checks.\n",
+            "# P1 partial PipeWire consumer control model\n\nPrivate consumer control flow, not native Linux capture. Compile exact fixed-source loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with newline normalization only. Explicit fake native loop/clock and symbolic format IDs; real OpenCV Mat ownership and conversion. Compare 74 cases/118 operations: whole-second wait truncation and spurious wakeups, ignored native activation errors, fresh versus three timeout replays/fourth rejection, empty cache, source disconnected predicate, inactive/reactivation, format selection, conversion after unlock, contained conversion exceptions and BGR shared-owner move. Additional checked clock/counter arithmetic remains a safety adaptation outside source undefined-overflow parity.\n\nThis does not compile the full original Linux class, prove SPA numeric values or native lock/callback/stream/buffer/teardown. A future native driver must exclude callbacks while locked and release/reacquire around timed_wait without leaving Rust references into callback-mutated state. Native setup/POD/process/SHM/DMA-BUF, caller mobility, initialization ownership, source manager and complete U remain pending; existing Linux runtime evidence remains P0 only. No P1/Linux-backend acceptance or P2/P3 implementation. Dependency preparation and Windows GDI regressions in this host batch are separate checks.\n",
         )?;
         source_snapshot
             .inputs

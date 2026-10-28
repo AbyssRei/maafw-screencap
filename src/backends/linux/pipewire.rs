@@ -56,6 +56,8 @@ pub(crate) trait Driver {
     // Snapshot must not lend callback-owned or producer-owned storage.
     fn snapshot(&mut self) -> (Option<Self::Raw>, Format);
     fn now(&mut self) -> Duration;
+    // The relative native API returns positive ETIMEDOUT; only negative
+    // results take the source's immediate predicate-recheck error branch.
     fn timed_wait(&mut self, seconds: i32) -> i32;
 }
 pub(crate) trait Converter<R> {

@@ -56,6 +56,7 @@ cargo xtask upstream-parity desktop-dup --offline-inputs runs/<prepared-native-r
 cargo xtask upstream-parity manager
 cargo xtask upstream-parity manager --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-model pipewire --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-context pipewire # native Linux x64 original-source context
 cargo xtask upstream-context frame-pool
 cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
@@ -155,7 +156,11 @@ Rust 保留连接时先清除旧捕获 owner、再设置调用线程 PMv2 DPI、
 
 `upstream-model pipewire` 是当前 Windows 原生 C++/OpenCV 工具链上的可移植消费端对照，单独标记为 P1/incomplete，不是 Linux 实际捕获。私有 `linux-pipewire` 能力目前只实现消费端算法，尚无原生 driver。原源码的等待 helper/锁 guard、格式表、connected/inactive/wait_for_frame_locked/screencap 函数体在构建目录提取，仅归一化换行；loop、clock 和格式编号是明确的脚本边界，Mat 所有者及转换使用真实 OpenCV。这不是完整原 Linux 类或 SPA 数值 ABI 的编译验证。
 
-本机 68 个案例、112 次操作已匹配原源码：每次激活并请求新帧、整秒截断与亚秒余量至少等待一秒、伪唤醒、负等待返回后的谓词复查、前三次超时回放与第四次拒绝、空缓存、停用/再激活、锁外转换/异常和 BGR 共享 owner 转移。原生 set_active 返回值按 U 忽略；源码错误回调不主动 signal，消费端也未提前加入 P3 的终止唤醒/绝对等待。额外的时钟/计数溢出检查独立验证，不执行原 C++ 未定义溢出。原生建连、init/deinit、POD、process、SHM/DMA-BUF、缓存写入别名、线程迁移、关闭/注销和 Linux manager 仍待迁移与原生 Actions 验收；已有 Linux 运行结果仍仅来自 P0 原型。
+本机 74 个案例、118 次操作已匹配原源码：每次激活并请求新帧、整秒截断与亚秒余量至少等待一秒、伪唤醒、负等待返回后的谓词复查、前三次超时回放与第四次拒绝、空缓存、停用/再激活、锁外转换/异常和 BGR 共享 owner 转移。原生 set_active 返回值按 U 忽略；源码错误回调不主动 signal，消费端也未提前加入 P3 的终止唤醒/绝对等待。额外的时钟/计数溢出检查独立验证，不执行原 C++ 未定义溢出。原生建连、init/deinit、POD、process、SHM/DMA-BUF、缓存写入别名、线程迁移、关闭/注销和 Linux manager 仍待迁移与原生 Actions 验收；已有 Linux 运行结果仍仅来自 P0 原型。
+
+`upstream-context pipewire` 已接入原生 Linux x64 源码环境诊断，首次原生编译/执行结果仍待 CI。它直接编译固定完整 `PipeWireScreencap.h/.cpp`，仅抽取原 screenshot base 排除输入/ConfigBase/meojson，并明确使用私有 namespace 与日志抑制 overlay。同批解析最新正式 OpenCV 与 DRM 头文件来源，保留 IPP/CPU 优化，记录 LLVM、系统 SDK 包、编译命令、原生链接与离线输入。默认 P0 生产端仍为原七色条；此入口选择独立 `--asymmetric` 二维图样、96 字节行距及初始化填充，不在该图样上执行 P0 的 RGB 条断言。
+
+源码入口安排 20 次独立 fd/init/三次截图/inactive/close 生命周期，按原 API 检查 60 张已知 BGR 和 fd/线程数，原对象关闭后继续持帧并跨线程读取；每张可解释布局的原图在颜色断言前保存。图样携带生产端序号并使各行内容随序号变化，持帧需保持原序号和像素；重复/倒退仅记诊断，不把它推断为原 API 的回放状态。转换库初始化在捕获资源基线之外，原构造函数的 `pw_init` 由测试在原对象完全销毁后额外 `pw_deinit`；这不证明原析构本身配平初始化。另在独立进程观察真实 `connect_fd` 早期错误的描述符状态，只在原生对象清理后按 socket cookie 回收仍匹配的 socket，不预设所有错误都会消费 fd。入口核对实际头文件/运行时版本及动态符号所在库。原 API 不暴露捕获时间/回放状态，耗时只记诊断。它仍不是 Rust 原生 driver、完整 C++/Rust 对照、framework/input、格式/故障/DMA-BUF 矩阵或 P1 验收。
 
 ## 已实现的 P0 工具
 
