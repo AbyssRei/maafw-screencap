@@ -13,7 +13,7 @@ DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` �
 
 截图 manager 已开始私有迁移，`upstream-parity manager` 对照原源码函数体的 122 个脚本，并通过本机 20 次真实 GDI manager 生命周期。它保留预热/测速、毫秒截断、候选与图像释放及 U 的调用线程 DPI 副作用；完整原生混合方法、包装和 framework 转发仍待验收，不构成公共 SDK。
 
-PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。原生 driver、流与缓冲处理尚未实现，Linux 实际捕获证据仍为 P0 原型，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。首个 daemon/SHM 原生 driver、POD、回调和关闭切片已实现，原生编译/取帧结果待 CI；受检 CPU 行复制与持帧隔离的四项本机测试通过。完整原生/OpenCV 对照及 P1 仍待完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
 | 文档 | 职责及当前状态 |
 | --- | --- |

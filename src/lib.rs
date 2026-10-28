@@ -4,6 +4,8 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(
     any(
+        test,
+        all(target_os = "linux", feature = "linux-pipewire"),
         all(
             target_os = "windows",
             any(feature = "windows-print-window", feature = "windows-frame-pool")
