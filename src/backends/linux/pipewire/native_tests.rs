@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 use crate::backends::linux::pipewire::{Consumer, Conversion, Converter};
-use std::{env, ffi::CStr, fs, path::Path};
+use std::{env, ffi::CStr, fs, path::Path, time::Duration};
 
 #[path = "opencv_tests.rs"]
 mod opencv;
@@ -33,6 +33,44 @@ impl Drop for BalanceInit {
 }
 fn count(path: &str) -> usize {
     fs::read_dir(path).unwrap().count()
+}
+fn task_ids() -> Vec<std::ffi::OsString> {
+    let mut tasks: Vec<_> = fs::read_dir("/proc/self/task")
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    tasks.sort();
+    tasks
+}
+fn task_snapshot(directory: &Path, label: &str, tasks: &[std::ffi::OsString]) {
+    let mut output = format!("tasks observed={} ids={tasks:?}\n", tasks.len());
+    for tid in tasks {
+        for name in ["comm", "stat", "status", "wchan"] {
+            let path = Path::new("/proc/self/task").join(tid).join(name);
+            output.push_str(&format!("{path:?}: {:?}\n", fs::read_to_string(&path)));
+        }
+    }
+    fs::write(directory.join(format!("tasks-{label}.txt")), output).unwrap();
+}
+fn assert_resources(directory: &Path, cycle: usize, fds: usize, threads: usize) {
+    let actual_fds = count("/proc/self/fd");
+    let tasks = task_ids();
+    let actual_threads = tasks.len();
+    if actual_fds != fds || actual_threads != threads {
+        eprintln!(
+            "native resource mismatch cycle={cycle} fds={actual_fds}/{fds} threads={actual_threads}/{threads} ids={tasks:?}; diagnostic observations cannot change this failure"
+        );
+        task_snapshot(directory, &format!("cycle-{cycle}-mismatch"), &tasks);
+        // Observe disappearance/continued existence only AFTER fixing the failed
+        // result. No recapture, cleanup retry, or later count can make it pass.
+        for delay in [1, 10, 100] {
+            std::thread::sleep(Duration::from_millis(delay));
+            let tasks = task_ids();
+            task_snapshot(directory, &format!("cycle-{cycle}-after-{delay}ms"), &tasks);
+        }
+    }
+    assert_eq!(actual_fds, fds, "fd count after cycle={cycle}");
+    assert_eq!(actual_threads, threads, "thread count after cycle={cycle}");
 }
 fn marker(frame: &RawFrame) -> u32 {
     assert_eq!(
@@ -114,6 +152,7 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
     );
     let fds = count("/proc/self/fd");
     let threads = count("/proc/self/task");
+    task_snapshot(Path::new(&directory), "baseline", &task_ids());
     let mut held = Vec::new();
     held.try_reserve_exact(60).unwrap();
     for cycle in 0..20 {
@@ -143,6 +182,9 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
             held.push((frame, serial));
             eprintln!("native Rust SHM cycle={cycle} call={call} marker={serial} copied_rgb=1");
         }
+        if cycle == 0 {
+            task_snapshot(Path::new(&directory), "first-live", &task_ids());
+        }
         native.close();
         consumer.reset_after_close();
         assert!(!native.connected());
@@ -159,12 +201,7 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
         eprintln!("native Rust SHM closed cycle={cycle} evidence={evidence:?}");
         drop(native);
         drop(balance_init);
-        assert_eq!(count("/proc/self/fd"), fds, "fd count after cycle={cycle}");
-        assert_eq!(
-            count("/proc/self/task"),
-            threads,
-            "thread count after cycle={cycle}"
-        );
+        assert_resources(Path::new(&directory), cycle, fds, threads);
         for (frame, serial) in &held {
             assert_eq!(marker(frame), *serial, "retained sample identity changed");
         }

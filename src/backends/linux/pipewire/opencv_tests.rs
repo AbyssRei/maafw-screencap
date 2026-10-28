@@ -406,6 +406,7 @@ fn captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown() {
     fs::create_dir_all(&directory).unwrap();
     let fds = count("/proc/self/fd");
     let threads = count("/proc/self/task");
+    task_snapshot(Path::new(&directory), "baseline", &task_ids());
     let mut held = Vec::new();
     held.try_reserve_exact(60).unwrap();
     for cycle in 0..20 {
@@ -438,6 +439,9 @@ fn captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown() {
             converter.witnessed,
             "actual native callback progress at conversion entry"
         );
+        if cycle == 0 {
+            task_snapshot(Path::new(&directory), "first-live", &task_ids());
+        }
         native.close();
         consumer.reset_after_close();
         let evidence = native.evidence();
@@ -459,10 +463,7 @@ fn captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown() {
         eprintln!("native OpenCV closed cycle={cycle} callback_progress=1 evidence={evidence:?}");
         drop(native);
         drop(balance_init);
-        assert_eq!(
-            (count("/proc/self/fd"), count("/proc/self/task")),
-            (fds, threads)
-        );
+        assert_resources(Path::new(&directory), cycle, fds, threads);
         assert_eq!(adapter.owner_count(), u64::try_from(held.len()).unwrap());
         for (image, serial) in &held {
             assert_eq!(known_bgr(image), *serial);

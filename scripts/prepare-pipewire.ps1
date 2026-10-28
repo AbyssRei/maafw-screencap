@@ -70,6 +70,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-fd-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_early_error result=null errno=\d+ input_fd_open=[01] observed') {
             throw 'Expected the real native early-error descriptor observation'
         }
+        if ($Name -eq 'pipewire-fd-add-io-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_add_io_error result=null errno=\d+ input_fd_open=[01] after_teardown_fd_open=[01] intercepted_calls=1 observed') {
+            throw 'Expected the actual native late connect_fd error with one explicit add_io interception'
+        }
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
         }
@@ -267,7 +270,7 @@ try {
     $env:XDG_RUNTIME_DIR = $runtime
     $env:PIPEWIRE_RUNTIME_DIR = $runtime
     $env:PIPEWIRE_REMOTE = 'mfs-p0-pipewire'
-    $env:PIPEWIRE_DEBUG = '3'
+    $env:PIPEWIRE_DEBUG = $SourceReference ? '3,pw.thread-loop:4,pw.data-loop:4' : '3'
     $start = [Diagnostics.ProcessStartInfo]::new((Join-Path $prefix bin/pipewire))
     $start.UseShellExecute = $false
     $start.RedirectStandardOutput = $true
@@ -340,6 +343,8 @@ try {
         # Independent processes; a failed ownership premise must not erase the
         # separate original-source lifecycle evidence or become an overall pass.
         try { Step pipewire-fd-error-observation timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--fd-error',$socket) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-fd-add-io-error-observation timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--fd-add-io-error',$socket) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step original-pipewire-source-context timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,$referenceArtifacts) }
         catch { $failed=$true; Write-Host $_.Exception.Message }

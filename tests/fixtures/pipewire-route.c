@@ -5,11 +5,13 @@
 // for the explicitly supplied mfs-p0-fixture node, never host/default sources.
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <pipewire/pipewire.h>
 
 enum { MAX_ROUTES = 16 };
@@ -205,11 +207,18 @@ static void core_done(void *data, uint32_t id, int seq)
     }
     if (seq != s->sync || s->ready_written) return;
     if (!s->producer_seen) { fail(s, "producer absent at registry sync", -ENOENT); return; }
-    FILE *ready = fopen(s->ready_file, "wx");
+    char temporary[PATH_MAX];
+    int length = snprintf(temporary, sizeof(temporary), "%s.pending", s->ready_file);
+    if (length <= 0 || (size_t)length >= sizeof(temporary)) { fail(s, "ready path length", -ENAMETOOLONG); return; }
+    FILE *ready = fopen(temporary, "wx");
     if (!ready) { fail(s, "ready file", -errno); return; }
     bool ok = fprintf(ready, "owned route supervisor ready producer=%u\n", s->producer) > 0;
-    if (fclose(ready) != 0 || !ok) fail(s, "ready file write", -EIO);
-    else s->ready_written = true;
+    if (fclose(ready) != 0 || !ok) { fail(s, "ready file write", -EIO); return; }
+    // Publish only a fully closed immutable inode, without replacing existing
+    // evidence. Parent existence polling can now hash the final contents safely.
+    if (link(temporary, s->ready_file) != 0) { fail(s, "ready publish", -errno); return; }
+    if (unlink(temporary) != 0) { fail(s, "ready temporary unlink", -errno); return; }
+    s->ready_written = true;
 }
 static void core_error(void *data, uint32_t id, int seq, int code, const char *message)
 {
