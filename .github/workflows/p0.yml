@@ -72,28 +72,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask wlr-prototype
-      - name: Validate Windows GDI, PrintWindow and ScreenDC migration and native interop
+      - name: Validate Windows GDI and PrintWindow migration and native interop
         if: runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cargo xtask upstream-parity print-window
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo xtask upstream-parity screen-dc
+      - name: Validate partial ScreenDC migration
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        run: |
+          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
+          cargo xtask upstream-parity screen-dc --offline-inputs $index.runs[-1].path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial DesktopDup and window migration
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: |
           $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
           cargo xtask upstream-parity desktop-dup --offline-inputs $index.runs[-1].path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial screenshot-manager migration
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: |
           $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
           cargo xtask upstream-parity manager --offline-inputs $index.runs[-1].path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Compare portable PipeWire consumer model with exact source
+        # A host control model, separate from Linux native capture acceptance.
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
+        run: |
+          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
+          cargo xtask upstream-model pipewire --offline-inputs $index.runs[-1].path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial FramePool migration and original caller contexts
-        if: runner.os == 'Windows'
+        if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: |
           # Reuse this job's explicit dependency batch. Source and Rust caller
           # contexts run separately; the scoped component remains P1 incomplete.
@@ -101,6 +113,7 @@ jobs:
           cargo xtask upstream-parity frame-pool --offline-inputs $index.runs[-1].path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Inventory registry licenses and verify prototype configuration
+        if: ${{ !cancelled() }}
         shell: pwsh
         run: |
           $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
