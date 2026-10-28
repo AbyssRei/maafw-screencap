@@ -52,6 +52,9 @@ fn run() -> Result<()> {
     if argv.first().is_some_and(|arg| arg == "upstream-parity") {
         return native::run_parity(&argv[1..]);
     }
+    if argv.first().is_some_and(|arg| arg == "upstream-context") {
+        return native::run_context(&argv[1..]);
+    }
     if argv.first().is_some_and(|arg| arg == "pipewire-prototype") {
         return pipewire::run(&argv[1..]);
     }
@@ -105,6 +108,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity gdi [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity print-window [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity screen-dc [--offline-inputs <native run manifest>]\n\n\
+                      cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\
                       cargo xtask wlr-prototype       # native Linux x64 only\n\n\

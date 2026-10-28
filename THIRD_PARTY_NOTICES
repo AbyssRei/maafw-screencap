@@ -61,5 +61,8 @@ validation, fallible CPU allocation and separate cleanup error evidence.
 The explicit native acceptance targets compile original MaaFramework and
 MaaUtils sources and link OpenCV/Boost from external preparation inputs. Their
 applicable licence/notice materials accompany those acceptance artifacts.
+The separate upstream-context frame-pool diagnostic additionally compiles the
+original FramePoolScreencap.{h,cpp} in an isolated executable. It observes caller
+COM/runtime state and source pixels; it is not a Rust FramePool migration.
 They are excluded from default product builds. This file is not the completed
 asset-specific distribution notice inventory, which is verified in P5.
