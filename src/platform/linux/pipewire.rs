@@ -25,6 +25,7 @@ pub(crate) struct Resources {
     pub context: *mut sys::pw_context,
     pub core: *mut sys::pw_core,
     pub stream: *mut sys::pw_stream,
+    pub core_disconnect_error: i32,
     core_hook: Box<spa::sys::spa_hook>,
     stream_hook: Box<spa::sys::spa_hook>,
     core_registered: bool,
@@ -44,6 +45,7 @@ impl Resources {
             context: ptr::null_mut(),
             core: ptr::null_mut(),
             stream: ptr::null_mut(),
+            core_disconnect_error: 0,
             core_hook,
             stream_hook,
             core_registered: false,
@@ -142,7 +144,10 @@ impl Resources {
                 self.core_registered = false;
             }
             if !self.core.is_null() {
-                sys::pw_core_disconnect(self.core);
+                let code = sys::pw_core_disconnect(self.core);
+                if code < 0 && self.core_disconnect_error == 0 {
+                    self.core_disconnect_error = code;
+                }
                 self.core = ptr::null_mut();
             }
             if !self.context.is_null() {
