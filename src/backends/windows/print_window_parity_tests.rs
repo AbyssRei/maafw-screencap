@@ -8,6 +8,8 @@ use std::error::Error;
 mod child_targets;
 #[path = "print_window_fault_tests.rs"]
 mod native_failures;
+#[path = "print_window_pseudo_tests.rs"]
+mod pseudo_minimize;
 #[path = "print_window_read_tests.rs"]
 mod read_boundary;
 

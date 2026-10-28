@@ -24,9 +24,10 @@ $logsRoot = Join-Path $configRoot logs
 $checks = [Collections.Generic.List[object]]::new()
 $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
+$nativeMissingEnvironment = $false
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($PrintWindowParity) {
-    $pending.Add('PrintWindow is a partial P1 component. Complete foreground/background/pseudo-minimize/window-state coverage remains pending. An earlier original-reference black-bitmap parity failure remains unresolved; later non-reproduction does not close it. A temporary GetDIBits deselection is an explicit native-precondition adaptation, not P3 DIB modernization. Fault-fixture recovery is distinct from product cleanup success.')
+    $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
 if ($GdiParity) {
     $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
@@ -88,6 +89,22 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($Name -eq 'pseudo-foreground-parity') {
+            $observed = Get-Content -LiteralPath $logPath -Raw
+            if ($exitCode -eq 101 -and
+                $observed.Contains('MFS_MISSING_ENVIRONMENT:foreground_control') -and
+                $observed -match '(?m)^test result: FAILED\. 0 passed; 1 failed; 0 ignored;' -and
+                $observed -notmatch 'panicked at') {
+                $status = 'missing_environment'
+                $script:nativeMissingEnvironment = $true
+                $pending.Add('The exact original/Rust foreground monitor case could not complete: native SetForegroundWindow returned zero while its own target was active and another process retained foreground. No activation bypass or input injection was used. The case remains unaccepted; other independent checks continue.')
+                Write-Host "$Name`: missing_environment"
+                return
+            }
+            if ($exitCode -eq 0 -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'The exact foreground case did not execute one native test'
+            }
+        }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }
         $status = 'passed'
@@ -425,8 +442,19 @@ try {
             $clippyArguments += @('--offline', '--config', $CargoConfig)
         }
         $parityFilter = if ($PrintWindowParity) { 'backends::windows::' } else { 'backends::windows::gdi::' }
-        Step 'gdi-original-parity' cargo ($parityArguments + @('--', $parityFilter, '--include-ignored', '--test-threads=1', '--nocapture'))
+        if ($PrintWindowParity) {
+            Step 'pseudo-helper-original-parity' cargo ($parityArguments + @('--', 'platform::windows::pseudo_minimize::', '--include-ignored', '--test-threads=1', '--nocapture'))
+        }
+        $foregroundCase = 'backends::windows::print_window::tests::parity::pseudo_minimize::restores_original_attributes_after_real_foreground_reactivation'
+        [string[]]$caseSelection = @($parityFilter, '--include-ignored', '--test-threads=1', '--nocapture')
+        if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
+        Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
+        if ($PrintWindowParity) {
+            # Separate invocation preserves the required case and its native
+            # environment result without obscuring other pixel/ownership checks.
+            Step 'pseudo-foreground-parity' cargo ($parityArguments + @('--', $foregroundCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+        }
     }
     $licenses = Join-Path $artifacts licenses
     New-Item -ItemType Directory -Path $licenses -Force | Out-Null
@@ -462,4 +490,4 @@ finally {
         checks = @($checks.ToArray()); pending = @($pending.ToArray()); inputs = @($inputs.ToArray())
     })
 }
-if ($failed) { exit 1 }
+if ($failed -or $nativeMissingEnvironment) { exit 1 }

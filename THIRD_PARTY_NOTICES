@@ -16,6 +16,22 @@ src/backends/windows/print_window.rs is a Rust migration of:
   source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.h
   source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp
 
+src/platform/windows/pseudo_minimize.rs and
+src/backends/windows/print_window_pseudo.rs are Rust migrations of:
+  source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.h
+  source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.cpp
+  source/MaaWin32ControlUnit/Screencap/PrintWindowWithPseudoMinimizeScreencap.h
+
+The helper retains its synchronous pre-capture action, 100ms monitor polling,
+original partial-failure behavior, and join-before-restore shutdown order.
+It uses standard Arc/atomics with guarded immutable style snapshots, a serial
+caller owner, fallible state allocation and fixed-size failure evidence.
+Inactive restoration remains distinct from stop's re-minimization. Native
+validation uses independently pumped controlled windows; original/Rust layered
+and nonlayered capture/stop/inactive/target-loss checks remain separate from
+foreground-control availability and unresolved historical parity failures. This
+is an incomplete migration component, not a public capture interface.
+
 The two migrated backends share DC/bitmap cleanup and private conversion/error
 types in gdi_resources.rs and gdi_types.rs. PrintWindow retains the original
 GetDIBits path, temporarily unselecting its bitmap to satisfy the native API

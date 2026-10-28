@@ -1,0 +1,19 @@
+# Copyright (C) 2026 AbyssRei
+# SPDX-License-Identifier: LGPL-3.0-or-later
+HWND
+GetLastError
+SetLastError
+GetWindowLongPtrW
+SetWindowLongPtrW
+GWL_EXSTYLE
+WS_EX_LAYERED
+WS_EX_TRANSPARENT
+GetLayeredWindowAttributes
+SetLayeredWindowAttributes
+LWA_ALPHA
+IsWindow
+IsIconic
+GetForegroundWindow
+ShowWindow
+SW_SHOWNOACTIVATE
+SW_MINIMIZE

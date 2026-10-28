@@ -96,6 +96,27 @@ fn main() {
     println!("cargo::rerun-if-changed=build-support/windows-gdi.txt");
     println!("cargo::rerun-if-changed=build-support/windows-print-window.txt");
     println!("cargo::rerun-if-changed=build-support/windows-gdi-common.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-window-coordination.txt");
+    #[cfg(feature = "windows-print-window")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+            .join("windows_window_coordination.rs");
+        let input =
+            std::fs::read_to_string("build-support/windows-window-coordination.txt").unwrap();
+        let mut args = vec![
+            "--out",
+            out.to_str().unwrap(),
+            "--flat",
+            "--sys",
+            "--filter",
+        ];
+        args.extend(
+            input
+                .lines()
+                .filter(|line| !line.is_empty() && !line.starts_with('#')),
+        );
+        windows_bindgen::bindgen(args);
+    }
     #[cfg(any(feature = "windows-gdi", feature = "windows-print-window"))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         assert_eq!(

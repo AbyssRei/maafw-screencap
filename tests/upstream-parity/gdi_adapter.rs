@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Test-only consumer of native/gdi-parity.h. Layout is verified in the real DLL.
 use crate::backends::windows::gdi_types::{BgraConverter, BgraView};
+use crate::test_support::native_module::Module;
 use std::{
     error::Error,
-    ffi::{CStr, c_void},
+    ffi::c_void,
     mem::{align_of, offset_of, size_of},
-    os::windows::ffi::OsStrExt,
     ptr::null_mut,
     sync::Arc,
 };
@@ -14,6 +14,9 @@ use std::{
 #[cfg(feature = "windows-print-window")]
 #[path = "print_fault_probe.rs"]
 pub(crate) mod print_fault;
+#[cfg(feature = "windows-print-window")]
+#[path = "print_pseudo_adapter.rs"]
+pub(crate) mod print_pseudo;
 #[cfg(feature = "windows-print-window")]
 #[path = "print_query_probe.rs"]
 pub(crate) mod print_query;
@@ -62,28 +65,6 @@ type Paint = unsafe extern "C" fn(*mut c_void, u32) -> i32;
 type Destroy = unsafe extern "C" fn(*mut c_void) -> i32;
 type Objects = unsafe extern "C" fn() -> u32;
 
-struct Module(native::HMODULE);
-impl Drop for Module {
-    fn drop(&mut self) {
-        // SAFETY: This owns one loader reference. Every image/adapter retains
-        // this Arc until its final native operation has completed.
-        let _ = unsafe { native::FreeLibrary(self.0) };
-    }
-}
-
-impl Module {
-    unsafe fn symbol<T: Copy>(&self, name: &CStr) -> Result<T, Box<dyn Error>> {
-        if size_of::<T>() != size_of::<native::FARPROC>() {
-            return Err("unexpected native function pointer representation".into());
-        }
-        // SAFETY: Live loader reference and NUL-terminated name.
-        let symbol = unsafe { native::GetProcAddress(self.0, name.as_ptr().cast()) }
-            .ok_or("GDI parity symbol missing")?;
-        // SAFETY: Caller supplies the exact signature from gdi-parity.h.
-        Ok(unsafe { std::mem::transmute_copy(&symbol) })
-    }
-}
-
 pub(crate) struct Adapter {
     module: Arc<Module>,
     reference: Reference,
@@ -105,20 +86,7 @@ impl Adapter {
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let path = std::env::var_os("MFS_GDI_PARITY_LIBRARY")
             .ok_or("MFS_GDI_PARITY_LIBRARY is required; run cargo xtask upstream-parity gdi")?;
-        if !std::path::Path::new(&path).is_absolute() {
-            return Err("GDI parity DLL path must be absolute".into());
-        }
-        let wide: Vec<u16> = path.encode_wide().chain(Some(0)).collect();
-        // SAFETY: Explicit absolute NUL-terminated path; restrict dependent DLL
-        // discovery to its directory and default safe locations, without changing
-        // the process-wide loader search configuration.
-        let handle = unsafe { native::LoadLibraryExW(wide.as_ptr(), null_mut(), 0x100 | 0x1000) };
-        if handle.is_null() {
-            // SAFETY: Read the loader failure before any other native operation.
-            let error = unsafe { native::GetLastError() };
-            return Err(format!("LoadLibraryExW failed for GDI parity adapter: {error}").into());
-        }
-        let module = Arc::try_new(Module(handle))?;
+        let module = Arc::try_new(Module::load(&path)?)?;
         // SAFETY: Every signature below matches gdi-parity.h. The loader owner
         // is kept together with all function pointers, including image releases.
         unsafe {
@@ -160,36 +128,7 @@ impl Adapter {
     }
 
     fn adopt(&self, status: i32, span: ImageSpan) -> Result<Image, i32> {
-        let image = Image {
-            span,
-            module: Arc::clone(&self.module),
-            release: self.release,
-        };
-        if status != 0 {
-            // A failure may not publish a partially-owned output.
-            assert!(
-                image.span.owner.is_null() && image.span.data.is_null() && image.span.length == 0
-            );
-            return Err(status);
-        }
-        let width = usize::try_from(image.span.width).map_err(|_| -1)?;
-        let height = usize::try_from(image.span.height).map_err(|_| -1)?;
-        let row = width.checked_mul(3).ok_or(-1)?;
-        let readable = height
-            .checked_sub(1)
-            .and_then(|rows| rows.checked_mul(image.span.stride))
-            .and_then(|preceding| preceding.checked_add(row))
-            .ok_or(-1)?;
-        if image.span.owner.is_null()
-            || image.span.data.is_null()
-            || row == 0
-            || image.span.stride < row
-            || image.span.length != readable
-            || image.span.length > isize::MAX as usize
-        {
-            return Err(-1);
-        }
-        Ok(image)
+        Image::adopt(&self.module, self.release, status, span)
     }
 
     pub fn reference(&self, hwnd: *mut c_void) -> Result<Image, i32> {
@@ -265,6 +204,43 @@ pub(crate) struct Image {
 }
 
 impl Image {
+    fn adopt(
+        module: &Arc<Module>,
+        release: Release,
+        status: i32,
+        span: ImageSpan,
+    ) -> Result<Self, i32> {
+        let image = Self {
+            span,
+            module: Arc::clone(module),
+            release,
+        };
+        if status != 0 {
+            // A failure may not publish a partially-owned output.
+            assert!(
+                image.span.owner.is_null() && image.span.data.is_null() && image.span.length == 0
+            );
+            return Err(status);
+        }
+        let width = usize::try_from(image.span.width).map_err(|_| -1)?;
+        let height = usize::try_from(image.span.height).map_err(|_| -1)?;
+        let row = width.checked_mul(3).ok_or(-1)?;
+        let readable = height
+            .checked_sub(1)
+            .and_then(|rows| rows.checked_mul(image.span.stride))
+            .and_then(|preceding| preceding.checked_add(row))
+            .ok_or(-1)?;
+        if image.span.owner.is_null()
+            || image.span.data.is_null()
+            || row == 0
+            || image.span.stride < row
+            || image.span.length != readable
+            || image.span.length > isize::MAX as usize
+        {
+            return Err(-1);
+        }
+        Ok(image)
+    }
     pub fn dimensions(&self) -> (i32, i32) {
         (self.span.width, self.span.height)
     }

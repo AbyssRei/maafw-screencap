@@ -9,6 +9,8 @@ mod gdi_types;
 mod print_window;
 #[cfg(feature = "windows-print-window")]
 mod print_window_api;
+#[cfg(feature = "windows-print-window")]
+mod print_window_pseudo;
 
 #[cfg(all(test, feature = "prototype-windows"))]
 #[path = "../../../tests/upstream-parity/gdi_adapter.rs"]

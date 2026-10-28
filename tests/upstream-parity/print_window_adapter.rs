@@ -159,12 +159,12 @@ impl Adapter {
             (
                 self.module.symbol(c"mfs_print_parity_layout")?,
                 self.module.symbol(if child_target {
-                    c"mfs_print_parity_child_fixture"
+                    c"mfs_print_thread_child_fixture"
                 } else {
-                    c"mfs_print_parity_fixture"
+                    c"mfs_print_thread_fixture"
                 })?,
-                self.module.symbol(c"mfs_print_parity_close")?,
-                self.module.symbol(c"mfs_print_parity_stats")?,
+                self.module.symbol(c"mfs_print_thread_close")?,
+                self.module.symbol(c"mfs_print_thread_stats")?,
             )
         };
         let mut actual = [0_u64; 9];
@@ -219,6 +219,10 @@ impl Adapter {
         {
             return Err("invalid PrintWindow fixture descriptor".into());
         }
+        let thread = fixture.thread_info()?;
+        if thread[0] == 0 || thread[0] == thread[1] || thread[0] != thread[2] {
+            return Err("fixture must have a distinct real UI/window owner".into());
+        }
         Ok(fixture)
     }
 }
@@ -230,7 +234,8 @@ impl PrintConverter for Converter<'_> {
         source: &Image,
         rectangle: Overlay,
     ) -> Result<(), i32> {
-        if self.adapter.module.0 != destination.module.0 || self.adapter.module.0 != source.module.0
+        if !self.adapter.module.same_instance(&destination.module)
+            || !self.adapter.module.same_instance(&source.module)
         {
             return Err(-1);
         }
@@ -269,12 +274,60 @@ pub(crate) struct Fixture {
     failed_close: bool,
 }
 impl Fixture {
+    pub fn prepare_pseudo(&self, layered: bool) -> Result<(), Box<dyn Error>> {
+        type Prepare = unsafe extern "C" fn(*mut c_void, u32) -> i32;
+        // SAFETY: The command creates/activates its anchor on the actual UI
+        // owner, then minimizes/styles this fixture without borrowing pointers.
+        let prepare: Prepare = unsafe { self.module.symbol(c"mfs_print_thread_prepare")? };
+        let status = unsafe { prepare(self.span.owner, u32::from(layered)) };
+        if status != 0 {
+            return Err(format!("UI-owner pseudo preparation failed: {status}").into());
+        }
+        Ok(())
+    }
+    pub fn thread_info(&self) -> Result<[u64; 4], Box<dyn Error>> {
+        type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
+        // SAFETY: Exact print-thread.h signature and four writable u64 outputs.
+        let info: Info = unsafe { self.module.symbol(c"mfs_print_thread_info")? };
+        let mut result = [0; 4];
+        if unsafe { info(self.span.owner, result.as_mut_ptr(), result.len()) } != 0 {
+            return Err("PrintWindow thread identity query failed".into());
+        }
+        Ok(result)
+    }
+    pub fn activate(&self) -> Result<(), Box<dyn Error>> {
+        type Activate = unsafe extern "C" fn(*mut c_void) -> i32;
+        // SAFETY: Sends one bounded command to the live fixture UI owner.
+        // Windows foreground policy remains observable; a rejection is an error.
+        let activate: Activate = unsafe { self.module.symbol(c"mfs_print_thread_activate")? };
+        let status = unsafe { activate(self.span.owner) };
+        if status != 0 {
+            type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
+            // SAFETY: Matching native observation for this same fixture command.
+            let info: Info = unsafe { self.module.symbol(c"mfs_print_thread_activation_info")? };
+            let mut observed = [0; 5];
+            let queried = unsafe { info(self.span.owner, observed.as_mut_ptr(), observed.len()) };
+            let kind = if status == 5
+                && queried == 0
+                && observed[0] == 0
+                && observed[1] == observed[3]
+                && observed[2] != observed[3]
+            {
+                "MFS_MISSING_ENVIRONMENT:foreground_control"
+            } else {
+                "fixture foreground assertion failed"
+            };
+            return Err(format!("{kind}: status={status}, info_status={queried}, [SetForegroundWindow, active, foreground, target, foreground_pid]={observed:?}").into());
+        }
+        Ok(())
+    }
     pub fn hwnd(&self) -> *mut c_void {
         self.span.hwnd
     }
     pub fn stats(&self) -> Result<[u64; 5], Box<dyn Error>> {
         let mut stats = [0; 5];
-        // SAFETY: Live same-thread owner and exactly five writable outputs.
+        // SAFETY: Live serial caller owner and exactly five writable outputs;
+        // the native command reads Pattern counters only on the UI thread.
         if unsafe { (self.stats)(self.span.owner, stats.as_mut_ptr(), stats.len()) } != 0 {
             return Err("PrintWindow fixture stats failed".into());
         }
@@ -287,8 +340,8 @@ impl Fixture {
         if self.failed_close {
             return Err("PrintWindow fixture previous close failed".into());
         }
-        // SAFETY: Owns a possibly partial same-thread context and its registered
-        // class. Successful native close destroys windows, unregisters then frees.
+        // SAFETY: Owns a possibly partial UI worker and native context. Native
+        // close destroys/unregisters on that worker, joins, then deletes/nulls.
         let status = unsafe { (self.close)(&mut self.span.owner) };
         if status != 0 {
             self.failed_close = true;
@@ -316,6 +369,10 @@ fn keeps_callback_module_until_window_registration_is_closed() -> Result<(), Box
     let adapter = Adapter::load()?;
     let module = Arc::downgrade(&adapter.module);
     let mut fixture = adapter.print_child_fixture((25, 17), (5, 3), 1)?;
+    let thread = fixture.thread_info()?;
+    assert_ne!(thread[0], thread[1]);
+    assert_eq!(thread[0], thread[2]);
+    println!("PrintWindow UI owner/caller/window/process identity: {thread:?}");
     drop(adapter);
     assert!(
         module.upgrade().is_some(),
@@ -329,6 +386,24 @@ fn keeps_callback_module_until_window_registration_is_closed() -> Result<(), Box
     assert!(
         module.upgrade().is_none(),
         "closed fixture must release its module lease"
+    );
+    Ok(())
+}
+
+#[test]
+#[ignore = "explicit partial native UI-worker construction and module release"]
+fn closes_partial_fixture_workers_before_releasing_callback_code() -> Result<(), Box<dyn Error>> {
+    let adapter = Adapter::load()?;
+    let module = Arc::downgrade(&adapter.module);
+    let baseline = adapter.objects();
+    // A worker/queue is created, then the original fixture rejects the negative
+    // popup size. Its retained partial owner must still be closed and joined.
+    assert!(adapter.print_fixture((-1, 17), (5, 3), 1).is_err());
+    assert_eq!(adapter.objects(), baseline);
+    drop(adapter);
+    assert!(
+        module.upgrade().is_none(),
+        "failed creation must release its joined worker module"
     );
     Ok(())
 }
