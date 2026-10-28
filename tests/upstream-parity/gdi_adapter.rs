@@ -11,6 +11,10 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "windows-manager")]
+#[path = "manager_adapter.rs"]
+pub(crate) mod manager;
+
 #[cfg(feature = "windows-print-window")]
 #[path = "print_fault_probe.rs"]
 pub(crate) mod print_fault;

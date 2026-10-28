@@ -6,6 +6,8 @@ pub(crate) mod desktop_dup;
 pub(crate) mod foreground;
 #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 pub(crate) mod geometry;
+#[cfg(feature = "windows-manager")]
+pub(crate) mod manager;
 #[cfg(any(feature = "windows-print-window", feature = "windows-frame-pool"))]
 pub(crate) mod pseudo_minimize;
 #[cfg(feature = "windows-frame-pool")]

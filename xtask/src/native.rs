@@ -19,8 +19,8 @@ pub fn run(args: &[String]) -> Result<()> {
 
 pub fn run_parity(args: &[String]) -> Result<()> {
     let kind = match args.first().map(String::as_str) {
-        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool" | "desktop-dup")) => kind,
-        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool|desktop-dup> [--offline-inputs <native run manifest>]".into()),
+        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool" | "desktop-dup" | "manager")) => kind,
+        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool|desktop-dup|manager> [--offline-inputs <native run manifest>]".into()),
     };
     let mut native_args = vec!["--desktop".to_owned()];
     native_args.extend_from_slice(&args[1..]);
@@ -42,6 +42,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     let frame_context = parity == Some("frame-pool-context");
     let frame_parity = parity == Some("frame-pool");
     let desktop_parity = parity == Some("desktop-dup");
+    let manager_parity = parity == Some("manager");
     let gdi_parity = parity.is_some() && !frame_context;
     let print_parity = parity == Some("print-window");
     let screen_parity = parity == Some("screen-dc");
@@ -151,6 +152,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "p1-frame-pool-windows"
         } else if desktop_parity {
             "p1-desktop-dup-windows"
+        } else if manager_parity {
+            "p1-manager-windows"
         } else if gdi_parity {
             "p1-gdi-windows"
         } else {
@@ -175,6 +178,16 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if manager_parity {
+        let scope = inputs.join("manager-scope.md");
+        fs::write(
+            &scope,
+            "# P1 partial Windows screenshot-manager migration\n\nPrivate screenshot path from fixed Win32ControlUnitMgr, input excluded. Preserve capture reset before caller PMv2 DPI change, subsequent HWND validation, None versus unknown-only selection, construction of all selected candidates before warmup/testing, millisecond-truncated costs and strict-less-than tie order, warmup failure followed by a measured call, selected owner survival, unselected destruction, inactive and output preservation. Some(empty Mat) remains an engaged successful source result. Optional failures, escaping exceptions and additional safety rejections remain distinct, with backend cleanup evidence. The pinned source leaves caller DPI changed; P3 host restoration is not introduced.\n\nNative source bodies and original enum are extracted with newline normalization into the native build, along with the selected MaaUtils duration_since body. A private declaration shim and input=None stubs exclude input code. Real MSVC unordered_map/shared_ptr and OpenCV Mat allocator/deallocation are observed while backend, DPI/window and clock boundaries are explicitly scripted. 122 cases compare ordered construction/capture/temporary-image release/timing/native-container destruction, all 64 recognized flag subsets, failed warmups/tests/construction, exceptions, empty images, output replacement/preservation, stale HWND checks and reconnect. This establishes the current MSVC container behavior, not a portable unordered_map iteration guarantee. The extraction does not compile the complete original input/control manager class.\n\nA separate source-body GDI-only boundary uses the actual original GDI class, real caller DPI/native calls and input=None stubs, with entry probes; other methods are deliberately unavailable in that reference. Twenty paired source/Rust manager/window lifecycles validate two connect calls plus one published capture each, strict odd-width known BGR pixels, CPU/image owners after source/Rust/window/module close, GDI resources and caller PMv2 context. The harness restores its own caller context outside the source/Rust manager. Single-method probes do not validate native competing-method timing.\n\nPending: native six-method/mixed-wrapper selection and winner cleanup/failure matrices, compatibility-mode DPI, complete framework/control-unit forwarding, factory allocation/cleanup faults, all other backend matrices and full all-platform F/P1 acceptance. Previous FramePool/PrintWindow failures and DesktopDup fixture failures remain failed records. No public SDK, P2 or P3 acceptance.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if desktop_parity {
         let scope = inputs.join("desktop-dup-scope.md");
         fs::write(
@@ -315,6 +328,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if desktop_parity {
         process.arg("-DesktopDupParity");
     }
+    if manager_parity {
+        process.arg("-ManagerParity");
+    }
     if let Some(input) = &offline {
         process
             .arg("-OfflineManifest")
@@ -369,6 +385,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "P1 FramePool component"
         } else if desktop_parity {
             "P1 Desktop Duplication component"
+        } else if manager_parity {
+            "P1 screenshot-manager component"
         } else if gdi_parity {
             "P1 GDI component"
         } else {
