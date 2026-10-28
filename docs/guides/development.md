@@ -61,7 +61,7 @@ cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-r
 
 内部 `windows-frame-pool` 实现现位于 `src/backends/windows/frame_pool.rs`，另有平台私有 WGC/工厂封装；默认产品仍不链接 OpenCV。它保留硬件 `D3D11CreateDeviceAndSwapChain` 的 flags=0、R8G8B8A8 swapchain、原 `Create`/BGRA/单缓冲、旧帧 drain/Close、每 2 ms 轮询至 2000 ms、无帧时克隆缓存，以及 Unmap 前转换并克隆新缓存。`uninit` 保留缓存/device/context/swapchain；尺寸变化重建、原返回失败和未被局部 catch 捕获的 WinRT 异常分别保留部分状态，不额外回滚。owner 不声明 Send/Sync，不建立库内 MTA worker。
 
-`upstream-parity frame-pool` 显式编译独立原 executable 与最小绘图/转换适配，不把原 C++/WinRT 工厂缓存放入可卸载的验收 DLL。它从原图记录启动未初始化/MTA/STA 三个独立 Rust 进程，核对逐字节像素、转换/克隆次数、独立 cache/result 所有者、关闭原生对象和窗口后的持帧、completion event 释放、调用方 COM/DPI，并保留 GDI 回归。三种本机上下文均通过局部检查；第二次调用实际观察到 2 秒等待后的缓存克隆。原 dispatcher 模式已有源码观察，Rust dispatcher 对照仍待完成；完整重复生命周期、原生故障/异常/清理、尺寸/DPI/边框/从属窗口/权限、伪最小化包装和 manager 尚未验收。
+`upstream-parity frame-pool` 显式编译独立原 executable 与最小绘图/转换适配，不把原 C++/WinRT 工厂缓存放入可卸载的验收 DLL。它从原图记录启动未初始化/MTA/MTA 加当前线程 dispatcher/STA 四个独立 Rust 进程，核对逐字节像素、转换/克隆次数、独立 cache/result 所有者、关闭原生对象和窗口后的持帧、completion event 释放、调用方 COM/DPI，并保留 GDI 回归。四种本机上下文均通过局部检查；第二次调用实际观察到 2 秒等待后的缓存克隆。dispatcher 仅在捕获和原生对象关闭后的夹具退出阶段 pump，等待真实 ShutdownQueueAsync 完成，捕获内不添加 pump；自有 COM 引用配平后恢复未初始化。另有 20 次 Rust 窗口/device/session/pool 创建、实际捕获、幂等 uninit 与析构，逐张比对原图并一直持有全部 CPU 结果；核对精确 image-owner 数、completion event 和关闭错误，全部窗口 join 和 dispatcher 完成后再检查像素。这是相同原图的 Rust 重复生命周期检查，尚非 C++ 重复/故障全过程对照，也未测量全部 GPU/系统资源泄漏。完整原生故障/异常/清理、尺寸/DPI/边框/从属窗口/权限、伪最小化包装和 manager 尚未验收。
 
 另一个真实 FramePool 控制在 cache clone 的 C++ 边界抛出异常，核对临时结果 owner 释放、原生关闭结果，并在错误返回后观察到 staging 可再次成功 Map；精确 Map/Unmap 调用拦截仍是独立待验项。显式返回的清理错误进入固定证据槽；Drop 的失败采用固定原子记录，避免在主错误展开时格式化、分配或因日志 I/O 再次 panic。这些局部控制不替代完整失败矩阵。
 
