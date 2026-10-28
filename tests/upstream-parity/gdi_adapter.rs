@@ -30,7 +30,11 @@ pub(crate) mod print_window;
 ))]
 #[path = "gdi_probe.rs"]
 pub(crate) mod probe;
-#[cfg(any(feature = "windows-screen-dc", feature = "windows-frame-pool"))]
+#[cfg(any(
+    feature = "windows-screen-dc",
+    feature = "windows-frame-pool",
+    feature = "windows-desktop-dup"
+))]
 #[path = "screen_fixture.rs"]
 pub(crate) mod screen_fixture;
 
@@ -248,6 +252,37 @@ impl BgraConverter for Converter<'_> {
     }
 }
 
+#[cfg(feature = "windows-desktop-dup-window")]
+impl crate::backends::windows::desktop_dup_window::Converter for Converter<'_> {
+    fn dimensions(&self, image: &Image) -> (i32, i32) {
+        image.dimensions()
+    }
+    fn crop_bgr(
+        &mut self,
+        image: &Image,
+        crop: crate::backends::windows::desktop_dup_window::Crop,
+    ) -> Result<Image, i32> {
+        type CropImage =
+            unsafe extern "C" fn(*mut c_void, i32, i32, i32, i32, *mut ImageSpan) -> i32;
+        // SAFETY: Input owner and function belong to the same retained module;
+        // exact private header ABI, checked geometry and writable output.
+        let function: CropImage =
+            unsafe { image.module.symbol(c"mfs_desktop_dup_crop") }.map_err(|_| -1)?;
+        let mut output = ImageSpan::default();
+        let code = unsafe {
+            function(
+                image.span.owner,
+                crop.x,
+                crop.y,
+                crop.width,
+                crop.height,
+                &mut output,
+            )
+        };
+        Image::adopt(&image.module, image.release, code, output)
+    }
+}
+
 #[cfg(feature = "windows-frame-pool")]
 impl crate::backends::windows::frame_pool::Converter for Converter<'_> {
     fn clone_image(&mut self, image: &Image) -> Result<Image, i32> {
@@ -319,11 +354,11 @@ impl Image {
         // private native owner and loader remain live through this borrow.
         unsafe { std::slice::from_raw_parts(self.span.data, self.span.length) }
     }
-    #[cfg(feature = "windows-frame-pool")]
+    #[cfg(any(feature = "windows-frame-pool", feature = "windows-desktop-dup"))]
     pub fn address(&self) -> usize {
         self.span.data as usize
     }
-    #[cfg(feature = "windows-frame-pool")]
+    #[cfg(any(feature = "windows-frame-pool", feature = "windows-desktop-dup"))]
     pub fn native_owners(&self) -> u64 {
         type Owners = unsafe extern "C" fn() -> u64;
         // SAFETY: Exact gdi-probe.h observation, module retained by this image.

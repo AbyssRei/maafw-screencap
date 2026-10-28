@@ -646,6 +646,8 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         Some("frame-pool-context-scope.md")
     } else if run.run_id.starts_with("p1-frame-pool-windows-") {
         Some("frame-pool-scope.md")
+    } else if run.run_id.starts_with("p1-desktop-dup-windows-") {
+        Some("desktop-dup-scope.md")
     } else {
         None
     };
@@ -749,6 +751,7 @@ mod tests {
             "screen-dc",
             "frame-pool-context",
             "frame-pool",
+            "desktop-dup",
         ] {
             let run_id = format!("p1-{kind}-windows-fixture");
             let scope = fixture

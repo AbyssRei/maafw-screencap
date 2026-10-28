@@ -35,6 +35,10 @@ MFS_PARITY_EXPORT void mfs_gdi_parity_release(void* owner);
 // Independent cv::Mat::clone, including source FramePool's two clone points.
 // Owner must originate in this loaded module. fault=1 contains a clone error.
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_clone(void* owner, uint32_t fault, MfsParityImage* output);
+// Private DesktopDupWindow boundary: clone the logical BGR ROI into packed,
+// target-only storage after the original full-monitor conversion point.
+MFS_PARITY_EXPORT int32_t mfs_desktop_dup_crop(void* owner, int32_t x, int32_t y,
+    int32_t width, int32_t height, MfsParityImage* output);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_layout(uint64_t* output, size_t capacity);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_window(int32_t width, int32_t height, MfsParityWindow* output);
 MFS_PARITY_EXPORT int32_t mfs_gdi_parity_paint(void* hwnd, uint32_t phase);

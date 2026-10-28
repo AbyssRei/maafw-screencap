@@ -6,7 +6,8 @@
         feature = "windows-gdi",
         feature = "windows-print-window",
         feature = "windows-screen-dc",
-        feature = "windows-frame-pool"
+        feature = "windows-frame-pool",
+        feature = "windows-desktop-dup"
     )
 ))]
 mod windows;
