@@ -14,19 +14,22 @@ use std::{
 };
 
 pub fn run(args: &[String]) -> Result<()> {
-    run_native(args, false)
+    run_native(args, None)
 }
 
 pub fn run_parity(args: &[String]) -> Result<()> {
-    if args.first().map(String::as_str) != Some("gdi") {
-        return Err("implemented parity entry: upstream-parity gdi [--offline-inputs <native run manifest>]".into());
-    }
+    let kind = match args.first().map(String::as_str) {
+        Some(kind @ ("gdi" | "print-window")) => kind,
+        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window> [--offline-inputs <native run manifest>]".into()),
+    };
     let mut native_args = vec!["--desktop".to_owned()];
     native_args.extend_from_slice(&args[1..]);
-    run_native(&native_args, true)
+    run_native(&native_args, Some(kind))
 }
 
-fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
+fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
+    let gdi_parity = parity.is_some();
+    let print_parity = parity == Some("print-window");
     let mut desktop = false;
     let mut offline_input = None;
     let mut args = args.iter();
@@ -121,7 +124,9 @@ fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
     let upstream = baseline.parent().unwrap().join("reference/upstream");
     let directory = root.join("runs").join(format!(
         "{}-{}",
-        if gdi_parity {
+        if print_parity {
+            "p1-print-window-windows"
+        } else if gdi_parity {
             "p1-gdi-windows"
         } else {
             "p0-native-windows"
@@ -156,6 +161,22 @@ fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
              Safe defect observations: the instrumented reference initializes input for positive short-return/layout probes; Rust rejects incomplete reads and failed metadata queries. A real 24-bit DDB may be rejected at SelectObject on the current 32-bit device; this is not a nondefault-depth display capture.\n\
              Safety adaptations: checked arithmetic/narrowing and fallible initialized allocation; GetObjectW validates the original packed one-plane 32-bit DDB assumption; short GetBitmapBits reads and invalid SelectObject sentinels are rejected. These are not DIB modernization.\n\
              No manager/selection/forwarding or other backend case is closed. Actual native outcomes remain in the check logs; no complete GDI backend, U snapshot, P1 exit, public SDK, PR or P3 feature is asserted by this component run.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
+    if print_parity {
+        let scope = inputs.join("print-window-scope.md");
+        fs::write(
+            &scope,
+            "# P1 PrintWindow migration component scope\n\n\
+             Fixed unpatched PrintWindowScreencap.{h,cpp}; the GDI regression scope is retained separately.\n\
+             U-WIN-PRINT-01/02 partial: owned WM_PAINT/WM_PRINTCLIENT class and real PrintWindow(3), main/popup BGR conversion before cleanup, composition after both cleanups, negative/partial/outside/hidden/absent and zero-size popup scenes, twenty fixture lifecycles each, retained CPU ownership. Actual rendering message counts remain observable; no single message path is assumed. Four hundred compiled OpenCV/Rust rectangle boundaries preserve representable empty/clipped results.\n\
+             U-WIN-PRINT-03 partial: null/destroyed main and zero-size optional popup; Rust conversion-exception propagation and ownership tested through the C++ converter. Eight query scenarios compare isolated original function bodies and Rust through real native query boundaries: normal/null root, null/root-equal popup, invalid/hidden popup and failure of either ClientToScreen query, including short-circuit order and main-image fallback. Original conversion/capture/cleanup exception injection, root-child and full window-state/native-failure matrices remain pending.\n\
+             Safety adaptation: temporarily deselect bitmap only around GetDIBits to meet its documented precondition, reselect before original conversion point, retain final restore/delete/delete/release. A real native selected-object witness verifies both boundaries. DWORD-aligned initialized u32 storage, checked CPU spans/scanline counts and signed geometry reject unsafe source assumptions; no CreateDIBSection/P3 migration is introduced.\n\
+             An earlier formal native run returned a black original popup bitmap while the subsequent Rust capture rendered the fixture pattern. Same-bitmap selected/unselected/repeated/raw reads confirmed black contents; later query/flush controls and an exact earlier-fixture replay did not reproduce it and do not establish a fix. Preserve that unresolved parity failure independently of this run's check outcomes; no PrintWindow component exit is asserted.\n\
+             No full backend, U snapshot, P1 exit, public SDK, manager, PR or later product feature is accepted by this record.\n",
         )?;
         source_snapshot
             .inputs
@@ -197,6 +218,9 @@ fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
     }
     if gdi_parity {
         process.arg("-GdiParity");
+    }
+    if print_parity {
+        process.arg("-PrintWindowParity");
     }
     if let Some(input) = &offline {
         process
@@ -242,7 +266,13 @@ fn run_native(args: &[String], gdi_parity: bool) -> Result<()> {
     batch::register(&root, &manifest)?;
     println!(
         "Native {} evidence archived at {}",
-        if gdi_parity { "P1 GDI component" } else { "P0" },
+        if print_parity {
+            "P1 PrintWindow component"
+        } else if gdi_parity {
+            "P1 GDI component"
+        } else {
+            "P0"
+        },
         manifest.display()
     );
     if !status.success() || run.checks.iter().any(|check| check.status != "passed") {

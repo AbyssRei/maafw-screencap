@@ -1,0 +1,19 @@
+# Copyright (C) 2026 AbyssRei
+# SPDX-License-Identifier: LGPL-3.0-or-later
+BITMAPINFO
+BITMAPINFOHEADER
+BI_RGB
+DIB_RGB_COLORS
+GetDIBits
+PrintWindow
+PW_CLIENTONLY
+PW_RENDERFULLCONTENT
+GA_ROOTOWNER
+GetAncestor
+GetLastActivePopup
+IsWindow
+IsWindowVisible
+ClientToScreen
+POINT
+GetCurrentObject
+OBJ_BITMAP

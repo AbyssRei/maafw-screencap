@@ -56,9 +56,12 @@ fn main() {
             )
             .expect("prepared Cargo feature selection");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");
         assert!(
-            std::env::var_os("CARGO_FEATURE_WINDOWS_GDI").is_none() || selected.enabled[0],
-            "windows-gdi cannot be enabled when the prepared Windows family is OFF"
+            (std::env::var_os("CARGO_FEATURE_WINDOWS_GDI").is_none()
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_PRINT_WINDOW").is_none())
+                || selected.enabled[0],
+            "Windows capture backends cannot be enabled when the prepared Windows family is OFF"
         );
         for (family, enabled) in selected.enabled.iter().enumerate() {
             if *enabled {
@@ -91,16 +94,32 @@ fn main() {
     println!("cargo::rerun-if-changed=build-support/windows-prototype.txt");
     println!("cargo::rerun-if-changed=build-support/windows-com-prototype.txt");
     println!("cargo::rerun-if-changed=build-support/windows-gdi.txt");
-    #[cfg(feature = "windows-gdi")]
+    println!("cargo::rerun-if-changed=build-support/windows-print-window.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-gdi-common.txt");
+    #[cfg(any(feature = "windows-gdi", feature = "windows-print-window"))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         assert_eq!(
             std::env::var("TARGET").as_deref(),
             Ok("x86_64-pc-windows-msvc"),
-            "the initial Windows GDI migration requires x86_64-pc-windows-msvc"
+            "the initial Windows capture migration requires x86_64-pc-windows-msvc"
         );
         let out =
             std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("windows_gdi.rs");
-        let input = std::fs::read_to_string("build-support/windows-gdi.txt").unwrap();
+        let mut input = std::fs::read_to_string("build-support/windows-gdi-common.txt").unwrap();
+        for (enabled, path) in [
+            (
+                cfg!(feature = "windows-gdi"),
+                "build-support/windows-gdi.txt",
+            ),
+            (
+                cfg!(feature = "windows-print-window"),
+                "build-support/windows-print-window.txt",
+            ),
+        ] {
+            if enabled {
+                input.push_str(&std::fs::read_to_string(path).unwrap());
+            }
+        }
         let mut args = vec![
             "--out",
             out.to_str().unwrap(),

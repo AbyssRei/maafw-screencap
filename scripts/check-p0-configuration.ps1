@@ -53,7 +53,9 @@ try {
     $env:MFS_BUILD_CONFIGURATION=$offConfig
     Check off-build cargo @('check','--release','--locked','--no-default-features')|Out-Null
     if($IsWindows) {
-        Check rejects-gdi-when-windows-off cargo @('check','--release','--locked','--no-default-features','--features','windows-gdi') 'windows-gdi cannot be enabled when the prepared Windows family is OFF'|Out-Null
+        foreach ($backend in @('windows-gdi','windows-print-window')) {
+            Check "rejects-$backend-when-windows-off" cargo @('check','--release','--locked','--no-default-features','--features',$backend) 'Windows capture backends cannot be enabled when the prepared Windows family is OFF'|Out-Null
+        }
     }
     $foreignFeature=if($IsMacOS){'prototype-linux-wlr'}else{'prototype-macos'}
     Check rejects-feature-mismatch cargo @('check','--release','--locked','--no-default-features','--features',$foreignFeature) 'Cargo features differ from the explicit prepared configuration'|Out-Null

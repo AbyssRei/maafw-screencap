@@ -6,7 +6,7 @@
     all(
         test,
         target_os = "windows",
-        feature = "windows-gdi",
+        any(feature = "windows-gdi", feature = "windows-print-window"),
         feature = "prototype-windows"
     ),
     feature(allocator_ext)

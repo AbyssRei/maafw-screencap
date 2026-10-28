@@ -7,6 +7,7 @@
 #include "gdi-probe.h"
 
 namespace mfs_parity {
+cv::Mat& image_pixels(void* owner);
 int32_t transfer_image(cv::Mat pixels, MfsParityImage* output);
 void probe_conversion();
 }

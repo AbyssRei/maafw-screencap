@@ -3,7 +3,7 @@
 use super::*;
 use crate::backends::windows::parity_adapter::probe as p;
 use crate::backends::windows::parity_adapter::{Adapter, Image};
-use std::error::Error;
+use std::{error::Error, ptr::null_mut};
 
 fn assert_fixture(image: &Image, phase: usize, width: i32, height: i32) {
     assert_eq!(image.dimensions(), (width, height));

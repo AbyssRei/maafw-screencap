@@ -1,7 +1,14 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#[cfg(feature = "windows-gdi")]
 mod gdi;
 mod gdi_api;
+mod gdi_resources;
+mod gdi_types;
+#[cfg(feature = "windows-print-window")]
+mod print_window;
+#[cfg(feature = "windows-print-window")]
+mod print_window_api;
 
 #[cfg(all(test, feature = "prototype-windows"))]
 #[path = "../../../tests/upstream-parity/gdi_adapter.rs"]

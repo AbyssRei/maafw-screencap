@@ -45,6 +45,7 @@ int32_t transfer(cv::Mat pixels, MfsParityImage* output)
 }
 
 namespace mfs_parity {
+cv::Mat& image_pixels(void* owner) { return static_cast<Image*>(owner)->pixels; }
 int32_t transfer_image(cv::Mat pixels, MfsParityImage* output) { return transfer(std::move(pixels), output); }
 }
 

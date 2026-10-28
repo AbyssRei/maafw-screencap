@@ -636,9 +636,16 @@ pub(crate) fn register(root: &Path, manifest: &Path) -> Result<()> {
 pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
     let run: Run = records::read(&records::verify(root, artifact)?)?;
     records::version(run.layout_version)?;
+    let component_scope = if run.run_id.starts_with("p1-gdi-windows-") {
+        Some("gdi-scope.md")
+    } else if run.run_id.starts_with("p1-print-window-windows-") {
+        Some("print-window-scope.md")
+    } else {
+        None
+    };
     let supported_phase = run.phase == "P0"
         || (run.phase == "P1"
-            && run.run_id.starts_with("p1-gdi-windows-")
+            && component_scope.is_some()
             && run
                 .inputs
                 .iter()
@@ -647,10 +654,9 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
                 })
                 .count()
                 == 1
-            && run
-                .inputs
-                .iter()
-                .any(|input| input.path == format!("runs/{}/inputs/gdi-scope.md", run.run_id)));
+            && run.inputs.iter().any(|input| {
+                input.path == format!("runs/{}/inputs/{}", run.run_id, component_scope.unwrap())
+            }));
     if !supported_phase || run.phase_status != "incomplete" || run.checks.is_empty() {
         return Err("unsupported preparation/component run record".into());
     }
@@ -729,60 +735,63 @@ mod tests {
         ));
         fs::create_dir(&root).unwrap();
         let fixture = SourceFixture(root);
-        let scope = fixture
-            .0
-            .join("runs/p1-gdi-windows-fixture/inputs/gdi-scope.md");
-        let baseline = fixture.0.join("baselines/u/source/manifest.json");
-        fs::create_dir_all(scope.parent().unwrap()).unwrap();
-        fs::create_dir_all(baseline.parent().unwrap()).unwrap();
-        fs::write(&scope, "Partial component scope, not a phase acceptance.\n").unwrap();
-        fs::write(
-            &baseline,
-            "Fixture parent identity; not a real U baseline.\n",
-        )
-        .unwrap();
-        let log = fixture.0.join("component.log");
-        fs::write(&log, "Fixture component check.\n").unwrap();
-        let mut run = Run {
-            layout_version: records::LAYOUT_VERSION,
-            run_id: "p1-gdi-windows-fixture".into(),
-            phase: "P1".into(),
-            phase_status: "incomplete".into(),
-            checks: vec![Check {
-                name: "fixture".into(),
-                status: "passed".into(),
-                log: records::artifact(&fixture.0, &log).unwrap(),
-            }],
-            pending: vec!["Full U remains unexecuted.".into()],
-            inputs: vec![
-                records::artifact(&fixture.0, &scope).unwrap(),
-                records::artifact(&fixture.0, &baseline).unwrap(),
-            ],
-        };
-        for (index, accepted) in [true, false, false, false].into_iter().enumerate() {
-            match index {
-                1 => run.phase_status = "complete".into(),
-                2 => {
-                    run.phase_status = "incomplete".into();
-                    run.inputs.pop();
+        for kind in ["gdi", "print-window"] {
+            let run_id = format!("p1-{kind}-windows-fixture");
+            let scope = fixture
+                .0
+                .join(format!("runs/{run_id}/inputs/{kind}-scope.md"));
+            let baseline = fixture.0.join("baselines/u/source/manifest.json");
+            fs::create_dir_all(scope.parent().unwrap()).unwrap();
+            fs::create_dir_all(baseline.parent().unwrap()).unwrap();
+            fs::write(&scope, "Partial component scope, not a phase acceptance.\n").unwrap();
+            fs::write(
+                &baseline,
+                "Fixture parent identity; not a real U baseline.\n",
+            )
+            .unwrap();
+            let log = fixture.0.join("component.log");
+            fs::write(&log, "Fixture component check.\n").unwrap();
+            let mut run = Run {
+                layout_version: records::LAYOUT_VERSION,
+                run_id,
+                phase: "P1".into(),
+                phase_status: "incomplete".into(),
+                checks: vec![Check {
+                    name: "fixture".into(),
+                    status: "passed".into(),
+                    log: records::artifact(&fixture.0, &log).unwrap(),
+                }],
+                pending: vec!["Full U remains unexecuted.".into()],
+                inputs: vec![
+                    records::artifact(&fixture.0, &scope).unwrap(),
+                    records::artifact(&fixture.0, &baseline).unwrap(),
+                ],
+            };
+            for (index, accepted) in [true, false, false, false].into_iter().enumerate() {
+                match index {
+                    1 => run.phase_status = "complete".into(),
+                    2 => {
+                        run.phase_status = "incomplete".into();
+                        run.inputs.pop();
+                    }
+                    3 => {
+                        run.inputs
+                            .push(records::artifact(&fixture.0, &baseline).unwrap());
+                        run.inputs.remove(0);
+                    }
+                    _ => {}
                 }
-                3 => {
-                    run.inputs
-                        .push(records::artifact(&fixture.0, &baseline).unwrap());
-                    run.inputs.remove(0);
-                }
-                _ => {}
+                let manifest = fixture.0.join(format!("{kind}-component-{index}.json"));
+                records::create_json(&manifest, &run).unwrap();
+                assert_eq!(
+                    verify(
+                        &fixture.0,
+                        &records::artifact(&fixture.0, &manifest).unwrap()
+                    )
+                    .is_ok(),
+                    accepted
+                );
             }
-            let manifest = fixture.0.join(format!("component-{index}.json"));
-            records::create_json(&manifest, &run).unwrap();
-            assert_eq!(
-                verify(
-                    &fixture.0,
-                    &records::artifact(&fixture.0, &manifest).unwrap()
-                )
-                .is_ok(),
-                accepted
-            );
         }
     }
 

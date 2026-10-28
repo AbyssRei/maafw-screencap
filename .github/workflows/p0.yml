@@ -1,4 +1,4 @@
-name: Native preparation and P1 GDI parity
+name: Native preparation and P1 Windows parity
 
 on:
   push:
@@ -67,11 +67,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask wlr-prototype
-      - name: Validate Windows GDI migration and native interop
+      - name: Validate Windows GDI and PrintWindow migration and native interop
         if: runner.os == 'Windows'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: cargo xtask upstream-parity gdi
+        run: cargo xtask upstream-parity print-window
       - name: Inventory registry licenses and verify prototype configuration
         shell: pwsh
         run: |

@@ -9,6 +9,7 @@ param(
     [Parameter(Mandatory)][string]$RustBatch,
     [switch]$Desktop,
     [switch]$GdiParity,
+    [switch]$PrintWindowParity,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -23,6 +24,10 @@ $logsRoot = Join-Path $configRoot logs
 $checks = [Collections.Generic.List[object]]::new()
 $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
+if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
+if ($PrintWindowParity) {
+    $pending.Add('PrintWindow is a partial P1 component. Original conversion/capture/cleanup exception injection, root-child and complete window-state/native-failure matrices remain pending. An earlier original-reference black-bitmap parity failure remains unresolved; later non-reproduction does not close it. A temporary GetDIBits deselection is an explicit native-precondition adaptation, not P3 DIB modernization.')
+}
 if ($GdiParity) {
     $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
 } else {
@@ -383,9 +388,16 @@ try {
 
     $boost = Boost-Source
     $build = Join-Path $nativeRoot "r-$([DateTime]::UtcNow.Ticks)"
-    $parityOptions = if ($GdiParity) { @('-DMFS_BUILD_GDI_PARITY=ON') } else { @() }
+    [string[]]$parityOptions = @(if ($GdiParity) { '-DMFS_BUILD_GDI_PARITY=ON' })
+    if ($PrintWindowParity) { $parityOptions += '-DMFS_BUILD_PRINT_PARITY=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
+    $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity))) {
+        $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
+        $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
+        if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
+    }
     Step 'reference-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_reference_u', '--parallel', '8')
     if ($GdiParity) {
         Step 'gdi-parity-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_gdi_parity', '--parallel', '8')
@@ -405,13 +417,15 @@ try {
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_gdi_parity.dll) -Destination $parityLibrary
         Save-Input $parityLibrary
         $env:MFS_GDI_PARITY_LIBRARY = $parityLibrary
-        $parityArguments = @('test', '--release', '--locked', '--lib', '--features', 'windows-gdi,prototype-windows-com')
-        $clippyArguments = @('clippy', '--workspace', '--all-targets', '--locked', '--features', 'windows-gdi,prototype-windows-com')
+        $parityFeatures = if ($PrintWindowParity) { 'windows-gdi,windows-print-window,prototype-windows-com' } else { 'windows-gdi,prototype-windows-com' }
+        $parityArguments = @('test', '--release', '--locked', '--lib', '--features', $parityFeatures)
+        $clippyArguments = @('clippy', '--workspace', '--all-targets', '--locked', '--features', $parityFeatures)
         if ($offline) {
             $parityArguments += @('--offline', '--config', $CargoConfig)
             $clippyArguments += @('--offline', '--config', $CargoConfig)
         }
-        Step 'gdi-original-parity' cargo ($parityArguments + @('--', 'backends::windows::gdi::', '--include-ignored', '--test-threads=1', '--nocapture'))
+        $parityFilter = if ($PrintWindowParity) { 'backends::windows::' } else { 'backends::windows::gdi::' }
+        Step 'gdi-original-parity' cargo ($parityArguments + @('--', $parityFilter, '--include-ignored', '--test-threads=1', '--nocapture'))
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
     }
     $licenses = Join-Path $artifacts licenses

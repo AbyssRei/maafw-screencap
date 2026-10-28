@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 use crate::backends::windows::{
-    gdi_api::GdiApi,
+    gdi_api::{DcApi, GdiApi},
     native::{HBITMAP, HDC, HGDIOBJ, HWND, RECT},
 };
 use std::mem::MaybeUninit;
@@ -87,7 +87,6 @@ type Begin = unsafe extern "C" fn(u32) -> i32;
 type End = unsafe extern "C" fn(*mut Report) -> i32;
 type GetApi = unsafe extern "C" fn(*mut Api) -> i32;
 type ProbeReference = unsafe extern "C" fn(*mut c_void, u32, *mut ImageSpan, *mut Report) -> i32;
-type ImageOwners = unsafe extern "C" fn() -> u64;
 
 impl Adapter {
     fn verify_probe_layout(&self) -> Result<(), Box<dyn Error>> {
@@ -186,13 +185,6 @@ impl Adapter {
         let status = unsafe { reference(hwnd, failures, &mut image, &mut report) };
         Ok((self.adopt(status, image), report))
     }
-
-    pub fn image_owners(&self) -> Result<u64, Box<dyn Error>> {
-        // SAFETY: Exact header signature; caller retains this loader reference.
-        let owners: ImageOwners = unsafe { self.module.symbol(c"mfs_gdi_parity_image_owners")? };
-        // SAFETY: Atomic query has no pointer inputs or native leases.
-        Ok(unsafe { owners() })
-    }
 }
 
 pub struct Probe<'a> {
@@ -230,7 +222,7 @@ impl Drop for Probe<'_> {
 // has the exact C header signature, returns real GDI objects on success and
 // confines writes to the same spans as Win32. Fixture residuals are reclaimed
 // only after recording the implementation's cleanup, never during capture.
-unsafe impl GdiApi for Probe<'_> {
+unsafe impl DcApi for Probe<'_> {
     unsafe fn get_dc(&self, hwnd: HWND) -> HDC {
         unsafe { (self.api.get_dc)(hwnd) }
     }
@@ -246,15 +238,6 @@ unsafe impl GdiApi for Probe<'_> {
     unsafe fn select(&self, dc: HDC, object: HGDIOBJ) -> HGDIOBJ {
         unsafe { (self.api.select)(dc, object) }
     }
-    unsafe fn copy(&self, destination: HDC, width: i32, height: i32, source: HDC) -> i32 {
-        unsafe { (self.api.copy)(destination, width, height, source) }
-    }
-    unsafe fn object(&self, bitmap: HBITMAP, length: i32, output: *mut c_void) -> i32 {
-        unsafe { (self.api.object)(bitmap, length, output) }
-    }
-    unsafe fn read(&self, bitmap: HBITMAP, length: i32, output: *mut c_void) -> i32 {
-        unsafe { (self.api.read)(bitmap, length, output) }
-    }
     unsafe fn delete_bitmap(&self, bitmap: HBITMAP) -> i32 {
         unsafe { (self.api.delete_bitmap)(bitmap) }
     }
@@ -263,5 +246,18 @@ unsafe impl GdiApi for Probe<'_> {
     }
     unsafe fn release_dc(&self, hwnd: HWND, dc: HDC) -> i32 {
         unsafe { (self.api.release_dc)(hwnd, dc) }
+    }
+}
+
+// SAFETY: Same-thread native probe table preserves the GDI read/write spans.
+unsafe impl GdiApi for Probe<'_> {
+    unsafe fn copy(&self, destination: HDC, width: i32, height: i32, source: HDC) -> i32 {
+        unsafe { (self.api.copy)(destination, width, height, source) }
+    }
+    unsafe fn object(&self, bitmap: HBITMAP, length: i32, output: *mut c_void) -> i32 {
+        unsafe { (self.api.object)(bitmap, length, output) }
+    }
+    unsafe fn read(&self, bitmap: HBITMAP, length: i32, output: *mut c_void) -> i32 {
+        unsafe { (self.api.read)(bitmap, length, output) }
     }
 }

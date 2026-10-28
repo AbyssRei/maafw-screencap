@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Test-only consumer of native/gdi-parity.h. Layout is verified in the real DLL.
-use crate::backends::windows::gdi::{BgraConverter, BgraView};
+use crate::backends::windows::gdi_types::{BgraConverter, BgraView};
 use std::{
     error::Error,
     ffi::{CStr, c_void},
@@ -11,7 +11,14 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "windows-print-window")]
+#[path = "print_query_probe.rs"]
+pub(crate) mod print_query;
+#[cfg(feature = "windows-print-window")]
+#[path = "print_window_adapter.rs"]
+pub(crate) mod print_window;
 #[path = "gdi_probe.rs"]
+#[cfg(feature = "windows-gdi")]
 pub(crate) mod probe;
 
 #[allow(
@@ -87,6 +94,12 @@ pub(crate) struct Adapter {
 }
 
 impl Adapter {
+    pub fn image_owners(&self) -> Result<u64, Box<dyn Error>> {
+        type ImageOwners = unsafe extern "C" fn() -> u64;
+        // SAFETY: Exact private signature; atomic query has no pointer inputs.
+        let owners: ImageOwners = unsafe { self.module.symbol(c"mfs_gdi_parity_image_owners")? };
+        Ok(unsafe { owners() })
+    }
     pub fn load() -> Result<Self, Box<dyn Error>> {
         let path = std::env::var_os("MFS_GDI_PARITY_LIBRARY")
             .ok_or("MFS_GDI_PARITY_LIBRARY is required; run cargo xtask upstream-parity gdi")?;
@@ -99,7 +112,9 @@ impl Adapter {
         // the process-wide loader search configuration.
         let handle = unsafe { native::LoadLibraryExW(wide.as_ptr(), null_mut(), 0x100 | 0x1000) };
         if handle.is_null() {
-            return Err("LoadLibraryExW failed for GDI parity adapter".into());
+            // SAFETY: Read the loader failure before any other native operation.
+            let error = unsafe { native::GetLastError() };
+            return Err(format!("LoadLibraryExW failed for GDI parity adapter: {error}").into());
         }
         let module = Arc::try_new(Module(handle))?;
         // SAFETY: Every signature below matches gdi-parity.h. The loader owner

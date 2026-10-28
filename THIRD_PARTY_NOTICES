@@ -12,6 +12,15 @@ src/backends/windows/gdi.rs is a Rust migration of:
   source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp
   source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp (window_size/conversion order)
 
+src/backends/windows/print_window.rs is a Rust migration of:
+  source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.h
+  source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp
+
+The two migrated backends share DC/bitmap cleanup and private conversion/error
+types in gdi_resources.rs and gdi_types.rs. PrintWindow retains the original
+GetDIBits path, temporarily unselecting its bitmap to satisfy the native API
+precondition and reselecting it before the original BGRA2BGR conversion point.
+
 These original files do not contain additional per-file copyright or licence
 notices. Their original source identities and licence materials are retained
 in the external provenance records. The Rust migration preserves the original

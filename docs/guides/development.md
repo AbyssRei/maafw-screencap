@@ -45,11 +45,21 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 ```text
 cargo xtask upstream-parity gdi
 cargo xtask upstream-parity gdi --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-parity print-window
+cargo xtask upstream-parity print-window --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
 
 本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空/最小化窗口与被封住的转换异常。故障对照以隔离命名空间编译原始函数体，通过真实 GDI 对象记录创建、复制、转换及清理的原生边界响应；14 组正常/故障/组合场景分别核对主错误、清理错误、调用顺序及 CPU owner 释放。夹具先记录捕获实现遗留的资源，再单独回收，不能据此声称产品在原生清理失败后已成功关闭。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
 
 U-WIN-GDI-02 的原生失败/清理与窗口状态场景已纳入对照；U-WIN-GDI-01 仍缺真实非默认显示深度，管理器/转发与完整 P1 验收尚待完成。原生 24 位 DDB 在当前 32 位设备上可能被 SelectObject 拒绝，该观察不等于实际 24 位显示器取帧。短读探针定义原参考输入的全部字节后观察其非零即成功分支，Rust 的安全拒绝单独分类。完整目录中的其他后端继续按 P1 迁移。
+
+PrintWindow 的内部迁移位于 `src/backends/windows/print_window.rs`，由独立的 `windows-print-window` feature 启用。它与 GDI 共享 DC/位图清理和私有转换类型，声明生成分别选择所需函数；PrintWindow 单独启用不编入 GetBitmapBits 路径。保留主窗口捕获、root-owner/last-active popup 选择、各自 BGRA2BGR、原生清理后 BGR ROI 合成的顺序；弹窗原生可选失败返回主图，转换/分配异常仍使整个操作失败。
+
+原源码在位图仍选入 DC 时调用 GetDIBits，违反其[原生前提](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-getdibits)。Rust 暂时移出位图再读回，成功后在原转换点前选回，最终清理顺序保持；原生对象查询见证读回和转换时的真实选择状态。此为显式安全适配，未改为 P3 的 CreateDIBSection。矩形交集另外直接对照已编译 OpenCV 的 400 组边界组合：仅拒绝原点差的 int 溢出，保留合法偏移的空交集/裁剪结果。完整扫描行数、DWORD 对齐的初始化缓冲及几何受检算术分别验证；读回存储使用 Vec<u32>，字节视图借用同一所有者，不额外复制整帧。
+
+`print-window` 对照同时回归 GDI，显式编译原始 PrintWindow 类及自有窗口类，使用 WM_PAINT/WM_PRINTCLIENT 绘制不同主图/弹窗图样。夹具在捕获前调用 GdiFlush/DwmFlush；这不证明此后每次 PrintWindow 都得到已绘制的像素。记录实际绘制消息而不假设 `PW_RENDERFULLCONTENT` 只走一种消息路径。负原点、部分重叠、边界外、隐藏/无弹窗及零宽弹窗各执行二十次夹具生命周期，逐像素检查与关闭后持帧；这仍是局部对照。八组查询对照还核对正常/root 查询为空、popup 为空或等于 root、无效/隐藏 popup、任一 ClientToScreen 失败的顺序、短路与主图返回。查询探针只替换查询边界，捕获/转换/清理仍执行原函数体；C/Rust 布局与表函数签名在加载后核验。原参考转换/捕获/清理异常注入、root-child、完整窗口状态与原生失败矩阵尚未完成，U-WIN-PRINT-01/02/03 均未宣称完整验收。
+
+已有正式批次出现原参考弹窗位图全黑、Rust 后续捕获图样正确的逐像素失败；临时移出位图、重复读取和原始位图读取都不能恢复该次像素。额外裁剪查询和后续未复现结果尚未建立因果关系，失败与诊断证据保留外置，PrintWindow 的局部验收仍未关闭。诊断 TU 与未插桩的参考 TU 分开，诊断读取返回第一次得到的图像，不以再次读取修补验收输出；额外裁剪/flush 对照已撤回，普通夹具不携带未经证实的修复。
 
 ## 已实现的 P0 工具
 
@@ -59,7 +69,7 @@ macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实
 
 首次 LLVM 原生准备在包摘要校验后遇到 zstd 默认解码内存上限，失败结果已保留；第一次参数修复又暴露了 PowerShell 单项条件数组被展开为字符串、splat 按字符传参的问题，本机 argv 检查已复现。读取 zstd 包现在以显式字符串数组对清单与解压均传入 2048 MiB 上限，继续流式读取，修复后已通过原生验证。
 
-Windows 环境准备可单独运行 `pwsh -NoProfile -File scripts/prepare-windows-toolchain.ps1`：查询 VS2026 stable channel 和 Microsoft SDK 正式下载页，核对安装器的 Microsoft Authenticode 签名及版本，保存外部 local 记录。默认只读，环境缺失返回 77；已在本机确认当前版本差距及两个安装器的有效签名。管理员 PowerShell 加 `-Install` 才安装：Build Tools 使用 deps 下的专用实例，SDK 为系统级安装；不请求 UAC、不重启、不关闭现有 IDE。Actions 已验证专用 Build Tools 安装、SDK 安装、后续只读复查、实际编译和最小原生/参考捕获；本机对应安装与复验仍待完成。安装/注册成功本身不能算 SDK 验收。
+Windows 环境准备可单独运行 `pwsh -NoProfile -File scripts/prepare-windows-toolchain.ps1`：查询 VS2026 stable channel 和 Microsoft SDK 正式下载页，核对安装器的 Microsoft Authenticode 签名及版本，保存外部 local 记录。默认只读，环境缺失返回 77。管理员 PowerShell 加 `-Install` 才安装：Build Tools 使用 deps 下的专用实例，SDK 为系统级安装；不请求 UAC、不重启、不关闭现有 IDE。Actions 已验证专用 Build Tools 安装、SDK 安装、后续只读复查、实际编译和最小原生/参考捕获；本机由用户手动更新 VS/SDK 后的对应编译、捕获与配置复验也已通过。安装/注册成功本身不能算 SDK 验收。
 
 编译器/SDK 的目录名与实际补丁版本分别记录。例如本轮工具目录仍为 MSVC 14.51.36231，但真实 C++ 编译器版本为 19.51.36260.0；SDK 目录为 10.0.28000.0，安装的 servicing release 为 10.0.28000.2957。以归档的编译器检测、文件身份和正式版准备记录判断实际版本，不按目录名要求重复升级。
 
@@ -93,7 +103,7 @@ cargo xtask wlr-prototype      # Linux x64：真实 wlroots headless/Pixman 与 
 
 批次依赖检查以归档 rustc 的 host 为原生 target，通过 `cargo metadata --all-features --filter-platform` 检查该 target 的完整 feature 图，并保存 `dependency-target.txt`。不将 Linux 专属 helper 的 Windows 条件依赖计入当前构建；其他平台分别由对应原生 Actions 批次检查。全局最新版与绑定专属传递约束规则仍逐包执行。
 
-`xtask` 不依赖捕获 package，默认 Cargo 构建只构建产品入口。普通构建不读取 reference，不链接 OpenCV。当前 `build.rs` 仅在目标 Windows 且显式选择原型 feature 时读取维护的过滤输入，向 OUT_DIR 生成私有 Win32 sys 声明及 COM/WinRT rich 投影；其他平台复用对应原生绑定，并已实现原型族的 AUTO/ON/OFF 配置与目标复验；当前只有窗口 GDI 开始迁移，其余后端和完整管理器调用链尚未完成。
+`xtask` 不依赖捕获 package，默认 Cargo 构建只构建产品入口。普通构建不读取 reference，不链接 OpenCV。当前 `build.rs` 仅在目标 Windows 且显式选择原型 feature 时读取维护的过滤输入，向 OUT_DIR 生成私有 Win32 sys 声明及 COM/WinRT rich 投影；其他平台复用对应原生绑定，并已实现原型族的 AUTO/ON/OFF 配置与目标复验；当前窗口 GDI 与 PrintWindow 已开始迁移，其余后端和完整管理器调用链尚未完成。
 
 `native` 是显式原生验收入口，当前仅实现 Windows x64 + VS2026/MSBuild，需要 Git、curl、GitHub CLI 和 PowerShell。它先完成本次 Rust 批次，再在线解析 CMake、OpenCV 和 Boost 最新正式版，以及 MaaUtils 正式版或无正式版时的维护分支。原生源码、工具归档、配置、SDK/编译器身份、日志和产物仍在 reference/deps，产品基础构建不触发这些步骤。CMake 的 ASM 编译器以显式 FILEPATH 缓存类型传入，并在重复配置后核查身份，避免缓存复用时被未定类型覆盖。OpenCV 只选择所需模块及其传递依赖，保留 CPU 分发、SIMD 与 IPP/HAL，并验证实际配置；未选择的 DNN/OCR 依赖不进入参考构建。
 
@@ -103,7 +113,7 @@ cargo xtask wlr-prototype      # Linux x64：真实 wlroots headless/Pixman 与 
 
 `wlr-prototype` 已通过原生 Actions：20 次真实 compositor 取帧、SHM/fd 生命周期、独立队列和退出验证。初次自有程序链接缺少 libwayland-server 的失败记录已外置保留，修正显式直接链接后通过。入口解析正式 tag/release，检查名称与发布标记，避免将错误标为正式发布的 beta 标签当作稳定版；从源码准备 libffi、Expat、Wayland、协议 XML、libdrm、Pixman、xkbcommon 和 wlroots，并记录实际 pkg-config 版本、源码、配置、工具和链接信息。自有 C 程序启动真实 headless backend/Pixman compositor，生成不对称三色场景，不连接宿主桌面或使用输入后端。Rust 明确启用 wayland-backend 的 client_system，通过私有 socket 执行 20 次 screencopy/shm/fd 生命周期，验证 Buffer/BufferDone/Flags/Ready、像素、native ready 时间字段、read/cancel-read、独立事件队列及代理数据释放。捕获进程还核对实际加载的 libwayland-client 与准备前缀一致；只把 CPU 像素交给其他线程。原生 compositor 必须响应 SIGTERM 正常退出。该入口尚无离线重放；LLVM 工具链已按正式版准备并通过本节原生验证，完整 compositor/格式/失败矩阵与原始 C++ 对照仍在对应后续阶段完成。不是 Wlr 产品后端或 P3 ExtImage 实现。
 
-私有 C++/OpenCV 适配器验证 C 布局和失败输出、真实外部线程回调、stop 排空及回调内拒绝、原生像素覆写/释放后的 Rust 独立持帧、跨线程释放和 Rust/C++ 异常边界。独立参考程序直接编译固定未打补丁的 `GdiScreencap.cpp`，在原调用点执行上游转换；其构建、加载/FFI 和受控窗口实际捕获分别记账。当前参考覆盖只包括 GDI，不代表六种 Windows 方法、完整 U 或 P0 已验收。具体构建/原生测试结果以各批次记录为准。
+私有 C++/OpenCV 适配器验证 C 布局和失败输出、真实外部线程回调、stop 排空及回调内拒绝、原生像素覆写/释放后的 Rust 独立持帧、跨线程释放和 Rust/C++ 异常边界。独立参考程序直接编译固定未打补丁的 `GdiScreencap.cpp`，局部对照 DLL 另可显式编译 `PrintWindowScreencap.cpp`，在原调用点执行上游转换；其构建、加载/FFI 和受控窗口实际捕获分别记账。这些参考入口不代表六种 Windows 方法或完整 U，P0 的准备验收另见计划状态。具体构建/原生测试结果以各批次记录为准。
 
 网络不可用时，可显式选择已登记、具备所需依赖归档的原生运行记录，使用其依赖快照验证当前源码：
 
