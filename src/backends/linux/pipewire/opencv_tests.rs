@@ -369,6 +369,149 @@ fn validates_opencv_abi_failures_and_owner_transfer() {
 }
 
 #[test]
+#[ignore = "explicit original native SPA format parser and actual OpenCV all-format oracle"]
+fn matches_original_format_pods_and_padded_conversion_bytes() {
+    let directory =
+        env::var("MFS_P1_PIPEWIRE_FORMAT_ORACLE").expect("explicit native format oracle");
+    let directory = Path::new(&directory);
+    let records = fs::read_to_string(directory.join("cases.tsv")).unwrap();
+    let adapter = Adapter::open();
+    let formats = [
+        Format::Bgra,
+        Format::Bgrx,
+        Format::Rgba,
+        Format::Rgbx,
+        Format::Rgb,
+        Format::Bgr,
+        Format::Yuy2,
+    ];
+    let mut lines = records.lines();
+    assert_eq!(
+        lines.next().unwrap(),
+        "index\tspa_format\tchannels\twidth\theight\tstride\tchoice_none\tlinear_modifier\tnative_parse_result"
+    );
+    let (mut cases, mut conversions, mut reuses) = (0, 0, 0);
+    for line in lines {
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 9);
+        let values: Vec<_> = fields[..8]
+            .iter()
+            .map(|field| field.parse::<u32>().unwrap())
+            .collect();
+        let [
+            index,
+            numeric,
+            channels,
+            width,
+            height,
+            stride,
+            choice,
+            modifier,
+        ] = <[u32; 8]>::try_from(values).unwrap();
+        assert_eq!(usize::try_from(index).unwrap(), cases);
+        let format = formats[cases / 4];
+        assert_eq!((width, height), (8, 3));
+        assert_eq!(usize::try_from(choice).unwrap(), (cases / 2) % 2);
+        assert_eq!(usize::try_from(modifier).unwrap(), cases % 2);
+        assert_eq!(pod::to_format(numeric), format);
+        assert_eq!(format.channels(), Some(usize::try_from(channels).unwrap()));
+        assert_eq!(
+            stride,
+            width
+                .checked_mul(channels)
+                .unwrap()
+                .checked_add(11)
+                .unwrap()
+        );
+        let name = format!("case-{index}");
+        let encoded = fs::read(directory.join(format!("{name}.pod"))).unwrap();
+        assert!((8..=4096).contains(&encoded.len()));
+        let declared = u32::from_ne_bytes(encoded[..4].try_into().unwrap());
+        assert_eq!(
+            usize::try_from(declared).unwrap().checked_add(8).unwrap(),
+            encoded.len()
+        );
+        // Aligned, fully initialized native POD storage. Only complete valid
+        // native builder outputs are offered to native parsers; malformed-input
+        // validation and callback negotiation are separate unfinished matrices.
+        let mut storage = [0_u64; 512];
+        // SAFETY: The initialized u64 array is 4096 bytes and permits arbitrary
+        // byte writes. No u64 value or native pointer is used during this copy.
+        let bytes =
+            unsafe { std::slice::from_raw_parts_mut(storage.as_mut_ptr().cast::<u8>(), 4096) };
+        bytes[..encoded.len()].copy_from_slice(&encoded);
+        // SAFETY: Exact complete native fixture with verified header length in
+        // correctly aligned initialized storage, borrowed only for this call.
+        let parsed = unsafe { pod::parse(storage.as_ptr().cast()) };
+        assert_eq!(parsed, Some((width, height, format)), "case={index}");
+        let mut raw = fs::read(directory.join(format!("{name}.raw"))).unwrap();
+        assert_eq!(
+            raw.len(),
+            usize::try_from(stride.checked_mul(height).unwrap()).unwrap()
+        );
+        let layout = Layout::checked(
+            width,
+            height,
+            format,
+            u32::try_from(raw.len()).unwrap(),
+            Some(Chunk {
+                stride: i32::try_from(stride).unwrap(),
+                offset: 0,
+                size: u32::try_from(raw.len()).unwrap(),
+                flags: 0,
+            }),
+        )
+        .unwrap();
+        let mut cache = RawCache::default();
+        // SAFETY: This initialized fixture contains the entire checked padded
+        // span. The new CPU cache cannot alias its immutable input allocation.
+        let copied = unsafe { cache.copy_native(raw.as_ptr(), layout) }.unwrap();
+        assert_eq!(
+            copied.copied_bytes,
+            usize::try_from(
+                width
+                    .checked_mul(height)
+                    .unwrap()
+                    .checked_mul(channels)
+                    .unwrap()
+            )
+            .unwrap()
+        );
+        raw.fill(0); // Independent target copy must survive input overwrite.
+        let frame = cache.snapshot().unwrap();
+        let output = match format.conversion().unwrap() {
+            Some(mode) => {
+                conversions += 1;
+                Bgr::Converted(adapter.convert(&frame, mode).unwrap())
+            }
+            None => {
+                reuses += 1;
+                Bgr::Reused(frame)
+            }
+        };
+        cache.clear();
+        assert_eq!(
+            output.pixels(),
+            fs::read(directory.join(format!("{name}.bgr"))).unwrap(),
+            "source format/conversion bytes differ case={index} format={format:?}"
+        );
+        drop(output);
+        assert_eq!(adapter.owner_count(), 0);
+        eprintln!(
+            "native format case={index} format={format:?} choice_none={choice} linear_modifier={modifier} native_parse_result={} source_bytes_equal=1",
+            fields[8].parse::<i32>().unwrap()
+        );
+        cases += 1;
+    }
+    assert_eq!((cases, conversions, reuses), (28, 24, 4));
+    drop(adapter);
+    assert_eq!(LOADER_CLEANUP_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "native PipeWire format oracle cases=28 formats=7 conversions=24 bgr_reuses=4 exact_bytes=1 passed"
+    );
+}
+
+#[test]
 #[ignore = "explicit native Linux + actual OpenCV conversion boundary and retained BGR owners"]
 fn captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown() {
     let adapter = Adapter::open();

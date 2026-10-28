@@ -174,6 +174,8 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 另在独立未运行的 main-loop 上显式拦截所选 fd 的 `add_io`，观察真实 `pw_context_connect_fd` 后期 ENOMEM、一次拦截和完整 teardown 前后的 fd 状态；其余原生方法和 data 不变，退出前恢复方法表。这仅为测试隔离进程的错误边界探针，尚待原生编译/执行，不是产品连接替代实现，也不证明多线程宿主中按 socket cookie 清理或所有失败分支安全。
 
+新增独立原生格式 oracle，待 Actions 编译/执行：直接使用固定原源码的七项 SPA/通道/转换表，生成 28 个普通值/Choice(None)、有/无 Linear modifier 的有效 POD，同时保存原解析结果、带 11 字节初始化行填充的输入和真实 OpenCV BGR。Rust 按原 POD 解析并取得独立目标行，覆写原输入、清除 cache 后逐字节比对 24 次转换和四次 BGR owner 复用。该矩阵没有 native buffer、回调或真实流格式切换，不能代替完整格式协商、损坏 POD、DMA-BUF 和端到端生命周期验收。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。

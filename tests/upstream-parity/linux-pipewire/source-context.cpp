@@ -16,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string_view>
@@ -286,6 +287,83 @@ void save_pods(const std::filesystem::path& directory) {
     }
     std::cout<<"original PipeWire negotiation pods=3 saved\n";
 }
+void save_bytes(const std::filesystem::path& path,const void* bytes,size_t length) {
+    require(length<=static_cast<size_t>(std::numeric_limits<std::streamsize>::max()),"fixture file length overflow");
+    std::ofstream output(path,std::ios::binary);
+    output.write(static_cast<const char*>(bytes),static_cast<std::streamsize>(length));
+    output.close();
+    require(output.good(),"cannot save format fixture");
+}
+void save_format_fixtures(const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    std::ofstream records(directory/"cases.tsv");
+    require(records.good(),"cannot create format fixture records");
+    records<<"index\tspa_format\tchannels\twidth\theight\tstride\tchoice_none\tlinear_modifier\tnative_parse_result\n";
+    size_t index=0;
+    for(const auto& info:MfsOriginalPipeWire::kSpaFormatTable) {
+        for(bool choice:{false,true}) {
+            for(bool modifier:{false,true}) {
+                alignas(8) uint8_t bytes[4096]={};
+                spa_pod_builder builder=SPA_POD_BUILDER_INIT(bytes,sizeof(bytes));
+                spa_pod_frame object{},child{};
+                auto checked=[](int result){require(result>=0,"format fixture builder failed");};
+                checked(spa_pod_builder_push_object(&builder,&object,SPA_TYPE_OBJECT_Format,SPA_PARAM_Format));
+                checked(spa_pod_builder_add(&builder,
+                    SPA_FORMAT_mediaType,SPA_POD_Id(SPA_MEDIA_TYPE_video),
+                    SPA_FORMAT_mediaSubtype,SPA_POD_Id(SPA_MEDIA_SUBTYPE_raw),0));
+                checked(spa_pod_builder_prop(&builder,SPA_FORMAT_VIDEO_format,0));
+                if(choice) { checked(spa_pod_builder_push_choice(&builder,&child,SPA_CHOICE_None,0)); }
+                checked(spa_pod_builder_id(&builder,info.format));
+                if(choice) { require(spa_pod_builder_pop(&builder,&child)!=nullptr,"format fixture choice failed"); }
+                checked(spa_pod_builder_prop(&builder,SPA_FORMAT_VIDEO_size,0));
+                if(choice) { checked(spa_pod_builder_push_choice(&builder,&child,SPA_CHOICE_None,0)); }
+                constexpr uint32_t width=8,height=3;
+                checked(spa_pod_builder_rectangle(&builder,width,height));
+                if(choice) { require(spa_pod_builder_pop(&builder,&child)!=nullptr,"size fixture choice failed"); }
+                if(modifier) {
+                    checked(spa_pod_builder_prop(&builder,SPA_FORMAT_VIDEO_modifier,0));
+                    checked(spa_pod_builder_long(&builder,DRM_FORMAT_MOD_LINEAR));
+                }
+                const auto* param=static_cast<const spa_pod*>(spa_pod_builder_pop(&builder,&object));
+                require(param && SPA_POD_SIZE(param)<=sizeof(bytes),"format fixture POD is absent/oversize");
+                spa_video_info_raw native{};
+                const int native_parse=spa_format_video_raw_parse(param,&native);
+                uint32_t actual_width=0,actual_height=0;
+                spa_video_format actual_format=SPA_VIDEO_FORMAT_UNKNOWN;
+                MfsOriginalPipeWire::parse_video_format(param,actual_width,actual_height,actual_format);
+                require(actual_width==width && actual_height==height && actual_format==info.format,"original format parser rejected the valid fixture");
+                const size_t row=static_cast<size_t>(width)*static_cast<size_t>(info.channels),stride=row+11;
+                std::vector<uint8_t> raw(stride*height,0xed);
+                for(size_t y=0;y<height;++y) {
+                    for(size_t x=0;x<width;++x) {
+                        for(int c=0;c<info.channels;++c) {
+                            raw[y*stride+x*static_cast<size_t>(info.channels)+static_cast<size_t>(c)]=
+                                static_cast<uint8_t>((y*29+x*17+static_cast<size_t>(c)*53+index*19)&255);
+                        }
+                    }
+                }
+                const cv::Mat borrowed(height,width,CV_8UC(info.channels),raw.data(),stride);
+                cv::Mat owned=borrowed.clone(),bgr;
+                // Use the fixed source's actual format table and actual OpenCV
+                // operations. This isolated format oracle has no native buffer,
+                // callback, capture-time or end-to-end format acceptance claim.
+                if(info.cv_conversion>=0) { cv::cvtColor(owned,bgr,info.cv_conversion); }
+                else { bgr=std::move(owned); }
+                require(bgr.type()==CV_8UC3 && bgr.isContinuous() && bgr.step[0]==width*3,"format oracle output layout mismatch");
+                const auto name="case-"+std::to_string(index);
+                save_bytes(directory/(name+".pod"),param,SPA_POD_SIZE(param));
+                save_bytes(directory/(name+".raw"),raw.data(),raw.size());
+                save_bytes(directory/(name+".bgr"),bgr.data,static_cast<size_t>(width)*height*3);
+                records<<index<<'\t'<<static_cast<uint32_t>(actual_format)<<'\t'<<info.channels<<'\t'
+                    <<actual_width<<'\t'<<actual_height<<'\t'<<stride<<'\t'<<choice<<'\t'<<modifier<<'\t'<<native_parse<<'\n';
+                ++index;
+            }
+        }
+    }
+    records.close();
+    require(index==28 && records.good(),"format fixture records incomplete");
+    std::cout<<"original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved\n";
+}
 }
 int main(int argc,char** argv) {
     try {
@@ -293,6 +371,10 @@ int main(int argc,char** argv) {
         verify_runtime();
         if(argc==3 && std::string_view(argv[1])=="--pods") {
             save_pods(argv[2]);
+            return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--format-fixtures") {
+            save_format_fixtures(argv[2]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--fd-error") {
