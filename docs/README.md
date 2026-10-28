@@ -11,6 +11,8 @@ FramePool 也已开始独立内部迁移与显式 `upstream-parity frame-pool` �
 
 DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` 入口。本机三个原源码进程（含空 HWND 的 adapter 0/output 0）、20 次混合 Rust 生命周期及独立转换/异常边界检查通过受控目标图样、帧归还与持帧；原映射 Mat 生命周期缺陷由明确计量的安全复制适配，完整原生故障、多输出/旋转和 manager 仍待验收。
 
+截图 manager 已开始私有迁移，`upstream-parity manager` 对照原源码函数体的 122 个脚本，并通过本机 20 次真实 GDI manager 生命周期。它保留预热/测速、毫秒截断、候选与图像释放及 U 的调用线程 DPI 副作用；完整原生混合方法、包装和 framework 转发仍待验收，不构成公共 SDK。
+
 | 文档 | 职责及当前状态 |
 | --- | --- |
 | [实施计划](plans/maafw-screencap-extraction-plan.md) | 项目范围、U/P/E 顺序、依赖政策、参考资料布局、后端要求、验收与发布门禁；计划已确认，实施待完成 |

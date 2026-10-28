@@ -106,6 +106,7 @@ fn main() {
     println!("cargo::rerun-if-changed=build-support/windows-screen-window.txt");
     println!("cargo::rerun-if-changed=build-support/windows-frame-pool.txt");
     println!("cargo::rerun-if-changed=build-support/windows-desktop-dup.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-manager.txt");
     #[cfg(feature = "windows-desktop-dup")]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         assert_eq!(
@@ -155,6 +156,10 @@ fn main() {
             .join("windows_window_coordination.rs");
         let mut input = String::new();
         for (enabled, path) in [
+            (
+                cfg!(feature = "windows-manager"),
+                "build-support/windows-manager.txt",
+            ),
             (
                 cfg!(any(
                     feature = "windows-print-window",

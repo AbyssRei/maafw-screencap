@@ -30,6 +30,8 @@ mod gdi_resources;
     feature = "windows-screen-dc"
 ))]
 mod gdi_types;
+#[cfg(feature = "windows-manager")]
+pub(crate) mod manager;
 mod pixels;
 #[cfg(feature = "windows-print-window")]
 mod print_window;

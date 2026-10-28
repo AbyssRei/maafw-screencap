@@ -14,6 +14,7 @@ param(
     [switch]$FramePoolContext,
     [switch]$FramePoolParity,
     [switch]$DesktopDupParity,
+    [switch]$ManagerParity,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -33,10 +34,14 @@ if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity require
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
 if ($DesktopDupParity -and -not $GdiParity) { throw 'DesktopDup parity requires the explicit common adapter/regression target.' }
+if ($ManagerParity -and -not $GdiParity) { throw 'Manager parity requires the explicit common image adapter.' }
 $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
+if ($ManagerParity) {
+    $pending.Add('Partial screenshot-only Windows manager migration, input excluded. Exact fixed-source bodies and enum plus MaaUtils duration_since are compiled with explicit platform/backend/clock and input=None stubs; real MSVC container/Mat owner behavior is compared in 122 scripts. A separate actual GDI-only source-body manager and twenty Rust lifecycles validate caller DPI, two connect captures and one published capture, strict pixels, GDI resources and retained image owners. Native competing/mixed methods and wrappers, complete framework forwarding, compatibility DPI, full native failures and all-platform U/P1 remain unaccepted. Source logging is suppressed in the test shim; the GDI-only entry probes are not native competing-method latency evidence. Previous failures remain failed.')
+}
 if ($DesktopDupParity) {
     $pending.Add('Partial P1 DesktopDup/Window migration. Preserve original default hardware/factory/enumeration/fallback, DuplicateOutput, 2000ms waits, up to three discarded alpha warmups followed by a separate final capture, access-lost state and cleanup order. The original mapped Mat escapes Unmap/ReleaseFrame: safe Rust adds and counts a full-output BGRA copy while mapped, keeping BGR conversion after native release. Window target isolation adds an explicit BGR copy after full conversion and ROI. Isolated source calls, null-HWND adapter 0/output 0 and twenty mixed Rust lifecycles compare controlled target pixels and ownership; dynamic full desktops are not globally byte-compared. Real conversion-boundary ReleaseFrame probes and contained conversion exceptions are distinct from exact Unmap interception. Native faults, exact call scripts, source repeated lifecycles, monitor-lookup fallback/multioutput/rotation/access loss/format, window/DPI/helper and manager matrices remain pending. No complete backend/U/P1 acceptance.')
 }
@@ -146,6 +151,11 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
         }
         if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
+        if ($Name -in @('manager-source-scripts','manager-gdi-lifecycles') -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact manager test did not execute one test' }
+            if ($Name -eq 'manager-source-scripts' -and $observed -notmatch 'exact-source manager script cases=122') { throw 'Expected 122 source manager cases' }
+        }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }
         $status = 'passed'
@@ -468,10 +478,11 @@ try {
     if ($framePoolSource) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_REFERENCE=ON' }
     if ($FramePoolParity) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_PARITY=ON' }
     if ($DesktopDupParity) { $parityOptions += '-DMFS_BUILD_DESKTOP_DUP_REFERENCE=ON' }
+    if ($ManagerParity) { $parityOptions += '-DMFS_BUILD_MANAGER_PARITY=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -479,6 +490,13 @@ try {
     Step 'reference-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_reference_u', '--parallel', '8')
     if ($GdiParity) {
         Step 'gdi-parity-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_gdi_parity', '--parallel', '8')
+    }
+    if ($ManagerParity) {
+        foreach ($name in @('manager-source.inc','manager-enum.inc','manager-time.inc')) {
+            $saved=Join-Path $inputsRoot $name
+            Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
+            Save-Input $saved
+        }
     }
     if ($framePoolSource) {
         Step 'frame-pool-context-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_framepool_reference', '--parallel', '8')
@@ -551,6 +569,7 @@ try {
         if ($ScreenDcParity) { $capabilities += 'windows-screen-dc' }
         if ($FramePoolParity) { $capabilities += 'windows-frame-pool' }
         if ($DesktopDupParity) { $capabilities += 'windows-desktop-dup-window' }
+        if ($ManagerParity) { $capabilities += 'windows-manager' }
         $parityFeatures = $capabilities -join ','
         if ($ScreenDcParity) {
             $screenEvidence = Join-Path $artifacts screen-evidence
@@ -566,6 +585,7 @@ try {
         # Shared GDI readback tests moved to their owning module; select all
         # compiled Windows backend modules so GDI-only runs retain those checks.
         $parityFilter = 'backends::windows::'
+        if ($ManagerParity) { $parityFilter = 'backends::windows::gdi' }
         if ($ScreenDcParity) {
             Step 'screen-window-helper-original-parity' cargo ($parityArguments + @('--', 'platform::windows::window_api::', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
@@ -583,8 +603,23 @@ try {
         $desktopConversionCase = 'backends::windows::desktop_dup::tests::releases_acquired_frame_before_external_conversion_and_conversion_exception'
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
-        Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
-        Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
+        if ($ManagerParity) {
+            # These cases run in distinct processes. Preserve any failed check
+            # while continuing independent manager evidence, without retry.
+            $managerChecks = @(
+                @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
+                @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
+                @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))}
+            )
+            foreach ($check in $managerChecks) {
+                try { Step $check.name cargo $check.arguments }
+                catch { $failed=$true; Write-Host $_.Exception.Message }
+            }
+        } else {
+            Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
+            Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
+        }
         if ($DesktopDupParity) {
             $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence
             Step 'desktop-dup-rust-lifecycles' cargo ($parityArguments + @('--',$desktopCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))

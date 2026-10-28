@@ -74,6 +74,17 @@ conversion point. Packed window BGR isolation adds another explicit target copy.
 These safety adaptations are counted and documented; full native/source parity
 and complete backend/P1 acceptance remain outstanding.
 
+src/backends/windows/manager.rs, manager_native.rs and the caller-DPI platform
+wrapper partially migrate only the screenshot path of the fixed
+source/MaaWin32ControlUnit/Manager/Win32ControlUnitMgr.{h,cpp}, including the
+MaaDef.h method values. Input implementations are excluded. Native acceptance
+extracts the original screenshot function bodies and enum into its build tree;
+an explicit input=None declaration shim and scripted boundaries are not the
+complete original control-unit class. It also compiles the selected external
+MaaUtils Time.hpp duration_since body; MaaUtils source/licence identities and
+all applicable notices accompany the external acceptance inputs. These targets
+and OpenCV remain excluded from default product builds.
+
 Microsoft C++/WinRT
 =================
 

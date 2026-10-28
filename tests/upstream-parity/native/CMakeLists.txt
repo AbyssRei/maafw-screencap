@@ -25,6 +25,10 @@ option(MFS_BUILD_SCREEN_PARITY "Include original ScreenDC and window-helper obse
 option(MFS_BUILD_FRAMEPOOL_REFERENCE "Build the isolated original FramePool caller-context diagnostic" OFF)
 option(MFS_BUILD_FRAMEPOOL_PARITY "Include the rendering/conversion adapter for private Rust FramePool parity" OFF)
 option(MFS_BUILD_DESKTOP_DUP_REFERENCE "Build the isolated original DesktopDup/Window reference" OFF)
+option(MFS_BUILD_MANAGER_PARITY "Build exact-source screenshot-manager scripts" OFF)
+if(MFS_BUILD_MANAGER_PARITY AND NOT MFS_BUILD_GDI_PARITY)
+    message(FATAL_ERROR "Manager parity requires the explicit common image adapter")
+endif()
 if(MFS_BUILD_FRAMEPOOL_PARITY AND (NOT MFS_BUILD_GDI_PARITY OR NOT MFS_BUILD_FRAMEPOOL_REFERENCE))
     message(FATAL_ERROR "FramePool parity requires the explicit common adapter and isolated original reference")
 endif()
@@ -103,6 +107,11 @@ add_library(mfs_gdi_parity SHARED
     gdi-probe.cpp
     gdi-probe-reference.cpp
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/GdiScreencap.cpp")
+if(MFS_BUILD_MANAGER_PARITY)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/manager-source.cmake")
+    target_sources(mfs_gdi_parity PRIVATE manager-script.cpp manager-gdi-reference.cpp)
+    target_include_directories(mfs_gdi_parity PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
+endif()
 target_include_directories(mfs_gdi_parity PRIVATE
     "${MFS_UPSTREAM_ROOT}/include"
     "${MFS_UPSTREAM_ROOT}/source/include"

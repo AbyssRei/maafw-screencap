@@ -113,7 +113,7 @@ fn matches_original_screen_dc_failures_and_records_residuals_before_fixture_reco
         let owners = adapter.image_owners()?;
         let (expected, source) = adapter.screen_reference_probe(window.hwnd(), mask)?;
         source.check_fixture();
-        let probe = adapter.probe(mask)?;
+        let probe = adapter.screen_probe(mask)?;
         let actual = capture.capture_with_api(&probe, &SystemWindow, &mut adapter.converter(0));
         let report = probe.finish()?;
         report.check_fixture();
@@ -215,7 +215,7 @@ fn classifies_short_reads_metadata_failures_and_24bit_device_bitmap_assumptions(
         let owners = adapter.image_owners()?;
         let (source, source_report) = adapter.screen_reference_probe(window.hwnd(), mask)?;
         source_report.check_fixture();
-        let probe = adapter.probe(mask)?;
+        let probe = adapter.screen_probe(mask)?;
         let actual = capture.capture_with_api(&probe, &SystemWindow, &mut adapter.converter(0));
         let report = probe.finish()?;
         report.check_fixture();
