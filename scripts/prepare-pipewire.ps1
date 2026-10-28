@@ -5,11 +5,14 @@ param(
     [Parameter(Mandatory)][string]$DepsRoot,
     [Parameter(Mandatory)][string]$RunRoot,
     [Parameter(Mandatory)][string]$ConfigureTool,
-    [Parameter(Mandatory)][string]$RustBatch
+    [Parameter(Mandatory)][string]$RustBatch,
+    [switch]$SourceReference,
+    [string]$UpstreamRoot = ''
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference = $false
+if($SourceReference -and (-not $UpstreamRoot -or -not(Test-Path -LiteralPath $UpstreamRoot -PathType Container))){throw 'Original PipeWire context requires the explicit verified upstream directory'}
 $productRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $productRoot
 $inputRoot = Join-Path $RunRoot inputs
@@ -24,6 +27,7 @@ $fixture = $null
 $fixtureOut = $null
 $fixtureError = $null
 $failed = $false
+$referenceArtifacts = $null
 
 function Artifact([string]$Path) {
     $relative = [IO.Path]::GetRelativePath($ReferenceRoot, $Path).Replace('\', '/')
@@ -50,6 +54,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         }
         if ($Name -eq 'rust-pipewire-consumer-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;') {
             throw 'Expected four portable consumer tests; the external source oracle remains explicitly ignored on this Linux entry'
+        }
+        if ($Name -eq 'original-pipewire-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire source cycles=20 captures=60 retained=60 passed') {
+            throw 'Expected twenty original PipeWire source lifecycles and sixty retained images'
+        }
+        if ($Name -eq 'pipewire-fd-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_early_error result=null errno=\d+ input_fd_open=[01] observed') {
+            throw 'Expected the real native early-error descriptor observation'
         }
         $status = 'passed'
     } finally {
@@ -94,7 +104,9 @@ try {
     Step clang-identity clang @('--version')
     Step python-identity python3 @('--version')
     $packages = @{}
-    foreach ($name in @('pip','meson','ninja')) {
+    $pythonTools=@('pip','meson','ninja')
+    if($SourceReference){$pythonTools+='cmake'}
+    foreach ($name in $pythonTools) {
         $path = Join-Path $inputRoot "$name-release.json"
         Step "$name-latest" curl @('--fail','--location','--silent','--show-error','--connect-timeout','15','--max-time','60','-o',$path,"https://pypi.org/pypi/$name/json")
         Save $path
@@ -105,7 +117,7 @@ try {
     Step python-environment python3 @('-m','venv',$venv)
     $python = Join-Path $venv bin/python
     $pipReport = Join-Path $inputRoot pip-install.json
-    Step python-tools $python @('-m','pip','install','--upgrade','--report',$pipReport,'pip','meson','ninja')
+    Step python-tools $python (@('-m','pip','install','--upgrade','--report',$pipReport)+$pythonTools)
     Save $pipReport
     $installedPath = Join-Path $inputRoot python-packages.json
     & $python -m pip list --format=json | Set-Content -LiteralPath $installedPath -Encoding utf8
@@ -117,7 +129,7 @@ try {
     }
     $wheels = Join-Path $inputRoot python-wheels
     New-Item -ItemType Directory -Path $wheels | Out-Null
-    Step python-offline-inputs $python @('-m','pip','download','--only-binary=:all:','--dest',$wheels,'pip','meson','ninja')
+    Step python-offline-inputs $python (@('-m','pip','download','--only-binary=:all:','--dest',$wheels)+$pythonTools)
     Get-ChildItem -LiteralPath $wheels -File | ForEach-Object { Save $_.FullName }
     $env:PATH = (Join-Path $venv bin) + ':' + $env:PATH
 
@@ -187,6 +199,15 @@ try {
     $savedFixture = Join-Path $nativeArtifacts mfs-p0-pipewire-source
     Copy-Item -LiteralPath $fixtureBinary -Destination $savedFixture
     Save $savedFixture
+    if($SourceReference){
+        $env:MFS_P1_PIPEWIRE_LIBRARY=(& readlink -f (Join-Path $prefix lib/libpipewire-0.3.so)|Out-String).Trim()
+        if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $env:MFS_P1_PIPEWIRE_LIBRARY -PathType Leaf)){throw 'Cannot identify the selected native PipeWire library'}
+        . (Join-Path $PSScriptRoot prepare-pipewire-reference.ps1)
+        $sourceExecutable=Prepare-PipeWireReference $UpstreamRoot
+        $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
+        New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
+        Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';pattern='asymmetric RGB bars with row/column/channel/producer-serial xor; RGB(0,0) holds 24-bit serial';scope='Fixture serial/retention observed; original API capture time and replay status are not exposed. Repeated markers are diagnostic, not rejected.'})
+    }
     # Linux sockaddr_un.sun_path has 108 bytes including the terminator. Keep
     # live sockets outside the long content-addressed native build directory.
     $runtime = Join-Path $DepsRoot ('runtime/pw-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
@@ -214,6 +235,7 @@ try {
     }
     $fixtureStart = [Diagnostics.ProcessStartInfo]::new($fixtureBinary)
     $fixtureStart.UseShellExecute = $false
+    if($SourceReference){$fixtureStart.ArgumentList.Add('--asymmetric')}
     $fixtureStart.RedirectStandardOutput = $true
     $fixtureStart.RedirectStandardError = $true
     $fixture = [Diagnostics.Process]::Start($fixtureStart)
@@ -233,8 +255,18 @@ try {
     if ($nodes.Count -ne 1) { throw 'Expected exactly the owned SPA fixture node' }
     $env:MFS_P0_PIPEWIRE_SOCKET = $socket
     $env:MFS_P0_PIPEWIRE_NODE_ID = [string]$nodes[0].id
-    Step rust-pipewire-capture cargo @('test','--release','--locked','--test','p0-interop','--features','prototype-linux-pipewire','--','--include-ignored','--test-threads=1','--nocapture')
+    if(-not $SourceReference){
+        Step rust-pipewire-capture cargo @('test','--release','--locked','--test','p0-interop','--features','prototype-linux-pipewire','--','--include-ignored','--test-threads=1','--nocapture')
+    }
     Step rust-pipewire-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-pipewire,linux-pipewire','--','-D','warnings')
+    if($SourceReference){
+        # Independent processes; a failed ownership premise must not erase the
+        # separate original-source lifecycle evidence or become an overall pass.
+        try { Step pipewire-fd-error-observation timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--fd-error',$socket) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step original-pipewire-source-context timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,$referenceArtifacts) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+    }
 } catch {
     $failed = $true
     $log = Join-Path $logsRoot preparation-error.log
@@ -242,12 +274,13 @@ try {
     $checks.Add([ordered]@{name='pipewire-preparation';status='failed';log=(Artifact $log)})
     Write-Host $_.Exception.ToString()
 } finally {
+    if($referenceArtifacts){Get-ChildItem -LiteralPath $referenceArtifacts -File|ForEach-Object{Save $_.FullName}}
     StopOwned source $fixture $fixtureOut $fixtureError
     StopOwned daemon $server $serverOut $serverError
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
-        layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase='P0';phase_status='incomplete'
+        layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Private PipeWire consumer compilation and four portable unit tests are separate from the P0 native stream probe; no native migrated driver or exact-source oracle executes on this entry.','Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
+        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Private PipeWire consumer compilation and four portable unit tests are separate from native capture; no native migrated driver executes on this entry.',($SourceReference ? 'Original-source context selected: complete fixed PipeWireScreencap header/cpp, exact extracted screenshot base, private namespace/logging overlays, asymmetric padded-RGB fixture. Twenty FD/init/three-output/inactive/close cycles check sixty known BGR results and retained images, FD/thread observations. Harness global deinit is outside the original destructor. Timings are diagnostic; the source API does not expose freshness/replay. P0 Rust native probe is not run against this distinct pattern; its normal entry is separate. No native Rust parity, full framework/input compilation, failure/mapping/format matrices or complete P1 acceptance.' : 'Original-source context not selected. The default P0 RGB-bar producer and native Rust stream probe remain separate from later source/Rust parity.'),'Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
     })
 }
 if($failed -or @($checks | Where-Object status -EQ failed).Count) { exit 1 }

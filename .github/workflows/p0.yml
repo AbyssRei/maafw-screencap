@@ -67,6 +67,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask wlr-prototype
+      - name: Observe original PipeWire native source lifecycles
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask upstream-context pipewire
       - name: Validate Windows GDI and PrintWindow migration and native interop
         if: runner.os == 'Windows'
         env:

@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-// Owned P0 producer. Real PipeWire buffers carry deterministic RGB rows and
+// Owned producer. Default P0 bars and explicit P1 asymmetric RGB rows carry
 // initialized padding across the private remote to the independent Rust client.
 #include <inttypes.h>
 #include <signal.h>
@@ -19,6 +19,7 @@ struct producer {
     struct spa_hook listener;
     int error;
     bool stopping;
+    bool asymmetric;
     uint64_t dequeued, queued;
 };
 
@@ -50,8 +51,19 @@ static void produce(void *userdata)
         unsigned char *pixels = plane->data;
         memset(pixels, 0xa5, FRAME_BYTES);
         for (size_t y = 0; y < HEIGHT; y++)
-            for (size_t x = 0; x < WIDTH; x++)
+            for (size_t x = 0; x < WIDTH; x++) {
                 memcpy(pixels + y * STRIDE + x * 3, bars[x / 4], 3);
+                if (p->asymmetric) {
+                    for (size_t c = 0; c < 3; c++)
+                        pixels[y * STRIDE + x * 3 + c] ^= (unsigned char)((y * 7 + x * 3 + c * 13 + (p->dequeued & 63)) & 63);
+                }
+            }
+        if (p->asymmetric) {
+            const uint32_t marker = (uint32_t)(p->dequeued & 0xffffff);
+            pixels[0] = (unsigned char)(marker >> 16);
+            pixels[1] = (unsigned char)(marker >> 8);
+            pixels[2] = (unsigned char)marker;
+        }
         *plane->chunk = (struct spa_chunk){ .offset = 0, .size = FRAME_BYTES, .stride = STRIDE };
     }
     // Every successful dequeue has exactly one return, including failure paths.
@@ -126,6 +138,14 @@ static void stop(void *userdata, int number)
 int main(int argc, char **argv)
 {
     struct producer p = {0};
+    if (argc == 2 && strcmp(argv[1], "--asymmetric") == 0) {
+        p.asymmetric = true;
+        argc = 1;
+        argv[1] = NULL;
+    } else if (argc != 1) {
+        fprintf(stderr, "owned source accepts only --asymmetric\n");
+        return 1;
+    }
     struct pw_context *context = NULL;
     struct pw_core *core = NULL;
     pw_init(&argc, &argv);
