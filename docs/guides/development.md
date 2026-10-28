@@ -55,6 +55,7 @@ cargo xtask upstream-parity desktop-dup
 cargo xtask upstream-parity desktop-dup --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-parity manager
 cargo xtask upstream-parity manager --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-model pipewire --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-context frame-pool
 cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
@@ -151,6 +152,10 @@ Rust 保留连接时先清除旧捕获 owner、再设置调用线程 PMv2 DPI、
 首次 manager 正式批次的 GDI 回归有两项因验收符号缺失而未执行：Rust 编译全部能力后，旧通用探针提前请求了该次 GDI-only 模块未选中的 ScreenDC 符号。该失败批次保留。GDI 与 ScreenDC 现使用显式探针入口，目标符号在各自开始原生故障状态前核验；修正后的 GDI 七项、ScreenDC 四项及 manager 两个入口已分别通过本机检查。后续正式 manager 批次的 20 项检查全部通过，包含 122 个脚本和 20 次真实 GDI 生命周期；记录仍为 P1/incomplete。正式 manager 批次串行运行独立回归/脚本/生命周期，保留每项失败而不中断其他独立证据，整批仍以任一失败为失败。
 
 修正标记计数后的 DesktopDup 原生 Actions 已通过全部 25 项，实际 20 轮标记绘制计数包含 1；此前失败保留。该轮 PrintWindow 30 项和 ScreenDC 19 项通过，FramePool 仍为 32 项通过、四项最小化原源码颜色失败。补充诊断 ZIP 已核对发布摘要，所含记录引用已校验；它不代替完整工程归档，也不撤销其他失败。
+
+`upstream-model pipewire` 是当前 Windows 原生 C++/OpenCV 工具链上的可移植消费端对照，单独标记为 P1/incomplete，不是 Linux 实际捕获。私有 `linux-pipewire` 能力目前只实现消费端算法，尚无原生 driver。原源码的等待 helper/锁 guard、格式表、connected/inactive/wait_for_frame_locked/screencap 函数体在构建目录提取，仅归一化换行；loop、clock 和格式编号是明确的脚本边界，Mat 所有者及转换使用真实 OpenCV。这不是完整原 Linux 类或 SPA 数值 ABI 的编译验证。
+
+本机 68 个案例、112 次操作已匹配原源码：每次激活并请求新帧、整秒截断与亚秒余量至少等待一秒、伪唤醒、负等待返回后的谓词复查、前三次超时回放与第四次拒绝、空缓存、停用/再激活、锁外转换/异常和 BGR 共享 owner 转移。原生 set_active 返回值按 U 忽略；源码错误回调不主动 signal，消费端也未提前加入 P3 的终止唤醒/绝对等待。额外的时钟/计数溢出检查独立验证，不执行原 C++ 未定义溢出。原生建连、init/deinit、POD、process、SHM/DMA-BUF、缓存写入别名、线程迁移、关闭/注销和 Linux manager 仍待迁移与原生 Actions 验收；已有 Linux 运行结果仍仅来自 P0 原型。
 
 ## 已实现的 P0 工具
 

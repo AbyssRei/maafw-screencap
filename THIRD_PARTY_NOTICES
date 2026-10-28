@@ -85,6 +85,15 @@ MaaUtils Time.hpp duration_since body; MaaUtils source/licence identities and
 all applicable notices accompany the external acceptance inputs. These targets
 and OpenCV remain excluded from default product builds.
 
+src/backends/linux/pipewire.rs partially migrates the consumer control flow of
+the fixed source/MaaLinuxControlUnit/Screencap/PipeWireScreencap.cpp. Native
+setup, POD and stream/buffer handling are not implemented by that module yet.
+Explicit portable acceptance extracts the original wait/lock helpers, format
+table and consumer methods into its external build tree, with fake loop/clock
+and symbolic format IDs plus real OpenCV Mat ownership/conversion. This is not
+the complete original Linux class or native PipeWire acceptance. The oracle
+and OpenCV stay outside the default product dependency tree.
+
 Microsoft C++/WinRT
 =================
 

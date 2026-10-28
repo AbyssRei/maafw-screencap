@@ -15,6 +15,7 @@ param(
     [switch]$FramePoolParity,
     [switch]$DesktopDupParity,
     [switch]$ManagerParity,
+    [switch]$PipeWireControl,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -35,13 +36,17 @@ if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the 
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
 if ($DesktopDupParity -and -not $GdiParity) { throw 'DesktopDup parity requires the explicit common adapter/regression target.' }
 if ($ManagerParity -and -not $GdiParity) { throw 'Manager parity requires the explicit common image adapter.' }
+if ($PipeWireControl -and -not $GdiParity) { throw 'PipeWire control model requires the explicit host regression/test entry.' }
 $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
 $geometryEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
+if ($PipeWireControl) {
+    $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 68 scripts and 112 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
+}
 if ($ManagerParity) {
-    $pending.Add('Partial screenshot-only Windows manager migration, input excluded. Exact fixed-source bodies and enum plus MaaUtils duration_since are compiled with explicit platform/backend/clock and input=None stubs; real MSVC container/Mat owner behavior is compared in 122 scripts. A separate actual GDI-only source-body manager and twenty Rust lifecycles validate caller DPI, two connect captures and one published capture, strict pixels, GDI resources and retained image owners. Native competing/mixed methods and wrappers, complete framework forwarding, compatibility DPI, full native failures and all-platform U/P1 remain unaccepted. Source logging is suppressed in the test shim; the GDI-only entry probes are not native competing-method latency evidence. Previous failures remain failed.')
+    $pending.Add('Partial screenshot-only Windows manager migration, input excluded. Exact fixed-source bodies and enum plus MaaUtils duration_since are compiled with explicit platform/backend/clock and input=None stubs; real MSVC container/Mat owner behavior is compared in 122 scripts. A separate actual GDI-only source-body manager and twenty Rust lifecycles validate caller DPI, two connect captures and one published capture, strict pixels, GDI resources and retained image owners. Native competing/mixed methods and wrappers, complete framework forwarding, compatibility DPI, full native failures and all-platform F/P1 remain unaccepted. Source logging is suppressed in the test shim; the GDI-only entry probes are not native competing-method latency evidence. Previous failures remain failed.')
 }
 if ($DesktopDupParity) {
     $pending.Add('Partial P1 DesktopDup/Window migration. Preserve original default hardware/factory/enumeration/fallback, DuplicateOutput, 2000ms waits, up to three discarded alpha warmups followed by a separate final capture, access-lost state and cleanup order. The original mapped Mat escapes Unmap/ReleaseFrame: safe Rust adds and counts a full-output BGRA copy while mapped, keeping BGR conversion after native release. Window target isolation adds an explicit BGR copy after full conversion and ROI. Isolated source calls, null-HWND adapter 0/output 0 and twenty mixed Rust lifecycles compare controlled target pixels and ownership; dynamic full desktops are not globally byte-compared. Real conversion-boundary ReleaseFrame probes and contained conversion exceptions are distinct from exact Unmap interception. Native faults, exact call scripts, source repeated lifecycles, monitor-lookup fallback/multioutput/rotation/access loss/format, window/DPI/helper and manager matrices remain pending. No complete backend/F/P1 acceptance.')
@@ -163,6 +168,10 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact manager test did not execute one test' }
             if ($Name -eq 'manager-source-scripts' -and $observed -notmatch 'exact-source manager script cases=122') { throw 'Expected 122 source manager cases' }
+        }
+        if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or $observed -notmatch 'exact-source PipeWire control cases=68 operations=112') { throw 'Expected one PipeWire model test with 68 cases and 112 operations' }
         }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
         if ($exitCode -ne 0) { throw "$Name exited with $exitCode; see $logPath" }
@@ -487,10 +496,11 @@ try {
     if ($FramePoolParity) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_PARITY=ON' }
     if ($DesktopDupParity) { $parityOptions += '-DMFS_BUILD_DESKTOP_DUP_REFERENCE=ON' }
     if ($ManagerParity) { $parityOptions += '-DMFS_BUILD_MANAGER_PARITY=ON' }
+    if ($PipeWireControl) { $parityOptions += '-DMFS_BUILD_PIPEWIRE_CONTROL=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity),@('MFS_BUILD_PIPEWIRE_CONTROL',[bool]$PipeWireControl))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -505,6 +515,16 @@ try {
             Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
             Save-Input $saved
         }
+    }
+    if ($PipeWireControl) {
+        Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
+        $saved=Join-Path $inputsRoot 'pipewire-control-source.inc'
+        Copy-Item -LiteralPath (Join-Path $build 'pipewire-control/pipewire-control-source.inc') -Destination $saved
+        Save-Input $saved
+        $env:MFS_PIPEWIRE_CONTROL_MODEL=Join-Path $build 'pipewire-control/Release/mfs_pipewire_control_model.exe'
+        $saved=Join-Path $inputsRoot 'mfs_pipewire_control_model.exe'
+        Copy-Item -LiteralPath $env:MFS_PIPEWIRE_CONTROL_MODEL -Destination $saved
+        Save-Input $saved
     }
     if ($framePoolSource) {
         Step 'frame-pool-context-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_framepool_reference', '--parallel', '8')
@@ -630,6 +650,9 @@ try {
         } else {
             Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
             Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
+        }
+        if ($PipeWireControl) {
+            Step 'pipewire-control-source-model' cargo ($parityArguments + @('--','backends::linux::pipewire::tests::matches_fixed_source_wait_replay_inactive_and_conversion_boundaries','--exact','--include-ignored','--test-threads=1','--nocapture'))
         }
         if ($DesktopDupParity) {
             $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence

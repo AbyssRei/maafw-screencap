@@ -48,6 +48,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             Get-Content -LiteralPath $log -Tail 50 | ForEach-Object { Write-Host $_ }
             throw "$Name exited with $code; see $log"
         }
+        if ($Name -eq 'rust-pipewire-consumer-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;') {
+            throw 'Expected four portable consumer tests; the external source oracle remains explicitly ignored on this Linux entry'
+        }
         $status = 'passed'
     } finally {
         $checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)})
@@ -175,6 +178,10 @@ try {
     $env:MFS_P0_PIPEWIRE_VERSION = $version
     . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family pipewire
     Save $env:MFS_BUILD_CONFIGURATION
+    # Compile the private consumer on native Linux and run its portable unit
+    # cases separately from the real P0 stream probe below. No native driver
+    # or source oracle is claimed by these four tests.
+    Step rust-pipewire-consumer-control cargo @('test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::tests::','--','--test-threads=1','--nocapture')
     $fixtureBinary = Join-Path $native mfs-p0-pipewire-source
     Step native-source-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)",(Join-Path $productRoot tests/fixtures/pipewire-source.c),"-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$fixtureBinary)
     $savedFixture = Join-Path $nativeArtifacts mfs-p0-pipewire-source
@@ -227,7 +234,7 @@ try {
     $env:MFS_P0_PIPEWIRE_SOCKET = $socket
     $env:MFS_P0_PIPEWIRE_NODE_ID = [string]$nodes[0].id
     Step rust-pipewire-capture cargo @('test','--release','--locked','--test','p0-interop','--features','prototype-linux-pipewire','--','--include-ignored','--test-threads=1','--nocapture')
-    Step rust-pipewire-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-pipewire','--','-D','warnings')
+    Step rust-pipewire-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-pipewire,linux-pipewire','--','-D','warnings')
 } catch {
     $failed = $true
     $log = Join-Path $logsRoot preparation-error.log
@@ -240,7 +247,7 @@ try {
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase='P0';phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
+        pending=@('Owned native producer only: portal/desktop capture, DMA-BUF, Wlr, macOS, source/method review and complete phase gates remain outstanding.','Private PipeWire consumer compilation and four portable unit tests are separate from the P0 native stream probe; no native migrated driver or exact-source oracle executes on this entry.','Latest Rust dependency checks are recorded by the parent batch and remain required even if these diagnostic native probes pass.')
     })
 }
 if($failed -or @($checks | Where-Object status -EQ failed).Count) { exit 1 }
