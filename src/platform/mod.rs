@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #[cfg(all(
     target_os = "windows",
-    any(feature = "windows-print-window", feature = "windows-screen-dc")
+    any(
+        feature = "windows-print-window",
+        feature = "windows-screen-dc",
+        feature = "windows-frame-pool"
+    )
 ))]
 pub(crate) mod windows;

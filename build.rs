@@ -58,10 +58,12 @@ fn main() {
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_SCREEN_DC");
+        println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_FRAME_POOL");
         assert!(
             (std::env::var_os("CARGO_FEATURE_WINDOWS_GDI").is_none()
                 && std::env::var_os("CARGO_FEATURE_WINDOWS_PRINT_WINDOW").is_none()
-                && std::env::var_os("CARGO_FEATURE_WINDOWS_SCREEN_DC").is_none())
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_SCREEN_DC").is_none()
+                && std::env::var_os("CARGO_FEATURE_WINDOWS_FRAME_POOL").is_none())
                 || selected.enabled[0],
             "Windows capture backends cannot be enabled when the prepared Windows family is OFF"
         );
@@ -100,6 +102,26 @@ fn main() {
     println!("cargo::rerun-if-changed=build-support/windows-gdi-common.txt");
     println!("cargo::rerun-if-changed=build-support/windows-window-coordination.txt");
     println!("cargo::rerun-if-changed=build-support/windows-screen-window.txt");
+    println!("cargo::rerun-if-changed=build-support/windows-frame-pool.txt");
+    #[cfg(feature = "windows-frame-pool")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        assert_eq!(
+            std::env::var("TARGET").as_deref(),
+            Ok("x86_64-pc-windows-msvc")
+        );
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+            .join("windows_frame_pool.rs");
+        let input = std::fs::read_to_string("build-support/windows-frame-pool.txt").unwrap();
+        windows_bindgen::builder()
+            .output(out)
+            .flat()
+            .filters(
+                input
+                    .lines()
+                    .filter(|line| !line.is_empty() && !line.starts_with('#')),
+            )
+            .write();
+    }
     #[cfg(any(feature = "windows-print-window", feature = "windows-screen-dc"))]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
         let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())

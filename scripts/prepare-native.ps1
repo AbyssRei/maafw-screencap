@@ -12,6 +12,7 @@ param(
     [switch]$PrintWindowParity,
     [switch]$ScreenDcParity,
     [switch]$FramePoolContext,
+    [switch]$FramePoolParity,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
 )
@@ -29,6 +30,8 @@ $pending = [Collections.Generic.List[string]]::new()
 $nativeMissingEnvironment = $false
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
+if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
+$framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
 $frameContextEvidence = ''
 if ($FramePoolContext -and (-not $Desktop -or $GdiParity)) { throw 'FramePool context observation requires its independent explicit desktop entry.' }
@@ -38,7 +41,9 @@ if ($ScreenDcParity) {
 if ($PrintWindowParity) {
     $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
-if ($FramePoolContext) {
+if ($FramePoolParity) {
+    $pending.Add('FramePool is a partial P1 migration, not a backend/phase exit. Three separate Rust caller contexts compare original image bytes, clone owners, native close, callback event, apartment and DPI. Repeated lifecycles, Rust dispatcher, native failure/initialization-exception/cleanup, complete polling/cache/resize/permission/format, pseudo wrapper and manager matrices remain pending. Safety target-row copy and scoped factory ownership differ from direct mapped conversion/global projection caching and are explicitly counted/classified; old WGC unload AV remains unresolved.')
+} elseif ($FramePoolContext) {
     $pending.Add('This P1 task observes only the unmodified C++ FramePool source in four isolated caller contexts. It implements no Rust FramePool backend or SDK and does not accept Rust parity, full pixels/format/resize/permission/cache/timeout semantics or P1. Process-isolated factory/MTA state, known interior pixels and COM observations remain specific to this native environment.')
 } elseif ($GdiParity) {
     $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
@@ -114,6 +119,11 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             if ($exitCode -eq 0 -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact foreground case did not execute one native test'
+            }
+        }
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|sta)$' -and $exitCode -eq 0) {
+            if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'The exact native FramePool case did not execute one test'
             }
         }
         if ($exitCode -eq 77 -and $Name -eq 'windows-toolchain-current') { $status = 'missing_environment' }
@@ -298,6 +308,22 @@ try {
     # when only headers or other SDK components change.
     $sdkProducts = @(Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*','HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
     [object[]]$sdkReleases = @(Select-SdkReleases $sdk.Name $sdkProducts)
+    if ($framePoolSource) {
+        $sdkHeaders = @()
+        foreach ($entry in @(@('base.h','sdk-cppwinrt-base.h'),@('Windows.Foundation.h','sdk-cppwinrt-foundation.h'))) {
+            $installedHeader = Join-Path $sdkRoot "Include/$($sdk.Name)/cppwinrt/winrt/$($entry[0])"
+            $savedHeader = Join-Path $inputsRoot $entry[1]
+            Copy-Item -LiteralPath $installedHeader -Destination $savedHeader
+            if ((Get-FileHash -LiteralPath $installedHeader -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $savedHeader -Algorithm SHA256).Hash) {
+                throw 'Selected SDK C++/WinRT header changed during snapshot'
+            }
+            Save-Input $savedHeader
+            $sdkHeaders += [ordered]@{ installed_path=$installedHeader; source=(Artifact $savedHeader) }
+        }
+        $sdkSourceRecord = Join-Path $inputsRoot sdk-cppwinrt-source.json
+        Write-NewJson $sdkSourceRecord ([ordered]@{ sdk_directory=$sdk.Name; installed_releases=$sdkReleases; headers=$sdkHeaders; license='MIT'; license_source='https://github.com/microsoft/cppwinrt/blob/master/LICENSE' })
+        Save-Input $sdkSourceRecord
+    }
 
     $opencvRelease = if ($offline) { Get-Content -LiteralPath (Prepared-File opencv-release.json) -Raw | ConvertFrom-Json } else { Api 'repos/opencv/opencv/releases/latest' }
     $opencvReleasePath = Join-Path $inputsRoot opencv-release.json
@@ -419,11 +445,12 @@ try {
     [string[]]$parityOptions = @(if ($GdiParity) { '-DMFS_BUILD_GDI_PARITY=ON' })
     if ($PrintWindowParity) { $parityOptions += '-DMFS_BUILD_PRINT_PARITY=ON' }
     if ($ScreenDcParity) { $parityOptions += '-DMFS_BUILD_SCREEN_PARITY=ON' }
-    if ($FramePoolContext) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_REFERENCE=ON' }
+    if ($framePoolSource) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_REFERENCE=ON' }
+    if ($FramePoolParity) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_PARITY=ON' }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$FramePoolContext))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -432,7 +459,7 @@ try {
     if ($GdiParity) {
         Step 'gdi-parity-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_gdi_parity', '--parallel', '8')
     }
-    if ($FramePoolContext) {
+    if ($framePoolSource) {
         Step 'frame-pool-context-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_framepool_reference', '--parallel', '8')
     }
     foreach ($name in @('CMakeCache.txt', 'toolchain-Release.txt')) {
@@ -445,7 +472,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved
         Save-Input $saved
     }
-    if ($FramePoolContext) {
+    if ($framePoolSource) {
         $programPath = Join-Path $artifacts mfs_framepool_reference.exe
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_reference.exe) -Destination $programPath
         Save-Input $programPath
@@ -468,6 +495,7 @@ try {
         $capabilities = @('windows-gdi', 'prototype-windows-com')
         if ($PrintWindowParity) { $capabilities += 'windows-print-window' }
         if ($ScreenDcParity) { $capabilities += 'windows-screen-dc' }
+        if ($FramePoolParity) { $capabilities += 'windows-frame-pool' }
         $parityFeatures = $capabilities -join ','
         if ($ScreenDcParity) {
             $screenEvidence = Join-Path $artifacts screen-evidence
@@ -491,9 +519,19 @@ try {
         }
         $foregroundCase = 'backends::windows::print_window::tests::parity::pseudo_minimize::restores_original_attributes_after_real_foreground_reactivation'
         [string[]]$caseSelection = @($parityFilter, '--include-ignored', '--test-threads=1', '--nocapture')
+        $frameCase = 'backends::windows::frame_pool::tests::captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners'
+        if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
         Step 'gdi-migration-clippy' cargo ($clippyArguments + @('--', '-D', 'warnings'))
+        if ($FramePoolParity) {
+            Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
+            foreach ($modeName in @('uninitialized','mta','sta')) {
+                $env:MFS_FRAMEPOOL_HOST_MODE = $modeName
+                $env:MFS_FRAMEPOOL_REFERENCE_PIXELS = Join-Path $frameContextEvidence "$modeName/source.bgr"
+                Step "frame-pool-rust-$modeName" cargo ($parityArguments + @('--', $frameCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            }
+        }
         if ($PrintWindowParity) {
             # Separate invocation preserves the required case and its native
             # environment result without obscuring other pixel/ownership checks.
@@ -513,6 +551,9 @@ try {
         Copy-Item -LiteralPath $item[0] -Destination (Join-Path $licenses $item[1])
     }
     Copy-Item -LiteralPath (Join-Path $opencvInstall etc/licenses) -Destination (Join-Path $licenses OpenCV) -Recurse
+    if ($framePoolSource) {
+        Copy-Item -LiteralPath (Join-Path $productRoot licenses/cppwinrt-MIT.txt) -Destination (Join-Path $licenses cppwinrt-MIT.txt)
+    }
     Get-ChildItem -LiteralPath $licenses -Recurse -File | ForEach-Object { Save-Input $_.FullName }
     if ($Desktop) {
         $pixels = Join-Path $artifacts controlled-window.bgr

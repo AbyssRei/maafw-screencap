@@ -105,6 +105,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity gdi [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity print-window [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity screen-dc [--offline-inputs <native run manifest>]\n\n\
+                      cargo xtask upstream-parity frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\

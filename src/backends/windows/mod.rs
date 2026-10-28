@@ -1,12 +1,30 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#[cfg(feature = "windows-frame-pool")]
+mod frame_pool;
 #[cfg(feature = "windows-gdi")]
 mod gdi;
+#[cfg(any(
+    feature = "windows-gdi",
+    feature = "windows-print-window",
+    feature = "windows-screen-dc"
+))]
 mod gdi_api;
 #[cfg(any(feature = "windows-gdi", feature = "windows-screen-dc"))]
 mod gdi_read;
+#[cfg(any(
+    feature = "windows-gdi",
+    feature = "windows-print-window",
+    feature = "windows-screen-dc"
+))]
 mod gdi_resources;
+#[cfg(any(
+    feature = "windows-gdi",
+    feature = "windows-print-window",
+    feature = "windows-screen-dc"
+))]
 mod gdi_types;
+mod pixels;
 #[cfg(feature = "windows-print-window")]
 mod print_window;
 #[cfg(feature = "windows-print-window")]
@@ -20,6 +38,11 @@ mod screen_dc;
 #[path = "../../../tests/upstream-parity/gdi_adapter.rs"]
 mod parity_adapter;
 
+#[cfg(any(
+    feature = "windows-gdi",
+    feature = "windows-print-window",
+    feature = "windows-screen-dc"
+))]
 #[allow(
     non_snake_case,
     non_camel_case_types,

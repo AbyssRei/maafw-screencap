@@ -4,7 +4,9 @@
 
 ## 阅读顺序与权威来源
 
-P1 另已加入独立 ScreenDC 内部实现和默认路径的 ForegroundUtils/HwndUtils 迁移，正式入口为 `cargo xtask upstream-parity screen-dc`。原头文件脚本、真实资源故障及本机局部像素/清理检查已有证据；亮屏且自有测试窗口置顶的新批次通过 20 轮严格源码/Rust 对照。此前黑图/灰图、夹具资源和记录目录失败均保留；遮挡、移动、实际显示深度、最新夹具的托管验证与完整后端/阶段验收仍未完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+P1 另已加入独立 ScreenDC 内部实现和默认路径的 ForegroundUtils/HwndUtils 迁移，正式入口为 `cargo xtask upstream-parity screen-dc`。原头文件脚本、真实资源故障及本机局部像素/清理检查已有证据；亮屏且自有测试窗口置顶的新批次通过 20 轮严格源码/Rust 对照。此前黑图/灰图、夹具资源和记录目录失败均保留；相同受控场景随后通过两个精确提交的原生 Actions；遮挡、移动、实际显示深度与完整后端/阶段验收仍未完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+
+FramePool 也已开始独立内部迁移与显式 `upstream-parity frame-pool` 局部对照：本机三个 Rust 调用环境匹配原图，缓存克隆与关闭后持帧已有实际证据。完整生命周期、原生错误/重建、dispatcher、伪最小化包装和 manager 仍待完成；不构成公共 SDK 或阶段验收。
 
 | 文档 | 职责及当前状态 |
 | --- | --- |

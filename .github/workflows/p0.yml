@@ -75,13 +75,13 @@ jobs:
           cargo xtask upstream-parity print-window
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo xtask upstream-parity screen-dc
-      - name: Observe original FramePool caller contexts
+      - name: Validate partial FramePool migration and original caller contexts
         if: runner.os == 'Windows'
         run: |
-          # Reuse this job's explicit dependency batch. Each original capture
-          # context runs in a fresh process; this is not Rust FramePool parity.
+          # Reuse this job's explicit dependency batch. Source and Rust caller
+          # contexts run separately; the scoped component remains P1 incomplete.
           $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-context frame-pool --offline-inputs $index.runs[-1].path
+          cargo xtask upstream-parity frame-pool --offline-inputs $index.runs[-1].path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Inventory registry licenses and verify prototype configuration
         shell: pwsh

@@ -4,7 +4,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(
     any(
-        all(target_os = "windows", feature = "windows-print-window"),
+        all(
+            target_os = "windows",
+            any(feature = "windows-print-window", feature = "windows-frame-pool")
+        ),
         all(
             test,
             target_os = "windows",
@@ -29,7 +32,8 @@ mod platform;
     any(
         feature = "windows-gdi",
         feature = "windows-print-window",
-        feature = "windows-screen-dc"
+        feature = "windows-screen-dc",
+        feature = "windows-frame-pool"
     )
 ))]
 #[path = "../tests/common/mod.rs"]

@@ -22,6 +22,9 @@ pub struct Fixture {
 }
 impl Adapter {
     pub fn screen_fixture(&self) -> Result<Fixture, Box<dyn Error>> {
+        self.render_fixture(37, 23)
+    }
+    pub fn render_fixture(&self, width: i32, height: i32) -> Result<Fixture, Box<dyn Error>> {
         type Create = unsafe extern "C" fn(i32, i32, i32, i32, i32, i32, u32, *mut Span) -> i32;
         // SAFETY: Exact print-parity.h/print-thread.h signatures. Resolve the
         // close function before any partial owner/callback can be created.
@@ -62,7 +65,7 @@ impl Adapter {
         };
         // SAFETY: Exact writable descriptor; even an error may transfer a partial
         // owner, which the guard closes before releasing its callback module.
-        let status = unsafe { create(37, 23, 0, 0, 0, 0, 0x300, &mut fixture.span) };
+        let status = unsafe { create(width, height, 0, 0, 0, 0, 0x300, &mut fixture.span) };
         if status != 0 {
             fixture.close()?;
             return Err(format!("render fixture create {status}").into());
@@ -70,7 +73,7 @@ impl Adapter {
         if fixture.span.owner.is_null()
             || fixture.span.hwnd.is_null()
             || !fixture.span.popup.is_null()
-            || (fixture.span.width, fixture.span.height) != (37, 23)
+            || (fixture.span.width, fixture.span.height) != (width, height)
         {
             return Err("invalid render fixture descriptor".into());
         }

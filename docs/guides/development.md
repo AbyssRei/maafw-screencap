@@ -49,13 +49,25 @@ cargo xtask upstream-parity print-window
 cargo xtask upstream-parity print-window --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-parity screen-dc
 cargo xtask upstream-parity screen-dc --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-parity frame-pool
+cargo xtask upstream-parity frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-context frame-pool
 cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
 ```
 
-`upstream-context frame-pool` 是独立的上游调用环境观察，尚无 Rust FramePool 对照实现。它把固定原 `FramePoolScreencap` 编译为独立 executable，分别在未初始化 COM、显式 MTA、MTA 加当前线程 dispatcher、STA 四个新进程中各调用一次原捕获，不在捕获内部添加 pump、等待或重试。自有绘图窗口有独立 UI owner/message loop；记录调用前后及原对象销毁后的 COM type/qualifier、原始 BGR、已知内部像素、耗时与窗口 owner。仅配平显式成功取得的初始化引用，dispatcher 在真实 shutdown 完成后退出。每个模式独立保存成功/失败，后续模式继续执行；完整原生、依赖、来源及许可材料进入外部 P1 incomplete 批次。
+`upstream-context frame-pool` 是独立的上游调用环境观察，不执行 Rust 对照。它把固定原 `FramePoolScreencap` 编译为独立 executable，分别在未初始化 COM、显式 MTA、MTA 加当前线程 dispatcher、STA 四个新进程中各调用一次原捕获，不在捕获内部添加 pump、等待或重试。自有绘图窗口有独立 UI owner/message loop；记录调用前后及原对象销毁后的 COM type/qualifier、原始 BGR、已知内部像素、耗时与窗口 owner。仅配平显式成功取得的初始化引用，dispatcher 在真实 shutdown 完成后退出。每个模式独立保存成功/失败，后续模式继续执行；完整原生、依赖、来源及许可材料进入外部 P1 incomplete 批次。
 
 首轮本机四个独立进程都返回 96×64 BGR，已知内部像素正确，四张完整原图的哈希一致；未初始化模式最初为 `CO_E_NOTINITIALIZED`，调用后为 implicit MTA，原对象销毁后仍保留。显式 MTA/STA 的自有初始化引用释放后恢复未初始化。这个结果记录了 C++/WinRT 激活路径的宿主副作用，不能据此要求 U 提前采用 P3 的固定 MTA worker，也不表示 dispatcher、权限、等待/缓存、格式、缩放、尺寸变化或 Rust FramePool 的完整矩阵已验证。先前 WGC 工厂缓存的 DLL 卸载访问违规仍保留；独立进程观察不撤销该失败。
+
+内部 `windows-frame-pool` 实现现位于 `src/backends/windows/frame_pool.rs`，另有平台私有 WGC/工厂封装；默认产品仍不链接 OpenCV。它保留硬件 `D3D11CreateDeviceAndSwapChain` 的 flags=0、R8G8B8A8 swapchain、原 `Create`/BGRA/单缓冲、旧帧 drain/Close、每 2 ms 轮询至 2000 ms、无帧时克隆缓存，以及 Unmap 前转换并克隆新缓存。`uninit` 保留缓存/device/context/swapchain；尺寸变化重建、原返回失败和未被局部 catch 捕获的 WinRT 异常分别保留部分状态，不额外回滚。owner 不声明 Send/Sync，不建立库内 MTA worker。
+
+`upstream-parity frame-pool` 显式编译独立原 executable 与最小绘图/转换适配，不把原 C++/WinRT 工厂缓存放入可卸载的验收 DLL。它从原图记录启动未初始化/MTA/STA 三个独立 Rust 进程，核对逐字节像素、转换/克隆次数、独立 cache/result 所有者、关闭原生对象和窗口后的持帧、completion event 释放、调用方 COM/DPI，并保留 GDI 回归。三种本机上下文均通过局部检查；第二次调用实际观察到 2 秒等待后的缓存克隆。原 dispatcher 模式已有源码观察，Rust dispatcher 对照仍待完成；完整重复生命周期、原生故障/异常/清理、尺寸/DPI/边框/从属窗口/权限、伪最小化包装和 manager 尚未验收。
+
+另一个真实 FramePool 控制在 cache clone 的 C++ 边界抛出异常，核对临时结果 owner 释放、原生关闭结果，并在错误返回后观察到 staging 可再次成功 Map；精确 Map/Unmap 调用拦截仍是独立待验项。显式返回的清理错误进入固定证据槽；Drop 的失败采用固定原子记录，避免在主错误展开时格式化、分配或因日志 I/O 再次 panic。这些局部控制不替代完整失败矩阵。
+
+原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积，真实零客户区原生矩阵仍待补齐。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
+
+安全适配明确计入差异：验证 [CopyResource 所需描述符关系](https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-copyresource)、ContentSize、ROI、RowPitch 和整数范围，仅复制初始化的目标 BGRA 行供私有转换器使用，避免将未定义的映射 padding 构造成 Rust slice。转换及 cache clone 仍在 Unmap 前；这新增一次目标 BGRA CPU 复制，不能描述为消除工作。工厂使用显式 owner，保留 SDK 的 implicit MTA 和任意激活 HRESULT 失败后的 DLL 层级尝试，避免投影的全局裸指针缓存；相应寿命和失败矩阵仍需扩充。border 请求保留 Completed handler + manual-reset event 的原 5 秒等待，超时不取消原生操作，晚到 delegate 只持有独立状态，不访问捕获对象。SDK 工厂/等待算法的 Microsoft 版权与 [MIT 文本](../../licenses/cppwinrt-MIT.txt)随产品保留，所用头文件身份与副本进入外部批次。此局部实现和检查不接受完整后端或 P1。
 
 本机首个局部对照已通过；三平台 CI 与本机结果分开记录。此入口显式使用 Windows x64 桌面，并复用独立原生准备后编译原始固定 GDI 类和 C++/OpenCV 转换适配。Rust 私有模块内的测试核对非对称图案、奇数宽度、逐像素 BGR、跨后续捕获/窗口销毁的持帧、转换时点和原生资源计数；另覆盖 null/已销毁/空/最小化窗口与被封住的转换异常。故障对照以隔离命名空间编译原始函数体，通过真实 GDI 对象记录创建、复制、转换及清理的原生边界响应；14 组正常/故障/组合场景分别核对主错误、清理错误、调用顺序及 CPU owner 释放。夹具先记录捕获实现遗留的资源，再单独回收，不能据此声称产品在原生清理失败后已成功关闭。结果、源码快照、依赖与未覆盖范围写入外部 P1 组件批次。原生 Actions 的 Windows 任务执行这个入口，其他平台继续各自的原型与构建检查。
 
@@ -97,7 +109,7 @@ ScreenDC 的真实资源故障入口以隔离命名空间编译原函数体，�
 
 后续结果未证实仅禁动画有效：用户确认并唤醒本机熄屏后，禁动画的完整 backend 入口仍为 16 项通过、2 项灰图失败；相应提交的 Actions 也仍失败。只读诊断又在一轮源码捕获前观察到客户区中心由另一窗口占据，随后目标抬升才取得正确像素。[IsWindowVisible](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-iswindowvisible) 仅表示可见样式，不保证无遮挡；[WindowFromPoint](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-windowfrompoint) 的点窗口/root 与源码捕获前后的前台、cloaked、坐标和样式一起保留。原 helper 共享的 5 秒冷却不保证为每个新窗口再次请求前台，不能用 Rust 返回后的前台值推断原源码取帧瞬间的可见性。
 
-新的夹具前提是在自有 ScreenDC root 上额外请求 `WS_EX_TOPMOST`，不授予前台权限；原 helper 仍可按原行为将它取消置顶。只改变夹具，保留原捕获、等待及严格像素断言，原 PrintWindow 模式与 C 接口前缀保持。一轮亮屏本机完整 backend 入口 19 项通过，包括 20 轮配对逐像素/清理/关闭后持帧，以及独立的 20 轮源码呈现前后控制；观察到各轮中心点 root 属于目标。这只证明该受控场景，新夹具的托管结果、显式遮挡/移动/深度与完整 P1 仍待验证。首次运行因未创建外部图像记录目录中断，属于保留的 harness I/O 失败；补建目录后的结果单独记录，不能覆盖之前的像素失败。
+新的夹具前提是在自有 ScreenDC root 上额外请求 `WS_EX_TOPMOST`，不授予前台权限；原 helper 仍可按原行为将它取消置顶。只改变夹具，保留原捕获、等待及严格像素断言，原 PrintWindow 模式与 C 接口前缀保持。一轮亮屏本机完整 backend 入口 19 项通过，包括 20 轮配对逐像素/清理/关闭后持帧，以及独立的 20 轮源码呈现前后控制；观察到各轮中心点 root 属于目标。相同受控场景随后通过两个精确提交的原生 Actions，证据及提交身份外置保存；这仍只证明该受控场景，显式遮挡/移动/深度与完整 P1 仍待验证。首次运行因未创建外部图像记录目录中断，属于保留的 harness I/O 失败；补建目录后的结果单独记录，不能覆盖之前的像素失败。
 
 ## 已实现的 P0 工具
 

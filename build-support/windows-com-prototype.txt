@@ -1,11 +1,14 @@
 # P0 private rich projection. No public SDK types or migrated backend.
 CoGetApartmentType
+APTTYPE_MTA
+APTTYPEQUALIFIER_IMPLICIT_MTA
 CoInitializeEx
 CoUninitialize
 COINIT_APARTMENTTHREADED
 RoInitialize
 RoUninitialize
 RO_INIT_MULTITHREADED
+RO_INIT_SINGLETHREADED
 RPC_E_CHANGED_MODE
 CO_E_NOTINITIALIZED
 GetThreadDpiAwarenessContext
