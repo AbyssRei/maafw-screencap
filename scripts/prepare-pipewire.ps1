@@ -76,6 +76,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
         }
+        if ($Name -eq 'pipewire-source-format-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved') {
+            throw 'Expected twenty-eight original native POD/parser/conversion fixtures'
+        }
+        if ($Name -eq 'rust-pipewire-native-formats') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native PipeWire format oracle cases=28 formats=7 conversions=24 bgr_reuses=4 exact_bytes=1 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected one native seven-format parser and exact OpenCV conversion/reuse comparison'
+            }
+        }
         if ($Name -eq 'rust-pipewire-daemon-shm') {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -255,9 +264,15 @@ try {
         $env:MFS_P1_PIPEWIRE_RUST_ARTIFACTS=$rustArtifacts
         $env:MFS_P1_PIPEWIRE_BGR_ARTIFACTS=$bgrArtifacts
         $env:MFS_P1_PIPEWIRE_POD_ORACLE=$podDirectory
+        $formatDirectory=Join-Path $referenceArtifacts formats
+        $env:MFS_P1_PIPEWIRE_FORMAT_ORACLE=$formatDirectory
         Json (Join-Path $rustArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Raw native driver probe; RawAudit preserves RGB and does not implement OpenCV conversion or source/BGR parity.'})
         Json (Join-Path $bgrArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';scope='Actual C++/OpenCV conversion after native unlock; twenty callback-progress witnesses add diagnostic waiting, not source latency parity. Native opaque Mat/loader mobility and full all-format/fault parity remain pending.'})
         try { Step pipewire-source-negotiation-pods $sourceExecutable @('--pods',$podDirectory) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-source-format-fixtures $sourceExecutable @('--format-fixtures',$formatDirectory) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-native-formats timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::matches_original_format_pods_and_padded_conversion_bytes','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
     }
     # Linux sockaddr_un.sun_path has 108 bytes including the terminator. Keep
