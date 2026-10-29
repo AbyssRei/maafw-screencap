@@ -257,6 +257,10 @@ PipeWire manager 首轮批次保留 81 项通过和 5 项失败：新的常量 c
 
 首个原生 Linux 配置批次在 meojson 准备阶段失败：PowerShell 函数的 Inputs 参数遮蔽调用方同名记录列表，使 Save 对字符串调用 Add；尚未编译或执行配置 oracle/捕获。该记录保留，参数现改为 InputDirectory，并以与原生调用方相同的 inputs 列表作用域复验；原生修复结果仍待新的 Actions，不将先前 Windows 的不同列表名称包装器当作该修复的原生验证。
 
+后续原生批次在更早的 Rust 测试目标编译处失败：JSON 创建夹具把节点 ID 放进 format 后失去原 Config 字段提供的 u32 推断，导致 E0284；该批次的 P0/P1 consumer 步骤均失败，尚未执行配置/捕获。现已显式声明 u32，修复的原生结果待新的 Actions；主机 Clippy 不编译该 Linux-only 测试体。
+
+原 C++ 调用器另新增 `--task-retirement-read-fixture <外部目录>`，仍与取帧实现分离。普通 proc task stat 读取保持严格，并保存 errno、bad/fail/eof 和实际字节数；只有原生 close/stop/join 与所有者退出之后，才允许对已知原先活跃 MaaScreencap 的精确 ESRCH/bad/fail/非 EOF/零字节失败，再做一次新的 stat open 与任务目录 stat，二者均为 ENOENT 才证明已消失。成功读出的任务仍核验相同 id/name/starttime、PF_EXITING、vsize/RSS 为零；未知、替换、活跃、部分数据或其他错误保持失败。没有增加取帧重试或改变既有 100ms 内核退出界限。独立原生控制通过真实命名线程的 held-stat 描述符产生 ESRCH，并要求已 join、文件/目录缺失；真实活线程路径与实际耗尽当前子进程 fd 后的 EMFILE 必须拒绝，随后关闭临时 fd、恢复原 soft/hard limit，并精确核对基线 task IDs/fd。另有 24 个明确标注的合成 metadata 反向控制，不代替真实原生退出证据。实现已加入显式 PipeWire 源码入口，原生编译/运行待验证；普通 strict read-exit 原控制及所有旧失败记录继续保留，核心捕获/等待/像素与生命周期代码未改写。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。
