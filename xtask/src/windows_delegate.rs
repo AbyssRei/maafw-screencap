@@ -12,7 +12,7 @@ mod cases;
 #[path = "windows_delegate_native.rs"]
 mod native;
 
-pub const ORACLE_INPUTS: [&str; 19] = [
+pub const ORACLE_INPUTS: [&str; 21] = [
     "mfs_windows_delegate_model.exe",
     "windows-delegate-loader.inc",
     "windows-delegate-source.inc",
@@ -32,6 +32,8 @@ pub const ORACLE_INPUTS: [&str; 19] = [
     "windows-delegate-native-manager-enum.inc",
     "windows-delegate-native-manager-time.inc",
     "windows-delegate-native-toolchain-Release.txt",
+    "windows-delegate-factory-create.inc",
+    "windows-delegate-factory-destroy.inc",
 ];
 pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
     for name in ORACLE_INPUTS {
@@ -48,6 +50,9 @@ pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|arg| arg == "win32-factory") {
+        return native::run_factory(&args[1..]);
+    }
     if args.first().is_some_and(|arg| arg == "win32-native") {
         return native::run(&args[1..]);
     }

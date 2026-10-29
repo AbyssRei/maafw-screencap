@@ -33,6 +33,7 @@ $inputs = [Collections.Generic.List[object]]::new()
 $pending = [Collections.Generic.List[string]]::new()
 $nativeMissingEnvironment = $false
 $delegateNativeEvidence = ''
+$delegateFactoryEvidence = ''
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
@@ -216,6 +217,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             & $ConfigureTool upstream-delegate win32-native $env:MFS_DELEGATE_NATIVE_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual native delegate records failed independent verification'}
+        }
+        if($Name -eq 'manager-factory-construction' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('real factory selector cases=36; native Rust manager contexts=18; actual captures=0; backend creation on connect not exercised; module/unit ownership closed=1')) {
+                throw 'Expected actual selector construction/ownership controls; no native capture claim'
+            }
+            & $ConfigureTool upstream-delegate win32-factory $env:MFS_DELEGATE_FACTORY_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Actual factory construction records failed independent verification'}
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -605,7 +615,7 @@ try {
             foreach($name in @('win32-info-source.inc','win32-info-members.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
-            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt')) {Save-Input (Prepared-File $name)}
+            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc')) {Save-Input (Prepared-File $name)}
             $env:MFS_DELEGATE_NATIVE_BUILD=Split-Path -Parent (Prepared-File mfs_delegate_bridge.dll)
         } else {
             # Adapt the native batch's record helpers without shadowing inputs.
@@ -626,7 +636,7 @@ try {
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
                 Save-Input $saved
             }
-            foreach($item in @(@('native-scope.txt','windows-delegate-native-scope.txt'),@('manager-source.inc','windows-delegate-native-manager-source.inc'),@('manager-enum.inc','windows-delegate-native-manager-enum.inc'),@('manager-time.inc','windows-delegate-native-manager-time.inc'),@('native-toolchain-Release.txt','windows-delegate-native-toolchain-Release.txt'))) {
+            foreach($item in @(@('native-scope.txt','windows-delegate-native-scope.txt'),@('manager-source.inc','windows-delegate-native-manager-source.inc'),@('manager-enum.inc','windows-delegate-native-manager-enum.inc'),@('manager-time.inc','windows-delegate-native-manager-time.inc'),@('native-toolchain-Release.txt','windows-delegate-native-toolchain-Release.txt'),@('delegate-factory-create.inc','windows-delegate-factory-create.inc'),@('delegate-factory-destroy.inc','windows-delegate-factory-destroy.inc'))) {
                 $saved=Join-Path $inputsRoot $item[1]
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
                 Save-Input $saved
@@ -643,6 +653,8 @@ try {
         $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS=$delegateEvidence
         $delegateNativeEvidence=Join-Path $artifacts windows-delegate-native
         $env:MFS_DELEGATE_NATIVE_RECORDS=$delegateNativeEvidence
+        $delegateFactoryEvidence=Join-Path $artifacts windows-delegate-factory
+        $env:MFS_DELEGATE_FACTORY_RECORDS=$delegateFactoryEvidence
     }
     if ($PipeWireControl) {
         Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
@@ -777,13 +789,15 @@ try {
             # while continuing independent manager evidence, without retry.
             $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
-            $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase)
+            $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
+            $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
                 @{name='manager-metadata-parity';arguments=($parityArguments + @('--','metadata_matches_original','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))}
             )
@@ -854,6 +868,7 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
