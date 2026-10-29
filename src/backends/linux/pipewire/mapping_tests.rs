@@ -252,7 +252,7 @@ fn matches_original_memfd_maps_and_retains_cpu_images_after_unmap() {
             match &error {
                 PlaneError::Map(error) => {
                     assert_eq!(error.operation, "owned MemFd mmap");
-                    assert_eq!(error.code, rustix::io::Errno::ACCES.raw_os_error());
+                    assert_eq!(error.code, rustix::io::Errno::ACCESS.raw_os_error());
                 }
                 _ => panic!("wrong failure {error:?}"),
             }
