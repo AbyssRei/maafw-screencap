@@ -27,6 +27,8 @@ type Abi = unsafe extern "C" fn(u32) -> usize;
 static LOADER_ERROR: AtomicI32 = AtomicI32::new(0);
 #[path = "wlr_name_tests.rs"]
 mod names;
+#[path = "wlr_protocol_tests.rs"]
+mod protocol;
 struct Module(NonNull<c_void>);
 impl Module {
     fn open(path: &Path) -> Self {
@@ -108,13 +110,11 @@ impl Adapter {
         unsafe { (self.owners)() }
     }
     fn convert(&self, sample: Sample, fault: i32) -> Result<Image<'_>, Error> {
-        if sample.conversion == Conversion::BgrCopy && fault == 0 {
-            return Ok(Image::Raw(sample));
-        }
         let (channels, mode) = match sample.conversion {
             Conversion::Bgra => (4, 1),
             Conversion::Rgba => (4, 2),
             Conversion::Rgb => (3, 3),
+            Conversion::BgrCopy if fault == 0 => (3, 5),
             Conversion::BgrCopy => return Err(Error::new("test BGR fault unsupported", 22)),
         };
         assert!((0..=1).contains(&fault));
@@ -141,45 +141,50 @@ impl Adapter {
             assert!(output.is_null());
             return Err(Error::new("native Wlr conversion", code));
         }
-        Ok(Image::Native {
+        Ok(Image {
             pointer: NonNull::new(output).unwrap(),
             adapter: self,
+            width: i32::try_from(sample.width).unwrap(),
+            height: i32::try_from(sample.height).unwrap(),
         })
     }
 }
-enum Image<'a> {
-    Raw(Sample),
-    Native {
-        pointer: NonNull<c_void>,
-        adapter: &'a Adapter,
-    },
+struct Image<'a> {
+    pointer: NonNull<c_void>,
+    adapter: &'a Adapter,
+    width: i32,
+    height: i32,
 }
 impl Image<'_> {
     fn pixels(&self) -> &[u8] {
-        match self {
-            Self::Raw(sample) => sample.pixels(),
-            Self::Native { pointer, adapter } => {
-                let mut view = View::default();
-                // SAFETY: Owning live Mat and exact native C header record.
-                assert_eq!(unsafe { (adapter.view)(pointer.as_ptr(), &mut view) }, 0);
-                assert_eq!(
-                    (view.width, view.height, view.stride, view.length),
-                    (64, 48, 192, 9216)
-                );
-                assert!(!view.pixels.is_null());
-                // SAFETY: Adapter borrows real Mat/module owner, immutable and
-                // complete checked native span, not the reused Wayland mapping.
-                unsafe { std::slice::from_raw_parts(view.pixels, view.length) }
-            }
-        }
+        self.pixels_for(64, 48)
+    }
+    fn pixels_for(&self, width: i32, height: i32) -> &[u8] {
+        assert_eq!((self.width, self.height), (width, height));
+        let mut view = View::default();
+        // SAFETY: Owning live Mat and exact native C header record.
+        assert_eq!(
+            unsafe { (self.adapter.view)(self.pointer.as_ptr(), &mut view) },
+            0
+        );
+        let stride = usize::try_from(width).unwrap().checked_mul(3).unwrap();
+        let length = stride
+            .checked_mul(usize::try_from(height).unwrap())
+            .unwrap();
+        assert_eq!(
+            (view.width, view.height, view.stride, view.length),
+            (width, height, stride, length)
+        );
+        assert!(!view.pixels.is_null());
+        // SAFETY: Adapter borrows real Mat/module owner, immutable and
+        // complete checked native span, not the reused Wayland mapping.
+        unsafe { std::slice::from_raw_parts(view.pixels, view.length) }
     }
 }
 impl Drop for Image<'_> {
     fn drop(&mut self) {
-        if let Self::Native { pointer, adapter } = self {
-            // SAFETY: Sole opaque owner and retained module; release once.
-            unsafe { (adapter.release)(pointer.as_ptr()) };
-        }
+        // SAFETY: Sole opaque owner and retained module; release once.
+        unsafe { (self.adapter.release)(self.pointer.as_ptr()) };
     }
 }
 fn tasks() -> Vec<std::ffi::OsString> {

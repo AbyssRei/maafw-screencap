@@ -42,6 +42,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
+Wlr 另接入独立的原生 Wayland IPC/SHM 协议夹具；它没有 compositor、宿主桌面或输入设备，不能替代原有真实 wlroots/Pixman 取帧。`upstream-context wlr` 会显式构建它并分别运行 screencopy v1/v2/v3，各做 20 轮源码/Rust 生命周期，覆盖六格式、7×5 奇数尺寸、packed/额外 13 字节行填充和 YInvert 共 24 场景。每版本保留 24 份真实 producer SHM 输入、双方各 480 张 BGR 与 Rust 原字节，并检查重用后的持帧和 fd/任务/回调及服务端对象退出。`cargo xtask upstream-protocol wlr <外部矩阵目录> [--check-only]` 独立复算实际输入、4320 份输出与完整元数据。当前仅本机记录校核逻辑测试通过，原生编译/运行待 Actions；完整格式/失败/client-close/P1 仍未验收。原版隐含 packed Mat step 与忽略 YInvert 的行为继续保留：无填充且未翻转是正确目标像素，其余作为旧行为字节对照，不能声称正确目标捕获。RGB888 验收已补真实 OpenCV `copyTo`，Rust 前置 CPU 安全复制仍另行记账；核心默认无 OpenCV 依赖。
+
 新增 `cargo xtask upstream-alpha frame-pool <外部诊断目录> [--check-only]` 校核实际透明度/内容诊断记录。`upstream-parity frame-pool` 另编译原生 `mfs_framepool_alpha_reference`：在各自独立的同一窗口上执行 alpha=255/0/255/0/255，分别使用每次新建与持续 FramePool 会话，切换两套已知图样并以独立原 PrintWindow 作当前内容见证。调色只在自有 UI owner 上同步更新，默认夹具图样不变；原捕获/helper 函数和等待均未改写，每步只调用一次原 FramePool。记录真实捕获前后窗口状态、20 份图像、重绘计数、持帧及窗口/dispatcher 退出。维护版本机取样及逐字节校核通过：新会话 alpha=0 两次全黑，持续会话一次全黑、一次约 2 秒后返回上一场景，其余六次 FramePool 及全部十次 PrintWindow 匹配当前图样。旧场景结果与原等待/缓存回放相符，但未截获缓存分支，不能宣称样本新鲜度或所有平台因果。黑图/旧图在此入口仅为诊断分类；四项原包装彩色图样失败及 P1 非通过门禁继续保留。原生 Actions 的新诊断尚待验证。
 
 窗口 GDI 的内部实现位于 `src/backends/windows/gdi.rs`，通过 `windows-gdi` 编译能力启用；没有对外发布 Rust/C SDK 接口。它保持 GetDC、兼容 DC/位图、BitBlt、GetBitmapBits 及转换前后的资源顺序。转换由调用点的私有适配边界执行；默认产品不链接 OpenCV。受检算术、初始化的 fallible CPU 分配、原生 32 位布局与完整读取校验属于显式记录的安全适配，没有提前迁至 P3 的 DIB 路径。

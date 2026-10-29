@@ -11,7 +11,8 @@ function Prepare-WlrReference([string]$FixedUpstream) {
         scope='Fixed original Wlr/WaylandClient/MemfdBuffer screenshot context; private namespace/logging and external random-name provider.'
     })
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
-    Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)")
+    Step wlr-protocol-scanner wayland-scanner @('--version')
+    Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)","-DMFS_WLROOTS_PROTOCOL_ROOT=$(Join-Path $wlr.source protocol)")
     Step wlr-reference-build cmake @('--build',$build,'--parallel','4')
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-source.inc) -Destination $saved;Save $saved
@@ -34,6 +35,24 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs libmfs_wlr_opencv.so
     Copy-Item -LiteralPath $adapter -Destination $saved;Save $saved
     Step wlr-opencv-linkage ldd @($adapter)
+    $protocolServer=Join-Path $build mfs_wlr_protocol_server
+    $saved=Join-Path $refInputs mfs_wlr_protocol_server
+    Copy-Item -LiteralPath $protocolServer -Destination $saved;Save $saved
+    Step wlr-protocol-server-linkage ldd @($protocolServer)
+    $serverLibrary=(& readlink -f (Join-Path $prefix lib/libwayland-server.so)|Out-String).Trim()
+    if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $serverLibrary)){throw 'Prepared native Wayland server library missing'}
+    $saved=Join-Path $refInputs native-libwayland-server.so
+    Copy-Item -LiteralPath $serverLibrary -Destination $saved;Save $saved
+    $env:MFS_P1_WLR_PROTOCOL_SERVER_LIBRARY=$serverLibrary
+    foreach($pair in @(@('screencopy','wlr-screencopy-unstable-v1'),@('pointer','wlr-virtual-pointer-unstable-v1'),@('keyboard','virtual-keyboard-unstable-v1'))){
+        foreach($suffix in @('h','c')){
+            $saved=Join-Path $refInputs "$($pair[0])-server.$suffix"
+            Copy-Item -LiteralPath (Join-Path $build "$($pair[0])-server.$suffix") -Destination $saved;Save $saved
+        }
+        $saved=Join-Path $refInputs "$($pair[1]).xml"
+        Copy-Item -LiteralPath (Join-Path $wlr.source "protocol/$($pair[1]).xml") -Destination $saved;Save $saved
+    }
+    $env:MFS_P1_WLR_PROTOCOL_SERVER=$protocolServer
     $env:MFS_P1_WLR_OPENCV_ADAPTER=$adapter
     return $executable
 }

@@ -19,6 +19,7 @@ mod records;
 mod reference;
 mod review;
 mod wlr;
+mod wlr_protocol;
 
 #[path = "../../build-support/p0-configuration.rs"]
 mod build_configuration;
@@ -50,6 +51,9 @@ fn run() -> Result<()> {
     }
     if argv.first().is_some_and(|arg| arg == "upstream-alpha") {
         return frame_pool_alpha::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "upstream-protocol") {
+        return wlr_protocol::run(&argv[1..]);
     }
     if argv.first().is_some_and(|arg| arg == "check") {
         return quality::run(&argv[1..]);
@@ -138,6 +142,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity custom [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-custom <external directory> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-protocol wlr <external directory> [--check-only]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context pipewire  # original source context on native Linux x64\n\n\
                       cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\
