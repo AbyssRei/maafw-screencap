@@ -125,6 +125,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected twenty Rust same-object lifecycles, forty sessions and 120 held raw RGB images'
             }
         }
+        if ($Name -eq 'original-pipewire-source-fd-retry' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire fd-retry objects=20 injected_failures=20 proven_live_retries=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed') {
+            throw 'Expected twenty complete original init failures, same-socket retries and 120 held BGR images'
+        }
+        if ($Name -eq 'rust-pipewire-supplied-fd-retry') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Rust PipeWire fd-retry objects=20 injected_failures=20 proven_live_retries=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected twenty complete Rust init failures, same-socket retries and 120 held RGB images'
+            }
+        }
         if ($Name -eq 'pipewire-opencv-private-abi') {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native OpenCV private ABI failures=6 exception=1 independent_bgr_owner=1 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -412,6 +421,17 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-supplied-fd-reinit timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::reinit::reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step original-pipewire-source-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$sourceExecutable,'--fd-retry',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts fd-retry)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try {
+            # Resolve the actual libtest executable through Cargo's structured
+            # output. Only that isolated consumer receives LD_PRELOAD; Cargo,
+            # rustc, producer, router and daemon keep their ordinary environment.
+            Step rust-pipewire-fd-retry-build cargo @('test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','--no-run','--message-format=json')
+            $testPrograms=@(Get-Content -LiteralPath (Join-Path $logsRoot rust-pipewire-fd-retry-build.log)|Where-Object{$_ -match '^\{'}|ForEach-Object{$_|ConvertFrom-Json}|Where-Object{ $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'maafw_screencap' -and $_.profile.test -and $_.executable }|ForEach-Object{$_.executable})
+            if($testPrograms.Count -ne 1 -or -not(Test-Path -LiteralPath $testPrograms[0] -PathType Leaf)){throw 'Cargo did not identify exactly one capture libtest executable'}
+            Step rust-pipewire-supplied-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$testPrograms[0],'backends::linux::pipewire::native::tests::reinit::retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions','--exact','--ignored','--test-threads=1','--nocapture')
+        } catch { $failed=$true; Write-Host $_.Exception.Message }
     }
 } catch {
     $failed = $true
