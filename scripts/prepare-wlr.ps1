@@ -72,6 +72,13 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         if($Name -eq 'rust-wlr-layout-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
             throw 'Expected one checked Wlr layout/conversion test, separate from native capture'
         }
+        if($Name -eq 'rust-wlr-fd-zero'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('native Rust Wlr fd_zero_cycles=20 captures=20 retained_raw=20 retained_bgr=20 source_descriptor_mapping_retained=20 fixture_reclaimed=20 product_cleanup_success=0 passed')){
+                throw 'Expected twenty actual FD-zero lifecycles with observed source residuals and separately reclaimed fixture resources'
+            }
+        }
         $status='passed'
     }finally{$checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)});Write-Host "${Name}: $status"}
 }
@@ -298,6 +305,8 @@ try{
         try { Step rust-wlr-migration-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::captures_source_scene_with_recursive_roundtrip_and_retained_outputs','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-conversion-exception timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::releases_frame_after_native_conversion_exception_and_captures_again','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-wlr-fd-zero timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::retains_original_fd_zero_residual_and_cpu_outputs_until_fixture_reclaim','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
     }else{
         Step rust-wlr-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr','--','-D','warnings')
