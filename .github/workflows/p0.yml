@@ -156,6 +156,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # Online components resolve current native versions independently.
+          # Refresh this disposable runner if stable changed in earlier steps.
+          ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo xtask upstream-parity print-window
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial ScreenDC migration
@@ -183,6 +187,8 @@ jobs:
         run: |
           # This component adds its own meojson/original-body oracle. Earlier
           # GDI/ScreenDC/DesktopDup batches did not prepare that offline input.
+          ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo xtask upstream-parity manager
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compare portable PipeWire consumer model with exact source
