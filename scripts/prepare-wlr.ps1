@@ -58,6 +58,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected the complete real protocol matrix, not a zero-test or partial run'
             }
         }
+        if($Name -in @('original-wlr-registry','rust-wlr-registry')){
+            $observed=Get-Content -LiteralPath $log -Raw
+            $summary=if($Name -eq 'original-wlr-registry'){
+                'original Wlr registry rounds=20 captures=80 retained=80 replacement_snapshots=20 removed_output_retained=20 advertised_versions=1,2 resources_balanced=1 passed'
+            }else{
+                'native Rust Wlr registry rounds=20 captures=80 retained_raw=80 retained_bgr=80 replacement_snapshots=20 removed_output_retained=20 advertised_versions=1,2 resources_balanced=1 passed'
+            }
+            if(-not $observed.Contains($summary) -or ($Name -eq 'rust-wlr-registry' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')){
+                throw 'Expected eighty native registry captures and actual retained-output/closure assertions, not a zero-test run'
+            }
+        }
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
@@ -354,6 +365,9 @@ try{
         catch { $failed=$true;Write-Host $_.Exception.Message }
         . (Join-Path $PSScriptRoot validate-wlr-protocol.ps1)
         try{Test-WlrProtocolMatrix $sourceExecutable $library $runtime $referenceArtifacts}
+        catch{$failed=$true;Write-Host $_.Exception.Message}
+        . (Join-Path $PSScriptRoot validate-wlr-registry.ps1)
+        try{Test-WlrRegistry $sourceExecutable $library $runtime $referenceArtifacts}
         catch{$failed=$true;Write-Host $_.Exception.Message}
         $managerPreserved=$managerOracles.Count -eq 60
         foreach($oracle in $managerOracles){if((Get-FileHash (Join-Path (Join-Path $referenceArtifacts manager) $oracle.name)).Hash.ToLowerInvariant() -ne $oracle.sha256){$managerPreserved=$false}}

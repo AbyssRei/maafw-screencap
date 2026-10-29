@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 #[path = "../../../tests/upstream-parity/linux-wlr/protocol-cases.rs"]
-mod cases;
+pub(super) mod cases;
 
 #[test]
 #[ignore = "requires the explicit native Wayland protocol/SHM fixture and original source records"]
