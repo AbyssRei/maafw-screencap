@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 4.2)
+project(mfs_macos_source_context LANGUAGES CXX OBJCXX)
+if(NOT APPLE OR CMAKE_CROSSCOMPILING OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$" OR
+   NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "This source context requires native macOS arm64")
+endif()
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_OBJCXX_STANDARD 23)
+set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(OpenCV_STATIC ON)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc)
+find_package(Threads REQUIRED)
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/macos-base-source.cmake")
+set(_mfs_root "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit")
+add_executable(mfs_macos_source_context source-context.mm
+    "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
+target_compile_options(mfs_macos_source_context PRIVATE -fno-objc-arc -fblocks -Wall -Wextra)
+target_include_directories(mfs_macos_source_context PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/overlay" "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+    "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mfs_macos_source_context PRIVATE Threads::Threads ${OpenCV_LIBS})
+find_library(_mfs_proc NAMES proc REQUIRED)
+target_link_libraries(mfs_macos_source_context PRIVATE "${_mfs_proc}")
+foreach(_framework AppKit ApplicationServices CoreFoundation CoreMedia CoreVideo ScreenCaptureKit)
+    find_library(_mfs_${_framework} NAMES ${_framework} REQUIRED)
+    target_link_libraries(mfs_macos_source_context PRIVATE "${_mfs_${_framework}}")
+endforeach()
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
+    "Complete fixed ScreenCaptureKitScreencap header/Objective-C++ source compiles unchanged with manual reference counting. Screenshot base declaration is extracted unchanged; private namespace/logging exclude unrelated input/framework code. AppKit fixture lives on process main thread, original synchronous calls execute on joined callers, and native callbacks retain original five-second wait/conversion/release points. Controlled-window interior pixels and retained Mat owners are checked; resource/late-callback/format/full-display/manager parity and Rust migration remain incomplete. OpenCV stays outside product/default builds.\n")
