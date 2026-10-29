@@ -48,6 +48,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             throw "$Name exited with $code ($status); see $log"
         }
         $observed=Get-Content -LiteralPath $log -Raw
+        if($Name -eq 'custom-native-parity'){
+            $status='failed';Assert-CustomNativeLog $observed;$status='passed'
+        }
+        if($Name -eq 'custom-core-runtime-tree'){
+            $status='failed';Assert-CustomRuntimeTree $observed;$status='passed'
+        }
         if($Name -eq 'original-macos-windows' -and $observed -notmatch 'original macOS windows cycles=20 captures=60 retained=60 missing_window=1 joined_callers=1 passed'){
             $status='failed';throw 'Expected twenty actual original macOS window lifecycles and sixty retained known-interior images'
         }
@@ -136,6 +142,9 @@ try {
         . (Join-Path $PSScriptRoot prepare-macos-reference.ps1)
         $executable=Prepare-MacosReference $UpstreamRoot
         $referenceArtifacts=Join-Path $RunRoot macos-arm64/reference-u/artifacts
+        . (Join-Path $PSScriptRoot prepare-custom-unix-reference.ps1)
+        try { Test-CustomUnixReference $UpstreamRoot $referenceArtifacts }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         $windows=Join-Path $referenceArtifacts windows
         $display=Join-Path $referenceArtifacts display
         New-Item -ItemType Directory -Path $windows,$display|Out-Null

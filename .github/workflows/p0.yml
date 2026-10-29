@@ -78,6 +78,10 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/*-info-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-LICENSE
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/*.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/*.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/*LICENSE*
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/source-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/macos-arm64/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/macos-arm64/reference-u/artifacts/**
           if-no-files-found: warn
@@ -129,6 +133,10 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-LICENSE
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/*-info-*.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/*.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/*.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/*LICENSE*
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/source-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64-pipewire/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/reference-u/artifacts/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-shm/artifacts/**

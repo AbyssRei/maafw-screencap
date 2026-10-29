@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Explicit native acceptance preparation only. Caller's Step/Save/Json own
 # records; no capture crate or product OpenCV dependency is introduced.
-function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDictionary]$Context) {
+function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDictionary]$Context,[switch]$ImageCodecs,[string]$StepPrefix='source-opencv') {
     New-Item -ItemType Directory -Path $Directory -Force|Out-Null
     $releaseFile=Join-Path $Directory opencv-release.json
     & gh api repos/opencv/opencv/releases/latest > $releaseFile
@@ -18,20 +18,21 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     $commit=(($peeled.Count -gt 0 ? $peeled[0] : $remote[0]) -split '\s+')[0]
     $source=Join-Path $DepsRoot "native-sources/OpenCV-$commit"
     if(-not(Test-Path -LiteralPath $source)){
-        Step source-opencv-clone git @('-c','core.autocrlf=false','clone','--depth=1','--branch',$release.tag_name,'https://github.com/opencv/opencv.git',$source)
+        Step "$StepPrefix-clone" git @('-c','core.autocrlf=false','clone','--depth=1','--branch',$release.tag_name,'https://github.com/opencv/opencv.git',$source)
     }
     $actual=(& git -C $source rev-parse HEAD|Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or $actual -ne $commit){throw 'OpenCV source does not match the resolved formal tag'}
     $dirty=& git -C $source status --porcelain --untracked-files=all
     if($LASTEXITCODE -ne 0 -or $dirty){throw 'OpenCV source cache was modified'}
     $archive=Join-Path $Directory OpenCV-source.tar
-    Step source-opencv-archive git @('-C',$source,'archive','--format=tar','--output',$archive,$commit);Save $archive
+    Step "$StepPrefix-archive" git @('-C',$source,'archive','--format=tar','--output',$archive,$commit);Save $archive
     $license=Join-Path $Directory opencv-LICENSE.txt
     Copy-Item -LiteralPath (Join-Path $source LICENSE) -Destination $license;Save $license
     $downloads=Join-Path $DepsRoot downloads/opencv
     New-Item -ItemType Directory -Path $downloads -Force|Out-Null
     $appleArm=$IsMacOS -and [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'Arm64'
-    $options=@('-DBUILD_LIST=core,imgproc','-DBUILD_SHARED_LIBS=OFF','-DBUILD_TESTS=OFF','-DBUILD_PERF_TESTS=OFF','-DBUILD_EXAMPLES=OFF','-DBUILD_opencv_apps=OFF','-DWITH_PROTOBUF=OFF','-DWITH_FLATBUFFERS=OFF')
+    $modules=if($ImageCodecs){'core,imgproc,imgcodecs'}else{'core,imgproc'}
+    $options=@("-DBUILD_LIST=$modules",'-DBUILD_SHARED_LIBS=OFF','-DBUILD_TESTS=OFF','-DBUILD_PERF_TESTS=OFF','-DBUILD_EXAMPLES=OFF','-DBUILD_opencv_apps=OFF','-DWITH_PROTOBUF=OFF','-DWITH_FLATBUFFERS=OFF')
     if($appleArm){
         # IPP is Intel-only. Retain OpenCV's native arm64 NEON baseline and
         # supported dispatch defaults, verified by the real native consumer.
@@ -58,14 +59,14 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     $configuration=Join-Path $Directory native-configuration.json
     Json $configuration ([ordered]@{
         opencv=$identityRecord;context=$Context
-        codec_policy=($appleArm ? 'Core/imgproc; unused codec discovery disabled; native NEON/CPU/HAL optimization retained, Intel IPP inapplicable.' : 'Core/imgproc and raw pixel artifacts only; unused codec discovery disabled; CPU/IPP/HAL optimization retained.')
+        codec_policy="Modules=$modules; external image-I/O discovery disabled; raw-pixel acceptance only. CPU/HAL optimization retained; IPP is required on x64 and inapplicable on Apple arm64. The optional real imgcodecs module supplies ImageBuffer vtable symbols; encoded/resize behavior is not accepted here."
     });Save $configuration
     # Backend context does not alter the OpenCV compilation. Archive it per run
     # but share the exact compiler/source/options cache after fresh resolution.
     $identity=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes(($identityRecord|ConvertTo-Json -Depth 20 -Compress)))).ToLowerInvariant()
     $native=Join-Path $DepsRoot "native/opencv-reference-$identity"
     $build=Join-Path $native opencv-build;$install=Join-Path $native install
-    Step source-opencv-configure cmake (@('-S',$source,'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DCMAKE_INSTALL_PREFIX=$install",'-DCMAKE_INSTALL_LIBDIR=lib',"-DOPENCV_DOWNLOAD_PATH=$downloads")+$options)
+    Step "$StepPrefix-configure" cmake (@('-S',$source,'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DCMAKE_INSTALL_PREFIX=$install",'-DCMAKE_INSTALL_LIBDIR=lib',"-DOPENCV_DOWNLOAD_PATH=$downloads")+$options)
     $cache=Join-Path $Directory OpenCV-CMakeCache.txt
     Copy-Item -LiteralPath (Join-Path $build CMakeCache.txt) -Destination $cache;Save $cache
     $config=Join-Path $Directory opencv-cvconfig.h
@@ -75,10 +76,10 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
        (Get-Content -LiteralPath $cache -Raw) -notmatch '(?m)^CPU_DISPATCH:STRING=\S+'){
         throw 'Reference OpenCV did not retain required IPP/CPU optimizations'
     }
-    try { Step source-opencv-build-install cmake @('--build',$build,'--target','install','--parallel','4') }
+    try { Step "$StepPrefix-build-install" cmake @('--build',$build,'--target','install','--parallel','4') }
     finally {
         $downloadArchive=Join-Path $Directory opencv-downloads.tar
-        Step source-opencv-download-archive tar @('-cf',$downloadArchive,'-C',$downloads,'.');Save $downloadArchive
+        Step "$StepPrefix-download-archive" tar @('-cf',$downloadArchive,'-C',$downloads,'.');Save $downloadArchive
     }
     $packages=@(Get-ChildItem -LiteralPath $install -File -Filter OpenCVConfig.cmake -Recurse)
     if($packages.Count -ne 1){throw 'Reference OpenCV install has no unique package configuration'}
