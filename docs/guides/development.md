@@ -46,6 +46,8 @@ Wlr 另接入独立的原生 Wayland IPC/SHM 协议夹具；它没有 compositor
 
 新增 `cargo xtask upstream-alpha frame-pool <外部诊断目录> [--check-only]` 校核实际透明度/内容诊断记录。`upstream-parity frame-pool` 另编译原生 `mfs_framepool_alpha_reference`：在各自独立的同一窗口上执行 alpha=255/0/255/0/255，分别使用每次新建与持续 FramePool 会话，切换两套已知图样并以独立原 PrintWindow 作当前内容见证。调色只在自有 UI owner 上同步更新，默认夹具图样不变；原捕获/helper 函数和等待均未改写，每步只调用一次原 FramePool。记录真实捕获前后窗口状态、20 份图像、重绘计数、持帧及窗口/dispatcher 退出。维护版本机取样及逐字节校核通过：新会话 alpha=0 两次全黑，持续会话一次全黑、一次约 2 秒后返回上一场景，其余六次 FramePool 及全部十次 PrintWindow 匹配当前图样。旧场景结果与原等待/缓存回放相符，但未截获缓存分支，不能宣称样本新鲜度或所有平台因果。黑图/旧图在此入口仅为诊断分类；四项原包装彩色图样失败及 P1 非通过门禁继续保留。原生 Actions 的新诊断尚待验证。
 
+另一次独立本机 CDB 观察在原 `FramePoolScreencap.cpp` 的缓存 clone 行设置 PDB 源码断点，保留反汇编、调用栈、可执行文件/PDB 和实际图像。持续会话的 alpha=0 步骤命中该行一次，约 2 秒后返回上一图样；独立 PrintWindow 同时匹配当前图样，逐字节检查确认这次旧图来自原缓存分支。原源码、等待和每步一次捕获均未改写，调试器会影响执行时序，不能由此证明透明度成因或普通运行耗时。同次新建会话最后一个 alpha=255 步骤无帧且无缓存，正向控制失败、进程退出 5；九张 FramePool 与十张 PrintWindow、窗口退出和 dispatcher 完成均已保存并独立核对。整次实验仍记失败，不重试捕获，不改动正常诊断或原包装的验收条件。
+
 窗口 GDI 的内部实现位于 `src/backends/windows/gdi.rs`，通过 `windows-gdi` 编译能力启用；没有对外发布 Rust/C SDK 接口。它保持 GetDC、兼容 DC/位图、BitBlt、GetBitmapBits 及转换前后的资源顺序。转换由调用点的私有适配边界执行；默认产品不链接 OpenCV。受检算术、初始化的 fallible CPU 分配、原生 32 位布局与完整读取校验属于显式记录的安全适配，没有提前迁至 P3 的 DIB 路径。
 
 ```text
