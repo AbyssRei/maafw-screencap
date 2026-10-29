@@ -88,7 +88,58 @@ fn config(method: u64) -> Config {
         wlr_socket: b"socket".to_vec(),
         pipewire_fd: -1,
         pipewire_node: 7,
+        ..Config::default()
     }
+}
+
+#[test]
+fn parsed_creation_and_queries_do_not_connect_or_touch_the_callers_output() {
+    let mut script = Script::default();
+    let json =
+        br#"{"screencap_method":4,"input_method":0,"pw_node_id":9,"wlr_socket_path":"a\u0000b"}"#;
+    let mut manager = Manager::<Script>::from_config_json(Some(json)).unwrap();
+    assert!(!manager.connected());
+    assert_eq!(manager.get_features(), 0);
+    let mut output = vec![7, 9, 11];
+    let pointer = output.as_ptr();
+    assert!(
+        !manager
+            .capture_with(&mut output, |_, _| -> Result<bool, ()> {
+                panic!("unconnected backend call")
+            })
+            .unwrap()
+    );
+    assert_eq!(output.as_ptr(), pointer);
+    assert_eq!(output, [7, 9, 11]);
+    let mut uuid = Vec::new();
+    assert!(manager.request_uuid(&mut uuid).unwrap());
+    assert_eq!(uuid, b"-1_9_-1");
+    assert_eq!(
+        Config::parse_c_string(Some(&manager.get_info().unwrap()))
+            .unwrap()
+            .wlr_socket,
+        b"a\0b"
+    );
+    assert!(manager.inactive(&mut script));
+    drop(manager);
+    assert!(script.take().is_empty());
+    assert!(Manager::<Script>::from_config_json(None).is_err());
+    assert!(Manager::<Script>::from_config_json(Some(b"{}")).is_err());
+}
+
+#[test]
+fn retained_input_metadata_does_not_enable_out_of_scope_input_control() {
+    let mut script = Script::default();
+    let mut manager = Manager::<Script>::from_config_json(Some(
+        br#"{"screencap_method":1,"input_method":2,"uinput_path":"custom"}"#,
+    ))
+    .unwrap();
+    let mut uuid = Vec::new();
+    manager.request_uuid(&mut uuid).unwrap();
+    assert_eq!(uuid, b"_custom");
+    assert!(!manager.connect(&mut script).unwrap());
+    assert!(!manager.connected());
+    assert!(script.take().is_empty());
 }
 
 #[test]
@@ -307,6 +358,7 @@ fn matches_fixed_source_manager_reconnect_forwarding_and_uuid() {
                                 wlr_socket: socket,
                                 pipewire_fd: fd,
                                 pipewire_node: node,
+                                ..Config::default()
                             });
                             let mut observed =
                                 format!("initial={}\n", u8::from(manager.connected()));

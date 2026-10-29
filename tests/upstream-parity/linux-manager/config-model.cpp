@@ -49,6 +49,8 @@ int main(int argc,char** argv) {
     try {
         static_assert(sizeof(MaaLinuxScreencapMethod)==8 && sizeof(MaaLinuxInputMethod)==8);
         static_assert(sizeof(int)==4 && sizeof(uint32_t)==4);
+        static_assert(json::_packed_bytes::packed_bytes_trait_max::step==16,
+            "Recharacterize the explicit source parser before changing its packed-byte trait");
         require(std::string_view(MaaLinuxControlUnitGetVersion())=="mfs-p1-config-oracle","original API version forwarding changed");
         require(argc==2 || argc==3,"usage: config-model --null | --file <raw JSON file>");
         std::string input;

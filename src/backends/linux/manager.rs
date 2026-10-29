@@ -1,9 +1,12 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Fixed Linux manager screenshot orchestration, restricted to Input=None.
-//! Private U logic with selected native factories; config JSON/full parity
-//! remain P1, and this module defines no public SDK.
-use std::{collections::TryReserveError, fmt::Write};
+//! Private U logic with selected native factories and legacy byte configuration.
+//! Full parity remains P1; this module defines no public SDK.
+#[path = "manager_config.rs"]
+mod configuration;
+pub(crate) use configuration::Config;
+pub(crate) use configuration::Error as ConfigError;
 
 #[cfg(all(
     target_os = "linux",
@@ -22,14 +25,6 @@ pub(crate) const NONE: u64 = 0;
 pub(crate) const WLR: u64 = 1;
 pub(crate) const EXT_IMAGE: u64 = 2;
 pub(crate) const PIPEWIRE: u64 = 4;
-
-pub(crate) struct Config {
-    pub method: u64,
-    // Original Config.h std::string bytes, without filesystem stream quoting.
-    pub wlr_socket: Vec<u8>,
-    pub pipewire_fd: i32,
-    pub pipewire_node: u32,
-}
 
 /// Boundaries mirror original construction and virtual init calls. Concrete
 /// factories must retain the actual shared client in each constructed Wlr unit;
@@ -74,6 +69,17 @@ impl<F: Factory> Manager<F> {
             client: None,
         }
     }
+    pub fn from_config_json(input: Option<&[u8]>) -> Result<Self, ConfigError> {
+        Ok(Self::new(Config::parse_c_string(input)?))
+    }
+    pub fn get_info(&self) -> Result<Vec<u8>, ConfigError> {
+        self.config.info()
+    }
+    pub const fn get_features(&self) -> u64 {
+        // Unconnected managers and the only implemented input unit (None)
+        // expose no input features in the source.
+        0
+    }
     pub const fn connected(&self) -> bool {
         self.connected
     }
@@ -81,6 +87,11 @@ impl<F: Factory> Manager<F> {
         self.connected = false;
         drop(self.capture.take());
         drop(self.input.take());
+        // Only Input=None is in this screenshot migration. Other input values
+        // remain queryable configuration; never silently perform input work.
+        if self.config.input_method != NONE {
+            return Ok(false);
+        }
         if self.config.method == WLR && self.client.is_none() {
             self.client = Some(factory.create_client()?);
             if !factory.connect_client(self.client.as_mut().unwrap(), &self.config.wlr_socket)? {
@@ -132,44 +143,8 @@ impl<F: Factory> Manager<F> {
         }
         true
     }
-    pub fn request_uuid(&self, output: &mut Vec<u8>) -> Result<bool, UuidError> {
-        let mut value = Vec::new();
-        match self.config.method {
-            WLR | EXT_IMAGE => {
-                // Original Config.h uses std::string. Stream its bytes without
-                // filesystem quoting, escaping or a lossy encoding conversion.
-                let capacity = self
-                    .config
-                    .wlr_socket
-                    .len()
-                    .checked_add(3)
-                    .ok_or(UuidError::Size)?;
-                value
-                    .try_reserve_exact(capacity)
-                    .map_err(UuidError::Allocation)?;
-                value.extend_from_slice(&self.config.wlr_socket);
-            }
-            PIPEWIRE => {
-                let mut decimal = String::new();
-                decimal
-                    .try_reserve_exact(22)
-                    .map_err(UuidError::Allocation)?;
-                write!(
-                    &mut decimal,
-                    "{}_{}",
-                    self.config.pipewire_fd, self.config.pipewire_node
-                )
-                .expect("String formatting cannot fail");
-                value.try_reserve_exact(25).map_err(UuidError::Allocation)?;
-                value.extend_from_slice(decimal.as_bytes());
-            }
-            _ => {
-                value.try_reserve_exact(5).map_err(UuidError::Allocation)?;
-                value.extend_from_slice(b"-1");
-            }
-        }
-        value.extend_from_slice(b"_-1"); // Explicit Input=None source branch.
-        *output = value;
+    pub fn request_uuid(&self, output: &mut Vec<u8>) -> Result<bool, ConfigError> {
+        *output = self.config.uuid()?;
         Ok(true)
     }
 }
@@ -182,12 +157,6 @@ impl<F: Factory> Drop for Manager<F> {
         drop(self.input.take());
     }
 }
-#[derive(Debug)]
-pub(crate) enum UuidError {
-    Size,
-    Allocation(TryReserveError),
-}
-
 #[cfg(test)]
 #[path = "manager_tests.rs"]
 mod tests;

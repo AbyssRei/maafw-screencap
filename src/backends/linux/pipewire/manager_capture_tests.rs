@@ -110,12 +110,10 @@ fn run(supplied_fd: bool) {
             }
         }
         let mut balance = Balance(0);
-        let mut manager = manager::NativeManager::new(manager::Config {
-            method: manager::PIPEWIRE,
-            wlr_socket: Vec::new(),
-            pipewire_fd: fd,
-            pipewire_node: node,
-        });
+        let json = format!(
+            r#"{{"screencap_method":4,"input_method":0,"pw_socket_fd":{fd},"pw_node_id":{node}}}"#
+        );
+        let mut manager = manager::NativeManager::from_config_json(Some(json.as_bytes())).unwrap();
         let mut output = None;
         assert!(
             !manager
