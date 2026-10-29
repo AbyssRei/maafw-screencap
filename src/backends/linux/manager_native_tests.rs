@@ -40,6 +40,7 @@ fn none_and_unimplemented_native_methods_do_not_enter_capture_adapters() {
         assert!(!captured.result.unwrap());
         assert_eq!(output, 99);
         assert!(matches!(captured.evidence, Evidence::None));
+        assert!(captured.replayed.is_none());
         assert!(manager.inactive_native());
         let close = connected.close;
         drop(manager);
