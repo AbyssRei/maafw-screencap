@@ -116,6 +116,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected twenty OpenCV conversion/owner lifecycles, sixty held BGR images and twenty actual native unlock witnesses'
             }
         }
+        if ($Name -eq 'original-pipewire-source-reinit' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed') {
+            throw 'Expected twenty original same-object lifecycles, forty sessions and 120 held BGR images'
+        }
+        if ($Name -eq 'rust-pipewire-supplied-fd-reinit') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Rust PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected twenty Rust same-object lifecycles, forty sessions and 120 held raw RGB images'
+            }
+        }
         if ($Name -eq 'pipewire-opencv-private-abi') {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native OpenCV private ABI failures=6 exception=1 independent_bgr_owner=1 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -398,6 +407,10 @@ try {
         try { Step rust-pipewire-supplied-fd-shm timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::captures_supplied_fd_shm_and_closes_twenty_consumed_sockets','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-opencv timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step original-pipewire-source-reinit timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--reinit',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts reinit)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-supplied-fd-reinit timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::reinit::reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
     }
 } catch {
