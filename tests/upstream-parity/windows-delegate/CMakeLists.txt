@@ -1,0 +1,33 @@
+cmake_minimum_required(VERSION 4.2)
+project(mfs_windows_delegate LANGUAGES CXX)
+if(NOT WIN32 OR NOT CMAKE_GENERATOR STREQUAL "Visual Studio 18 2026" OR NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+    message(FATAL_ERROR "Initial delegate source model requires x64 VS2026/MSBuild")
+endif()
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
+set(OpenCV_STATIC ON)
+find_package(OpenCV REQUIRED COMPONENTS core)
+foreach(_input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_BOOST_ROOT MFS_MEOJSON_INCLUDE)
+    if(NOT IS_DIRECTORY "${${_input}}")
+        message(FATAL_ERROR "Explicit ${_input} is required")
+    endif()
+endforeach()
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/windows-delegate-source.cmake")
+set(BOOST_INCLUDE_LIBRARIES dll function)
+set(BOOST_BUILD_TESTING OFF)
+set(BOOST_SKIP_INSTALL_RULES ON)
+add_subdirectory("${MFS_BOOST_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/Boost" EXCLUDE_FROM_ALL)
+add_executable(mfs_windows_delegate_model model.cpp)
+target_include_directories(mfs_windows_delegate_model PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+    "${MFS_UPSTREAM_ROOT}/include" "${MFS_MAAUTILS_ROOT}/include"
+    "${MFS_BOOST_ROOT}" "${MFS_MEOJSON_INCLUDE}" ${OpenCV_INCLUDE_DIRS})
+target_compile_definitions(mfs_windows_delegate_model PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_options(mfs_windows_delegate_model PRIVATE /utf-8 /EHsc)
+target_link_libraries(mfs_windows_delegate_model PRIVATE Boost::dll Boost::function ${OpenCV_LIBS})
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/toolchain-$<CONFIG>.txt" CONTENT
+    "compiler=${CMAKE_CXX_COMPILER}\ncompiler_id=${CMAKE_CXX_COMPILER_ID}\ncompiler_version=${CMAKE_CXX_COMPILER_VERSION}\nsdk=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}\nconfiguration=$<CONFIG>\nmsvc_runtime=$<TARGET_PROPERTY:mfs_windows_delegate_model,MSVC_RUNTIME_LIBRARY>\n")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
+    "Capture-only exact init_win32_unit/screencap/inactive, optional selection expression, full original Win32ControlUnitLoader and prepared MaaUtils LibraryHolder. Real original ControlUnitAPI declarations, boost::function/shared control blocks/mutex/OpenCV Mats. Scripted DLL load/export/lookup and backend outcome boundaries, not native module loading, ViGEm/input, actual Win32 capture or complete delegate/P1 acceptance. Stale source views are observed without calling a dead object; Rust refusal is an explicit safety adaptation. Native/control-block allocation exhaustion and complete shared-loader failure behavior remain pending.\n")

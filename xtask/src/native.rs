@@ -129,6 +129,7 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         let prepared: batch::Run = records::read(&records::verify(&root, input)?)?;
         if manager_parity {
             crate::manager_metadata::require_native_oracle(&prepared.inputs)?;
+            crate::windows_delegate::require_oracle(&prepared.inputs)?;
         }
         prepared
             .inputs
