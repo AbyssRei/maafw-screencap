@@ -20,6 +20,7 @@ set(_mfs_capture "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Screencap/Pipe
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_mfs_capture}")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/pipewire-base-source.cmake")
 add_executable(mfs_pipewire_source_context source-context.cpp)
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../linux-manager" linux-manager)
 # source-context includes the unedited complete original cpp in one translation
 # unit so the separate explicit POD oracle can call its static helpers.
 target_compile_definitions(mfs_pipewire_source_context PRIVATE _GNU_SOURCE)

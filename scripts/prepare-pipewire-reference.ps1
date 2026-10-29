@@ -41,6 +41,13 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     $cvPackage=$opencv.Package
     Step pipewire-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-pipewire),'-B',$refBuild,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$cvPackage","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_DRM_SOURCE=$drmSource","-DMFS_PIPEWIRE_VERSION=$($env:MFS_P0_PIPEWIRE_VERSION)")
     Step pipewire-reference-build cmake @('--build',$refBuild,'--parallel','4')
+    $manager=Join-Path $refBuild linux-manager/mfs_linux_manager_model
+    $saved=Join-Path $refInputs mfs_linux_manager_model
+    Copy-Item -LiteralPath $manager -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-source.inc
+    Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-source.inc) -Destination $saved;Save $saved
+    Step linux-manager-model-linkage ldd @($manager)
+    $env:MFS_P1_LINUX_MANAGER_MODEL=$manager
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $refBuild $item[0]) -Destination $saved
