@@ -22,6 +22,7 @@ struct Pattern {
     uintptr_t paint_wparam = 0;
     uintptr_t paint_dc = 0;
     uintptr_t paint_bitmap = 0;
+    bool alternative = false;
 };
 struct Fixture {
     HINSTANCE module = nullptr;
@@ -46,7 +47,7 @@ void draw(HWND hwnd, HDC dc, Pattern& pattern) noexcept
         RECT { client.right / 3, 0, client.right, client.bottom / 2 },
         RECT { client.right / 3, client.bottom / 2, client.right, client.bottom }
     };
-    const std::array<COLORREF, 3> colors = pattern.popup
+    const std::array<COLORREF, 3> colors = (pattern.popup || pattern.alternative)
         ? std::array<COLORREF, 3> { 0x00e34219, 0x00578bc1, 0x009d23f5 }
         : std::array<COLORREF, 3> { 0x001f53a7, 0x00b94d27, 0x003be281 };
     for (size_t i = 0; i < regions.size(); ++i) {
@@ -247,6 +248,14 @@ int32_t mfs_print_parity_close(void** owner)
     return 0;
 }
 
+int32_t mfs_print_parity_scene(void* owner, uint32_t alternative)
+{
+    if (!owner || alternative > 1) { return 1; }
+    auto& fixture = *static_cast<Fixture*>(owner);
+    auto& target = fixture.child ? fixture.child_pattern : fixture.main_pattern;
+    target.alternative = alternative != 0;
+    return 0;
+}
 int32_t mfs_print_parity_stats(void* owner, uint64_t* output, size_t capacity)
 {
     if (!owner || !output || capacity < 5) { return 1; }

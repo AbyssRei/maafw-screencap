@@ -1,6 +1,6 @@
 # 开发、构建与验证
 
-日期：2026-10-29。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
+日期：2026-10-30。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
 
 ## 当前仓库与本机命令
 
@@ -21,7 +21,7 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Windows 默认 workspace 测试包含 8 项 PipeWire 消费/CPU 行所有权测试（另有一项显式原源码 oracle 默认忽略）、4 项分配原型与 26 项工具测试，Unix 另运行一项 symlink 越界测试。选择 `linux-pipewire` 后原生 driver 取帧测试仍须显式启用。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
+Windows 默认 workspace 测试覆盖分配原型、通用回调、PipeWire 消费/CPU 行所有权、各平台 manager 逻辑及工具记录校核，实际数量与忽略项以当次日志为准；Unix 另有 symlink 边界检查。这些测试不执行真实桌面取帧。选择 `linux-pipewire` 后，原生 driver 取帧测试仍须显式启用。Windows GDI 桌面原型仅在 `prototype-windows` 下编译，默认忽略，须显式串行执行：
 
 ```powershell
 cargo test --release --test p0-interop --features prototype-windows-com -- --include-ignored --test-threads=1
@@ -41,6 +41,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 这些原型不提供产品截图 API，不构成六种 Windows 方法、完整 Desktop Duplication/FramePool 异常/重建/权限矩阵、混合 DPI 或多显示器验收；P3 的 DIB 现代化与全虚拟桌面路径均未提前实施。四项基础 COM 测试不需要桌面交互，默认在选择该 feature 后执行；GDI、两个实际 WGC 和 Desktop Duplication 用例仍须显式启用 ignored 测试。具体本机和 runner 结果分别以外部运行记录为准，缺硬件/桌面或捕获能力不能记为捕获通过。
 
 ## 当前 P1 迁移与对照
+
+新增 `cargo xtask upstream-alpha frame-pool <外部诊断目录> [--check-only]` 校核实际透明度/内容诊断记录。`upstream-parity frame-pool` 另编译原生 `mfs_framepool_alpha_reference`：在各自独立的同一窗口上执行 alpha=255/0/255/0/255，分别使用每次新建与持续 FramePool 会话，切换两套已知图样并以独立原 PrintWindow 作当前内容见证。调色只在自有 UI owner 上同步更新，默认夹具图样不变；原捕获/helper 函数和等待均未改写，每步只调用一次原 FramePool。记录真实捕获前后窗口状态、20 份图像、重绘计数、持帧及窗口/dispatcher 退出。维护版本机取样及逐字节校核通过：新会话 alpha=0 两次全黑，持续会话一次全黑、一次约 2 秒后返回上一场景，其余六次 FramePool 及全部十次 PrintWindow 匹配当前图样。旧场景结果与原等待/缓存回放相符，但未截获缓存分支，不能宣称样本新鲜度或所有平台因果。黑图/旧图在此入口仅为诊断分类；四项原包装彩色图样失败及 P1 非通过门禁继续保留。原生 Actions 的新诊断尚待验证。
 
 窗口 GDI 的内部实现位于 `src/backends/windows/gdi.rs`，通过 `windows-gdi` 编译能力启用；没有对外发布 Rust/C SDK 接口。它保持 GetDC、兼容 DC/位图、BitBlt、GetBitmapBits 及转换前后的资源顺序。转换由调用点的私有适配边界执行；默认产品不链接 OpenCV。受检算术、初始化的 fallible CPU 分配、原生 32 位布局与完整读取校验属于显式记录的安全适配，没有提前迁至 P3 的 DIB 路径。
 
@@ -270,9 +272,9 @@ PipeWire manager 首轮批次保留 81 项通过和 5 项失败：新的常量 c
 
 Windows/macOS 的同一个私有截图 manager 已补 get_info，保持 Input=None、原字段名/顺序、HWND/u32 window_id 宽度，以及原 uint64 方法标志转 int64 的 metadata 视图。方法选择仍使用原 u64，不从日志视图推导支持能力。`tests/upstream-parity/manager-metadata` 的独立 C++ 目标只复制原字段声明与未改写 get_info 函数体，使用真实 MaaDef/最新 meojson；Windows 主机实际通过 88 个 Win32 和 66 个 macOS 字段查询/JSON 字节对照，覆盖零/高位标识与有符号边界。这不构造原生 manager、不验证虚表/C ABI 或桌面；所有输入方法保持 None。
 
-新增 `cargo xtask upstream-metadata <win32|macos> <外部目录> [--check-only]` 校核实际 v1 cases.tsv/source-stdout.txt/rust-stdout.txt 与完整矩阵，拒绝重复字段、额外字段、改变整数宽度/词法、错行与缺失输入；保存或复核 metadata-validation.json 及原文件哈希。源与 Rust JSON 行字节精确相同，记录文件允许平台 CRLF/LF。源码模型、许可、生成字段/函数体及所有输出均在参考区；核心不增加 meojson/serde_json/OpenCV 依赖。显式 Windows manager 对照已加入两个查询测试和独立校核，在线每批查询并构建最新 meojson；显式离线对照使用该批哈希验证过的 oracle exe/声明作为参考输入，不代替产品离线源码构建。Linux PipeWire 与 macOS 源码入口也编排对应 portable/native-host 元数据查询；原生 macOS 52 项和 Linux PipeWire 95 项组件均已通过，并独立运行下载记录的 --check-only 校核；Windows 首次 manager 步骤复用了不含 oracle 的 DesktopDup 离线输入，在 16 项准备检查后失败，尚未执行查询/截图对照。CI 现为 manager 单独在线准备并解析 meojson；显式离线 manager 要求完整且唯一的 exe、四份声明/函数体及 prepared 身份，缺少时在原生构建前拒绝，不静默联网。修复原生结果待验证，旧失败保留。
+新增 `cargo xtask upstream-metadata <win32|macos> <外部目录> [--check-only]` 校核实际 v1 cases.tsv/source-stdout.txt/rust-stdout.txt 与完整矩阵，拒绝重复字段、额外字段、改变整数宽度/词法、错行与缺失输入；保存或复核 metadata-validation.json 及原文件哈希。源与 Rust JSON 行字节精确相同，记录文件允许平台 CRLF/LF。源码模型、许可、生成字段/函数体及所有输出均在参考区；核心不增加 meojson/serde_json/OpenCV 依赖。显式 Windows manager 对照已加入两个查询测试和独立校核，在线每批查询并构建最新 meojson；显式离线对照使用该批哈希验证过的 oracle exe/声明作为参考输入，不代替产品离线源码构建。Linux PipeWire 与 macOS 源码入口也编排对应 portable/native-host 元数据查询；原生 macOS 52 项和 Linux PipeWire 95 项组件均已通过，并独立运行下载记录的 --check-only 校核；Windows 首次 manager 步骤复用了不含 oracle 的 DesktopDup 离线输入，在 16 项准备检查后失败，尚未执行查询/截图对照。CI 现为 manager 单独在线准备并解析 meojson；显式离线 manager 要求完整且唯一的 exe、四份声明/函数体及 prepared 身份，缺少时在原生构建前拒绝，不静默联网。修正后的原生 Windows manager 25 项检查已通过，154 条元数据输出已独立复核，旧失败保留。随后一轮 Windows CI 因 VS stable build 更新未就绪而在准备前失败，未执行新的截图对照；CI 现于每个在线 Windows 组件入口重做当前工具链准备，修正结果待验证。
 
-Wlr 原生名称现保留原 filesystem::path::c_str 边界：NUL 后字节仍属于 client 重连身份和 manager UUID，但 C 接口只读取首个 NUL 前的名称；空名称和首字节 NUL 仍传非空指针，不改用默认来源。新增原源码/Rust 独立进程各 20 生命周期、60 张关闭后持帧与精确资源检查，并由 Rust JSON 解码 NUL 后实际连接 manager。该 NUL 场景已通过 98 项原生组件，全部 60 组 raw/Rust BGR/原版图像及 40 行资源已独立复核。另新增无分配的原路径 component 比较，保留 dot、末尾分隔符及完整字节；841 个实际 C++ 路径比较和 20 轮真实重连/拒绝/取帧已接入，尚待原生执行。通用路径与完整后端/P1 仍未验收。
+Wlr 原生名称现保留原 filesystem::path::c_str 边界：NUL 后字节仍属于 client 重连身份和 manager UUID，但 C 接口只读取首个 NUL 前的名称；空名称和首字节 NUL 仍传非空指针，不改用默认来源。新增原源码/Rust 独立进程各 20 生命周期、60 张关闭后持帧与精确资源检查，并由 Rust JSON 解码 NUL 后实际连接 manager。该 NUL 场景已通过 98 项原生组件，全部 60 组 raw/Rust BGR/原版图像及 40 行资源已独立复核。另新增无分配的原路径 component 比较，保留 dot、末尾分隔符及完整字节；841 个实际 C++ 路径比较和 20 轮真实重连/拒绝/取帧已通过 100 项原生组件，全部 20 组 raw/BGR/原版图像和 40 行资源已独立复核。通用路径与完整后端/P1 仍未验收。
 
 Custom 上游回调的补充源码审阅已纳入外部 catalog：共 101 个源码条目的身份、精确行和路由引用通过校验。实际 raw C setter 位于 source/Common/MaaBuffer.cpp，包装 packed Mat 后调用真实 ImageBuffer::set 克隆；manager 成功返回共享该 Mat 的所有者，false 保留原输出、true+empty 则替换为空。真实 ImageBuffer 虚表还引用 imgcodecs；其原生链接、调用及 Rust 迁移仍待完成，源码审阅不作回调捕获验收。
 

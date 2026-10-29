@@ -5,6 +5,7 @@ mod batch;
 mod configuration;
 mod custom_capture;
 mod dependencies;
+mod frame_pool_alpha;
 mod licenses;
 mod linux_config;
 mod macos;
@@ -49,6 +50,9 @@ fn run() -> Result<()> {
     }
     if argv.first().is_some_and(|arg| arg == "upstream-custom") {
         return custom_capture::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "upstream-alpha") {
+        return frame_pool_alpha::run(&argv[1..]);
     }
     if argv.first().is_some_and(|arg| arg == "check") {
         return quality::run(&argv[1..]);
@@ -137,6 +141,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity manager [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity custom [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-custom <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context pipewire  # original source context on native Linux x64\n\n\
                       cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\
