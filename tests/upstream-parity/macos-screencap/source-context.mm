@@ -159,8 +159,10 @@ void windows(NSApplication* app,const std::filesystem::path& directory) {
         auto image=capture(source);require(image.has_value(),"original warmup capture failed");
         save(*image,directory/"warmup.bgr");pixels(*image,0);
     }
-    const auto baseline=resources();
     std::ofstream observations(directory/"resources.tsv");
+    require(observations.good(),"cannot open native resource observations");
+    // Keep this fixture's TSV descriptor present in every observation.
+    const auto baseline=resources();
     observations<<"cycle\tfd_count\tthread_count\tport_name_count\n"
         <<"baseline\t"<<baseline.descriptors<<'\t'<<baseline.threads<<'\t'<<baseline.ports<<'\n';
     std::vector<cv::Mat> held;held.reserve(60);
