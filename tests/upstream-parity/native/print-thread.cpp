@@ -14,7 +14,7 @@
 
 namespace {
 constexpr UINT command_message = WM_APP + 0x71;
-enum class Command { none, stats, close, activate, prepare, restore_control, updates, update_info };
+enum class Command { none, stats, close, activate, prepare, restore_control, updates, update_info, scene };
 struct Owner {
     std::thread worker;
     std::mutex mutex;
@@ -136,6 +136,9 @@ void run(Owner& owner, Arguments arguments) noexcept
                 else if (command == Command::close) {
                     result = close_native(owner);
                     closed = result == 0;
+                }
+                else if (command == Command::scene) {
+                    result = mfs_print_parity_scene(owner.fixture.owner, parameter);
                 }
                 else if (command == Command::activate) {
                     SetActiveWindow(static_cast<HWND>(owner.fixture.hwnd));
@@ -332,6 +335,12 @@ int32_t mfs_print_thread_prepare(void* context, uint32_t layered)
 {
     if (!context || layered > 1) { return 1; }
     try { return request(*static_cast<Owner*>(context), Command::prepare, layered); }
+    catch (...) { return 3; }
+}
+int32_t mfs_print_thread_scene(void* context, uint32_t alternative)
+{
+    if (!context || alternative > 1) { return 1; }
+    try { return request(*static_cast<Owner*>(context), Command::scene, alternative); }
     catch (...) { return 3; }
 }
 int32_t mfs_print_thread_restore_control(void* context, uint32_t alpha, uint32_t repaint)

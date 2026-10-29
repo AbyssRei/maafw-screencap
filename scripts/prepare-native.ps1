@@ -65,6 +65,7 @@ if ($PrintWindowParity) {
     $pending.Add('PrintWindow is a partial P1 component. Pseudo-minimize helper/wrapper migration and 22 deterministic original-body scripts are implemented; fake scheduling does not prove real thread lifetime. Dedicated UI-owner/message-loop fixtures, joined shutdown, layered/nonlayered stop/inactive and target-loss lifecycles are separate native checks. Earlier same-thread layered failures remain archived; capture/helper code is unchanged by the fixture correction. Foreground recovery has its own exact native case: missing foreground authority remains missing_environment, never success. Complete foreground/window-state coverage and the earlier independent original-popup black-bitmap failure remain unresolved. GetDIBits deselection is a native-precondition adaptation, not P3 modernization. Fixture recovery is distinct from product cleanup success.')
 }
 if ($FramePoolParity) {
+    $pending.Add('The independent alpha/content sequence is source-only diagnostic evidence: fresh/persistent sessions, two UI-owner palettes, real pre/post capture window state, native PrintWindow content witnesses and retained CPU images. Alpha0 black/prior images are diagnostic classifications only; exact cache-branch/native freshness, general transparency cause and full resource accounting are unproved. This check cannot accept or replace failed original pseudo known-color gates.')
     $pending.Add('FramePool is a partial P1 migration, not a backend/phase exit. Four separate Rust caller contexts compare original image bytes, clone owners, native close, callback event, apartment and DPI; twenty Rust capture/window/device lifecycles retain all images through completed dispatcher shutdown. Full repeated source/fault comparisons, native failure/initialization-exception/cleanup, complete polling/cache/resize/permission/format, full pseudo-wrapper and manager matrices remain pending. The migrated pseudo wrapper shares the original helper; five isolated source image/state scenarios feed twenty Rust lifecycles. Source known-color failures remain failed and make the batch nonpassing, even when subsequent byte/state diagnostics match; a local alpha-zero black result is not capture acceptance. Safety target-row copy and scoped factory ownership differ from direct mapped conversion/global projection caching and are explicitly counted/classified; old WGC unload AV remains unresolved.')
 } elseif ($FramePoolContext) {
     $pending.Add('This P1 task observes only the unmodified C++ FramePool source in four isolated caller contexts. It implements no Rust FramePool backend or SDK and does not accept Rust parity, full pixels/format/resize/permission/cache/timeout semantics or P1. Process-isolated factory/MTA state, known interior pixels and COM observations remain specific to this native environment.')
@@ -629,6 +630,16 @@ try {
         Save-Input $programPath
         $frameContextEvidence = Join-Path $artifacts frame-pool-context
         New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
+        if($FramePoolParity) {
+            Step frame-pool-alpha-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_alpha_reference','--parallel','4')
+            $alphaProgram=Join-Path $artifacts mfs_framepool_alpha_reference.exe
+            Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_alpha_reference.exe) -Destination $alphaProgram
+            Save-Input $alphaProgram
+            $alphaEvidence=Join-Path $frameContextEvidence alpha-sequence
+            New-Item -ItemType Directory -Path $alphaEvidence|Out-Null
+            Step frame-pool-source-alpha $alphaProgram @($alphaEvidence)
+            Step frame-pool-source-alpha-records $ConfigureTool @('upstream-alpha','frame-pool',$alphaEvidence)
+        }
         $contextFailures = [Collections.Generic.List[string]]::new()
         foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
             $modeRoot = Join-Path $frameContextEvidence $modeName

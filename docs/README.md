@@ -1,8 +1,10 @@
 # 文档导航与维护约定
 
-日期：2026-10-29。P0 准备阶段已验收，P1 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；macOS 主线程 ScreenCaptureKit 原型已通过 20 次受控窗口取帧、独立持帧、完成块释放与晚到结果原生验证；Wlr 真实 headless/Pixman compositor 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；结果按平台记录，P0 已通过计划第 16 节的准备与最小原生可行性门禁；完整 U 行为对照仍由 P1 完成。默认 binary 仍为 Hello World；内部 library 开始窗口 GDI 与 PrintWindow 迁移及显式局部对照，完整 U、公共 SDK 和绑定尚未完成。实际命令及原型边界见[开发指南](guides/development.md)。
+日期：2026-10-30。P0 准备阶段已验收，P1 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；macOS 主线程 ScreenCaptureKit 原型已通过 20 次受控窗口取帧、独立持帧、完成块释放与晚到结果原生验证；Wlr 真实 headless/Pixman compositor 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；结果按平台记录，P0 已通过计划第 16 节的准备与最小原生可行性门禁；完整 U 行为对照仍由 P1 完成。默认 binary 仍为 Hello World；内部 library 开始窗口 GDI 与 PrintWindow 迁移及显式局部对照，完整 U、公共 SDK 和绑定尚未完成。实际命令及原型边界见[开发指南](guides/development.md)。
 
 ## 阅读顺序与权威来源
+
+FramePool 新增透明度/内容原生诊断及实际记录校核；维护版本机 10 次 FramePool、10 次独立 PrintWindow 内容见证与完整字节检查通过。alpha=0 的黑图/旧场景结果仅作诊断，原包装彩色图样失败继续失败；新诊断的 Actions 验证仍待完成。入口及范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
 Custom 的私有回调切片和真实 ImageBuffer/raw setter 原生对照已加入；本机局部 96 个案例、192 次源码/Rust 调用及独立输出记录复算通过。正式在线批次的 22 项原生检查通过，但归档器漏识别新组件前缀使命令失败；修复后的只读记录校核通过，完整 CI 入口待验证。完整 Custom/所有平台及 P1 未验收；默认核心无 OpenCV 依赖。当前入口与范围见[开发指南](guides/development.md#当前仓库与本机命令)。
 
@@ -17,9 +19,9 @@ DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` �
 
 PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。受控原生批次中，完整原 C++、Rust daemon、Rust supplied-fd、Rust OpenCV 各通过 20 生命周期/60 张关闭后持帧；七格式/28 组有效 POD 与精确转换字节对照也通过 Actions。真实 MemFd helper 的 60 次复制/所有权与六类拒绝，以及原 C++/Rust 同一对象各 40 个 session/120 张持帧也已通过原生对照。测试区分已 join 的内核退出任务与活跃线程，严格保留 fd/任务身份检查；旧即时数量断言和后续编译失败不撤销。实际 Portal 授权、通用 fd 失败/重试、GPU 同步、完整格式/故障及 P1 仍待完成；真实 kernel DMA helper 和独立生产器/回调流检查已加入，首个 helper 编译失败保留，修正后原生编译与负向控制通过，真实 kernel helper 已通过，实际 NULL-data DMA 流已通过原生对照，旧 const/API 编译失败保留，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-`upstream-context wlr` 的原源码入口已通过 20 次原生生命周期/60 张持帧及递归 roundtrip 检查；私有日志、名称提供者及被动 manager 夹具边界保留。首个私有 Rust Wlr 捕获切片与对应 native 探针已加入；首轮编译失败修正后，20 生命周期/60 组 raw+BGR 与实际转换异常检查已通过原生运行；该批次保留的 Clippy 失败修正后，后续 87 项原生检查全部通过；新增共享 client/安全重连/FD 0 原版探针后，最新 90 项亦通过，新增 80 张原版图已独立复核；Rust FD 0 成功路径补齐后最新 91 项检查通过，新增 20 组图已独立复算，NUL 名称与完整后缀重连随后通过 98 项组件，新增 60 组图像与 40 行资源已独立复核；原路径 component 比较及 841 对照/20 轮连接场景另已接入但尚待原生验证，仍不代表完整后端已验收。操作与边界见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+`upstream-context wlr` 的原源码入口已通过 20 次原生生命周期/60 张持帧及递归 roundtrip 检查；私有日志、名称提供者及被动 manager 夹具边界保留。首个私有 Rust Wlr 捕获切片与对应 native 探针已加入；首轮编译失败修正后，20 生命周期/60 组 raw+BGR 与实际转换异常检查已通过原生运行；该批次保留的 Clippy 失败修正后，后续 87 项原生检查全部通过；新增共享 client/安全重连/FD 0 原版探针后，最新 90 项亦通过，新增 80 张原版图已独立复核；Rust FD 0 成功路径补齐后最新 91 项检查通过，新增 20 组图已独立复算，NUL 名称与完整后缀重连随后通过 98 项组件，新增 60 组图像与 40 行资源已独立复核；原路径 component 比较及 841 对照/20 轮连接场景随后通过 100 项原生组件，20 组图像与 40 行资源独立复核，仍不代表完整后端已验收。操作与边界见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-Linux manager 的 Input=None 编排、两分钟 PipeWire 长流及 Wlr 受控转发已有原生证据。配置/API 原源码与 Rust 的 946 个案例及 JSON-to-manager 取帧已通过 93 项 Linux 组件检查，完整官方存档摘要及全部 852 份 UUID/info、4974 个原生输入哈希均已独立校核；严格 proc-task 退出观察控制随后通过 94 项组件，旧 ESRCH 失败仍保留。Windows/macOS 的 get_info 已在主机通过 154 个原函数体对照，原生 macOS 与 Linux-host 编排及下载记录独立校核已通过（52/95 项组件），Windows 首次 manager 步骤因离线输入缺少 oracle 在测试前失败；已改为独立在线准备，修复原生结果待验证。完整 P1 仍未验收，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+Linux manager 的 Input=None 编排、两分钟 PipeWire 长流及 Wlr 受控转发已有原生证据。配置/API 原源码与 Rust 的 946 个案例及 JSON-to-manager 取帧已通过 93 项 Linux 组件检查，完整官方存档摘要及全部 852 份 UUID/info、4974 个原生输入哈希均已独立校核；严格 proc-task 退出观察控制随后通过 94 项组件，旧 ESRCH 失败仍保留。Windows/macOS 的 get_info 已在主机通过 154 个原函数体对照，原生 macOS 与 Linux-host 编排及下载记录独立校核已通过（52/95 项组件），Windows 首次 manager 步骤因离线输入缺少 oracle 在测试前失败；改为独立在线准备后，原生 Windows manager 25 项检查及 154 条元数据输出独立复核通过。后续 Windows 批次因 VS stable 新 build 未就绪在准备阶段停止；每个在线组件入口刷新工具链的 CI 修正待验证。完整 P1 仍未验收，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
 `upstream-context macos` 已实现未改写的 Objective-C++ ScreenCaptureKit 原源码入口，首轮 24 项原生检查通过，60 张窗口图像与预热图已独立复核。窗口路径核验已知内部像素和关闭后持帧，首个 display 路径仅观察布局/所有权；原生资源计数不当作配平断言，Mach port 增长的因果仍待隔离。首个私有 Rust macOS 捕获切片在测试专用 main-thread AppKit host 修正后，40 项原生检查全部通过，60 组 raw/BGR 独立匹配同窗口原版；旧初始化断言/编译失败保留，直接核心构建隔离已通过，组件增至 42 项；私有 manager 的最新 49 项组件（含 Clippy）全部通过，320 组脚本及双方 20 轮真实转发/各 60 张独立留存图已复核；完整后端未验收，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 

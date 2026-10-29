@@ -23,6 +23,9 @@ typedef struct MfsPrintFixture {
 extern "C" {
 #endif
 MFS_PARITY_EXPORT int32_t mfs_print_parity_reference(void* hwnd, MfsParityImage* output);
+// Fixture UI owner only. Change its next draw's palette without drawing or
+// altering capture. Zero preserves the original default scene.
+MFS_PARITY_EXPORT int32_t mfs_print_parity_scene(void* owner, uint32_t alternative);
 // Image owners originate in this module; destination is exclusively borrowed.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_overlay(void* destination, void* source,
     int32_t source_x, int32_t source_y, int32_t destination_x, int32_t destination_y,
