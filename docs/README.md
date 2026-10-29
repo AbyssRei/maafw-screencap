@@ -13,9 +13,9 @@ DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` �
 
 截图 manager 已开始私有迁移，`upstream-parity manager` 对照原源码函数体的 122 个脚本，并通过本机 20 次真实 GDI manager 生命周期。它保留预热/测速、毫秒截断、候选与图像释放及 U 的调用线程 DPI 副作用；完整原生混合方法、包装和 framework 转发仍待验收，不构成公共 SDK。
 
-PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。受控原生批次中，完整原 C++、Rust daemon、Rust supplied-fd、Rust OpenCV 各通过 20 生命周期/60 张关闭后持帧；七格式/28 组有效 POD 与精确转换字节对照也通过 Actions。真实 MemFd helper 的 60 次复制/所有权与六类拒绝，以及原 C++/Rust 同一对象各 40 个 session/120 张持帧也已通过原生对照。测试区分已 join 的内核退出任务与活跃线程，严格保留 fd/任务身份检查；旧即时数量断言和后续编译失败不撤销。实际 Portal 授权、通用 fd 失败/重试、实际 NULL-data 流、DMA-BUF、完整格式/故障及 P1 仍待完成；真实 kernel DMA helper 和独立生产器/回调流检查已加入，首个 helper 编译失败保留，修正后原生编译与负向控制通过，真实 kernel helper 已通过，实际流生产器的 const/API 编译错误已修正、原生复验仍待完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。受控原生批次中，完整原 C++、Rust daemon、Rust supplied-fd、Rust OpenCV 各通过 20 生命周期/60 张关闭后持帧；七格式/28 组有效 POD 与精确转换字节对照也通过 Actions。真实 MemFd helper 的 60 次复制/所有权与六类拒绝，以及原 C++/Rust 同一对象各 40 个 session/120 张持帧也已通过原生对照。测试区分已 join 的内核退出任务与活跃线程，严格保留 fd/任务身份检查；旧即时数量断言和后续编译失败不撤销。实际 Portal 授权、通用 fd 失败/重试、GPU 同步、完整格式/故障及 P1 仍待完成；真实 kernel DMA helper 和独立生产器/回调流检查已加入，首个 helper 编译失败保留，修正后原生编译与负向控制通过，真实 kernel helper 已通过，实际 NULL-data DMA 流已通过原生对照，旧 const/API 编译失败保留，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-新增 `upstream-context wlr` 原源码入口与受控原生递归 roundtrip/像素/持帧检查，尚待原生编译执行；它包含明确的私有日志、名称提供者及被动 manager 夹具边界，不代表 Rust Wlr 后端已迁移。操作与边界见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+`upstream-context wlr` 的原源码入口已通过 20 次原生生命周期/60 张持帧及递归 roundtrip 检查；私有日志、名称提供者及被动 manager 夹具边界保留。首个私有 Rust Wlr 捕获切片与对应 native 探针已加入，仍待原生编译/执行，不代表完整后端已验收。操作与边界见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
 | 文档 | 职责及当前状态 |
 | --- | --- |

@@ -34,5 +34,12 @@ target_link_libraries(mfs_wlr_source_context PRIVATE
 # The wrapper only observes calls made by the compiled source and forwards each
 # one immediately, unchanged, to the actual system libwayland entry point.
 target_link_options(mfs_wlr_source_context PRIVATE "LINKER:--wrap=wl_display_roundtrip")
+# Reuse the self-owned, header-checked conversion acceptance source. It includes
+# OpenCV only and introduces no PipeWire runtime or capture dependency.
+add_library(mfs_wlr_opencv SHARED ../linux-pipewire/conversion-adapter.cpp)
+target_include_directories(mfs_wlr_opencv PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mfs_wlr_opencv PRIVATE Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+target_link_options(mfs_wlr_opencv PRIVATE "LINKER:--exclude-libs,ALL")
+set_target_properties(mfs_wlr_opencv PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "Complete fixed WlrScreencap, WaylandClient, MemfdBuffer, WaylandHelper and original generated C protocol sources compile unchanged. Only the screenshot base is extracted. Private namespace/logging and a kernel-random external UUID name provider replace unrelated framework dependencies. Passive virtual keyboard/pointer managers are required by the original client; no input action runs. A forwarding linker wrapper records actual source roundtrip recursion. Native capture, buffers, C++ owners and OpenCV conversion remain real. This is original source context only, not a Rust backend, original UUID implementation or full Wlr/P1 acceptance.\n")

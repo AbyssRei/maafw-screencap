@@ -13,6 +13,8 @@ const CONSTRAINED_BINDINGS: &[&str] = &[
     "wayland-client",
     "wayland-backend",
     "wayland-protocols-wlr",
+    "wayland-protocols-misc",
+    "wayland-sys",
 ];
 
 fn closure(

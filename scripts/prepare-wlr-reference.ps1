@@ -26,5 +26,10 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_wlr_source_context
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
     Step wlr-reference-linkage ldd @($executable)
+    $adapter=Join-Path $build libmfs_wlr_opencv.so
+    $saved=Join-Path $refInputs libmfs_wlr_opencv.so
+    Copy-Item -LiteralPath $adapter -Destination $saved;Save $saved
+    Step wlr-opencv-linkage ldd @($adapter)
+    $env:MFS_P1_WLR_OPENCV_ADAPTER=$adapter
     return $executable
 }
