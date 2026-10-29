@@ -204,11 +204,19 @@ DMA-BUF 私有迁移已接入回调的单 plane packed 路径。首个原生批�
 
 另已接入独立 CPU 写入的 kernel DMA 生产器和实际流验证入口；首个实际生产器构建的 timespec const/API 错误已修正，新的原生构建/运行尚未验收；生产器编译单独记账，缺少 exporter 不能掩盖其构建结果。普通 RGB 生产器与路由先完整停止，随后在同一私有 daemon 上创建新的 DMA 生产器与精确路由；注册/移除等待只属于夹具就绪，不重试捕获。生产端通过 ALLOC_BUFFERS 提供真实 DMA-BUF fd，完成 WRITE START/copy/END 后才归还，不设置 MAPPABLE；捕获端保留 U 的 MAP_BUFFERS。原源码与 Rust 各要求 20 个流生命周期/60 张已知图像，Rust 还要求真实回调的 60 次 NULL-data owning map、READ START/END/unmap、无 borrowed bypass、queue 与资源配平，关闭后仍保持独立 CPU 图像。原源码输出为 BGR，Rust 该入口保留 RGB；各自按生产序号核对，不声称同一时刻逐帧对照。原源码回调指针没有被单独插桩，GPU 异步完成与 Portal 授权仍未覆盖。
 
-`cargo xtask upstream-context wlr` 是新增的原生 Linux x64 原源码入口，编译和运行结果仍待验证。它直接编译固定的 WlrScreencap、WaylandClient、MemfdBuffer、WaylandHelper 与原有生成 C 协议文件；截图 base 从原声明抽取，日志、私有 namespace 和外部 UUID 名称提供者有明确适配边界。名称提供者用 getrandom 生成 UUID 形状的随机文件名，不验证原 Boost UUID 工具；真实 memfd 创建/截断/映射、Wayland buffer、native 连接和 OpenCV 转换保持原调用。该入口不是 Rust Wlr 实现或完整框架/P1 对照。
+`cargo xtask upstream-context wlr` 是原生 Linux x64 原源码入口，原 C++ 编译和受控运行已验证。它直接编译固定的 WlrScreencap、WaylandClient、MemfdBuffer、WaylandHelper 与原有生成 C 协议文件；截图 base 从原声明抽取，日志、私有 namespace 和外部 UUID 名称提供者有明确适配边界。名称提供者用 getrandom 生成 UUID 形状的随机文件名，不验证原 Boost UUID 工具；真实 memfd 创建/截断/映射、Wayland buffer、native 连接和 OpenCV 转换保持原调用。该入口现也运行下述 Rust 捕获切片，完整框架/P1 对照仍未完成。
 
-自有 compositor 的显式 source-client 模式仅额外注册原客户端强制要求的 virtual-keyboard/virtual-pointer manager；不创建输入设备或执行输入动作。参考进程要求 20 次连接/三次截图/关闭生命周期、60 张完整已知 BGR 图像、fd/任务身份配平及关闭后独立持帧。链接器 wrapper 只记录并立即转发真实 wl_display_roundtrip，要求观察到原 Buffer 回调内的递归 roundtrip；不提前把它改为排队或移到回调外。完整 source 失败/格式/客户提前关闭矩阵及 Rust 递归执行通道仍待实现。独立轻量诊断 artifact 在通用工程归档校验前上传，完整工程包仍为来源/依赖重建依据。
+自有 compositor 的显式 source-client 模式仅额外注册原客户端强制要求的 virtual-keyboard/virtual-pointer manager；不创建输入设备或执行输入动作。参考进程要求 20 次连接/三次截图/关闭生命周期、60 张完整已知 BGR 图像、fd/任务身份配平及关闭后独立持帧。链接器 wrapper 只记录并立即转发真实 wl_display_roundtrip，要求观察到原 Buffer 回调内的递归 roundtrip；不提前把它改为排队或移到回调外。完整 source 失败/格式/客户提前关闭矩阵仍待实现；Rust 递归执行通道的原生验证见下文。独立轻量诊断 artifact 在通用工程归档校验前上传，完整工程包仍为来源/依赖重建依据。
 
-Linux 两个原源码入口共用 [OpenCV 准备函数](../../scripts/prepare-opencv-reference.ps1)：每次重新查询正式发布及 tag，核验源码，保留 core/imgproc、CPU/IPP/HAL 优化和原 codec 发现排除规则。源码/编译器/选项/构建环境构成共同缓存身份；后端上下文仍按批次单独归档。共用准备不引入核心 OpenCV 依赖；新抽取的准备代码仍待原生验证。
+Linux 两个原源码入口共用 [OpenCV 准备函数](../../scripts/prepare-opencv-reference.ps1)：每次重新查询正式发布及 tag，核验源码，保留 core/imgproc、CPU/IPP/HAL 优化和原 codec 发现排除规则。源码/编译器/选项/构建环境构成共同缓存身份；后端上下文仍按批次单独归档。共用准备不引入核心 OpenCV 依赖；共用准备已通过下述原生批次。
+
+后续原生 Linux 批次确认 DMA 实际流通过：PipeWire 组件 76 项检查全部通过，原 C++ 与 Rust 各 20 个流生命周期/60 张关闭后持帧，Rust 记录 60 次 NULL-data owning map、READ START/END/unmap 和缓冲归还。独立复算包括 1080 张 PipeWire 保存图像和 120 份带填充输入；这不证明 GPU 异步完成、Portal 授权或完整 P1。此前权限缺失及生产器 C 编译失败保留。相同批次的 Wlr 原源码组件 82 项检查通过，60 张保存 BGR 也独立复核；真实递归深度为二，roundtrip 总调用数只作观察，不作延迟/CPU 优化结论。
+
+私有 `linux-wlr` 切片已开始真实 Rust 迁移，原生编译与运行仍待验证。它使用维护中的 Wayland 绑定及 ObjectData，按原 advertised version 绑定并保留最后 output、GlobalRemove no-op、被动 manager 前提、每次新 frame、Buffer 内创建/复制、原 roundtrip 点、Flags 忽略和转换后的 frame 销毁。高层 dispatcher 持有非递归锁，故仅在活跃 ObjectData/TLS 回调内通过一个头文件检查的 C 队列 getter，调用原生 roundtrip_queue；不跨递归持有 Rust 可变状态借用或状态锁。这个窄缺口由 build.rs 按实际 TARGET/feature 在验证配置后编入 OUT_DIR，Wlr 未启用或其他 OS 不探测/链接该接口；需要选中 libwayland 的真实 getter，不静默降级。
+
+原源码 Mat 不传 stride，Rust 继续其 packed-step 解释和未处理的反转 flag，并记录实际 native stride。独立 raw CPU 副本在 native lease/映射有效时产生，随后执行真实私有 C++/OpenCV 转换，frame 代理仍存活到转换结束；这增加复制成本，不称作消除工作。BGR 可复用独立 CPU owner。普通 create_buffer 失败继续原等待且不新增错误唤醒；Rust 自身回调 panic 以独立标量故障保存，不保证捕获原生/绑定的 aborting OOM。尺寸/跨度/窄化、超出绑定的协议版本、NUL 路径检查及 RAII 是明确安全适配；原 memfd FD0/失败部分状态、完整原错误/共享 client/early-close、所有格式/padding/flags、外国队列和 native mobility 尚未完成对照。该切片不最终确定 Frame/Session/ABI 或 P3 调度。
+
+源码入口先做独立原 C++ 捕获，再以单独进程运行 Rust 布局控制、20 生命周期/60 张 raw+BGR 和实际转换异常/后续捕获检查；每个进程单独记录 native fd/task 基线。探针覆盖逐次实际 OpenCV 转换时 frame 尚存活、返回后已销毁，空闲 SHM 覆写不改变已持有图像，关闭后的 CPU 持帧及所有原生/Mat owner。它们尚待真实 Linux 执行；Windows 本机的编译/格式/Clippy 只能证明对应宿主路径，不能冒充 Linux 捕获。
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 

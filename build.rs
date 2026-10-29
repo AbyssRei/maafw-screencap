@@ -5,6 +5,9 @@
 mod configuration;
 
 fn main() {
+    println!("cargo::rerun-if-env-changed=CARGO_FEATURE_LINUX_WLR");
+    println!("cargo::rerun-if-changed=build-support/wayland-reentry.c");
+    println!("cargo::rerun-if-changed=build-support/wayland-reentry.h");
     println!("cargo::rerun-if-changed=build-support/p0-configuration.rs");
     println!("cargo::rerun-if-env-changed=MFS_BUILD_CONFIGURATION");
     println!("cargo::rerun-if-env-changed=HOST");
@@ -62,6 +65,12 @@ fn main() {
                 || selected.enabled[1],
             "PipeWire consumer cannot be enabled when the prepared PipeWire family is OFF"
         );
+        assert!(
+            os != "linux"
+                || std::env::var_os("CARGO_FEATURE_LINUX_WLR").is_none()
+                || selected.enabled[2],
+            "Wlr capture cannot be enabled when the prepared Wlr family is OFF"
+        );
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_SCREEN_DC");
@@ -103,6 +112,39 @@ fn main() {
         .expect("write verified features into OUT_DIR");
     }
     println!("cargo::rerun-if-env-changed=TARGET");
+    #[cfg(feature = "linux-wlr")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        let native = pkg_config::Config::new()
+            .probe("wayland-client")
+            .expect("selected Wlr needs native libwayland-client headers and library");
+        let mut header_roots = native.include_paths.clone();
+        // pkg-config may omit a default system include directory from cflags.
+        // Track the actual native declarations as well as our narrow adapter.
+        header_roots.push(
+            pkg_config::get_variable("wayland-client", "includedir")
+                .expect("selected Wayland include directory")
+                .into(),
+        );
+        for header in [
+            "wayland-client-core.h",
+            "wayland-util.h",
+            "wayland-version.h",
+        ] {
+            let path = header_roots
+                .iter()
+                .map(|root| root.join(header))
+                .find(|path| path.is_file())
+                .expect("selected Wayland native header");
+            println!("cargo::rerun-if-changed={}", path.display());
+        }
+        let mut bridge = cc::Build::new();
+        bridge.file("build-support/wayland-reentry.c").std("c11");
+        bridge.flag_if_supported("-Werror=implicit-function-declaration");
+        for include in native.include_paths {
+            bridge.include(include);
+        }
+        bridge.compile("mfs_wayland_reentry");
+    }
     println!("cargo::rerun-if-env-changed=CARGO_CFG_TARGET_OS");
     println!("cargo::rerun-if-changed=build-support/windows-prototype.txt");
     println!("cargo::rerun-if-changed=build-support/windows-com-prototype.txt");

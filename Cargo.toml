@@ -17,6 +17,7 @@ windows-desktop-dup-window = ["windows-desktop-dup"]
 windows-manager = ["windows-gdi", "windows-print-window", "windows-screen-dc", "windows-frame-pool", "windows-desktop-dup-window"]
 # Private consumer plus an unfinished native daemon/SHM migration.
 linux-pipewire = ["dep:pipewire", "dep:rustix"]
+linux-wlr = ["dep:wayland-client", "dep:wayland-backend", "dep:wayland-protocols-wlr", "dep:wayland-protocols-misc", "dep:wayland-sys", "dep:rustix", "rustix/rand", "dep:memmap2", "dep:cc", "dep:pkg-config"]
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows-com = ["prototype-windows", "dep:windows-core", "dep:windows-future"]
 prototype-linux-pipewire = ["dep:pipewire"]
@@ -34,6 +35,8 @@ pipewire = { version = "0.10", optional = true, features = ["v1_2_0"] }
 wayland-client = { version = "0.31", optional = true }
 wayland-backend = { version = "0.3", optional = true, features = ["client_system"] }
 wayland-protocols-wlr = { version = "0.3", optional = true, features = ["client"] }
+wayland-protocols-misc = { version = "0.3", optional = true, features = ["client"] }
+wayland-sys = { version = "0.31", optional = true, features = ["client"] }
 rustix = { version = "1", optional = true, features = ["fs", "event", "mm"] }
 memmap2 = { version = "0.9", optional = true }
 
@@ -54,6 +57,8 @@ objc2-core-graphics = { version = "0.3", optional = true, default-features = fal
 
 [build-dependencies]
 windows-bindgen = { version = "0.100", optional = true }
+cc = { version = "1", optional = true }
+pkg-config = { version = "0.3", optional = true }
 
 [[test]]
 name = "p0-interop"
