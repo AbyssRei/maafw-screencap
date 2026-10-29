@@ -1,13 +1,12 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
-use super::Manager;
+use super::NativeManager;
 use crate::{
     backends::macos::screen_capture_kit::{Capture, Converter, Trace},
     platform::macos::Error,
 };
 use std::sync::Arc;
 
-pub(crate) type NativeManager = Manager<Arc<Capture>>;
 impl NativeManager {
     pub fn connect_native(&mut self) -> Result<bool, Error> {
         // Match __builtin_available(macOS 14.0, *) through the maintained
