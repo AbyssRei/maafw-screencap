@@ -145,6 +145,14 @@ are documented safety adaptations. Same-window original/native Rust probes
 and C++ CPU Mat ownership tests are not full macOS/P1 acceptance or public SDK
 bindings. The shared OpenCV acceptance source remains outside the core tree.
 
+src/backends/macos/manager.rs and manager_native.rs migrate the screenshot-only
+MacOSControlUnitMgr path: connection/owner replacement, result forwarding,
+decimal UUID and inactive semantics. Input=None is an explicit acceptance
+boundary. The private native targets extract six unchanged manager function
+bodies; their original identities, source/license materials and scripted/native
+scope accompany the external batch. Metadata/full manager/API acceptance is
+pending; no public SDK binding or new input functionality is provided.
+
 Microsoft C++/WinRT
 =================
 
