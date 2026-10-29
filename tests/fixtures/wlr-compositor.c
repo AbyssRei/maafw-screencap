@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 #include <wayland-server-core.h>
 #include <wlr/backend/headless.h>
@@ -16,6 +17,8 @@
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_shm.h>
+#include <wlr/types/wlr_virtual_keyboard_v1.h>
+#include <wlr/types/wlr_virtual_pointer_v1.h>
 #include <wlr/util/log.h>
 
 struct fixture {
@@ -60,8 +63,10 @@ static void render(struct wl_listener *listener, void *unused)
     wlr_scene_output_send_frame_done(f->scene_output, &now);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
+    const bool source_client = argc == 2 && strcmp(argv[1], "--source-client") == 0;
+    if (argc != 1 && !source_client) return 1;
     struct fixture f = {0};
     struct wl_event_source *term = NULL, *interrupt = NULL;
     wlr_log_init(WLR_INFO, NULL);
@@ -81,6 +86,11 @@ int main(void)
     if (wlr_compositor_create(f.display, 6, f.renderer) == NULL ||
         wlr_shm_create_with_renderer(f.display, 1, f.renderer) == NULL ||
         wlr_screencopy_manager_v1_create(f.display) == NULL) goto failed;
+    // The fixed original WaylandClient insists on these passive globals even
+    // for screenshots. This explicit P1 mode never creates or handles input
+    // devices, does not connect a host seat, and leaves the P0 mode unchanged.
+    if (source_client && (wlr_virtual_keyboard_manager_v1_create(f.display) == NULL ||
+        wlr_virtual_pointer_manager_v1_create(f.display) == NULL)) goto failed;
     const float blue[4] = {0,0,1,1}, red[4] = {1,0,0,1}, green[4] = {0,1,0,1};
     if (wlr_scene_rect_create(&f.scene->tree, 64, 48, blue) == NULL ||
         wlr_scene_rect_create(&f.scene->tree, 32, 24, red) == NULL) goto failed;
