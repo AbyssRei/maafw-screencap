@@ -385,6 +385,7 @@ fn captures_source_scene_with_recursive_roundtrip_and_retained_outputs() {
         assert_eq!(evidence.fault, 0, "{evidence:?}");
         assert_eq!(evidence.buffer_error, 0, "{evidence:?}");
         assert_eq!(evidence.cleanup, 0, "{evidence:?}");
+        assert_eq!(evidence.source_fd_zero_retained, 0, "{evidence:?}");
         assert_eq!(evidence.data_created, evidence.destroyed, "{evidence:?}");
         assert_eq!(evidence.data_created, evidence.data_dropped, "{evidence:?}");
         assert!(capture.capture_with(Ok::<_, Error>).is_err());
@@ -438,6 +439,7 @@ fn releases_frame_after_native_conversion_exception_and_captures_again() {
     capture.close();
     let e = capture.evidence();
     assert_eq!((e.frames, e.cleanup, e.fault, e.buffer_error), (2, 0, 0, 0));
+    assert_eq!(e.source_fd_zero_retained, 0);
     assert_eq!(e.data_created, e.destroyed);
     assert_eq!(e.data_created, e.data_dropped);
     drop(capture);
@@ -449,5 +451,125 @@ fn releases_frame_after_native_conversion_exception_and_captures_again() {
     assert_eq!(tasks(), before_tasks);
     eprintln!(
         "native Wlr conversion_exception=1 frame_released=1 subsequent_capture=1 native_owners_closed=1 passed"
+    );
+}
+
+#[test]
+#[ignore = "isolated stdin/FD-zero native Wlr residual probe; explicit fixture reclamation"]
+fn retains_original_fd_zero_residual_and_cpu_outputs_until_fixture_reclaim() {
+    let socket = env::var_os("MFS_P0_WLR_SOCKET").unwrap();
+    let artifacts = env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap();
+    let directory = Path::new(&artifacts).join("fd-zero");
+    std::fs::create_dir_all(&directory).unwrap();
+    let original = env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap();
+    let adapter = Adapter::open();
+    warm(&adapter);
+    let baseline = fds();
+    let baseline_tasks = tasks();
+    let mut raw_owners = Vec::new();
+    let mut bgr_owners = Vec::new();
+    raw_owners.try_reserve_exact(20).unwrap();
+    bgr_owners.try_reserve_exact(20).unwrap();
+    for cycle in 0..20 {
+        let mut capture = Capture::connect(Path::new(&socket)).unwrap();
+        // Own the connection and initialize the adapter BEFORE freeing zero.
+        // This exact isolated libtest process has one active native test.
+        // SAFETY: Observe and duplicate this process's live stdin descriptor.
+        let flags = unsafe { libc::fcntl(0, libc::F_GETFD) };
+        assert!(flags >= 0);
+        let saved = unsafe { libc::fcntl(0, libc::F_DUPFD_CLOEXEC, 3) };
+        assert!(saved >= 3);
+        assert_eq!(unsafe { libc::close(0) }, 0);
+        let context = capture.context.clone();
+        let mut pointer = std::ptr::null_mut::<u8>();
+        let mut length = 0;
+        let image = capture
+            .capture_with(|sample| {
+                raw(&sample);
+                {
+                    let state = context.state().unwrap();
+                    let buffer = state.buffer.as_ref().unwrap();
+                    assert_eq!(buffer.file.as_raw_fd(), 0);
+                    pointer = buffer.map.as_ptr().cast_mut();
+                    length = buffer.map.len();
+                }
+                raw_owners.push(sample.clone());
+                adapter.convert(sample, 0)
+            })
+            .unwrap();
+        capture.close();
+        let evidence = capture.evidence();
+        assert_eq!(evidence.source_fd_zero_retained, 1);
+        assert_eq!(
+            (evidence.frames, evidence.cleanup, evidence.fault),
+            (1, 0, 0)
+        );
+        assert_eq!(evidence.buffer_error, 0);
+        assert_eq!(evidence.data_created, evidence.destroyed);
+        assert_eq!(evidence.data_created, evidence.data_dropped);
+        drop(capture);
+        drop(context);
+        assert!(!pointer.is_null());
+        assert_eq!(length, 64 * 48 * 4);
+        assert!(unsafe { libc::fcntl(0, libc::F_GETFD) } >= 0);
+        // SAFETY: The sole source-compatible mapping owner was intentionally
+        // retained by Buffer::drop, after native Ready/conversion and complete
+        // channel/proxy teardown. mincore observes its mapped span first.
+        let page = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        let page = usize::try_from(page).unwrap();
+        assert_ne!(page, 0);
+        let mut resident = vec![0_u8; length.div_ceil(page)];
+        assert_eq!(
+            unsafe { libc::mincore(pointer.cast(), length, resident.as_mut_ptr()) },
+            0
+        );
+        // No further Copy or Rust/native pixel borrow remains; mutate only the
+        // fixture-owned residual and prove that both CPU outputs are isolated.
+        unsafe { std::ptr::write_bytes(pointer, 0, length) };
+        raw(raw_owners.last().unwrap());
+        bgr(image.pixels());
+        // SAFETY: Explicit fixture recovery of the two observed residuals,
+        // exactly once, with no surviving Rust MmapMut/File owner or borrow.
+        assert_eq!(unsafe { libc::munmap(pointer.cast(), length) }, 0);
+        assert_eq!(unsafe { libc::close(0) }, 0);
+        assert_eq!(unsafe { libc::dup2(saved, 0) }, 0);
+        assert_eq!(unsafe { libc::fcntl(0, libc::F_SETFD, flags) }, 0);
+        assert_eq!(unsafe { libc::close(saved) }, 0);
+        let expected =
+            std::fs::read(Path::new(&original).join(format!("cycle-{cycle}-call-0.bgr"))).unwrap();
+        assert_eq!(image.pixels(), expected);
+        std::fs::write(
+            directory.join(format!("cycle-{cycle}.raw")),
+            raw_owners.last().unwrap().pixels(),
+        )
+        .unwrap();
+        std::fs::write(directory.join(format!("cycle-{cycle}.bgr")), image.pixels()).unwrap();
+        bgr_owners.push(image);
+        assert_eq!(fds(), baseline, "after explicit fixture residual reclaim");
+        assert_eq!(tasks(), baseline_tasks);
+        eprintln!(
+            "native Wlr fd_zero cycle={cycle} source_residuals=1 fixture_reclaimed=1 evidence={evidence:?}"
+        );
+    }
+    std::thread::spawn(move || {
+        for sample in raw_owners {
+            raw(&sample);
+        }
+    })
+    .join()
+    .unwrap();
+    for image in &bgr_owners {
+        bgr(image.pixels());
+    }
+    drop(bgr_owners);
+    assert_eq!(adapter.owners(), 0);
+    drop(adapter);
+    assert_eq!(LOADER_ERROR.load(Ordering::Acquire), 0);
+    assert_eq!(fds(), baseline);
+    // Native task identities were checked in every cycle before the separate
+    // joined CPU reader. A joined reader's transient exiting /proc task is not
+    // an active backend resource and is not used to repeat a capture/assertion.
+    eprintln!(
+        "native Rust Wlr fd_zero_cycles=20 captures=20 retained_raw=20 retained_bgr=20 source_descriptor_mapping_retained=20 fixture_reclaimed=20 product_cleanup_success=0 passed"
     );
 }
