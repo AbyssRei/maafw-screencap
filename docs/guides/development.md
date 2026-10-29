@@ -4,6 +4,8 @@
 
 ## 当前仓库与本机命令
 
+Custom 的私有迁移入口为 `upstream-parity custom`，首批正式编排限 Windows x64/VS2026，不要求可见桌面。核心 `custom-capture` feature 只编入通用回调算法，无原生运行依赖；原生验收显式编译固定原 manager 的构造、connect、connected、screencap、inactive 函数体、完整原 callback table 和原 raw setter，并使用真实 MaaUtils ImageBuffer/vtable 与 OpenCV core/imgproc/imgcodecs。局部本机对照已运行 96 个案例/192 次源码与 Rust 截图调用，覆盖缺失 table/回调、0/1/2/255 返回值、三种实际头文件定义的 8-bit 类型、成功空图、失败保留旧输出、raw setter 克隆、修改借用表和 C++ 异常后独立调用；36 个 Mat head 保持到 context/input 销毁后，最终 head/context/adapter scope 配平。独立 `upstream-custom` 逐字节复算全部 192 份输出及原生 ABI/资源记录。首个正式在线批次的 22 项原生检查全部通过，但命令最后因归档验证器漏识别新组件前缀失败，原日志保留。补齐前缀和既有 scope/parent/phase 测试后，`cargo xtask reference verify-run runs/<run-id>/manifest.json` 已只读校核该批次完整输入；它不重新截图、不登记或改写状态，不能把原命令失败变为通过。修正后的完整 CI 入口待验证；完整 manager 虚表/create-destroy ABI、UUID/info/features、encoded/resize/全部类型、其他平台与 P1 尚未验收。OpenCV 5 的类型常量由实际编译头读取，不使用旧主版本的位打包假设。
+
 默认入口仍是 Rust 2024 Hello World binary。内部 library 已实现首个窗口 GDI 迁移与显式局部对照入口，尚无完整 U、公共 SDK 或 binding；独立 workspace xtask 与 P0 原型继续可用。`.github/workflows/p0.yml` 定义三个原生 runner 的工具验证和现有原型；Linux 已验证私有 PipeWire 流；macOS 已验证受控窗口 ScreenCaptureKit 主线程原型。P0 汇总退出审阅结合固定来源/许可范围、职责与用例定义、本机最新工具链原生验证和三平台证据，已确认准备门禁通过；完整 U 对照仍待 P1。单次原型批次的 incomplete 和待办保留该任务的局部/历史范围，不独立表达整个阶段结论。命令从仓库根执行，本机只验证宿主 OS，不以 WSL 代替 Linux 验收。
 
 先更新 nightly，再改写 CARGO_HOME；若已经改写，使用 `rustup update nightly --no-self-update`。随后将可清理缓存及构建输出放入同级 deps：
@@ -55,6 +57,9 @@ cargo xtask upstream-parity desktop-dup
 cargo xtask upstream-parity desktop-dup --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-parity manager
 cargo xtask upstream-parity manager --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-parity custom
+cargo xtask upstream-parity custom --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-custom <external-custom-artifacts> --check-only
 cargo xtask upstream-model pipewire --offline-inputs runs/<prepared-native-run>/manifest.json
 cargo xtask upstream-context pipewire # native Linux x64 original-source context
 cargo xtask upstream-context frame-pool

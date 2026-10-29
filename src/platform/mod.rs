@@ -10,6 +10,7 @@ pub(crate) mod macos;
 #[cfg(all(
     target_os = "windows",
     any(
+        all(test, feature = "prototype-windows"),
         feature = "windows-print-window",
         feature = "windows-screen-dc",
         feature = "windows-frame-pool",
