@@ -156,11 +156,11 @@ Rust 保留连接时先清除旧捕获 owner、再设置调用线程 PMv2 DPI、
 
 `upstream-model pipewire` 是当前 Windows 原生 C++/OpenCV 工具链上的可移植消费端对照，单独标记为 P1/incomplete，不是 Linux 实际捕获。私有 `linux-pipewire` 能力现有消费端算法及首个待原生验证的 daemon/SHM driver 切片。原源码的等待 helper/锁 guard、格式表、connected/inactive/wait_for_frame_locked/screencap 函数体在构建目录提取，仅归一化换行；loop、clock 和格式编号是明确的脚本边界，Mat 所有者及转换使用真实 OpenCV。这不是完整原 Linux 类或 SPA 数值 ABI 的编译验证。
 
-本机 74 个案例、118 次操作已匹配原源码：每次激活并请求新帧、整秒截断与亚秒余量至少等待一秒、伪唤醒、负等待返回后的谓词复查、前三次超时回放与第四次拒绝、空缓存、停用/再激活、锁外转换/异常和 BGR 共享 owner 转移。原生 set_active 返回值按 U 忽略；源码错误回调不主动 signal，消费端也未提前加入 P3 的终止唤醒/绝对等待。额外的时钟/计数溢出检查独立验证，不执行原 C++ 未定义溢出。原生建连、init/deinit、POD、process、SHM/DMA-BUF、缓存写入别名、线程迁移、关闭/注销和 Linux manager 仍待迁移与原生 Actions 验收；已有 Linux 运行结果仍仅来自 P0 原型。
+本机 74 个案例、118 次操作已匹配原源码：每次激活并请求新帧、整秒截断与亚秒余量至少等待一秒、伪唤醒、负等待返回后的谓词复查、前三次超时回放与第四次拒绝、空缓存、停用/再激活、锁外转换/异常和 BGR 共享 owner 转移。原生 set_active 返回值按 U 忽略；源码错误回调不主动 signal，消费端也未提前加入 P3 的终止唤醒/绝对等待。额外的时钟/计数溢出检查独立验证，不执行原 C++ 未定义溢出。原生建连、init/deinit、POD、process、SHM/DMA-BUF、缓存写入别名、线程迁移、关闭/注销和 Linux manager 仍待迁移与原生 Actions 验收；受控 daemon/给定 socket 的 P1 原生证据见下文，完整后端仍未完成。
 
 `upstream-context pipewire` 已接入原生 Linux x64 源码环境诊断，完整原 cpp 与 Rust driver 已在 Actions 编译、链接并取得初批正确像素，生命周期资源断言仍有失败，完整入口未通过。它直接编译固定完整 `PipeWireScreencap.h/.cpp`，仅抽取原 screenshot base 排除输入/ConfigBase/meojson，并明确使用私有 namespace 与日志抑制 overlay。同批解析最新正式 OpenCV 与 DRM 头文件来源，保留 IPP/CPU 优化，记录 LLVM、系统 SDK 包、编译命令、原生链接与离线输入。默认 P0 生产端仍为原七色条；此入口选择独立 `--asymmetric` 二维图样、96 字节行距及初始化填充，不在该图样上执行 P0 的 RGB 条断言。
 
-新的原生 Rust 切片包含 daemon 建连、先启动 loop 再 connect、固定 4096 字节 POD builder、稳定事件/状态地址、真实 loop 锁和返回值保留的相对等待、逐次归还前驱 buffer、只按请求复制最新 SHM、停止线程后注销并释放对象。完整原 cpp 现在不改内容地 include 到测试翻译单元，以调用其 static 格式 helper；另用原 buffer POD 表达式保存三个协商 POD，与 Rust 逐字节比较。独立 Rust 用例要求 20 次生命周期/60 张 raw RGB、inactive、返回计数、fd/线程归零和原样持帧；RawAudit 只保留 RGB，不执行 OpenCV 转换，因此没有宣布原生 BGR 对照通过。另已加入显式 C++/OpenCV 共享验收适配器、私有 C 头与实际 ABI 消费/异常测试，并安排独立 20 次生命周期/60 张 BGR 持帧验证，首次原生结果仍待 CI。实际转换仍位于 native 解锁之后；每周期在转换入口等待真实 process 回调推进一次，额外等待只作解锁诊断，不是源码耗时对照。Mat owner 借用 loader 生命周期、清除 native cache 后仍持有真实 BGR 存储，不添加第二次全帧 CPU 复制；未声明 opaque Mat/loader 可跨线程。只有 Linux 测试使用 libc loader 声明，默认核心仍无 OpenCV 依赖。该切片已在原生 Linux 编译，四项行所有权测试通过；首次 Clippy 因当前 nightly 弃用 fetch_update 失败，现已改为 try_update，保留原内存序和受检计数。driver 取帧结果仍待验证；Portal fd、无既有指针的映射、DMA-BUF、完整格式/故障/共享缓存矩阵仍待迁移。
+新的原生 Rust 切片包含 daemon 建连、先启动 loop 再 connect、固定 4096 字节 POD builder、稳定事件/状态地址、真实 loop 锁和返回值保留的相对等待、逐次归还前驱 buffer、只按请求复制最新 SHM、停止线程后注销并释放对象。完整原 cpp 现在不改内容地 include 到测试翻译单元，以调用其 static 格式 helper；另用原 buffer POD 表达式保存三个协商 POD，与 Rust 逐字节比较。独立 Rust 用例要求 20 次生命周期/60 张 raw RGB、inactive、返回计数、fd/线程归零和原样持帧；RawAudit 只保留 RGB，不执行 OpenCV 转换，因此没有宣布原生 BGR 对照通过。另已加入显式 C++/OpenCV 共享验收适配器、私有 C 头与实际 ABI 消费/异常测试，并安排独立 20 次生命周期/60 张 BGR 持帧验证，受控 RGB 原生结果已通过。实际转换仍位于 native 解锁之后；每周期在转换入口等待真实 process 回调推进一次，额外等待只作解锁诊断，不是源码耗时对照。Mat owner 借用 loader 生命周期、清除 native cache 后仍持有真实 BGR 存储，不添加第二次全帧 CPU 复制；未声明 opaque Mat/loader 可跨线程。只有 Linux 测试使用 libc loader 声明，默认核心仍无 OpenCV 依赖。该切片已在原生 Linux 编译，四项行所有权测试通过；首次 Clippy 因当前 nightly 弃用 fetch_update 失败，现已改为 try_update，保留原内存序和受检计数。受控取帧结果见下文；实际 Portal 授权、无既有指针的映射、DMA-BUF、完整格式/故障/共享缓存矩阵仍待迁移。
 
 CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标行与填充隔离、空指针拒绝、独占存储复用及清除缓存后的跨线程持帧。负 stride、非零 chunk offset、损坏标志和短跨度显式拒绝，未静默提前套用 P3 的 offset 语义。已有持帧者时分配新 CPU owner，保留单次行复制；这是修复原 Mat 缓存可写别名的安全适配，需独立核验原生行为和成本。原生实现保留每构造一次 raw pw_init、析构无 deinit 的 U 策略；测试配平仅发生在完整 native teardown 之后，禁止与高层 binding 的 OnceLock 初始化便利构造函数混用。
 
@@ -172,7 +172,7 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 包含路由监督器的首次原生批次已取得原 C++ 六张正确 BGR、Rust raw 三张正确 RGB；两项分别在第二/第一生命周期关闭后多出一个线程，严格资源断言失败。独立 Rust OpenCV 探针通过 20 生命周期、60 张已知 BGR 的原生关闭后持帧、20 次转换入口回调推进、buffer 归还与 owner 释放检查；私有 ABI/真实异常测试也通过。监督器 23 次 link 创建、绑定、销毁配平，生产端和 daemon 正常退出。这些局部证据不撤销两个资源失败，也不构成完整原源码对照或 P1 验收。新增线程身份、名称、状态和 thread-loop/data-loop join 日志诊断；计数首次不符后才记录延后观察，原失败值固定保留，不以稍后恢复改变结果。诊断尚待新原生批次验证。ready 文件在完整关闭临时文件后原子发布，以免父进程在写入期间归档。
 
-另有独立 `--joined-task-observation` 原生控制进程，不创建捕获对象：完成一万次真实 `std::thread::join`，逐次检查刚 join 的 Linux TID 是否仍被 `/proc/self/task` 枚举，记录前 20 个残留观察及首次观察后的状态。该控制仅报告实际观察次数，不预设必须出现或不出现；它不能替代 capture 的注销/join/资源断言，也不能撤销失败。新控制尚待原生验证。
+另有独立 `--joined-task-observation` 原生控制进程，不创建捕获对象：完成一万次真实 `std::thread::join`，逐次检查刚 join 的 Linux TID 是否仍被 `/proc/self/task` 枚举，记录前 20 个残留观察及首次观察后的状态。该控制仅报告实际观察次数，不预设必须出现或不出现；它不能替代 capture 的注销/join/资源断言，也不能撤销失败。该控制已在原生 Actions 观察到 join 后短暂可枚举的 TID。
 
 另在独立未运行的 main-loop 上显式拦截所选 fd 的 `add_io`，观察真实 `pw_context_connect_fd` 后期 ENOMEM、一次拦截和完整 teardown 前后的 fd 状态；其余原生方法和 data 不变，退出前恢复方法表。这仅为测试隔离进程的错误边界探针，尚待原生编译/执行，不是产品连接替代实现，也不证明多线程宿主中按 socket cookie 清理或所有失败分支安全。
 
@@ -180,9 +180,11 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 后续线程诊断确认：原 C++ 的多余 TID 在读取其详细信息时已消失；Rust OpenCV 的 MaaScreencap 任务带 PF_EXITING、vsize/RSS 为零、fd 表为空，1ms 观察即消失。该批 raw Rust 的 20 生命周期/60 张 RGB 及关闭后持帧检查通过；原 C++ 和 OpenCV 的即时 proc 数量断言仍保留为失败。后期 add_io 探针已实测返回 ENOMEM、恰好一次拦截，fd 在完整 teardown 后仍打开。早期和后期观察都不等于一般 fd 所有权契约已完成。
 
-据此修正测试的 proc 退出时点前提，待新原生验证：关闭前记录活跃 MaaScreencap 的 TID/starttime；原生 stop/join、对象销毁及严格 fd 检查之后，仅允许同身份任务已经消失或带 PF_EXITING 且无地址空间/RSS 时进入最长 100ms 的内核任务移除观察。原 baseline TID 必须全部保留，最终集合须完全恢复；未知任务、TID 替换、仍有用户态地址空间、fd 不符或逾期均失败。测试没有等待仍活跃的 callback 完成；旧批次的即时数量断言不改判，捕获实现、等待和销毁顺序保持原样。
+据此修正测试的 proc 退出时点前提，已在受控原生批次通过：关闭前记录活跃 MaaScreencap 的 TID/starttime；原生 stop/join、对象销毁及严格 fd 检查之后，仅允许同身份任务已经消失或带 PF_EXITING 且无地址空间/RSS 时进入最长 100ms 的内核任务移除观察。原 baseline TID 必须全部保留，最终集合须完全恢复；未知任务、TID 替换、仍有用户态地址空间、fd 不符或逾期均失败。C++/Rust 均实际观察到约 1.1–1.3ms 的内核任务移除。测试没有等待仍活跃的 callback 完成；旧批次的即时数量断言不改判，捕获实现、等待和销毁顺序保持原样。
 
-私有 Rust driver 新增 supplied-fd 建连切片，待原生验证：与 daemon 方式共用原顺序的 loop/context/core/listener/stream 建立，只在非空 core 后将原 fd 数值置为 -1，close 不恢复它，后续 init 沿用原源码的 daemon 选择。该入口是显式 unsafe 的 U 适配，要求调用方保证独占 socket、移交前解除原 owning handle、完成原生清理后才处理失败残留；没有推导空 core 的一般所有权，也没有添加泛用 fd 清理或重试。独立进程用例要求 20 次私有 socket、60 张 RGB、归还/持帧及已消费 fd 在原生关闭后为 EBADF；它验证 fd 传输成功路径，实际 Portal 授权、通用失败/重试和安全宿主接口仍未完成。
+私有 Rust driver 的 supplied-fd 建连切片已通过受控成功路径验证：与 daemon 方式共用原顺序的 loop/context/core/listener/stream 建立，只在非空 core 后将原 fd 数值置为 -1，close 不恢复它，后续 init 沿用原源码的 daemon 选择。该入口是显式 unsafe 的 U 适配，要求调用方保证独占 socket、移交前解除原 owning handle、完成原生清理后才处理失败残留；没有推导空 core 的一般所有权，也没有添加泛用 fd 清理或重试。独立进程用例通过 20 次私有 socket、60 张 RGB、归还/持帧及已消费 fd 在原生关闭后为 EBADF；它验证 fd 传输成功路径，重新初始化、实际 Portal 授权、通用失败/重试和安全宿主接口仍未完成。
+
+同一最新受控 RGB 批次中，完整原 C++、Rust daemon、Rust supplied-fd、Rust OpenCV 各通过 20 生命周期、60 张关闭后持帧，原图独立校验共 240 张；路由 80 次创建、绑定、销毁配平且自有进程正常退出。真实七格式/28 个有效 POD 和转换字节、私有 ABI/异常测试继续通过。源码与 Rust 分别采集生产端的不同序号，按各自序号核对已知图样，未声称同一时刻采样或源码延迟对照。owned mapping、DMA-BUF、完整流格式/故障/缓存矩阵、mobility、Linux manager 与其他平台完整迁移仍未完成；这些局部通过不放行整个 P1。
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
