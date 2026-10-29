@@ -267,7 +267,9 @@ Windows/macOS 的同一个私有截图 manager 已补 get_info，保持 Input=No
 
 新增 `cargo xtask upstream-metadata <win32|macos> <外部目录> [--check-only]` 校核实际 v1 cases.tsv/source-stdout.txt/rust-stdout.txt 与完整矩阵，拒绝重复字段、额外字段、改变整数宽度/词法、错行与缺失输入；保存或复核 metadata-validation.json 及原文件哈希。源与 Rust JSON 行字节精确相同，记录文件允许平台 CRLF/LF。源码模型、许可、生成字段/函数体及所有输出均在参考区；核心不增加 meojson/serde_json/OpenCV 依赖。显式 Windows manager 对照已加入两个查询测试和独立校核，在线每批查询并构建最新 meojson；显式离线对照使用该批哈希验证过的 oracle exe/声明作为参考输入，不代替产品离线源码构建。Linux PipeWire 与 macOS 源码入口也编排对应 portable/native-host 元数据查询；原生 macOS 52 项和 Linux PipeWire 95 项组件均已通过，并独立运行下载记录的 --check-only 校核；Windows 首次 manager 步骤复用了不含 oracle 的 DesktopDup 离线输入，在 16 项准备检查后失败，尚未执行查询/截图对照。CI 现为 manager 单独在线准备并解析 meojson；显式离线 manager 要求完整且唯一的 exe、四份声明/函数体及 prepared 身份，缺少时在原生构建前拒绝，不静默联网。修复原生结果待验证，旧失败保留。
 
-Wlr 原生名称现保留原 filesystem::path::c_str 边界：NUL 后字节仍属于 client 重连身份和 manager UUID，但 C 接口只读取首个 NUL 前的名称；空名称和首字节 NUL 仍传非空指针，不改用默认来源。新增原源码/Rust 独立进程各 20 生命周期、60 张关闭后持帧与精确资源检查，并由 Rust JSON 解码 NUL 后实际连接 manager。上述新增场景尚待原生执行；完整路径 component 相等性和后端/P1 仍未验收。
+Wlr 原生名称现保留原 filesystem::path::c_str 边界：NUL 后字节仍属于 client 重连身份和 manager UUID，但 C 接口只读取首个 NUL 前的名称；空名称和首字节 NUL 仍传非空指针，不改用默认来源。新增原源码/Rust 独立进程各 20 生命周期、60 张关闭后持帧与精确资源检查，并由 Rust JSON 解码 NUL 后实际连接 manager。该 NUL 场景已通过 98 项原生组件，全部 60 组 raw/Rust BGR/原版图像及 40 行资源已独立复核。另新增无分配的原路径 component 比较，保留 dot、末尾分隔符及完整字节；841 个实际 C++ 路径比较和 20 轮真实重连/拒绝/取帧已接入，尚待原生执行。通用路径与完整后端/P1 仍未验收。
+
+Custom 上游回调的补充源码审阅已纳入外部 catalog：共 101 个源码条目的身份、精确行和路由引用通过校验。实际 raw C setter 位于 source/Common/MaaBuffer.cpp，包装 packed Mat 后调用真实 ImageBuffer::set 克隆；manager 成功返回共享该 Mat 的所有者，false 保留原输出、true+empty 则替换为空。真实 ImageBuffer 虚表还引用 imgcodecs；其原生链接、调用及 Rust 迁移仍待完成，源码审阅不作回调捕获验收。
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
