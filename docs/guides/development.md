@@ -190,6 +190,8 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 显式 MemFd helper 入口编译固定原 `ScopedBufferMap`，生成 20 个真实 memfd、60 组 padded/maxsize-zero/无 chunk 的 RGB/BGR 参考，检查原生只读/private VMA、unmap、fd 保留与覆盖/关闭后的持帧。Rust 对照 native `spa_data` 布局、60 次复制映射及 60 次单独权限观察映射，复制入口返回后要求 VMA 消失，关闭 fd 后保留 60 张 RGB/BGR；另检查负/过宽 fd、非零 mapoffset、短文件、空跨度和真实 mmap 权限失败。额外 60 次观察映射仅属于测试；不声称与源码映射次数或耗时相同，也不将手动 SPA 描述符当作真实 PipeWire callback/queue 验收。映射与 unmap 错误分别保留，未用后者覆盖首次复制错误。
 
+首个 owned MemFd 原生批次在 Linux 测试编译时因 rustix 权限错误常量拼写失败，尚未运行上述 helper 或任一取帧 probe；失败日志与诊断归档保留。常量已修正，本机格式及 Clippy 只验证 Windows 条件编译范围，Linux 编译/运行结果仍待独立新批次验证。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。
