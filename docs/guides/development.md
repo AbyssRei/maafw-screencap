@@ -42,7 +42,15 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
-可选外层 Windows 截图委托现有私有 Rust 状态迁移及 `cargo xtask upstream-delegate win32 <外部记录目录> [--check-only]`，由 `upstream-parity manager` 显式编排。它仅覆盖固定 `GamepadControlUnitMgr` 的截图初始化/转发/停用、完整 `Win32ControlUnitLoader` 与 MaaUtils `LibraryHolder` 源函数体，不实现手柄或输入操作。真实原接口声明、Boost function/shared owner/mutex 与 OpenCV Mat 在 C++ 模型中消费；DLL/日志/路径和底层截图结果是明确脚本边界。274 个案例、548 个阶段（含 8 个可选方式未选择阶段）已在本机匹配，覆盖可选条件、64 位选择器、两个输入选择器 None、加载/符号/构造/连接失败及异常、直接输出修改、空图、停用和关闭后持帧；实际双侧记录另校验像素、owner/event 配平与失效视图未调用。真实 DLL 加载、底层捕获工厂、跨委托共享加载故障与完整框架接入仍待迁移/验收，不构成完整委托或 P1 通过。显式离线 manager 输入现在须包含该次独立 oracle 及来源记录，缺失或重复时提前拒绝。
+可选外层 Windows 截图委托现有私有 Rust 状态迁移及 `cargo xtask upstream-delegate win32 <外部记录目录> [--check-only]`，由 `upstream-parity manager` 显式编排。它仅覆盖固定 `GamepadControlUnitMgr` 的截图初始化/转发/停用、完整 `Win32ControlUnitLoader` 与 MaaUtils `LibraryHolder` 源函数体，不实现手柄或输入操作。真实原接口声明、Boost function/shared owner/mutex 与 OpenCV Mat 在 C++ 模型中消费；该模型的 DLL/日志/路径和底层截图结果仍是明确脚本边界。274 个案例、548 个阶段（含 8 个可选方式未选择阶段）已在本机匹配，覆盖可选条件、64 位选择器、两个输入选择器 None、加载/符号/构造/连接失败及异常、直接输出修改、空图、停用和关闭后持帧；实际双侧记录另校验像素、owner/event 配平与失效视图未调用。
+
+另已实现独立的真实 DLL 消费切片，由 `cargo xtask upstream-delegate win32-native <外部记录目录> [--check-only]` 复算实际记录。私有平台 loader 按实际 Boost Windows 顺序尝试固定名 `.dll`、`lib` 前缀及无扩展名，使用原生 flags=0，不修改进程搜索路径。标准 Arc/Weak 在同一缓存互斥锁下共享模块，最终 FreeLibrary 完成后才允许新加载；unit 先销毁，模块后释放。模块可跨线程引用不表示 unit、回调或 COM 对象可以迁移；本切片仍限定调用线程。当前路径域为显式绝对运行目录，仅规范分隔符；完整 C++ filesystem 别名/大小写/组件比较并未验收。
+
+本机实际通过 80 轮双委托共享加载生命周期和 160 张模块/窗口关闭后持帧。三个文件名路径另分别由使用真实 Boost DLL、原 LibraryHolder、loader 和外层函数体的独立 executable 取帧；GDI-only 源 DLL 编译原 manager 函数体和未改写 GDI，输入 None、其他工厂拒绝及日志/目录注入为夹具边界。另一真实 DLL 使用原 Win32ControlUnitAPI 虚表作为验收 facade，实际回调 40 个 Rust manager/GDI 对象，见证 120 次原转换点、线程和完整析构。另验证缺失模块/两个导出、共享模块时不同目录拒绝、真实 C++ create/connect 异常及返回 false/异常后的输出修改；实际 165 份像素和 1093 条原生事件由 xtask 独立校核，仍不代表六工厂、通用共享加载失败或完整 framework/P1 验收。
+
+原 DLL 静态链接 OpenCV 时，返回 Mat 的 allocator/vtable 可属于该 DLL；验收桥接在持有模块期间复制到独立 CPU 存储，并先销毁 DLL Mat。源 provider 增加一次边界复制；Rust facade 先复制借用图像到 provider Mat，再复制到桥接，增加两次边界复制，不将这些工作计为消除。图像仅保留桥接模块，原 provider 可完整卸载。C++ 异常在窄桥接内转成状态；编译使用 [/EHs](https://learn.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model)，避免 /EHc 将原 extern-C 工厂假定为不会抛异常。原生销毁消费不明时固定错误槽报告失败并保留模块；实现还必须断开所有 host/回调借用，仅保留模块不足以保证借用有效。此故障及分配耗尽仍待原生验证，不声称清理成功。
+
+`upstream-parity manager` 现编排独立的真实 DLL 测试、非零测试守卫、像素/模块/owner 记录校核和失败归档；该新增 CI 路径尚待原生 Actions 验证。显式离线 manager 输入须完整包含 19 份独立模型/原生 oracle、工具链与来源记录，缺失或重复时提前拒绝。上述本机原生构建明确重放已归档的 OpenCV/Boost/MaaUtils/VS/SDK 输入，Rust 依赖另按在线批次更新；不以此重放声称新一轮原生依赖在线验收。
 
 原源码重连先替换 loader；加载/创建早期失败时，旧的 no-op shared view 可能仍存在，而它不保活实际 unit。模型观察该状态，跳过对已销毁对象的虚调用；Rust 保留对应部分状态和原释放顺序，但显式拒绝失效视图。该安全适配依据 [C++ 对象寿命规则](https://eel.is/c++draft/basic.life)与 [Rust 原始指针访问条件](https://doc.rust-lang.org/std/ptr/index.html#safety)，不是把未定义调用当作成功对照。新 loader 构造失败仍保留旧 owner，新 view 构造失败仍保留已创建的新 loader；这两项为 Rust 控制，原生分配耗尽/完整控制块故障仍待验证。调用方线程约束单独保留，不声明原生对象可跨线程。
 

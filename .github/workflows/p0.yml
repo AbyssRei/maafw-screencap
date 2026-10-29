@@ -250,12 +250,14 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.h
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-scope.txt
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-native-*.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/*.bgr
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/geometry.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/manager-metadata/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/custom-capture/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate-native/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/alpha-sequence/**
           if-no-files-found: warn
       - name: Archive engineering evidence

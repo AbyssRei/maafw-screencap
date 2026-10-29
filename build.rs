@@ -119,6 +119,26 @@ fn main() {
         .expect("write verified features into OUT_DIR");
     }
     println!("cargo::rerun-if-env-changed=TARGET");
+    #[cfg(feature = "windows-manager")]
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        println!("cargo::rerun-if-changed=build-support/windows-delegate.txt");
+        let input = std::fs::read_to_string("build-support/windows-delegate.txt").unwrap();
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap())
+            .join("windows_delegate.rs");
+        let mut args = vec![
+            "--out",
+            out.to_str().unwrap(),
+            "--flat",
+            "--sys",
+            "--filter",
+        ];
+        args.extend(
+            input
+                .lines()
+                .filter(|line| !line.is_empty() && !line.starts_with('#')),
+        );
+        windows_bindgen::bindgen(args);
+    }
     #[cfg(feature = "linux-wlr")]
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
         let native = pkg_config::Config::new()

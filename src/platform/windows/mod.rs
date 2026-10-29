@@ -1,5 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
+#[cfg(feature = "windows-manager")]
+pub(crate) mod delegate;
 #[cfg(feature = "windows-desktop-dup")]
 pub(crate) mod desktop_dup;
 #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
