@@ -64,6 +64,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             Get-Content -LiteralPath $log -Tail 50 | ForEach-Object { Write-Host $_ }
             throw "$Name exited with $code; see $log"
         }
+        if($Name -eq 'custom-native-parity'){Assert-CustomNativeLog (Get-Content -LiteralPath $log -Raw)}
+        if($Name -eq 'custom-core-runtime-tree'){Assert-CustomRuntimeTree (Get-Content -LiteralPath $log -Raw)}
         if ($Name -eq 'rust-pipewire-consumer-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;') {
             throw 'Expected four portable consumer tests; the external source oracle remains explicitly ignored on this Linux entry'
         }
@@ -423,6 +425,9 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
         New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
+        . (Join-Path $PSScriptRoot prepare-custom-unix-reference.ps1)
+        try { Test-CustomUnixReference $UpstreamRoot $referenceArtifacts }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';pattern='asymmetric RGB bars with row/column/channel/producer-serial xor; RGB(0,0) holds 24-bit serial';scope='Fixture serial/retention observed; original API capture time and replay status are not exposed. Repeated markers are diagnostic, not rejected.'})
         $podDirectory=Join-Path $referenceArtifacts negotiation
         $rustArtifacts=Join-Path $RunRoot linux-x64/rust-shm/artifacts

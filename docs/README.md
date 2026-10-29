@@ -6,9 +6,9 @@
 
 Wlr 新接入独立的 IPC/SHM 协议夹具与实际记录校核，覆盖 v1/v2/v3、六格式及行填充/YInvert；本机工具测试通过，原生 Actions 尚待执行。它补充格式与原版缺陷对照，不能代替真实 compositor/完整后端验收；范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-FramePool 新增透明度/内容原生诊断及实际记录校核；维护版本机 10 次 FramePool、10 次独立 PrintWindow 内容见证与完整字节检查通过。另一次独立调试器观察确认旧图命中原缓存 clone 分支，但该次新建会话另有无帧失败，整次实验仍失败。alpha=0 的黑图/旧场景结果仅作诊断，原包装彩色图样失败继续失败；新诊断的 Actions 验证仍待完成。入口及范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+FramePool 新增透明度/内容原生诊断及实际记录校核；维护版本机 10 次 FramePool、10 次独立 PrintWindow 内容见证与完整字节检查通过。另一次独立调试器观察确认旧图命中原缓存 clone 分支，但该次新建会话另有无帧失败，整次实验仍失败。alpha=0 的黑图/旧场景结果仅作诊断，原包装彩色图样失败继续失败；新诊断已通过 Actions 取样和下载后 20 份实际图像校核，四项 alpha=0 均为黑图；原 FramePool 组件仍保留四项包装彩色图样失败。入口及范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-Custom 的私有回调切片和真实 ImageBuffer/raw setter 原生对照已加入；本机局部 96 个案例、192 次源码/Rust 调用及独立输出记录复算通过。正式在线批次的 22 项原生检查通过，但归档器漏识别新组件前缀使命令失败；修复后的只读记录校核通过，完整 CI 入口待验证。完整 Custom/所有平台及 P1 未验收；默认核心无 OpenCV 依赖。当前入口与范围见[开发指南](guides/development.md#当前仓库与本机命令)。
+Custom 的私有回调切片和真实 ImageBuffer/raw setter 原生对照已加入；本机局部 96 个案例、192 次源码/Rust 调用及独立输出记录复算通过。正式在线批次的 22 项原生检查通过，但归档器漏识别新组件前缀使命令失败；修复后的只读记录校核通过，随后 876cfbb Actions 的 18 项离线原生检查及下载后 192 份实际输出复算也通过。完整 Custom/所有平台及 P1 未验收；默认核心无 OpenCV 依赖。当前入口与范围见[开发指南](guides/development.md#当前仓库与本机命令)。
 
 P1 另已加入独立 ScreenDC 内部实现和默认路径的 ForegroundUtils/HwndUtils 迁移，正式入口为 `cargo xtask upstream-parity screen-dc`。原头文件脚本、真实资源故障及本机局部像素/清理检查已有证据；亮屏且自有测试窗口置顶的新批次通过 20 轮严格源码/Rust 对照。此前黑图/灰图、夹具资源和记录目录失败均保留；相同受控场景随后通过两个精确提交的原生 Actions；遮挡、移动、实际显示深度与完整后端/阶段验收仍未完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
