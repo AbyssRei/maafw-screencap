@@ -119,6 +119,13 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Save $saved
     Step pipewire-opencv-adapter-linkage ldd @($adapter)
     $env:MFS_P1_PIPEWIRE_OPENCV_ADAPTER=$adapter
+    $fault=Join-Path $refBuild libmfs_pipewire_fd_fault.so
+    if($fault -match '[:\s]'){throw 'The explicit FD fault fixture path cannot be encoded in LD_PRELOAD'}
+    $saved=Join-Path $refInputs libmfs_pipewire_fd_fault.so
+    Copy-Item -LiteralPath $fault -Destination $saved
+    Save $saved
+    Step pipewire-fd-fault-linkage ldd @($fault)
+    $env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY=$fault
     # libdrm's resolved source has no root COPYING. Preserve its actual project
     # license declaration/full notice plus all canonical header notices. The
     # complete source tar above remains an independent reconstructable input.
