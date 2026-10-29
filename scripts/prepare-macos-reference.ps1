@@ -1,6 +1,6 @@
 # Copyright (C) 2026 AbyssRei
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Explicit original-source acceptance only, dot-sourced after formal Xcode
+# Explicit original-source/Rust acceptance, dot-sourced after formal Xcode
 # selection. Step/Artifact/Json and evidence ownership belong to the caller.
 function Prepare-MacosReference([string]$FixedUpstream) {
     $refInputs=Join-Path $inputRoot source-reference
@@ -34,7 +34,7 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $opencv=Prepare-OpenCvReference $refInputs ([ordered]@{
         backend='macos-original-screen-capture-kit';target='aarch64-apple-darwin'
         developer_dir=$env:DEVELOPER_DIR;sdkroot=$env:SDKROOT
-        scope='Unchanged fixed Objective-C++ source; original callback/5s wait; no Rust backend or full P1 acceptance.'
+        scope='Unchanged fixed Objective-C++ source plus private initial Rust migration; original callback/5s wait; full P1 acceptance remains incomplete.'
     })
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
     Step macos-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/macos-screencap),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0',"-DCMAKE_OSX_SYSROOT:PATH=$($env:SDKROOT)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DCMAKE_OBJCXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream")
@@ -53,5 +53,66 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_macos_source_context
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
     Step macos-reference-linkage otool @('-L',$executable)
+    $adapter=Join-Path $build libmfs_macos_opencv.dylib
+    $saved=Join-Path $refInputs libmfs_macos_opencv.dylib
+    Copy-Item -LiteralPath $adapter -Destination $saved;Save $saved
+    Step macos-opencv-linkage otool @('-L',$adapter)
+    $env:MFS_P1_MACOS_OPENCV_ADAPTER=$adapter
     return $executable
+}
+
+function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[string]$Artifacts) {
+    $directory=Join-Path $Artifacts $Name
+    $scene=Join-Path $directory scene
+    New-Item -ItemType Directory -Path $directory,$scene|Out-Null
+    $server=$null;$serverOut=$null;$serverError=$null
+    try {
+        $info=[Diagnostics.ProcessStartInfo]::new($Executable)
+        $info.ArgumentList.Add('scene');$info.ArgumentList.Add($scene)
+        $info.UseShellExecute=$false;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+        $server=[Diagnostics.Process]::Start($info)
+        $serverOut=$server.StandardOutput.ReadToEndAsync();$serverError=$server.StandardError.ReadToEndAsync()
+        $ready=Join-Path $scene ready.json
+        $until=[DateTime]::UtcNow.AddSeconds(20)
+        while(-not(Test-Path -LiteralPath $ready)){
+            if($server.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Owned AppKit scene did not publish a ready identity'}
+            Start-Sleep -Milliseconds 25
+        }
+        $identity=Get-Content -LiteralPath $ready -Raw|ConvertFrom-Json
+        if($identity.owner_pid -ne $server.Id -or $identity.width -ne 47 -or $identity.height -ne 31 -or $identity.colour -ne 'green' -or $identity.window_id -le 0){throw 'Unexpected owned native scene identity'}
+        $env:MFS_P1_MACOS_WINDOW_ID=[string]$identity.window_id
+        $env:MFS_P1_MACOS_SCENE_STOP=Join-Path $scene stop
+        $env:MFS_P1_MACOS_SCENE_STOPPED=Join-Path $scene stopped.txt
+        $env:MFS_P1_MACOS_RUST_ARTIFACTS=$directory
+        Step "$Name-original-oracle" $Executable @('external-window',$directory,[string]$identity.window_id)
+        $env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr
+        Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-screen-capture-kit',$Test,'--','--exact','--ignored','--test-threads=1','--nocapture')
+    }catch{
+        $log=Join-Path $logsRoot "$Name-probe-error.log"
+        $_.Exception.ToString()|Set-Content -LiteralPath $log
+        $classification=if(($server -and $server.HasExited -and $server.ExitCode -eq 77) -or ($checks.Count -gt 0 -and $checks[$checks.Count-1].status -eq 'missing_environment')){'missing_environment'}else{'failed'}
+        $checks.Add([ordered]@{name="$Name-probe";status=$classification;log=(Artifact $log)})
+        throw
+    }finally{
+        if($server){
+            $log=Join-Path $logsRoot "$Name-scene-stop.log";$status='failed'
+            "owned_pid=$($server.Id)"|Set-Content -LiteralPath $log
+            try {
+                $unexpected=$server.HasExited -and -not(Test-Path -LiteralPath (Join-Path $scene stop))
+                if(-not $server.HasExited){[IO.File]::WriteAllText((Join-Path $scene stop),'stop')}
+                $forced=-not $server.WaitForExit(10000)
+                if($forced){$server.Kill();$server.WaitForExit()}
+                $stdout=$serverOut.GetAwaiter().GetResult();$stderr=$serverError.GetAwaiter().GetResult()
+                $stdout|Set-Content (Join-Path $logsRoot "$Name-scene-stdout.log")
+                $stderr|Set-Content (Join-Path $logsRoot "$Name-scene-stderr.log")
+                Save (Join-Path $logsRoot "$Name-scene-stdout.log");Save (Join-Path $logsRoot "$Name-scene-stderr.log")
+                "owned_pid=$($server.Id)`nexit=$($server.ExitCode)`nunexpected=$unexpected`nforced=$forced"|Set-Content $log
+                if(-not $unexpected -and -not $forced -and $server.ExitCode -eq 0 -and $stdout -match 'owned macOS scene stop=1 main_thread=1 passed'){$status='passed'}
+                elseif($server.ExitCode -eq 77){$status='missing_environment'}
+            }finally{
+                $checks.Add([ordered]@{name="$Name-scene-stop";status=$status;log=(Artifact $log)})
+                $server.Dispose()
+            }
+        }
+    }
 }

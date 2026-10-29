@@ -5,6 +5,8 @@
     any(feature = "linux-pipewire", feature = "linux-wlr")
 ))]
 pub(crate) mod linux;
+#[cfg(all(target_os = "macos", feature = "macos-screen-capture-kit"))]
+pub(crate) mod macos;
 #[cfg(all(
     target_os = "windows",
     any(
