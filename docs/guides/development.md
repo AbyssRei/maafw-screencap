@@ -245,6 +245,10 @@ Linux manager 首轮原生 Wlr 批次的原版 20 轮/60 张图及资源检查�
 
 PipeWire manager 首轮批次保留 81 项通过和 5 项失败：新的常量 chunks_exact Clippy 门禁、两个 Rust 预热在真实取帧前因 maxsize 写成行宽 6 而非完整 12 字节触发 ShortSpan，以及两个原版夹具浅拷贝/复用 caller Mat 后的持帧变化。现修正预热大小和固定数组分块，并把原版输出 owner 移入 held，与 Rust take() 的调用前提一致；新增真实 OpenCV 控制要求浅 alias 被下一次 cvtColor 改写，而 move 后的 owner 保持像素。此控制已在本机 Windows 编译运行通过，Linux 和 manager 实际修正仍待原生验证。旧记录不撤销；所有既有 1080 张流/映射图和 120 个带 padding 输入在该失败批次仍独立核验正确，不把它们当新增 manager 通过。
 
+修正后原生 Linux manager 批次的 PipeWire 85 项、Wlr 96 项组件检查均通过。新增 PipeWire 540 张图、180 组同样本 RGB/BGR 与 80 行资源记录，以及 Wlr 60 组 raw/BGR/原版图、40 行资源记录均已独立复核；Wlr 的 60 个原图事前哈希未改变。此结论只覆盖受控 Input=None 转发与记录中的重连/停用/所有权前提，完整配置、metadata/API 与 P1 仍未验收，旧失败保留。
+
+按计划 §14.2，新增独立原版/Rust PipeWire manager 长流入口，各先完成三次预热，再持续至少 120 秒；逐帧保存完整 RGB/BGR payload 和调用耗时/producer marker，每秒记录 fd、线程数与 RSS，并保存关闭前后的精确 task IDs。只保留最早三帧和最后一帧的 CPU owner，关闭后复验，Rust 同时核对原 Consumer 的 replay 决定和 native copy/buffer 计数；原版未公开的 replay/缓冲计数明确为未知，不把 marker 变化伪装成 native 新鲜度。实际 v1 记录格式与逐字节验证在独立 xtask 中实现：`cargo xtask upstream-trace pipewire <source|rust> <外部长流目录> [--check-only]`；默认只创建新的 trace-validation.json，`--check-only` 复算并核对已有报告而不写入，报告含 p50/p95/p99 调用延迟及资源范围。长流入口已接入 upstream-context pipewire，原生编译/运行尚待新的 Actions；这是自有 CPU RGB 源的门禁，不证明 GPU 完成、一般内存增长上界或性能达标。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。

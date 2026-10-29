@@ -174,6 +174,18 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected the real OpenCV shallow-alias/moved-owner premise control'
             }
         }
+        if($Name -in @('original-pipewire-sustained','rust-pipewire-sustained')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'PipeWire sustained warmup=3 steady_ns=(\d+) calls=(\d+) retained=4 errors=0 resources_balanced=1 passed' -or
+                [uint64]$Matches[1] -lt 120000000000 -or [uint64]$Matches[2] -lt 4) {
+                throw 'Expected at least 120 steady seconds and bounded retained native images'
+            }
+            $rust=$Name -eq 'rust-pipewire-sustained'
+            if($rust -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Expected one actual native sustained Rust test' }
+            $traceDirectory=Join-Path ($rust ? $bgrArtifacts : $referenceArtifacts) sustained
+            & $ConfigureTool upstream-trace pipewire ($rust ? 'rust' : 'source') $traceDirectory >> $log 2>&1
+            if($LASTEXITCODE -ne 0) { throw 'Sustained trace/pixel/resource validation failed; see native log' }
+        }
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
         }
@@ -552,6 +564,10 @@ try {
             try { Step ('rust-pipewire-manager-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire',('backends::linux::pipewire::native::tests::opencv::manager_capture::'+$probe[2]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
         }
+        try { Step original-pipewire-sustained timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--sustained-manager',$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts sustained)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-sustained timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::sustained::sustains_native_manager_for_two_minutes_with_bounded_retained_owners','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step original-pipewire-source-reinit timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--reinit',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts reinit)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-supplied-fd-reinit timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::reinit::reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images','--','--exact','--ignored','--test-threads=1','--nocapture') }

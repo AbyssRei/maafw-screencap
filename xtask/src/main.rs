@@ -9,6 +9,7 @@ mod macos;
 mod native;
 mod native_tools;
 mod pipewire;
+mod pipewire_trace;
 mod quality;
 mod records;
 mod reference;
@@ -57,6 +58,9 @@ fn run() -> Result<()> {
     }
     if argv.first().is_some_and(|arg| arg == "upstream-model") {
         return native::run_model(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "upstream-trace") {
+        return pipewire_trace::run(&argv[1..]);
     }
     if argv.first().is_some_and(|arg| arg == "pipewire-prototype") {
         return pipewire::run(&argv[1..]);
@@ -119,6 +123,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\
                       cargo xtask upstream-context macos  # original ScreenCaptureKit on native macOS arm64\n\n\
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
+                      cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\
                       cargo xtask wlr-prototype       # native Linux x64 only\n\n\
