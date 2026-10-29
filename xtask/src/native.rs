@@ -34,9 +34,12 @@ pub fn run_context(args: &[String]) -> Result<()> {
     if args.first().map(String::as_str) == Some("wlr") {
         return crate::wlr::run_reference(&args[1..]);
     }
+    if args.first().map(String::as_str) == Some("macos") {
+        return crate::macos::run_reference(&args[1..]);
+    }
     if args.first().map(String::as_str) != Some("frame-pool") {
         return Err(
-            "expected upstream-context frame-pool [--offline-inputs <native run manifest>] or upstream-context <pipewire|wlr> (native Linux x64)".into(),
+            "expected upstream-context frame-pool [--offline-inputs <native run manifest>], upstream-context <pipewire|wlr> (native Linux x64), or upstream-context macos (native macOS arm64)".into(),
         );
     }
     let mut native_args = vec!["--desktop".to_owned()];

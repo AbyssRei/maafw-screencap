@@ -17,6 +17,8 @@ PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 
 
 `upstream-context wlr` 的原源码入口已通过 20 次原生生命周期/60 张持帧及递归 roundtrip 检查；私有日志、名称提供者及被动 manager 夹具边界保留。首个私有 Rust Wlr 捕获切片与对应 native 探针已加入；首轮原生编译失败已修正，运行与复验仍待完成，不代表完整后端已验收。操作与边界见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
+`upstream-context macos` 已实现未改写的 Objective-C++ ScreenCaptureKit 原源码入口，尚待原生验证。窗口路径核验已知内部像素和关闭后持帧，首个 display 路径仅观察布局/所有权；原生资源计数不当作配平断言。它不代表 Rust macOS 后端已迁移，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+
 | 文档 | 职责及当前状态 |
 | --- | --- |
 | [实施计划](plans/maafw-screencap-extraction-plan.md) | 项目范围、U/P/E 顺序、依赖政策、参考资料布局、后端要求、验收与发布门禁；计划已确认，实施待完成 |
