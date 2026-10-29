@@ -13,6 +13,9 @@ use std::{
 };
 #[path = "delegate_native_host_tests.rs"]
 mod host;
+#[cfg(feature = "prototype-windows-com")]
+#[path = "delegate_runtime_tests.rs"]
+mod runtime;
 #[derive(Default)]
 #[repr(C)]
 struct Span {

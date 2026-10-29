@@ -45,6 +45,7 @@ foreach(_target mfs_delegate_bridge mfs_delegate_source mfs_delegate_missing_cre
 endforeach()
 # This overlay contains ONLY a logger. Actual Boost DLL/LibraryHolder are used.
 add_executable(mfs_delegate_native_source native/source.cpp)
+add_executable(mfs_delegate_runtime_source native/runtime-source.cpp)
 target_include_directories(mfs_delegate_native_source PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/native"
     "${CMAKE_CURRENT_SOURCE_DIR}/native/overlay" "${CMAKE_CURRENT_BINARY_DIR}"
     "${MFS_UPSTREAM_ROOT}/include" "${MFS_MAAUTILS_ROOT}/include"
@@ -52,7 +53,12 @@ target_include_directories(mfs_delegate_native_source PRIVATE "${CMAKE_CURRENT_S
 target_compile_definitions(mfs_delegate_native_source PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN BOOST_ALL_NO_LIB)
 target_compile_options(mfs_delegate_native_source PRIVATE /utf-8 /EHs)
 target_link_libraries(mfs_delegate_native_source PRIVATE mfs_delegate_bridge Boost::dll Boost::function ${OpenCV_LIBS})
+foreach(_property INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS LINK_LIBRARIES)
+    get_target_property(_value mfs_delegate_native_source ${_property})
+    set_property(TARGET mfs_delegate_runtime_source PROPERTY ${_property} "${_value}")
+endforeach()
+target_link_libraries(mfs_delegate_runtime_source PRIVATE WindowsApp RuntimeObject CoreMessaging User32)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/native-scope.txt"
-    "Actual flags=0 Windows DLL loads, original LibraryHolder/Boost DLL and loader/outer capture bodies. Real original interface ABI. Source provider wraps extracted manager bodies and now compiles all six unedited original screenshot methods/helper; input=None shim and logger/path injection remain. Existing actual capture matrix exercises only GDI; compiling other backends does not prove native creation or capture. Rust provider is an acceptance-only C++ ABI facade calling the actual private Rust manager/factory via synchronous borrowed host callbacks, forwarding null HWND and all selector masks without constructor validation. It copies Rust output to provider Mat; bridge then copies provider pixels once into independent CPU bytes. These two boundary copies are extra work, not eliminated work. Full six-method runtime/framework integration and P1 remain pending.\n")
+    "Actual flags=0 Windows DLL loads, original LibraryHolder/Boost DLL and loader/outer capture bodies. Real original interface ABI. Source provider compiles all six fixed original screenshot methods/helper and manager bodies; input=None shim and logger/path injection remain. The original paired-owner matrix exercises GDI. A separate explicit runtime executable/test consumes each method and mask63 on independent owned UI-thread windows, MTA/current-thread dispatchers, 20 lifecycles and60 retained CPU images per side. DesktopDup retains full monitor scope and checks its owned-window ROI; DesktopDupWindow stays window-only. Rust provider remains an acceptance-only C++ ABI facade over the actual private Rust manager/factory. Rust output crosses two explicit boundary safety copies; the independent source process clones once into executable-owned storage. Full host/format/fault/pseudo-minimize/resource/framework matrices and P1 remain pending.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/native-scope.txt"
     "MaaWin32ControlUnitCreate/Destroy compile the complete fixed original source bodies without rewriting statements. The concrete Win32ControlUnitMgr name denotes the explicitly scoped capture-only source/Rust manager facade with original Win32ControlUnitAPI inheritance; constructor instrumentation and input=None boundary remain explicit. Real std::make_unique/release, pointer forwarding, null-safe virtual delete and exception unwinding are consumed, not handwritten factory algorithm substitutes.\n")
