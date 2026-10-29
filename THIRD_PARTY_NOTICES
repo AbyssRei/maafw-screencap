@@ -176,6 +176,13 @@ asset-specific distribution notice inventory, which is verified in P5.
 meojson
 --------
 
+The explicit manager-metadata model additionally compiles the fixed Windows
+and macOS manager get_info bodies with their copied metadata member declarations
+and real MaaDef/meojson types. Input=None is an explicit query boundary; native
+manager constructors, virtual ABI and capture are excluded. The same private
+Rust managers now produce the corresponding field/selector views using std,
+without a JSON library or reference material in default product dependencies.
+
 Repository: https://github.com/MistEO/meojson
 The explicit Linux configuration source oracle uses the latest formal meojson
 headers, archived with their original source and licence per batch. The private

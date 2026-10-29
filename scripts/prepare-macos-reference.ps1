@@ -37,8 +37,12 @@ function Prepare-MacosReference([string]$FixedUpstream) {
         scope='Unchanged fixed Objective-C++ source plus private initial Rust migration; original callback/5s wait; full P1 acceptance remains incomplete.'
     })
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
-    Step macos-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/macos-screencap),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0',"-DCMAKE_OSX_SYSROOT:PATH=$($env:SDKROOT)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DCMAKE_OBJCXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream")
+    . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
+    $meojson=Prepare-MeoJsonReference $refInputs
+    Step macos-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/macos-screencap),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0',"-DCMAKE_OSX_SYSROOT:PATH=$($env:SDKROOT)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DCMAKE_OBJCXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)")
     Step macos-reference-build cmake @('--build',$build,'--parallel','4')
+    . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
+    Save-ManagerMetadataReference (Join-Path $build metadata) $refInputs (Join-Path $RunRoot macos-arm64/reference-u/artifacts/manager-metadata)
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('macos-manager-source.inc','macos-manager-source.inc'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $build $item[0]) -Destination $saved;Save $saved

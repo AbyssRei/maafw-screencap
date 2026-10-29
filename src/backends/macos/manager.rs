@@ -43,6 +43,15 @@ impl<B> Manager<B> {
     pub const fn connected(&self) -> bool {
         self.connected
     }
+    pub fn get_info(&self) -> Result<String, TryReserveError> {
+        let mut value = String::new();
+        value.try_reserve_exact(192)?;
+        // Preserve the source's uint64 -> int64 metadata conversion as a bit
+        // interpretation; selectors remain u64 for actual method selection.
+        let method = i64::from_ne_bytes(self.method.to_ne_bytes());
+        write!(&mut value,"{{\"input_method\":0,\"screencap_method\":{method},\"type\":\"macos\",\"window_id\":{}}}",self.window_id).expect("String formatting cannot fail");
+        Ok(value)
+    }
     pub fn request_uuid(&self, output: &mut String) -> Result<bool, TryReserveError> {
         let mut value = String::new();
         value.try_reserve_exact(10)?; // u32 decimal is at most ten bytes.
@@ -80,6 +89,15 @@ pub(crate) type NativeManager = Manager<std::sync::Arc<super::screen_capture_kit
 mod tests {
     use super::*;
     use std::{cell::Cell, rc::Rc};
+    #[test]
+    #[ignore = "requires explicitly built original get_info model with current meojson"]
+    fn metadata_matches_original_signed_selectors_and_window_identity() {
+        crate::backends::manager_metadata::compare("macos", |id, method| {
+            Manager::<()>::new(u32::try_from(id).unwrap(), method)
+                .get_info()
+                .unwrap()
+        });
+    }
 
     #[test]
     fn none_and_unknown_methods_connect_without_a_capture_or_output_change() {
