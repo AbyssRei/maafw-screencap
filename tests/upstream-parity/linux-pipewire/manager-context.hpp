@@ -4,6 +4,26 @@
 // Product calls use the exact extracted manager bodies and real PipeWire source.
 void manager_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool supplied_fd) {
     std::filesystem::create_directories(artifacts);
+    // Independent real OpenCV control for the first failed fixture's shallow
+    // retained header. cvtColor may reuse the caller's writable output storage,
+    // even when another Mat header references it. Moving the output owner into
+    // held matches the Rust output.take() premise without a new capture/copy.
+    {
+        cv::Mat first(2,2,CV_8UC3,cv::Scalar(1,2,3)),second(2,2,CV_8UC3,cv::Scalar(4,5,6)),output;
+        cv::cvtColor(first,output,cv::COLOR_RGB2BGR);
+        cv::Mat shallow=output;
+        const auto* address=output.data;
+        require(shallow.at<cv::Vec3b>(0,0)==cv::Vec3b(3,2,1),"OpenCV control initial pixel mismatch");
+        cv::cvtColor(second,output,cv::COLOR_RGB2BGR);
+        require(output.data==address && shallow.data==address && shallow.at<cv::Vec3b>(0,0)==cv::Vec3b(6,5,4),
+            "OpenCV control did not reproduce shallow output mutation");
+        cv::Mat retained=std::move(output);
+        require(output.empty(),"OpenCV move did not detach the caller output");
+        cv::cvtColor(first,output,cv::COLOR_RGB2BGR);
+        require(output.data!=retained.data && retained.at<cv::Vec3b>(0,0)==cv::Vec3b(6,5,4),
+            "OpenCV moved output did not retain independent pixels");
+        std::cout<<"manager Mat control shallow_output_reuse_mutates_alias=1 moved_owner_preserved=1 passed\n";
+    }
     cv::Mat warm(HEIGHT,WIDTH,CV_8UC3,cv::Scalar(1,2,3)),converted;
     cv::cvtColor(warm,converted,cv::COLOR_RGB2BGR);
     const size_t base_fds=count_entries("/proc/self/fd");
@@ -40,7 +60,7 @@ void manager_context(const char* socket,uint32_t node,const std::filesystem::pat
                     require(manager.screencap(output),"original PipeWire manager forwarding failed");
                     save(output,artifacts/("manager-"+std::to_string(cycle)+"-session-"+std::to_string(session)+"-call-"+std::to_string(call)+".bgr"));
                     const auto serial=known_pixels(output);
-                    held.push_back({output,serial});
+                    held.push_back({std::move(output),serial});
                     for(const auto& image:held) {require(known_pixels(image.image)==image.marker,"manager changed held source pixels");}
                 }
             }
