@@ -128,7 +128,7 @@ impl Layout {
 /// All bytes are initialized target pixels, in source row/channel order.
 /// Cloning retains CPU storage only, without prolonging native buffer leases.
 #[derive(Clone, Debug)]
-pub(super) struct RawFrame {
+pub(in crate::backends::linux) struct RawFrame {
     pub width: u32,
     pub height: u32,
     pub format: Format,

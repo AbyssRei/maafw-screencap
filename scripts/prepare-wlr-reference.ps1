@@ -13,6 +13,10 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
     Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)")
     Step wlr-reference-build cmake @('--build',$build,'--parallel','4')
+    $saved=Join-Path $refInputs linux-manager-source.inc
+    Copy-Item -LiteralPath (Join-Path $build linux-manager-source.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-config.inc
+    Copy-Item -LiteralPath (Join-Path $build linux-manager-config.inc) -Destination $saved;Save $saved
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $build $item[0]) -Destination $saved;Save $saved
