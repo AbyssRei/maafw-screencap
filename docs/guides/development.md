@@ -198,7 +198,7 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 该批次的独立 joined-task 观察在第 542 轮因诊断 I/O 失败中止，不能记作整批通过：PF_EXITING 线程的 status 文件打开后无内容，`output << input.rdbuf()` 在零字节提取时设置输出 failbit。原始部分文件与失败日志保留；其余取帧/资源检查和两侧新 fd 用例均通过，840 张保存图像与 60 份带填充输入也已独立复算。诊断代码现按固定块显式 read/write，分别记录 open/read/close errno 和读取字节数，真实输出失败仍使检查失败。后续 Linux 批次的 65 项检查全部通过，包括空/正常/缺失文件、实际 `/dev/full` ENOSPC 和 10,000 次 join 观察；其 840 张图像也再次独立复算。没有调整捕获、等待、任务身份判断、资源计数或其通过条件。
 
-DMA-BUF 私有迁移已接入回调的单 plane packed 路径，但尚待原生编译/验证。新 owner 保持无指针分支的 `PROT_READ`/`MAP_SHARED`、零偏移和 stride×height 映射长度，记录一次 READ START；仅在 START 成功后执行 READ END，再 unmap，之后才返回 buffer。已有指针按 U 跳过映射/同步；START 失败仍按源码保留指针并继续复制，错误独立保存，不把这种 U 结果称为 SDK 一致性保证。P3 的失败拒绝与 EINTR/EAGAIN 重试没有提前引入。额外 fstat 可读跨度检查增加一次系统调用；非零 owned mapoffset、多 plane 和未知布局明确拒绝，完整 modifier/格式/故障矩阵仍未完成。
+DMA-BUF 私有迁移已接入回调的单 plane packed 路径。首个原生批次在 C++ kernel fixture 编译时触发 int 到 Linux u64 字段的列表初始化窄化错误，未运行 DMA 或源码捕获；现改为字段赋值，修正后的原生编译/验证仍待完成。新 owner 保持无指针分支的 `PROT_READ`/`MAP_SHARED`、零偏移和 stride×height 映射长度，记录一次 READ START；仅在 START 成功后执行 READ END，再 unmap，之后才返回 buffer。已有指针按 U 跳过映射/同步；START 失败仍按源码保留指针并继续复制，错误独立保存，不把这种 U 结果称为 SDK 一致性保证。P3 的失败拒绝与 EINTR/EAGAIN 重试没有提前引入。额外 fstat 可读跨度检查增加一次系统调用；非零 owned mapoffset、多 plane 和未知布局明确拒绝，完整 modifier/格式/故障矩阵仍未完成。
 
 原 helper 与 Rust 的 ENOTTY 控制使用明确无效的普通 MemFd，仅验证 START 失败／已有指针选择，不计为 DMA 成功。正向 helper 必须由 `/dev/udmabuf` 或 `/dev/dma_heap/system` 实际导出 DMA-BUF：每侧 20 个 fd/60 次复制，生产端 WRITE START/END，原 READ helper、Rust READ/SHARED/END/unmap、关闭后 RGB/BGR 持帧和 C ioctl ABI分别检查。Rust 额外 60 次权限观察映射独立计量。该夹具不证明实际 PipeWire DMA 回调或 GPU 完成同步。仅在 `RUNNER_ENVIRONMENT=github-hosted` 的临时 Actions Linux VM 上尝试加载已安装 udmabuf 模块并设置新测试设备 owner；不下载驱动，不对本地/自托管主机自动提权。两种 exporter 都不可用时返回 77，报告 `missing_environment`，保留其他独立结果且整批不通过。
 
