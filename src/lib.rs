@@ -3,6 +3,24 @@
 //! Capture implementation under migration. No public SDK API is defined yet.
 #![deny(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(
+    all(
+        test,
+        target_os = "macos",
+        feature = "macos-screen-capture-kit",
+        feature = "prototype-macos"
+    ),
+    feature(test, custom_test_frameworks)
+)]
+#![cfg_attr(
+    all(
+        test,
+        target_os = "macos",
+        feature = "macos-screen-capture-kit",
+        feature = "prototype-macos"
+    ),
+    test_runner(crate::macos_libtest_host::run)
+)]
+#![cfg_attr(
     any(
         test,
         all(target_os = "linux", feature = "linux-pipewire"),
@@ -32,6 +50,26 @@
 mod backends;
 #[allow(dead_code)]
 mod platform;
+
+// Explicit acceptance host only. The original source fixture initializes AppKit
+// on the process main thread and pumps it while synchronous capture callers run.
+// Keep this outside the capture implementation and retain standard libtest's
+// exact filtering, ignored handling, reporting and failure exit status.
+#[cfg(all(
+    test,
+    target_os = "macos",
+    feature = "macos-screen-capture-kit",
+    feature = "prototype-macos"
+))]
+extern crate test;
+#[cfg(all(
+    test,
+    target_os = "macos",
+    feature = "macos-screen-capture-kit",
+    feature = "prototype-macos"
+))]
+#[path = "../tests/upstream-parity/macos-screencap/libtest-host.rs"]
+mod macos_libtest_host;
 
 #[cfg(all(
     test,

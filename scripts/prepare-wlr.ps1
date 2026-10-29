@@ -46,6 +46,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
             throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
         }
+        $sourceSummary=switch($Name){
+            'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
+            'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
+            'original-wlr-fd-zero' {'original MemfdBuffer fd_zero=1 available=1 destructor_fd_retained=1 destructor_mapping_retained=1 fixture_reclaimed=1 product_cleanup_success=0 passed'}
+            default {$null}
+        }
+        if($sourceSummary -and -not (Get-Content -LiteralPath $log -Raw).Contains($sourceSummary)){
+            throw 'Expected the complete original shared-client/reconnect/FD-zero context summary'
+        }
         if($Name -eq 'rust-wlr-migration-capture'){
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native Rust Wlr cycles=20 captures=60 retained_raw=60 retained_bgr=60 frame_conversion_lifetimes=60 overwritten_maps=60 resources_balanced=1 passed' -or
@@ -272,6 +281,12 @@ try{
     if($SourceReference){
         try { Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
+        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('fd-zero','fd-zero'))){
+            $probeArtifacts=Join-Path $referenceArtifacts $probe[0]
+            New-Item -ItemType Directory -Path $probeArtifacts|Out-Null
+            try { Step ('original-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$probeArtifacts,$library,$probe[1]) }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+        }
         $env:MFS_P1_WLR_SOURCE_ARTIFACTS=$referenceArtifacts
         $env:MFS_P1_WLR_RUST_ARTIFACTS=Join-Path $referenceArtifacts rust
         New-Item -ItemType Directory -Path $env:MFS_P1_WLR_RUST_ARTIFACTS -Force|Out-Null
