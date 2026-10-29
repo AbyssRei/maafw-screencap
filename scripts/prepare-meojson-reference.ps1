@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Explicit acceptance dependency only; no capture runtime/build.rs dependency.
 # Caller owns Step/Save/Json/DepsRoot and an already-new external input folder.
-function Prepare-MeoJsonReference([string]$Inputs) {
-    $releasePath=Join-Path $Inputs meojson-latest-release.json
+function Prepare-MeoJsonReference([string]$InputDirectory) {
+    $releasePath=Join-Path $InputDirectory meojson-latest-release.json
     # Query once: the archived response is also the actual resolution input.
     & gh api repos/MistEO/meojson/releases/latest | Set-Content -LiteralPath $releasePath -Encoding utf8
     if($LASTEXITCODE -ne 0){throw 'Cannot record current formal meojson release'}
@@ -12,7 +12,7 @@ function Prepare-MeoJsonReference([string]$Inputs) {
     if($release.draft -or $release.prerelease -or $release.tag_name -notmatch '^v\d+\.\d+\.\d+$'){
         throw 'Unrecognized formal meojson release'
     }
-    $tagPath=Join-Path $Inputs meojson-tag.json
+    $tagPath=Join-Path $InputDirectory meojson-tag.json
     & gh api ('repos/MistEO/meojson/git/ref/tags/'+$release.tag_name) | Set-Content -LiteralPath $tagPath -Encoding utf8
     if($LASTEXITCODE -ne 0){throw 'Cannot resolve formal meojson tag'}
     Save $tagPath
@@ -20,7 +20,7 @@ function Prepare-MeoJsonReference([string]$Inputs) {
     $depth=0
     while($object.type -eq 'tag') {
         if($depth -ge 8){throw 'Too many annotated meojson tag indirections'}
-        $tagObject=Join-Path $Inputs "meojson-tag-object-$depth.json"
+        $tagObject=Join-Path $InputDirectory "meojson-tag-object-$depth.json"
         & gh api ('repos/MistEO/meojson/git/tags/'+$object.sha)|Set-Content -LiteralPath $tagObject -Encoding utf8
         if($LASTEXITCODE -ne 0){throw 'Cannot resolve annotated meojson tag'}
         Save $tagObject
@@ -36,10 +36,10 @@ function Prepare-MeoJsonReference([string]$Inputs) {
     if($LASTEXITCODE -ne 0 -or $actual -ne $object.sha){throw 'meojson cache differs from the current formal tag'}
     $dirty=& git -C $source status --porcelain --untracked-files=all
     if($LASTEXITCODE -ne 0 -or $dirty){throw 'meojson source cache was modified'}
-    $archive=Join-Path $Inputs meojson-source.tar
+    $archive=Join-Path $InputDirectory meojson-source.tar
     Step meojson-source-archive git @('-C',$source,'archive','--format=tar','--output',$archive,$actual)
     Save $archive
-    $license=Join-Path $Inputs meojson-LICENSE
+    $license=Join-Path $InputDirectory meojson-LICENSE
     Copy-Item -LiteralPath (Join-Path $source LICENSE) -Destination $license;Save $license
     $prefix=Join-Path $DepsRoot ('native-includes/meojson-'+$actual)
     $headers=Join-Path $prefix meojson
@@ -55,7 +55,7 @@ function Prepare-MeoJsonReference([string]$Inputs) {
         [ordered]@{path=$relative.Replace('\','/');sha256=$hash}
     })
     if(@(Get-ChildItem -LiteralPath $headers -File -Recurse).Count -ne $identities.Count){throw 'Unexpected meojson prepared headers'}
-    $identity=Join-Path $Inputs meojson-prepared.json
+    $identity=Join-Path $InputDirectory meojson-prepared.json
     Json $identity ([ordered]@{version=$release.tag_name;commit=$actual;headers=$identities;scope='MIT header-only configuration/API reference oracle dependency, outside capture runtime and default product assets.'});Save $identity
     return [ordered]@{Include=$prefix;Version=$release.tag_name;Commit=$actual}
 }
@@ -63,20 +63,22 @@ function Prepare-MeoJsonReference([string]$Inputs) {
 # The owning native batch builds the explicit target alongside its source
 # reference. Preserve exact copied declarations/extracted bodies and every case,
 # including partial records on a failed observation; never rerun a failed case.
-function Observe-LinuxConfigReference([string]$Build,[string]$Inputs) {
+function Observe-LinuxConfigReference([string]$Build,[string]$InputDirectory) {
     $managerBuild=Join-Path $Build linux-manager
     $executable=Join-Path $managerBuild mfs_linux_config_model
-    $saved=Join-Path $Inputs mfs_linux_config_model
+    $saved=Join-Path $InputDirectory mfs_linux_config_model
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
     Step linux-config-model-linkage ldd @($executable)
-    $declarations=Join-Path $Inputs config-oracle-sources
+    $declarations=Join-Path $InputDirectory config-oracle-sources
     New-Item -ItemType Directory -Path $declarations|Out-Null
     foreach($relative in @('linux-config-api.inc','linux-config-manager.inc','config-overlay/Base/Config.h','config-overlay/Base/UnitBase.h','config-overlay/Manager/LinuxControlUnitMgr.h')){
         $destination=Join-Path $declarations $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force|Out-Null
         Copy-Item -LiteralPath (Join-Path $managerBuild $relative) -Destination $destination;Save $destination
     }
-    $observations=Join-Path $Inputs configuration-observations
+    $observations=Join-Path $InputDirectory configuration-observations
     try { Step linux-config-source-corpus $ConfigureTool @('upstream-config','linux',$executable,$observations) }
     finally { if(Test-Path -LiteralPath $observations){Get-ChildItem -LiteralPath $observations -Recurse -File|ForEach-Object{Save $_.FullName}} }
+    $env:MFS_P1_LINUX_CONFIG_OBSERVATIONS=$observations
+    $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS=Join-Path $InputDirectory configuration-rust
 }

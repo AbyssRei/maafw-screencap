@@ -172,3 +172,36 @@ original FramePoolScreencap.{h,cpp} in an isolated executable. It observes calle
 COM/runtime state and source pixels; it is not a Rust FramePool migration.
 They are excluded from default product builds. This file is not the completed
 asset-specific distribution notice inventory, which is verified in P5.
+
+meojson
+--------
+
+Repository: https://github.com/MistEO/meojson
+The explicit Linux configuration source oracle uses the latest formal meojson
+headers, archived with their original source and licence per batch. The private
+Rust manager_config reader adapts its observed byte/string, number, duplicate
+key and document-boundary semantics, without a C++ or meojson runtime dependency.
+The observed parser trait and dependency identity are verified by the explicit
+reference target. These legacy semantics are not a new SDK JSON contract.
+
+MIT License
+
+Copyright (c) 2020 MistEO
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
