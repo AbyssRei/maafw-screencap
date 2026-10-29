@@ -438,6 +438,9 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
     assert_eq!(fds(), baseline_fds);
     assert_eq!(tasks(), baseline_tasks);
     held.push(output.take().unwrap());
+    // Even an empty Option<Image> has drop glue tied to the adapter borrow.
+    // End this output slot before explicitly unloading the owning module.
+    drop(output);
     std::thread::spawn(move || {
         for sample in converter.held {
             raw(&sample);

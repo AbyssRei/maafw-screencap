@@ -241,6 +241,8 @@ Linux manager 已接入同一私有 Wlr/PipeWire 实现的原生工厂，新增 
 
 PipeWire manager 的实际流探针已加入 upstream-context pipewire：原版精确 manager 函数体分别连接真实 PipeWire 源，Rust 通过同一 native factory/Consumer 在原转换点使用 C++/OpenCV。daemon 模式要求 20 个 manager、40 次重建后端和 120 张图；supplied-fd 模式要求 20 个独占 socket、60 张图，且不复用已被消费的配置 fd。Rust 同时留存 raw RGB 与对应 BGR 并逐字节检查通道顺序；双方按生产序号独立核验像素，不把不同取样时刻的图强行逐字匹配。原版与 Rust 的全局 pw_init 均只在 manager/native 销毁后由夹具配平；真实截图、不依赖 connected 的转发、inactive 和默认等待保持原实现。新增编译/资源/图像结果仍待原生 Actions，未接受完整 manager/P1。
 
+Linux manager 首轮原生 Wlr 批次的原版 20 轮/60 张图及资源检查通过，留存像素已独立复算；Rust 测试因显式卸载 adapter 时仍有已取空 Option<Image> 的析构借用而报 E0505，九项相关 Rust 入口未执行。夹具现显式释放该输出槽后再卸载，保留所有 Mat owner 归零断言；修正后的原生编译/取帧仍待验证，旧失败不撤销。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。
