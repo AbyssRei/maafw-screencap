@@ -6,6 +6,30 @@ use std::{fs, path::Path};
 #[path = "../../tests/upstream-parity/manager-metadata/cases.rs"]
 mod cases;
 
+const NATIVE_ORACLE_INPUTS: [&str; 6] = [
+    "mfs_manager_metadata_model.exe",
+    "win32-info-source.inc",
+    "win32-info-members.inc",
+    "macos-info-source.inc",
+    "macos-info-members.inc",
+    "meojson-prepared.json",
+];
+
+/// An explicit offline manager replay needs the complete oracle prepared by a
+/// manager batch. A GDI/DesktopDup batch is not interchangeable. Fail before
+/// expensive native preparation; do not fetch missing inputs in offline mode.
+pub(crate) fn require_native_oracle(inputs: &[records::Artifact]) -> Result<()> {
+    for name in NATIVE_ORACLE_INPUTS {
+        let suffix = format!("/inputs/{name}");
+        if inputs.iter().filter(|a| a.path.ends_with(&suffix)).count() != 1 {
+            return Err(format!(
+                "offline manager snapshot requires exactly one {name}; run upstream-parity manager online first or select a complete manager snapshot"
+            ).into());
+        }
+    }
+    Ok(())
+}
+
 pub fn run(args: &[String]) -> Result<()> {
     let (kind, path, check_only) = match args {
         [kind, path] => (kind, path, false),
@@ -96,6 +120,36 @@ fn validate(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn refuses_incomplete_or_ambiguous_offline_oracles_before_native_preparation() {
+        let complete: Vec<_> = NATIVE_ORACLE_INPUTS
+            .iter()
+            .map(|name| records::Artifact {
+                path: format!("runs/manager/inputs/{name}"),
+                sha256: "0".repeat(64),
+            })
+            .collect();
+        assert!(require_native_oracle(&complete).is_ok());
+        assert!(require_native_oracle(&[]).is_err());
+        for index in 0..complete.len() {
+            let mut missing = complete.clone();
+            missing.remove(index);
+            assert!(require_native_oracle(&missing).is_err());
+        }
+        let mut duplicate = complete.clone();
+        duplicate.push(records::Artifact {
+            path: format!("runs/other/inputs/{}", NATIVE_ORACLE_INPUTS[0]),
+            sha256: "1".repeat(64),
+        });
+        assert!(require_native_oracle(&duplicate).is_err());
+        let mut wrong_scope = complete.clone();
+        wrong_scope[0].path = format!(
+            "runs/manager/inputs/product-source/{}",
+            NATIVE_ORACLE_INPUTS[0]
+        );
+        assert!(require_native_oracle(&wrong_scope).is_err());
+    }
+
     #[test]
     fn rejects_changed_widths_duplicate_keys_and_wrong_row_inputs() {
         let matrix = [(u64::MAX, u64::MAX)];

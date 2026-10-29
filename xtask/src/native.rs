@@ -122,6 +122,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         .transpose()?;
     let parent = if let Some(input) = &offline {
         let prepared: batch::Run = records::read(&records::verify(&root, input)?)?;
+        if manager_parity {
+            crate::manager_metadata::require_native_oracle(&prepared.inputs)?;
+        }
         prepared
             .inputs
             .iter()
