@@ -16,6 +16,21 @@ src/backends/windows/print_window.rs is a Rust migration of:
   source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.h
   source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp
 
+src/backends/custom.rs partially migrates the screenshot and connection path of:
+  source/MaaCustomControlUnit/Manager/CustomControlUnitMgr.{h,cpp}
+
+It preserves the borrowed callback table/context, synchronous caller execution,
+nonzero MaaBool results, false-output preservation and true-empty replacement.
+Explicit acceptance extracts unchanged selected manager bodies and the raw
+MaaImageBufferSetRawData body from source/Common/MaaBuffer.cpp. It compiles the
+real include/MaaFramework/Instance/MaaCustomController.h callback declarations,
+Utility/MaaBuffer.h and prepared MaaUtils ImageBuffer implementation/vtable,
+linking OpenCV core/imgproc/imgcodecs without stub codec symbols. The selected
+body model is not the full manager virtual ABI, create/destroy API, input
+implementation or SDK provider. Native source/license inputs accompany each
+external acceptance batch; default builds and the custom-only core have no
+OpenCV dependency. Full Custom and P1 acceptance remain outstanding.
+
 src/platform/windows/pseudo_minimize.rs and
 src/backends/windows/print_window_pseudo.rs and frame_pool_pseudo.rs are Rust migrations of:
   source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.h

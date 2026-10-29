@@ -633,6 +633,30 @@ pub(crate) fn register(root: &Path, manifest: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Verify one existing archived run without registering it or executing capture.
+/// This also works for a completed manifest left unregistered by an interrupted
+/// caller; failed checks remain failures and no record is rewritten.
+pub fn verify_run(args: &[String]) -> Result<()> {
+    let [path] = args else {
+        return Err("expected reference verify-run <reference-relative run manifest>".into());
+    };
+    let root = env::var_os("MFS_REFERENCE_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            repository()
+                .parent()
+                .unwrap()
+                .join("maafw-screencap-reference")
+        });
+    let root = records::external_root(&root)?;
+    let path = records::resolve(&root, path)?;
+    verify(&root, &records::artifact(&root, &path)?)?;
+    println!(
+        "Verified archived run integrity; checks and phase status unchanged; no capture executed."
+    );
+    Ok(())
+}
+
 pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
     let run: Run = records::read(&records::verify(root, artifact)?)?;
     records::version(run.layout_version)?;
@@ -650,6 +674,8 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         Some("desktop-dup-scope.md")
     } else if run.run_id.starts_with("p1-manager-windows-") {
         Some("manager-scope.md")
+    } else if run.run_id.starts_with("p1-custom-windows-") {
+        Some("custom-scope.md")
     } else if run.run_id.starts_with("p1-pipewire-control-windows-") {
         Some("pipewire-control-scope.md")
     } else if run.run_id.starts_with("p1-pipewire-context-linux-") {
@@ -761,6 +787,7 @@ mod tests {
             ("frame-pool", "windows"),
             ("desktop-dup", "windows"),
             ("manager", "windows"),
+            ("custom", "windows"),
             ("pipewire-control", "windows"),
             ("pipewire-context", "linux"),
             ("wlr-context", "linux"),

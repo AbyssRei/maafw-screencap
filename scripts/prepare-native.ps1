@@ -15,6 +15,7 @@ param(
     [switch]$FramePoolParity,
     [switch]$DesktopDupParity,
     [switch]$ManagerParity,
+    [switch]$CustomParity,
     [switch]$PipeWireControl,
     [string]$OfflineManifest = '',
     [string]$CargoConfig = ''
@@ -42,6 +43,11 @@ $screenEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
 $metadataEvidence = ''
+$customEvidence = ''
+if($CustomParity -and ($Desktop -or $GdiParity -or $FramePoolContext)) {throw 'Custom parity is an independent callback entry without desktop/GDI prerequisites'}
+if($CustomParity) {
+    $pending.Add('Private Custom screenshot slice only: actual fixed callback table, selected original manager bodies, unchanged raw C setter and real MaaUtils ImageBuffer/vtable. Rust preserves synchronous nonzero-byte callback, borrowed table/context, false output and true-empty semantics; real Mat heads retain CPU storage after temporary buffer/context/input destruction. Ninety-six source/Rust cases and native callback exception/subsequent distinct capture are explicit. Native ABI/raw types use actual compiled header values, never frozen OpenCV 4 type packing. Input/app/shell actions, UUID/get_features/get_info, full manager virtual ABI/create-destroy exports, encoded/resize/all-type and all-platform/full P1 remain unaccepted. Opaque acceptance Mat heads add bookkeeping allocation; default product/core custom feature has no OpenCV dependency.')
+}
 if ($PipeWireControl) {
     $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 74 scripts and 118 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
 }
@@ -64,7 +70,7 @@ if ($FramePoolParity) {
     $pending.Add('This P1 task observes only the unmodified C++ FramePool source in four isolated caller contexts. It implements no Rust FramePool backend or SDK and does not accept Rust parity, full pixels/format/resize/permission/cache/timeout semantics or P1. Process-isolated factory/MTA state, known interior pixels and COM observations remain specific to this native environment.')
 } elseif ($GdiParity) {
     $pending.Add('P1 remains incomplete. GDI fault probes and direct window-state cases do not establish actual nondefault display depth or a complete backend/phase pass. Manager/forwarding and every other backend remain outstanding. Fixture recovery is separate from recorded implementation cleanup failures.')
-} else {
+} elseif(-not $CustomParity) {
     $pending.Add('This P0 native task does not independently accept the complete preparation phase; associate the source/method/license and other platform records in the external exit assessment.')
 }
 $offline = -not [string]::IsNullOrEmpty($OfflineManifest)
@@ -172,6 +178,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             foreach($kind in @('win32','macos')) {
                 & $ConfigureTool upstream-metadata $kind (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS $kind) >> $logPath 2>&1
                 if($LASTEXITCODE -ne 0){throw 'Metadata source/Rust artifact validation failed'}
+            }
+        }
+        if($Name -eq 'custom-native-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('native Custom cases=96 source_rust_captures=192 retained=36 real_imagebuffer=1 caller_callbacks=1 false_output_preserved=1 true_empty=1 raw_setter_clone=1 borrowed_table_changes=1 native_exception=1 subsequent_capture=1 native_mat_heads_closed=1 passed')) {
+                throw 'Expected real original/Rust callback/ImageBuffer cases, retained native Mat owners and exception cleanup'
             }
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
@@ -492,7 +505,7 @@ try {
     if ($offline) { $rustArguments += @('--offline', '--config', $CargoConfig) }
     Step 'rust-native-ffi' cargo ($rustArguments + @('--', '--ignored', '--test-threads=1', '--nocapture'))
 
-    $boost = Boost-Source
+    $boost = if($CustomParity) {''} else {Boost-Source}
     $build = Join-Path $nativeRoot "r-$([DateTime]::UtcNow.Ticks)"
     [string[]]$parityOptions = @(if ($GdiParity) { '-DMFS_BUILD_GDI_PARITY=ON' })
     if ($PrintWindowParity) { $parityOptions += '-DMFS_BUILD_PRINT_PARITY=ON' }
@@ -502,15 +515,48 @@ try {
     if ($DesktopDupParity) { $parityOptions += '-DMFS_BUILD_DESKTOP_DUP_REFERENCE=ON' }
     if ($ManagerParity) { $parityOptions += '-DMFS_BUILD_MANAGER_PARITY=ON' }
     if ($PipeWireControl) { $parityOptions += '-DMFS_BUILD_PIPEWIRE_CONTROL=ON' }
+    if ($CustomParity) { $parityOptions += @('-DMFS_BUILD_CUSTOM_PARITY=ON','-DMFS_BUILD_REFERENCE=OFF') }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity),@('MFS_BUILD_PIPEWIRE_CONTROL',[bool]$PipeWireControl))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity),@('MFS_BUILD_PIPEWIRE_CONTROL',[bool]$PipeWireControl),@('MFS_BUILD_CUSTOM_PARITY',[bool]$CustomParity))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
     }
-    Step 'reference-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_reference_u', '--parallel', '8')
+    if(-not $CustomParity) {Step 'reference-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_reference_u', '--parallel', '8')}
+    if($CustomParity) {
+        Step custom-capture-build $cmake @('--build',$build,'--config','Release','--target','mfs_custom_capture','--parallel','4')
+        foreach($name in @('custom-source.inc','custom-raw-source.inc','source-scope.txt')) {
+            $saved=Join-Path $inputsRoot ($name -eq 'source-scope.txt' ? 'custom-source-scope.txt' : $name)
+            Copy-Item -LiteralPath (Join-Path $build "custom-capture/$name") -Destination $saved;Save-Input $saved
+        }
+        $env:MFS_CUSTOM_CAPTURE_LIBRARY=Join-Path $artifacts mfs_custom_capture.dll
+        Copy-Item -LiteralPath (Join-Path $build custom-capture/Release/mfs_custom_capture.dll) -Destination $env:MFS_CUSTOM_CAPTURE_LIBRARY
+        Save-Input $env:MFS_CUSTOM_CAPTURE_LIBRARY
+        $customEvidence=Join-Path $artifacts custom-capture
+        $env:MFS_CUSTOM_CAPTURE_ARTIFACTS=$customEvidence
+        $customArgs=@('test','--release','--locked','--lib','--features','custom-capture,prototype-windows-com')
+        if($offline){$customArgs+=@('--offline','--config',$CargoConfig)}
+        Step custom-native-parity cargo ($customArgs+@('backends::custom::native_tests::preserves_original_native_callbacks_pixels_empty_failure_and_owners','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-native-records $ConfigureTool @('upstream-custom',$customEvidence)
+        $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
+        if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
+        Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))
+        $customConfiguration=$env:MFS_BUILD_CONFIGURATION
+        try {
+            Remove-Item Env:MFS_BUILD_CONFIGURATION -ErrorAction SilentlyContinue
+            $directArgs=@('build','--release','--locked','--lib','--no-default-features','--features','custom-capture')
+            $treeArgs=@('tree','--locked','-p','maafw-screencap','--edges','normal','--no-default-features','--features','custom-capture')
+            if($offline){$directArgs+=@('--offline','--config',$CargoConfig);$treeArgs+=@('--offline','--config',$CargoConfig)}
+            Step custom-core-direct-build cargo $directArgs
+            Step custom-core-runtime-tree cargo $treeArgs
+            $runtimeTree=Get-Content -LiteralPath (Join-Path $logsRoot custom-core-runtime-tree.log) -Raw
+            if($runtimeTree -match '(?m)^[│├└ ]*[├└]── ' -or $runtimeTree -match '(?m)^(?:opencv|windows-core|windows-link|pipewire|wayland|objc2) v') {
+                throw 'Custom-only core unexpectedly includes a normal runtime dependency'
+            }
+        } finally {$env:MFS_BUILD_CONFIGURATION=$customConfiguration}
+    }
     if ($GdiParity) {
         Step 'gdi-parity-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_gdi_parity', '--parallel', '8')
     }
@@ -560,7 +606,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
         Save-Input $saved
     }
-    foreach ($name in @('mfs_reference_utils.dll', 'mfs_reference_u.exe')) {
+    foreach ($name in $(if($CustomParity){@()}else{@('mfs_reference_utils.dll', 'mfs_reference_u.exe')})) {
         $saved = Join-Path $artifacts $name
         Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved
         Save-Input $saved
@@ -708,11 +754,11 @@ try {
         @((Join-Path $UpstreamRoot LICENSE.md), 'MaaFramework-LICENSE.md'),
         @((Join-Path $maautils LICENSE.md), 'MaaUtils-LICENSE.md'),
         @((Join-Path $opencv LICENSE), 'OpenCV-LICENSE.txt'),
-        @((Join-Path $opencv COPYRIGHT), 'OpenCV-COPYRIGHT.txt'),
-        @((Join-Path $boost LICENSE_1_0.txt), 'Boost-LICENSE.txt')
+        @((Join-Path $opencv COPYRIGHT), 'OpenCV-COPYRIGHT.txt')
     )) {
         Copy-Item -LiteralPath $item[0] -Destination (Join-Path $licenses $item[1])
     }
+    if(-not $CustomParity) {Copy-Item -LiteralPath (Join-Path $boost LICENSE_1_0.txt) -Destination (Join-Path $licenses Boost-LICENSE.txt)}
     Copy-Item -LiteralPath (Join-Path $opencvInstall etc/licenses) -Destination (Join-Path $licenses OpenCV) -Recurse
     if ($framePoolSource) {
         Copy-Item -LiteralPath (Join-Path $productRoot licenses/cppwinrt-MIT.txt) -Destination (Join-Path $licenses cppwinrt-MIT.txt)
@@ -722,7 +768,7 @@ try {
         $pixels = Join-Path $artifacts controlled-window.bgr
         Step 'reference-gdi-capture' (Join-Path $artifacts mfs_reference_u.exe) @($pixels)
         Save-Input $pixels
-    } else { $pending.Add('The native desktop reference executable was built but capture was not requested.') }
+    } elseif(-not $CustomParity) { $pending.Add('The native desktop reference executable was built but capture was not requested.') }
 }
 catch {
     $failed = $true
@@ -733,6 +779,7 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}
     if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
         Get-ChildItem -LiteralPath $screenEvidence -File | ForEach-Object { Save-Input $_.FullName }
@@ -742,7 +789,7 @@ finally {
     }
     if ($desktopEvidence -and (Test-Path -LiteralPath $desktopEvidence)) { Get-ChildItem -LiteralPath $desktopEvidence -Recurse -File | ForEach-Object { Save-Input $_.FullName } }
     Write-NewJson (Join-Path $RunRoot native-result.json) ([ordered]@{
-        layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity -or $FramePoolContext) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
+        layout_version = 1; run_id = (Split-Path -Leaf $RunRoot); phase = $(if ($GdiParity -or $FramePoolContext -or $CustomParity) { 'P1' } else { 'P0' }); phase_status = 'incomplete'
         checks = @($checks.ToArray()); pending = @($pending.ToArray()); inputs = @($inputs.ToArray())
     })
 }

@@ -3,6 +3,7 @@
 
 mod batch;
 mod configuration;
+mod custom_capture;
 mod dependencies;
 mod licenses;
 mod linux_config;
@@ -43,6 +44,9 @@ fn run() -> Result<()> {
     if argv.first().is_some_and(|arg| arg == "configuration-check") {
         return configuration::run_checks(&argv[1..]);
     }
+    if argv.first().is_some_and(|arg| arg == "upstream-custom") {
+        return custom_capture::run(&argv[1..]);
+    }
     if argv.first().is_some_and(|arg| arg == "check") {
         return quality::run(&argv[1..]);
     }
@@ -79,6 +83,9 @@ fn run() -> Result<()> {
     if argv.starts_with(&["reference".into(), "catalog".into()]) {
         return review::run(&argv[2..]);
     }
+    if argv.starts_with(&["reference".into(), "verify-run".into()]) {
+        return batch::verify_run(&argv[2..]);
+    }
     if argv.starts_with(&["reference".into(), "licenses".into()]) {
         return licenses::run(&argv[2..]);
     }
@@ -110,6 +117,7 @@ fn run() -> Result<()> {
             println!(
                 "cargo xtask reference prepare [--root <external directory>]\n\
                       cargo xtask reference verify [--root <external directory>]\n\n\
+                      cargo xtask reference verify-run <reference-relative run manifest>\n\n\
                       cargo xtask reference catalog <reference-relative input> [--root <external directory>]\n\n\
                       cargo xtask reference licenses <Rust batch manifest> [--root <external directory>]\n\n\
                       cargo xtask check [--message-file <commit message file>]\n\
@@ -123,6 +131,8 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity desktop-dup [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity manager [--offline-inputs <native run manifest>]\n\n\
+                      cargo xtask upstream-parity custom [--offline-inputs <native run manifest>]\n\n\
+                      cargo xtask upstream-custom <external directory> [--check-only]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context pipewire  # original source context on native Linux x64\n\n\
                       cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\
