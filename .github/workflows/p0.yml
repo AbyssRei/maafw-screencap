@@ -1,4 +1,4 @@
-name: Native preparation and P1 Windows parity
+name: Native preparation and partial P1 migration
 
 on:
   push:
@@ -77,7 +77,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask upstream-context pipewire
-      - name: Observe original Wlr source capture and recursive native dispatch
+      - name: Validate partial Wlr migration and original recursive dispatch
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         env:
           GH_TOKEN: ${{ github.token }}
