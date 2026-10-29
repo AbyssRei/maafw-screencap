@@ -17,7 +17,7 @@ PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 
 
 `upstream-context wlr` 的原源码入口已通过 20 次原生生命周期/60 张持帧及递归 roundtrip 检查；私有日志、名称提供者及被动 manager 夹具边界保留。首个私有 Rust Wlr 捕获切片与对应 native 探针已加入；首轮编译失败修正后，20 生命周期/60 组 raw+BGR 与实际转换异常检查已通过原生运行；该批次保留的 Clippy 失败修正后，后续 87 项原生检查全部通过；新增共享 client/安全重连/FD 0 原版探针后，最新 90 项亦通过，新增 80 张原版图已独立复核；Rust FD 0 成功路径补齐后最新 91 项检查通过，新增 20 组图已独立复算，仍仅覆盖初始切片，不代表完整后端已验收。操作与边界见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-Wlr 的共享 client 与安全重连已迁移并新增原生测试，待 Linux 验证；Linux manager 的 Input=None 截图编排已开始迁移，六项 portable 算法控制通过，原函数体脚本与真实后端转发尚待接入。
+Wlr 的共享 client 与安全重连已通过 93 项原生组件，新增 80 组图像已独立复核；Linux manager 的 Input=None 编排通过六项 portable 控制和本机 960 组原函数体脚本，Linux 执行与真实后端转发仍待验收。
 
 `upstream-context macos` 已实现未改写的 Objective-C++ ScreenCaptureKit 原源码入口，首轮 24 项原生检查通过，60 张窗口图像与预热图已独立复核。窗口路径核验已知内部像素和关闭后持帧，首个 display 路径仅观察布局/所有权；原生资源计数不当作配平断言，Mach port 增长的因果仍待隔离。首个私有 Rust macOS 捕获切片在测试专用 main-thread AppKit host 修正后，40 项原生检查全部通过，60 组 raw/BGR 独立匹配同窗口原版；旧初始化断言/编译失败保留，直接核心构建隔离已通过，组件增至 42 项；私有 manager 的最新 49 项组件（含 Clippy）全部通过，320 组脚本及双方 20 轮真实转发/各 60 张独立留存图已复核；完整后端未验收，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
