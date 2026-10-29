@@ -6,6 +6,7 @@ mod configuration;
 
 fn main() {
     println!("cargo::rerun-if-env-changed=CARGO_FEATURE_LINUX_WLR");
+    println!("cargo::rerun-if-env-changed=CARGO_FEATURE_MACOS_SCREEN_CAPTURE_KIT");
     println!("cargo::rerun-if-changed=build-support/wayland-reentry.c");
     println!("cargo::rerun-if-changed=build-support/wayland-reentry.h");
     println!("cargo::rerun-if-changed=build-support/p0-configuration.rs");
@@ -70,6 +71,12 @@ fn main() {
                 || std::env::var_os("CARGO_FEATURE_LINUX_WLR").is_none()
                 || selected.enabled[2],
             "Wlr capture cannot be enabled when the prepared Wlr family is OFF"
+        );
+        assert!(
+            os != "macos"
+                || std::env::var_os("CARGO_FEATURE_MACOS_SCREEN_CAPTURE_KIT").is_none()
+                || selected.enabled[3],
+            "ScreenCaptureKit cannot be enabled when its prepared family is OFF"
         );
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_GDI");
         println!("cargo::rerun-if-env-changed=CARGO_FEATURE_WINDOWS_PRINT_WINDOW");

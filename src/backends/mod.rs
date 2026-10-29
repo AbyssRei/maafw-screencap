@@ -10,6 +10,8 @@
     test
 ))]
 mod linux;
+#[cfg(all(target_os = "macos", feature = "macos-screen-capture-kit"))]
+mod macos;
 #[cfg(all(
     target_os = "windows",
     any(
