@@ -102,6 +102,29 @@ DRM declarations and OpenCV remain real; their source/license inputs are archive
 with that diagnostic batch. This target is not a native Rust capture backend or
 part of default product builds and SDK assets.
 
+src/backends/linux/wlr.rs partially migrates the fixed:
+  source/MaaLinuxControlUnit/Screencap/WlrScreencap.{h,cpp}
+  source/MaaLinuxControlUnit/Wayland/WaylandClient.{h,cpp}
+  source/MaaLinuxControlUnit/Wayland/WaylandHelper.{h,cpp}
+  source/MaaLinuxControlUnit/Base/MemfdBuffer.{h,cpp}
+
+The private capture slice preserves callback-internal recursive waiting and
+frame ownership through caller conversion. Checked layouts/version/path, RAII
+and an added independent CPU copy are documented safety adaptations. Shared
+client, full native error/format and remaining P1 parity are incomplete. The
+platform channel uses maintained bindings and an original one-function C
+adapter for the native queue getter missing from wayland-sys.
+
+The explicit tests/upstream-parity/linux-wlr source context compiles those
+fixed upstream files and original generated C protocols unchanged, with an
+extracted screenshot base and explicit private namespace/logging overlays.
+An external kernel-random name provider is separate from the original UUID
+utility. Its passive input-manager fixture creates no host input device or
+action. Real OpenCV conversion acceptance reuses the self-owned private
+linux-pipewire adapter without a PipeWire runtime dependency. These acceptance
+targets and reference inputs remain outside default builds and SDK assets;
+their native/source licence materials are archived externally per batch.
+
 Microsoft C++/WinRT
 =================
 
