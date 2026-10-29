@@ -251,5 +251,44 @@ pub fn cases() -> Vec<Case> {
         Some(format!("{{{base},\"wlr_socket_path\":\"a\0b\"}}").into_bytes()),
         false,
     );
+    // Characterize the source's packed-string boundary. Padding is outside the
+    // root object yet still visible to the C-string parser's remaining length.
+    // A raw literal can be skipped between surrogate escapes when a full
+    // 16-byte packed read is available. These are legacy invalid-Unicode cases.
+    for gap in [0, 1, 7, 8, 15, 16, 17, 31, 32, 33] {
+        for padding in [0, 1, 8, 16, 32] {
+            let bytes = format!(
+                "{{{base},\"wlr_socket_path\":\"\\ud800{}\\udc00\"}}{}",
+                "x".repeat(gap),
+                " ".repeat(padding)
+            );
+            let accepted = gap % 16 == 0 || gap % 16 + 8 + padding >= 16;
+            add(
+                format!("surrogate-gap-{gap}-padding-{padding}"),
+                Some(bytes.into_bytes()),
+                accepted,
+            );
+        }
+    }
+    for byte in 0_u8..=255 {
+        let mut bytes = format!("{{{base},\"wlr_socket_path\":\"").into_bytes();
+        bytes.push(byte);
+        bytes.extend_from_slice(b"\"}");
+        add(
+            format!("string-byte-{byte:02x}"),
+            Some(bytes),
+            byte >= 32 && byte != b'"' && byte != b'\\',
+        );
+    }
+    for capture in [0_u64, 1, 2, 4, 7, u64::MAX] {
+        for input in [0_u64, 1, 2, 4, 7, u64::MAX] {
+            let bytes=format!(r#"{{"screencap_method":{capture},"input_method":{input},"wlr_socket_path":"w\u0000\n","pw_socket_fd":-2147483648,"pw_node_id":4294967295,"uinput_screen_width":2147483647,"uinput_screen_height":-2147483648,"uinput_path":"u\t\"\\","eis_socket_path":"e\u0001","use_win32_vk_code":true}}"#).into_bytes();
+            add(
+                format!("metadata-capture-{capture}-input-{input}"),
+                Some(bytes),
+                true,
+            );
+        }
+    }
     cases
 }

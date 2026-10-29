@@ -154,6 +154,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected 960 exact original-body/Rust manager scripts and one actual test'
             }
         }
+        if($Name -eq 'linux-config-rust-parity') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'Rust Linux config cases=946 accepted=426 rejected=520 exact_uuid_metadata=1 input_actions=0 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'Expected all original/Rust configuration acceptance, UUID and metadata comparisons in one actual test'
+            }
+        }
+        if($Name -eq 'linux-config-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 8 passed; 0 failed; 1 ignored;') {
+            throw 'Expected eight manager controls, with the explicit original-source model still ignored on this default filter'
+        }
         if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;') {
             throw 'Expected the two native None/unimplemented-method and unsafe-FD boundary controls'
         }
@@ -455,6 +464,11 @@ try {
             Step linux-manager-source-model timeout @('--signal=TERM','--kill-after=5s','180s',$managerTest,'backends::linux::manager::tests::matches_fixed_source_manager_reconnect_forwarding_and_uuid','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
         if($managerTest){
+            try { Step linux-config-rust-parity timeout @('--signal=TERM','--kill-after=5s','90s',$managerTest,'backends::linux::manager::configuration::tests::matches_original_configuration_creation_uuid_and_metadata_bytes','--exact','--ignored','--test-threads=1','--nocapture') }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+            finally {if(Test-Path -LiteralPath $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS){Get-ChildItem -LiteralPath $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS -Recurse -File|ForEach-Object{Save $_.FullName}}}
+            try { Step linux-config-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::tests::','--test-threads=1','--nocapture') }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
             try { Step rust-pipewire-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::native::tests::','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
         }

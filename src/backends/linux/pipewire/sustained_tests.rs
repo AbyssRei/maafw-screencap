@@ -127,6 +127,7 @@ fn sustains_native_manager_for_two_minutes_with_bounded_retained_owners() {
         wlr_socket: Vec::new(),
         pipewire_fd: -1,
         pipewire_node: node,
+        ..manager::Config::default()
     });
     let connected = manager.connect_native().unwrap();
     let native_balance = BalanceInit;

@@ -317,6 +317,7 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
             wlr_socket: socket.as_os_str().as_bytes().to_vec(),
             pipewire_fd: -1,
             pipewire_node: 0,
+            ..manager::Config::default()
         });
         let connected = manager.connect_native().unwrap();
         assert!(connected.connected && connected.failure.is_none());
@@ -407,6 +408,7 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
         wlr_socket: missing.as_os_str().as_bytes().to_vec(),
         pipewire_fd: -1,
         pipewire_node: 0,
+        ..manager::Config::default()
     });
     let connected = manager.connect_native().unwrap();
     assert!(!connected.connected && connected.failure.is_some());

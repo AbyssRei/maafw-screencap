@@ -30,6 +30,7 @@ fn none_and_unimplemented_native_methods_do_not_enter_capture_adapters() {
             wlr_socket: Vec::new(),
             pipewire_fd: -1,
             pipewire_node: 0,
+            ..Config::default()
         });
         let connected = manager.connect_native().unwrap();
         assert_eq!(connected.connected, method == NONE);
@@ -59,6 +60,7 @@ fn safe_native_connect_rejects_an_unproven_source_fd_before_construction() {
         wlr_socket: Vec::new(),
         pipewire_fd: 0,
         pipewire_node: 0,
+        ..Config::default()
     });
     assert!(matches!(
         manager.connect_native(),
