@@ -55,6 +55,11 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code = $LASTEXITCODE
         "exit=$code" | Add-Content -LiteralPath $log -Encoding utf8
+        if($code -eq 77){
+            $status='missing_environment'
+            Get-Content -LiteralPath $log -Tail 10 | ForEach-Object {Write-Host $_}
+            throw "$Name requires a missing native environment; see $log"
+        }
         if ($code -ne 0) {
             Get-Content -LiteralPath $log -Tail 50 | ForEach-Object { Write-Host $_ }
             throw "$Name exited with $code; see $log"
@@ -93,6 +98,21 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native MemFd helper cycles=20 copies=60 owning_maps=60 observed_maps=60 unmap_calls=120 rejected=6 retained_rgb=60 retained_bgr=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 throw 'Expected one native MemFd helper test with real map/unmap, six failures and sixty RGB/BGR owners'
+            }
+        }
+        if($Name -eq 'rust-pipewire-dma-error-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native non-DMA error control START=ENOTTY END=skipped borrowed_pointer=skips_sync invalid_layouts=5 passed'){
+            throw 'Expected the real non-DMA ioctl failure and source borrowed-pointer controls'
+        }
+        if($Name -eq 'pipewire-source-dma-error-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original non-DMA error control START=ENOTTY borrowed_pointer=skips_sync retained_bytes=1 passed'){
+            throw 'Expected compiled original helper non-DMA ioctl failure and existing-pointer observations'
+        }
+        if($Name -eq 'pipewire-source-dma-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original DMA helper exporter=[12] cycles=20 maps=60 retained_bgr=60 fd_preserved=60 passed'){
+            throw 'Expected original helper copies from a real kernel DMA exporter'
+        }
+        if($Name -eq 'rust-pipewire-kernel-dma-helper'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native kernel DMA helper cycles=20 copies=60 observation_maps=60 READ_START=120 READ_END=120 unmaps=120 retained_rgb=60 retained_bgr=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected real kernel DMA/CPU/OpenCV owners with paired sync and unmap evidence'
             }
         }
         if ($Name -eq 'rust-pipewire-native-formats') {
@@ -148,6 +168,39 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         $checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)})
         Write-Host "${Name}: $status"
     }
+}
+function Capture-TestProgram([string]$Name) {
+    Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','--no-run','--message-format=json')
+    $programs=@(Get-Content -LiteralPath (Join-Path $logsRoot "$Name.log")|Where-Object{$_ -match '^\{'}|ForEach-Object{$_|ConvertFrom-Json}|Where-Object{ $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'maafw_screencap' -and $_.profile.test -and $_.executable }|ForEach-Object{$_.executable})
+    if($programs.Count -ne 1 -or -not(Test-Path -LiteralPath $programs[0] -PathType Leaf)){throw 'Cargo did not identify exactly one capture libtest executable'}
+    return $programs[0]
+}
+function Prepare-DmaKernelFixture {
+    $log=Join-Path $logsRoot dma-kernel-environment.log
+    "scope=owned acceptance fixture only; no local/self-hosted module or permission changes"|Set-Content -LiteralPath $log -Encoding utf8
+    # Root preparation is restricted to the ephemeral GitHub-hosted Linux VM.
+    # Use only its installed kernel module; no module download/build.
+    if($env:GITHUB_ACTIONS -eq 'true' -and $env:RUNNER_ENVIRONMENT -eq 'github-hosted' -and -not(Test-Path -LiteralPath '/dev/udmabuf')){
+        $modinfo=Get-Command modinfo -ErrorAction SilentlyContinue
+        if($modinfo){
+            & $modinfo.Source -F filename udmabuf >> $log 2>&1
+            if($LASTEXITCODE -eq 0){
+                & sudo -n modprobe udmabuf >> $log 2>&1
+                "module_load_exit=$LASTEXITCODE"|Add-Content -LiteralPath $log -Encoding utf8
+                if(Test-Path -LiteralPath '/dev/udmabuf'){
+                    $fixtureUid=(& id -u|Out-String).Trim()
+                    if($LASTEXITCODE -ne 0 -or $fixtureUid -notmatch '^\d+$'){throw 'Cannot identify fixture user'}
+                    & sudo -n chown -- $fixtureUid /dev/udmabuf >> $log 2>&1
+                    "device_owner_exit=$LASTEXITCODE"|Add-Content -LiteralPath $log -Encoding utf8
+                }
+            }
+        }
+    }
+    foreach($path in @('/dev/udmabuf','/dev/dma_heap/system')){
+        "path=$path present=$(Test-Path -LiteralPath $path)"|Add-Content -LiteralPath $log -Encoding utf8
+        if(Test-Path -LiteralPath $path){ & stat $path >> $log 2>&1 }
+    }
+    Save $log
 }
 function StopOwned([string]$Name, $Process, $OutputTask, $ErrorTask) {
     if (-not $Process) { return }
@@ -310,6 +363,8 @@ try {
         $env:MFS_P1_PIPEWIRE_FORMAT_ORACLE=$formatDirectory
         $memfdDirectory=Join-Path $referenceArtifacts memfd
         $env:MFS_P1_PIPEWIRE_MEMFD_ORACLE=$memfdDirectory
+        $dmaDirectory=Join-Path $referenceArtifacts dma
+        $env:MFS_P1_PIPEWIRE_DMA_ORACLE=$dmaDirectory
         Json (Join-Path $rustArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Raw native driver probe; RawAudit preserves RGB and does not implement OpenCV conversion or source/BGR parity.'})
         Json (Join-Path $fdArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Explicit unsafe supplied private socket success path, twenty consumed descriptors closed after native teardown; no Portal authorization, generic failure ownership or safe host FD contract is established.'})
         Json (Join-Path $bgrArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';scope='Actual C++/OpenCV conversion after native unlock; twenty callback-progress witnesses add diagnostic waiting, not source latency parity. Native opaque Mat/loader mobility and full all-format/fault parity remain pending.'})
@@ -323,6 +378,18 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-memfd-helper timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::mapping::matches_original_memfd_maps_and_retains_cpu_images_after_unmap','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-dma-error-control timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::dma::preserves_source_non_dma_ioctl_failure_and_borrowed_pointer_selection','--','--exact','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-source-dma-error-control timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--dma-error-control') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Prepare-DmaKernelFixture }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-source-dma-fixtures timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--dma-fixtures',$dmaDirectory) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try {
+            $dmaTest=Capture-TestProgram rust-pipewire-dma-helper-build
+            Step rust-pipewire-kernel-dma-helper timeout @('--signal=TERM','--kill-after=5s','180s',$dmaTest,'backends::linux::pipewire::native::tests::opencv::dma::matches_original_kernel_dma_maps_and_retains_independent_cpu_images','--exact','--ignored','--test-threads=1','--nocapture')
+        } catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-task-diagnostic-fixtures timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-diagnostic-fixtures',(Join-Path $referenceArtifacts task-diagnostic)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
@@ -432,10 +499,8 @@ try {
             # Resolve the actual libtest executable through Cargo's structured
             # output. Only that isolated consumer receives LD_PRELOAD; Cargo,
             # rustc, producer, router and daemon keep their ordinary environment.
-            Step rust-pipewire-fd-retry-build cargo @('test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','--no-run','--message-format=json')
-            $testPrograms=@(Get-Content -LiteralPath (Join-Path $logsRoot rust-pipewire-fd-retry-build.log)|Where-Object{$_ -match '^\{'}|ForEach-Object{$_|ConvertFrom-Json}|Where-Object{ $_.reason -eq 'compiler-artifact' -and $_.target.name -eq 'maafw_screencap' -and $_.profile.test -and $_.executable }|ForEach-Object{$_.executable})
-            if($testPrograms.Count -ne 1 -or -not(Test-Path -LiteralPath $testPrograms[0] -PathType Leaf)){throw 'Cargo did not identify exactly one capture libtest executable'}
-            Step rust-pipewire-supplied-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$testPrograms[0],'backends::linux::pipewire::native::tests::reinit::retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions','--exact','--ignored','--test-threads=1','--nocapture')
+            $fdTest=Capture-TestProgram rust-pipewire-fd-retry-build
+            Step rust-pipewire-supplied-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$fdTest,'backends::linux::pipewire::native::tests::reinit::retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
     }
 } catch {
