@@ -99,6 +99,16 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
         ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(mfs_framepool_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS}
         Gdi32 User32 Dwmapi D3D11 Dxgi WindowsApp RuntimeObject CoreMessaging)
+    # Independent alpha/content causal diagnostic, sharing the exact native
+    # source and fixture dependencies of the original caller-context entry.
+    get_target_property(_framepool_sources mfs_framepool_reference SOURCES)
+    list(REMOVE_ITEM _framepool_sources framepool-reference.cpp)
+    add_executable(mfs_framepool_alpha_reference framepool-alpha-reference.cpp ${_framepool_sources}
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp")
+    foreach(_property INCLUDE_DIRECTORIES COMPILE_DEFINITIONS LINK_LIBRARIES)
+        get_target_property(_value mfs_framepool_reference ${_property})
+        set_property(TARGET mfs_framepool_alpha_reference PROPERTY ${_property} "${_value}")
+    endforeach()
 endif()
 if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
     add_executable(mfs_desktop_dup_reference desktop-dup-reference.cpp print-parity.cpp print-thread.cpp
