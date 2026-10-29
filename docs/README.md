@@ -6,7 +6,7 @@
 
 Wlr 新接入独立的 IPC/SHM 协议夹具与实际记录校核，覆盖 v1/v2/v3、六格式及行填充/YInvert；本机工具测试通过，原生 Actions 尚待执行。它补充格式与原版缺陷对照，不能代替真实 compositor/完整后端验收；范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
-FramePool 新增透明度/内容原生诊断及实际记录校核；维护版本机 10 次 FramePool、10 次独立 PrintWindow 内容见证与完整字节检查通过。alpha=0 的黑图/旧场景结果仅作诊断，原包装彩色图样失败继续失败；新诊断的 Actions 验证仍待完成。入口及范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+FramePool 新增透明度/内容原生诊断及实际记录校核；维护版本机 10 次 FramePool、10 次独立 PrintWindow 内容见证与完整字节检查通过。另一次独立调试器观察确认旧图命中原缓存 clone 分支，但该次新建会话另有无帧失败，整次实验仍失败。alpha=0 的黑图/旧场景结果仅作诊断，原包装彩色图样失败继续失败；新诊断的 Actions 验证仍待完成。入口及范围见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
 Custom 的私有回调切片和真实 ImageBuffer/raw setter 原生对照已加入；本机局部 96 个案例、192 次源码/Rust 调用及独立输出记录复算通过。正式在线批次的 22 项原生检查通过，但归档器漏识别新组件前缀使命令失败；修复后的只读记录校核通过，完整 CI 入口待验证。完整 Custom/所有平台及 P1 未验收；默认核心无 OpenCV 依赖。当前入口与范围见[开发指南](guides/development.md#当前仓库与本机命令)。
 
