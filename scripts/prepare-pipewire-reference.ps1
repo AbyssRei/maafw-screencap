@@ -39,8 +39,11 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     })
     $refBuild=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
     $cvPackage=$opencv.Package
-    Step pipewire-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-pipewire),'-B',$refBuild,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$cvPackage","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_DRM_SOURCE=$drmSource","-DMFS_PIPEWIRE_VERSION=$($env:MFS_P0_PIPEWIRE_VERSION)")
+    . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
+    $meojson=Prepare-MeoJsonReference $refInputs
+    Step pipewire-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-pipewire),'-B',$refBuild,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$cvPackage","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_DRM_SOURCE=$drmSource","-DMFS_PIPEWIRE_VERSION=$($env:MFS_P0_PIPEWIRE_VERSION)","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)")
     Step pipewire-reference-build cmake @('--build',$refBuild,'--parallel','4')
+    Observe-LinuxConfigReference $refBuild $refInputs
     $manager=Join-Path $refBuild linux-manager/mfs_linux_manager_model
     $saved=Join-Path $refInputs mfs_linux_manager_model
     Copy-Item -LiteralPath $manager -Destination $saved;Save $saved
