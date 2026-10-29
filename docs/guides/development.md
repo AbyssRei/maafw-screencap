@@ -235,6 +235,8 @@ Wlr 原版入口另增加三个独立原生进程探针，最新组件 90 项检
 
 私有 Wlr 现已分离共享 client 的 registry/连接状态与每个 capture 的回调、缓冲区和结果；capture 复制原版 manager/SHM/output 快照并保活同一个标准 Arc client。可变 close/reconnect 只在旧 capture/proxy owner 全部结束、取得唯一 client 访问时执行；保留活跃旧快照的断连/重连仍待原版证据和安全寿命处理。新增两个独立进程测试，各 20 轮，分别检查调用方及第一个 capture 释放后继续取帧、最终 client 释放，以及同路径不重新绑定、显式关闭后重开、别名路径变化、缺失路径失败和后续显式连接；要求独立 raw/BGR 对照原图、分离的 native buffer、回调 owner 配平、关闭后持帧和精确 FD/task 基线，尚待原生 Linux 验证。此前成功 FD-zero 路径的 91 项组件及独立图像复核已有通过证据；构造失败/部分状态、早关、格式与完整后端仍未验收。
 
+Linux manager 的私有 Input=None 编排已开始迁移，六项 portable 测试通过；它们只验证算法，不证明原生 Linux manager 取帧。连接先释放 capture 再释放 input，并保留已有 Wayland client；首次连接失败保留的 client 在下一次 manager connect 中不会自动重连，因此 manager connected 与真实可取帧状态可能不同。构造先于虚 init，失败后保留已选 owner，截图不增加 connected 门禁，也不回滚后端在失败时对输出的写入；inactive 按 capture、input 顺序调用。None 仍构造真实无截图方法，PipeWire 仅拒绝 fd<0 且 node=0，U 的 ExtImage 构造仍拒绝。UUID 保留 Linux path 的引号/转义及原始字节，或有符号 fd/node，再附 Input=None 后缀。准确原函数体脚本、现有 Wlr/PipeWire 的原生工厂、配置/metadata/API 边界仍待接入和验收。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。
