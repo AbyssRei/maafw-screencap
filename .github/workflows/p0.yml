@@ -83,6 +83,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask pipewire-prototype
+      - name: Upload Linux PipeWire prototype diagnostics
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: p0-linux-pipewire-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p0-pipewire-linux-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p0-pipewire-linux-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p0-pipewire-linux-*/linux-x64-pipewire/logs/*.log
+          if-no-files-found: warn
       - name: Validate Linux native Wlr screencopy prototype
         if: runner.os == 'Linux'
         env:
@@ -93,6 +103,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask upstream-context pipewire
+      - name: Upload Linux PipeWire component diagnostics
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-linux-pipewire-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64-pipewire/logs/*.log
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/reference-u/artifacts/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-shm/artifacts/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-fd/artifacts/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-opencv/artifacts/**
+          if-no-files-found: warn
       - name: Validate partial Wlr migration and original recursive dispatch
         if: ${{ !cancelled() && runner.os == 'Linux' }}
         env:
@@ -180,20 +204,6 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/*.bgr
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/geometry.txt
-          if-no-files-found: warn
-      - name: Upload Linux PipeWire component diagnostics
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
-        with:
-          name: p1-linux-pipewire-diagnostics
-          path: |
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/manifest.json
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/native-result.json
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64-pipewire/logs/*.log
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/reference-u/artifacts/**
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-shm/artifacts/**
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-fd/artifacts/**
-            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-opencv/artifacts/**
           if-no-files-found: warn
       - name: Archive engineering evidence
         if: always()
