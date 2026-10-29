@@ -10,6 +10,7 @@
 #include <cerrno>
 #include <charconv>
 #include <chrono>
+#include <cstddef>
 #include <cstring>
 #include <cstdlib>
 #include <exception>
@@ -28,6 +29,7 @@
 #include <dlfcn.h>
 #include <pthread.h>
 #include <sys/socket.h>
+#include <sys/mman.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -458,6 +460,109 @@ void save_format_fixtures(const std::filesystem::path& directory) {
     require(index==28 && records.good(),"format fixture records incomplete");
     std::cout<<"original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved\n";
 }
+struct MemFile {
+    int fd;
+    explicit MemFile(int value):fd(value) { require(fd>=0,"memfd fixture creation failed"); }
+    MemFile(const MemFile&)=delete;
+    MemFile& operator=(const MemFile&)=delete;
+    ~MemFile() {
+        if(fd>=0 && ::close(fd)!=0) { std::cerr<<"memfd fixture cleanup errno="<<errno<<'\n'; }
+    }
+    void close() { const int value=fd;fd=-1;require(::close(value)==0,"memfd fixture close failed"); }
+};
+size_t file_mappings(const std::string& name,bool check_permissions) {
+    std::ifstream maps("/proc/self/maps");
+    require(maps.good(),"cannot read map observations");
+    size_t count=0;
+    std::string line;
+    while(std::getline(maps,line)) {
+        if(line.find("/memfd:"+name+" ")==std::string::npos) { continue; }
+        std::istringstream fields(line);
+        std::string range,permissions;
+        fields>>range>>permissions;
+        if(check_permissions) { require(permissions=="r--p","source map is not read-only/private"); }
+        ++count;
+    }
+    return count;
+}
+void save_memfd_fixtures(const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    std::ofstream layout(directory/"spa-data-layout.txt");
+    layout<<sizeof(spa_data)<<' '<<alignof(spa_data)<<' '<<offsetof(spa_data,type)<<' '
+        <<offsetof(spa_data,flags)<<' '<<offsetof(spa_data,fd)<<' '<<offsetof(spa_data,mapoffset)<<' '
+        <<offsetof(spa_data,maxsize)<<' '<<offsetof(spa_data,data)<<' '<<offsetof(spa_data,chunk)<<' '
+        <<sizeof(spa_data::fd)<<'\n';
+    layout.close();require(layout.good(),"cannot write native data ABI observations");
+    std::ofstream records(directory/"cases.tsv");
+    records<<"index\tstride\tmaxsize\tchunk_size\thas_chunk\tfile_length\tmarker\n";
+    constexpr size_t row=WIDTH*3;
+    constexpr std::array<std::array<uint8_t,3>,7> bars={{{191,191,191},{191,191,0},{0,191,191},{0,191,0},{191,0,191},{191,0,0},{0,0,191}}};
+    cv::Mat warm(HEIGHT,WIDTH,CV_8UC3,cv::Scalar(1,2,3)),warm_bgr;
+    cv::cvtColor(warm,warm_bgr,cv::COLOR_RGB2BGR);
+    const size_t baseline=count_entries("/proc/self/fd");
+    std::vector<HeldImage> held;
+    held.reserve(60);
+    size_t index=0;
+    for(size_t cycle=0;cycle<20;++cycle) {
+        const auto name="mfs-source-map-"+std::to_string(cycle);
+        MemFile file(memfd_create(name.c_str(),MFD_CLOEXEC));
+        require(file_mappings(name,false)==0,"source memfd unexpectedly mapped before helper");
+        for(size_t mode=0;mode<3;++mode) {
+            const size_t stride=mode==2 ? row : 96;
+            const size_t capacity=stride*HEIGHT;
+            const size_t span=(HEIGHT-1)*stride+row;
+            // The chunk fallback maps the declared length but reads no trailing
+            // final-row padding: the actual file deliberately ends at span.
+            const size_t file_length=mode==1 ? span : capacity;
+            const uint32_t marker=static_cast<uint32_t>(index+1);
+            std::vector<uint8_t> bytes(capacity,0xed);
+            for(size_t y=0;y<HEIGHT;++y) {
+                for(size_t x=0;x<WIDTH;++x) {
+                    for(size_t c=0;c<3;++c) {
+                        bytes[y*stride+x*3+c]=static_cast<uint8_t>(bars[x/4][c]^((y*7+x*3+c*13+(marker&63))&63));
+                    }
+                }
+            }
+            bytes[0]=static_cast<uint8_t>(marker>>16);bytes[1]=static_cast<uint8_t>(marker>>8);bytes[2]=static_cast<uint8_t>(marker);
+            require(ftruncate(file.fd,static_cast<off_t>(file_length))==0 &&
+                    pwrite(file.fd,bytes.data(),file_length,0)==static_cast<ssize_t>(file_length),"cannot initialize memfd fixture");
+            spa_chunk chunk{};
+            chunk.stride=static_cast<int32_t>(stride);chunk.size=static_cast<uint32_t>(capacity);
+            spa_data data{};
+            data.type=SPA_DATA_MemFd;data.flags=SPA_DATA_FLAG_READABLE;data.fd=file.fd;
+            data.maxsize=mode==1 ? 0 : static_cast<uint32_t>(capacity);
+            data.chunk=mode==2 ? nullptr : &chunk;
+            cv::Mat raw(HEIGHT,WIDTH,CV_8UC3);
+            {
+                MfsOriginalPipeWire::ScopedBufferMap map(data,capacity);
+                require(map.ptr()!=nullptr,"original MemFd helper failed valid input");
+                require(file_mappings(name,true)==1,"original helper mapping not observed");
+                if(stride==row) { std::memcpy(raw.data,map.ptr(),HEIGHT*stride); }
+                else { for(size_t y=0;y<HEIGHT;++y) { std::memcpy(raw.ptr(static_cast<int>(y)),static_cast<const uint8_t*>(map.ptr())+y*stride,row); } }
+            }
+            require(file_mappings(name,false)==0,"original helper mapping survived destruction");
+            require(fcntl(file.fd,F_GETFD)>=0,"original mapping helper consumed the native FD");
+            cv::Mat bgr;
+            cv::cvtColor(raw,bgr,cv::COLOR_RGB2BGR); // after owned unmap, as in U
+            require(known_pixels(bgr)==marker,"source memfd target pixels differ");
+            const auto base="case-"+std::to_string(index);
+            save_bytes(directory/(base+".input"),bytes.data(),bytes.size());
+            save_bytes(directory/(base+".rgb"),raw.data,HEIGHT*row);
+            save_bytes(directory/(base+".bgr"),bgr.data,HEIGHT*row);
+            records<<index<<'\t'<<stride<<'\t'<<data.maxsize<<'\t'<<capacity<<'\t'<<(data.chunk!=nullptr)<<'\t'<<file_length<<'\t'<<marker<<'\n';
+            held.push_back({std::move(bgr),marker});
+            std::fill(bytes.begin(),bytes.end(),0);
+            require(pwrite(file.fd,bytes.data(),file_length,0)==static_cast<ssize_t>(file_length),"cannot overwrite released memfd input");
+            for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"held memfd BGR changed after native overwrite"); }
+            ++index;
+        }
+        file.close();
+        require(count_entries("/proc/self/fd")==baseline,"source memfd fixture descriptor leak");
+    }
+    records.close();require(records.good() && index==60,"memfd fixture records incomplete");
+    for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"held memfd image changed after all FDs closed"); }
+    std::cout<<"original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed\n";
+}
 }
 int main(int argc,char** argv) {
     try {
@@ -469,6 +574,10 @@ int main(int argc,char** argv) {
         }
         if(argc==3 && std::string_view(argv[1])=="--format-fixtures") {
             save_format_fixtures(argv[2]);
+            return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--memfd-fixtures") {
+            save_memfd_fixtures(argv[2]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--joined-task-observation") {

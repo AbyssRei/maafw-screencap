@@ -5,10 +5,10 @@
 //! owned mappings/DMA-BUF, all-format parity and complete P1 remain unfinished.
 use super::{
     Driver, Format,
-    buffer::{Chunk, CopyError, Layout, RawCache, RawFrame},
+    buffer::{Chunk, CopyError, CopyEvidence, Layout, RawCache, RawFrame},
     wait_until,
 };
-use crate::platform::linux::pipewire::{NativeError, Resources, spa, sys};
+use crate::platform::linux::pipewire::{MemFdMap, NativeError, Resources, spa, sys};
 use std::{
     cell::{Cell, UnsafeCell},
     ffi::{c_char, c_void},
@@ -53,6 +53,10 @@ struct Callbacks {
     state: UnsafeCell<State>,
     fault: AtomicU32,
     queue_error: AtomicI32,
+    mapping_error: AtomicI32,
+    unmap_error: AtomicI32,
+    owned_maps: AtomicU64,
+    unmap_calls: AtomicU64,
     dequeued: Arc<AtomicU64>,
     returned: AtomicU64,
     copies: AtomicU64,
@@ -217,38 +221,20 @@ unsafe extern "C" fn on_process(data: *mut c_void) {
             .contains(spa::buffer::DataFlags::READABLE);
         if !readable
             || (kind != spa::buffer::DataType::MemFd && kind != spa::buffer::DataType::MemPtr)
-            || plane.data.is_null()
+            || (plane.data.is_null() && kind == spa::buffer::DataType::MemPtr)
         {
             // Explicit unfinished memory-path rejection. In particular an
             // existing DMA-BUF pointer does not bypass the pending sync audit.
             callbacks.fail(4);
             return;
         }
-        // SAFETY: The chunk descriptor, when present, belongs to the SPA lease.
-        let chunk = unsafe { plane.chunk.as_ref() }.map(|c| Chunk {
-            stride: c.stride,
-            offset: c.offset,
-            size: c.size,
-            flags: c.flags,
-        });
         // No consumer wait/reentrant native operation occurs inside this block.
         let copied = {
             // SAFETY: Only this callback can mutate state under the native lock.
             let state = unsafe { &mut *callbacks.state.get() };
-            Layout::checked(
-                state.width,
-                state.height,
-                state.format,
-                plane.maxsize,
-                chunk,
-            )
-            .and_then(|layout| {
-                // SAFETY: MAP_BUFFERS supplies a CPU-readable plane until lease
-                // return. Layout bounds every target row by chunk/maxsize; only
-                // those initialized rows are read and copied into independent CPU
-                // storage. Existing SHM pointers already include native mapoffset.
-                unsafe { state.cache.copy_native(plane.data.cast(), layout) }
-            })
+            // SAFETY: The native lease retains descriptors/FDs and excludes
+            // producer writes until this synchronous copy and owned unmap end.
+            unsafe { copy_plane(state, plane, callbacks) }
         };
         match copied {
             Ok(evidence) => {
@@ -266,9 +252,73 @@ unsafe extern "C" fn on_process(data: *mut c_void) {
                     sys::pw_thread_loop_signal(callbacks.loop_.get(), false);
                 }
             }
-            Err(error) => callbacks.fail(copy_fault(error)),
+            Err(PlaneError::Copy(error)) => callbacks.fail(copy_fault(error)),
+            Err(PlaneError::Map(error)) => {
+                let _ = callbacks.mapping_error.compare_exchange(
+                    0,
+                    error.code,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                );
+                callbacks.fail(5);
+            }
         }
     });
+}
+#[derive(Debug)]
+enum PlaneError {
+    Copy(CopyError),
+    Map(NativeError),
+}
+/// # Safety
+/// Caller exclusively owns State (the actual loop lock for callback State).
+/// All descriptor/chunk fields and representable nonnegative FDs stay live.
+/// An existing pointer covers the declared readable span; producer writes and
+/// truncation are excluded through copy and mapping destruction. Mapping may
+/// fail without reading pixels. No native pointer escapes this call.
+unsafe fn copy_plane(
+    state: &mut State,
+    plane: &spa::sys::spa_data,
+    callbacks: &Callbacks,
+) -> Result<CopyEvidence, PlaneError> {
+    // SAFETY: Lease retains the optional initialized chunk for this call.
+    let chunk = unsafe { plane.chunk.as_ref() }.map(|c| Chunk {
+        stride: c.stride,
+        offset: c.offset,
+        size: c.size,
+        flags: c.flags,
+    });
+    let capacity = if plane.data.is_null() && plane.maxsize == 0 {
+        chunk.map_or(0, |c| c.size) // same no-pointer MemFd source fallback
+    } else {
+        plane.maxsize
+    };
+    let layout = Layout::checked(state.width, state.height, state.format, capacity, chunk)
+        .map_err(PlaneError::Copy)?;
+    let mapping = if plane.data.is_null() {
+        // SAFETY: Same retained lease, checked target span and channel. The
+        // platform owner verifies descriptor/file extent before its fresh mmap.
+        let mapping = unsafe {
+            MemFdMap::new(
+                plane,
+                layout.readable_span(),
+                &callbacks.unmap_error,
+                &callbacks.unmap_calls,
+            )
+        }
+        .map_err(PlaneError::Map)?;
+        callbacks.add(&callbacks.owned_maps, 1);
+        Some(mapping)
+    } else {
+        None
+    };
+    let pointer = mapping
+        .as_ref()
+        .map_or(plane.data.cast_const().cast(), MemFdMap::pointer);
+    // SAFETY: MAP_BUFFERS retains existing SHM pointers (including native mapoffset)
+    // or the owned map covers these checked target rows. No padding is borrowed.
+    // Guard drop finishes unmap before wanted/signal and the outer buffer return.
+    unsafe { state.cache.copy_native(pointer, layout) }.map_err(PlaneError::Copy)
 }
 fn copy_fault(error: CopyError) -> u32 {
     16 + error as u32
@@ -286,6 +336,10 @@ pub(super) struct Evidence {
     pub fault: u32,
     pub queue_error: i32,
     pub core_disconnect_error: i32,
+    pub mapping_error: i32,
+    pub unmap_error: i32,
+    pub owned_maps: u64,
+    pub unmap_calls: u64,
     pub dequeued: u64,
     pub returned: u64,
     pub copies: u64,
@@ -301,6 +355,10 @@ impl Native {
             state: UnsafeCell::new(State::default()),
             fault: AtomicU32::new(0),
             queue_error: AtomicI32::new(0),
+            mapping_error: AtomicI32::new(0),
+            unmap_error: AtomicI32::new(0),
+            owned_maps: AtomicU64::new(0),
+            unmap_calls: AtomicU64::new(0),
             dequeued: Arc::try_new(AtomicU64::new(0))?,
             returned: AtomicU64::new(0),
             copies: AtomicU64::new(0),
@@ -453,6 +511,10 @@ impl Native {
             fault: self.callbacks.fault.load(Ordering::Acquire),
             queue_error: self.callbacks.queue_error.load(Ordering::Acquire),
             core_disconnect_error: self.resources.core_disconnect_error,
+            mapping_error: self.callbacks.mapping_error.load(Ordering::Acquire),
+            unmap_error: self.callbacks.unmap_error.load(Ordering::Acquire),
+            owned_maps: self.callbacks.owned_maps.load(Ordering::Acquire),
+            unmap_calls: self.callbacks.unmap_calls.load(Ordering::Acquire),
             dequeued: self.callbacks.dequeued.load(Ordering::Acquire),
             returned: self.callbacks.returned.load(Ordering::Acquire),
             copies: self.callbacks.copies.load(Ordering::Acquire),

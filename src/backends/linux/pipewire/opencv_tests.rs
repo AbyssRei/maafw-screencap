@@ -11,6 +11,9 @@ use std::{
     ptr::NonNull,
 };
 
+#[path = "mapping_tests.rs"]
+mod mapping;
+
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 struct View {
@@ -599,6 +602,12 @@ fn captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown() {
             "{evidence:?}"
         );
         assert_eq!(evidence.dequeued, evidence.returned, "{evidence:?}");
+        assert_eq!(
+            (evidence.mapping_error, evidence.unmap_error),
+            (0, 0),
+            "{evidence:?}"
+        );
+        assert_eq!(evidence.owned_maps, evidence.unmap_calls, "{evidence:?}");
         assert_eq!(
             (evidence.copies, evidence.allocated),
             (3, 1),
