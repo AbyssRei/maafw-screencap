@@ -54,6 +54,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'original-macos-display' -and $observed -notmatch 'original macOS display captures=1 retained=1 known_pixels=not_asserted passed'){
             $status='failed';throw 'Expected one actual original first-display layout/owner observation, separate from pixel acceptance'
         }
+        if($Name -eq 'rust-macos-core-dependencies' -and $observed -match '(?m)^(objc2-app-kit|opencv) v'){
+            $status='failed';throw 'Direct capture-only core graph contains an acceptance/AppKit crate dependency'
+        }
         if($Name -match '^rust-macos-(capture|exception|timeout|display)-original-oracle$' -and $observed -notmatch 'original macOS external_window captures=1 known_interior=1 passed'){
             $status='failed';throw 'Expected the unchanged source to capture the same owned external window'
         }
@@ -98,6 +101,17 @@ try {
     if($SourceReference){
         try { Step rust-macos-migration-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-macos,macos-screen-capture-kit','--','-D','warnings') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
+        # Direct Cargo consumer entry: explicit capture capability, without the
+        # prototype's AppKit feature or its prepared P0 feature configuration.
+        # Xcode/SDK selection remains the same; restore the environment exactly.
+        $prototypeConfiguration=$env:MFS_BUILD_CONFIGURATION
+        try {
+            Remove-Item Env:MFS_BUILD_CONFIGURATION -ErrorAction SilentlyContinue
+            try { Step rust-macos-core-only-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','macos-screen-capture-kit') }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+            try { Step rust-macos-core-dependencies cargo @('tree','--locked','--no-default-features','--features','macos-screen-capture-kit','--target','aarch64-apple-darwin','--edges','normal,build','--prefix','none') }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+        }finally{$env:MFS_BUILD_CONFIGURATION=$prototypeConfiguration}
         . (Join-Path $PSScriptRoot prepare-macos-reference.ps1)
         $executable=Prepare-MacosReference $UpstreamRoot
         $referenceArtifacts=Join-Path $RunRoot macos-arm64/reference-u/artifacts
