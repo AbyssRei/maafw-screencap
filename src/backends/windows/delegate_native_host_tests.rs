@@ -30,6 +30,7 @@ struct Stats {
     conversions: Cell<usize>,
     captures: Cell<u32>,
     inactive: Cell<u32>,
+    selected: Cell<u64>,
 }
 struct Context {
     output: ManagerImage<CpuImage>,
@@ -95,6 +96,11 @@ unsafe extern "C" fn connect(user: *mut c_void, context: *mut c_void, output: *m
         let context = unsafe { &mut *context.cast::<Context>() };
         let mut converter = context.adapter.converter(0);
         let report = context.manager.connect_native(&mut converter);
+        stats.selected.set(
+            report
+                .selected
+                .map_or(0, |method| 1u64 << ((method as u32) - 1)),
+        );
         stats
             .conversions
             .set(stats.conversions.get() + converter.conversions);
@@ -186,6 +192,7 @@ impl<'a> Guard<'a> {
             conversions: Cell::new(0),
             captures: Cell::new(0),
             inactive: Cell::new(0),
+            selected: Cell::new(0),
         })
         .unwrap();
         // SAFETY: Header/layout verified by Ops; stable Box is kept through
@@ -226,6 +233,9 @@ impl<'a> Guard<'a> {
             u64::from(stats.captures.get()),
             u64::from(stats.inactive.get()),
         ]
+    }
+    pub(super) fn selected(&self) -> u64 {
+        self.stats.as_ref().unwrap().selected.get()
     }
 }
 impl Drop for Guard<'_> {

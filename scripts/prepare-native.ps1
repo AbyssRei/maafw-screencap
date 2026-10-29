@@ -34,6 +34,7 @@ $pending = [Collections.Generic.List[string]]::new()
 $nativeMissingEnvironment = $false
 $delegateNativeEvidence = ''
 $delegateFactoryEvidence = ''
+$delegateRuntimeEvidence = ''
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
@@ -226,6 +227,16 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             & $ConfigureTool upstream-delegate win32-factory $env:MFS_DELEGATE_FACTORY_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual factory construction records failed independent verification'}
+        }
+        if($Name -match '^manager-delegate-runtime-(1|2|4|8|16|32|63)$' -and $exitCode -eq 0) {
+            $runtimeMask=$Matches[1]
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains("real native runtime method=$runtimeMask; source_lifecycles=20 Rust_lifecycles=20; source_retained=60 Rust_retained=60; actual factory/virtual capture and window/module shutdown=1 passed")) {
+                throw 'Expected actual original/Rust factory capture/lifetime case, not constructor or zero-test success'
+            }
+            & $ConfigureTool upstream-delegate win32-runtime $runtimeMask $env:MFS_DELEGATE_RUNTIME_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Actual native runtime images/owners/events failed independent verification'}
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -553,13 +564,13 @@ try {
     if ($framePoolSource) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_REFERENCE=ON' }
     if ($FramePoolParity) { $parityOptions += '-DMFS_BUILD_FRAMEPOOL_PARITY=ON' }
     if ($DesktopDupParity) { $parityOptions += '-DMFS_BUILD_DESKTOP_DUP_REFERENCE=ON' }
-    if ($ManagerParity) { $parityOptions += '-DMFS_BUILD_MANAGER_PARITY=ON' }
+    if ($ManagerParity) { $parityOptions += @('-DMFS_BUILD_MANAGER_PARITY=ON','-DMFS_BUILD_RENDER_FIXTURE=ON') }
     if ($PipeWireControl) { $parityOptions += '-DMFS_BUILD_PIPEWIRE_CONTROL=ON' }
     if ($CustomParity) { $parityOptions += @('-DMFS_BUILD_CUSTOM_PARITY=ON','-DMFS_BUILD_REFERENCE=OFF') }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
-    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity),@('MFS_BUILD_PIPEWIRE_CONTROL',[bool]$PipeWireControl),@('MFS_BUILD_CUSTOM_PARITY',[bool]$CustomParity))) {
+    foreach ($selection in @(@('MFS_BUILD_GDI_PARITY',[bool]$GdiParity),@('MFS_BUILD_PRINT_PARITY',[bool]$PrintWindowParity),@('MFS_BUILD_SCREEN_PARITY',[bool]$ScreenDcParity),@('MFS_BUILD_FRAMEPOOL_REFERENCE',[bool]$framePoolSource),@('MFS_BUILD_FRAMEPOOL_PARITY',[bool]$FramePoolParity),@('MFS_BUILD_DESKTOP_DUP_REFERENCE',[bool]$DesktopDupParity),@('MFS_BUILD_MANAGER_PARITY',[bool]$ManagerParity),@('MFS_BUILD_RENDER_FIXTURE',[bool]$ManagerParity),@('MFS_BUILD_PIPEWIRE_CONTROL',[bool]$PipeWireControl),@('MFS_BUILD_CUSTOM_PARITY',[bool]$CustomParity))) {
         $expectedValue = if ($selection[1]) { 'ON' } else { 'OFF' }
         $pattern = '(?m)^' + [regex]::Escape($selection[0]) + ':BOOL=' + $expectedValue + '\r?$'
         if (-not [regex]::IsMatch($referenceCache,$pattern)) { throw "CMake did not select $($selection[0])=$expectedValue" }
@@ -615,7 +626,7 @@ try {
             foreach($name in @('win32-info-source.inc','win32-info-members.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
-            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc')) {Save-Input (Prepared-File $name)}
+            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
             $env:MFS_DELEGATE_NATIVE_BUILD=Split-Path -Parent (Prepared-File mfs_delegate_bridge.dll)
         } else {
             # Adapt the native batch's record helpers without shadowing inputs.
@@ -630,7 +641,7 @@ try {
             Save-ManagerMetadataReference $metadataBuild $inputsRoot $metadataEvidence
             $delegateBuild=Join-Path $nativeRoot ('delegate-'+[DateTime]::UtcNow.Ticks)
             Step windows-delegate-configure $cmake (@('-S',(Join-Path $productRoot tests/upstream-parity/windows-delegate),'-B',$delegateBuild,'-DMFS_BUILD_NATIVE_DELEGATE=ON',"-DMFS_UPSTREAM_ROOT=$UpstreamRoot","-DMFS_MAAUTILS_ROOT=$maautils","-DMFS_BOOST_ROOT=$boost","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)","-DOpenCV_DIR=$opencvInstall")+$generator)
-            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','--parallel','4')
+            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','--parallel','4')
             foreach($item in @(@('delegate-loader.inc','windows-delegate-loader.inc'),@('delegate-source.inc','windows-delegate-source.inc'),@('delegate-condition.inc','windows-delegate-condition.inc'),@('original-LibraryHolder.h','windows-delegate-LibraryHolder.h'),@('source-scope.txt','windows-delegate-scope.txt'),@('CMakeCache.txt','windows-delegate-CMakeCache.txt'),@('toolchain-Release.txt','windows-delegate-toolchain-Release.txt'),@('Release/mfs_windows_delegate_model.exe','mfs_windows_delegate_model.exe'))) {
                 $saved=Join-Path $inputsRoot $item[1]
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
@@ -641,7 +652,7 @@ try {
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
                 Save-Input $saved
             }
-            foreach($name in @('mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe')) {
+            foreach($name in @('mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','mfs_delegate_runtime_source.exe')) {
                 $saved=Join-Path $inputsRoot $name
                 Copy-Item -LiteralPath (Join-Path $delegateBuild "Release/$name") -Destination $saved
                 Save-Input $saved
@@ -655,6 +666,8 @@ try {
         $env:MFS_DELEGATE_NATIVE_RECORDS=$delegateNativeEvidence
         $delegateFactoryEvidence=Join-Path $artifacts windows-delegate-factory
         $env:MFS_DELEGATE_FACTORY_RECORDS=$delegateFactoryEvidence
+        $delegateRuntimeEvidence=Join-Path $artifacts windows-delegate-runtime
+        New-Item -ItemType Directory -Path $delegateRuntimeEvidence | Out-Null
     }
     if ($PipeWireControl) {
         Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
@@ -790,7 +803,8 @@ try {
             $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
-            $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase)
+            $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
+            $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
@@ -804,6 +818,12 @@ try {
             foreach ($check in $managerChecks) {
                 try { Step $check.name cargo $check.arguments }
                 catch { $failed=$true; Write-Host $_.Exception.Message }
+            }
+            foreach($runtimeMask in @(1,2,4,8,16,32,63)) {
+                $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$runtimeMask
+                $env:MFS_DELEGATE_RUNTIME_RECORDS=Join-Path $delegateRuntimeEvidence "method-$runtimeMask"
+                try {Step "manager-delegate-runtime-$runtimeMask" cargo ($parityArguments+@('--',$delegateRuntimeCase,'--exact','--ignored','--test-threads=1','--nocapture'))}
+                catch {$failed=$true;Write-Host $_.Exception.Message}
             }
         } else {
             Step 'gdi-original-parity' cargo ($parityArguments + @('--') + $caseSelection)
@@ -868,6 +888,8 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if($geometryEvidence -and (Test-Path -LiteralPath $geometryEvidence)) {Get-ChildItem -LiteralPath $geometryEvidence -File|ForEach-Object {Save-Input $_.FullName}}
+    if($delegateRuntimeEvidence -and (Test-Path -LiteralPath $delegateRuntimeEvidence)) {Get-ChildItem -LiteralPath $delegateRuntimeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}

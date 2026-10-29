@@ -72,7 +72,18 @@ struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
 #ifdef MFS_RUST_PROVIDER
         int32_t result=0;require_host(mfs_dn_host_connect(context,&result),"Rust host connect");return result!=0;
 #else
-        return manager.connect();
+        const auto result=manager.connect();
+        if(mfs_dn_mode()==5) {
+            const auto* unit=manager.screencap_.get();uint64_t selected=0;
+            if(dynamic_cast<const Source::GdiScreencap*>(unit)) { selected=1; }
+            else if(dynamic_cast<const Source::FramePoolWithPseudoMinimizeScreencap*>(unit)) { selected=2; }
+            else if(dynamic_cast<const Source::DesktopDupWindowScreencap*>(unit)) { selected=8; }
+            else if(dynamic_cast<const Source::DesktopDupScreencap*>(unit)) { selected=4; }
+            else if(dynamic_cast<const Source::PrintWindowWithPseudoMinimizeScreencap*>(unit)) { selected=16; }
+            else if(dynamic_cast<const Source::ScreenDCScreencap*>(unit)) { selected=32; }
+            mfs_dn_event(7,selected,0,0,0);
+        }
+        return result;
 #endif
     }
     bool screencap(cv::Mat& image) override {
