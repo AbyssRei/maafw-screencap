@@ -343,6 +343,12 @@ fn run_raw_probe(supplied_fd: bool) {
         assert_eq!(evidence.fault, 0, "{evidence:?}");
         assert_eq!(evidence.queue_error, 0, "{evidence:?}");
         assert_eq!(evidence.core_disconnect_error, 0, "{evidence:?}");
+        assert_eq!(
+            (evidence.mapping_error, evidence.unmap_error),
+            (0, 0),
+            "{evidence:?}"
+        );
+        assert_eq!(evidence.owned_maps, evidence.unmap_calls, "{evidence:?}");
         assert_eq!(evidence.dequeued, evidence.returned, "{evidence:?}");
         assert_eq!(evidence.copies, 3, "{evidence:?}");
         assert_eq!(

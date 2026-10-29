@@ -83,6 +83,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-source-format-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved') {
             throw 'Expected twenty-eight original native POD/parser/conversion fixtures'
         }
+        if ($Name -eq 'pipewire-source-memfd-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed') {
+            throw 'Expected real original MemFd helper mappings, FD preservation and retained BGR owners'
+        }
+        if ($Name -eq 'rust-pipewire-memfd-helper') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native MemFd helper cycles=20 copies=60 owning_maps=60 observed_maps=60 unmap_calls=120 rejected=6 retained_rgb=60 retained_bgr=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected one native MemFd helper test with real map/unmap, six failures and sixty RGB/BGR owners'
+            }
+        }
         if ($Name -eq 'rust-pipewire-native-formats') {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native PipeWire format oracle cases=28 formats=7 conversions=24 bgr_reuses=4 exact_bytes=1 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -278,6 +287,8 @@ try {
         $env:MFS_P1_PIPEWIRE_POD_ORACLE=$podDirectory
         $formatDirectory=Join-Path $referenceArtifacts formats
         $env:MFS_P1_PIPEWIRE_FORMAT_ORACLE=$formatDirectory
+        $memfdDirectory=Join-Path $referenceArtifacts memfd
+        $env:MFS_P1_PIPEWIRE_MEMFD_ORACLE=$memfdDirectory
         Json (Join-Path $rustArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Raw native driver probe; RawAudit preserves RGB and does not implement OpenCV conversion or source/BGR parity.'})
         Json (Join-Path $fdArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Explicit unsafe supplied private socket success path, twenty consumed descriptors closed after native teardown; no Portal authorization, generic failure ownership or safe host FD contract is established.'})
         Json (Join-Path $bgrArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';scope='Actual C++/OpenCV conversion after native unlock; twenty callback-progress witnesses add diagnostic waiting, not source latency parity. Native opaque Mat/loader mobility and full all-format/fault parity remain pending.'})
@@ -286,6 +297,10 @@ try {
         try { Step pipewire-source-format-fixtures $sourceExecutable @('--format-fixtures',$formatDirectory) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-native-formats timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::matches_original_format_pods_and_padded_conversion_bytes','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-source-memfd-fixtures timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--memfd-fixtures',$memfdDirectory) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-memfd-helper timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::mapping::matches_original_memfd_maps_and_retains_cpu_images_after_unmap','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
