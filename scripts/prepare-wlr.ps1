@@ -79,6 +79,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected twenty actual FD-zero lifecycles with observed source residuals and separately reclaimed fixture resources'
             }
         }
+        $rustContextSummary=switch($Name){
+            'rust-wlr-shared-client' {'native Rust Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained_raw=60 retained_bgr=60 independent_buffers=20 resources_balanced=1 passed'}
+            'rust-wlr-reconnect' {'native Rust Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 same_missing_retry=20 subsequent_connect=20 captures=20 retained_raw=20 retained_bgr=20 resources_balanced=1 passed'}
+            default {$null}
+        }
+        if($rustContextSummary){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or -not $observed.Contains($rustContextSummary)){
+                throw 'Expected the complete native Rust shared-client/reconnect test and retained raw/BGR images'
+            }
+        }
         $status='passed'
     }finally{$checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)});Write-Host "${Name}: $status"}
 }
@@ -308,6 +319,10 @@ try{
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-fd-zero timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::retains_original_fd_zero_residual_and_cpu_outputs_until_fixture_reclaim','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
+        foreach($probe in @(@('shared-client','retains_shared_client_after_caller_and_first_capture_release'),@('reconnect','reconnects_same_and_changed_paths_after_old_capture_owners_end'))){
+            try { Step ('rust-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr',('backends::linux::wlr::tests::'+$probe[1]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+        }
     }else{
         Step rust-wlr-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr','--','-D','warnings')
         Step rust-wlr-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--test','p0-interop','--features','prototype-linux-wlr','--','--include-ignored','--test-threads=1','--nocapture')

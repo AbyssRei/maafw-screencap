@@ -255,6 +255,319 @@ fn warm(adapter: &Adapter) {
     assert_eq!(adapter.owners(), 0);
 }
 
+fn context_capture<'a>(
+    capture: &mut Capture,
+    adapter: &'a Adapter,
+    directory: &Path,
+    oracle: &Path,
+    stem: &str,
+    held_raw: &mut Vec<Sample>,
+) -> Image<'a> {
+    let counts = capture.context.counts.clone();
+    let before = counts.destroyed.load(Ordering::Acquire);
+    let image = capture
+        .capture_with(|sample| {
+            raw(&sample);
+            std::fs::write(directory.join(format!("{stem}.raw")), sample.pixels()).unwrap();
+            std::fs::write(
+                directory.join(format!("{stem}.meta.txt")),
+                format!(
+                    "conversion={:?}\nwidth={}\nheight={}\nnative_stride={}\nready_time={:?}\nflags={:?}\n",
+                    sample.conversion, sample.width, sample.height, sample.native_stride,
+                    sample.ready_time, sample.flags
+                ),
+            ).unwrap();
+            held_raw.push(sample.clone());
+            let image = adapter.convert(sample, 0)?;
+            assert_eq!(counts.destroyed.load(Ordering::Acquire), before);
+            Ok(image)
+        })
+        .unwrap();
+    assert_eq!(counts.destroyed.load(Ordering::Acquire), before + 1);
+    bgr(image.pixels());
+    assert_eq!(
+        image.pixels(),
+        std::fs::read(oracle.join(format!("{stem}.bgr"))).unwrap()
+    );
+    std::fs::write(directory.join(format!("{stem}.bgr")), image.pixels()).unwrap();
+    image
+}
+
+fn released_counts(counts: &Counts) {
+    assert_eq!(counts.cleanup.load(Ordering::Acquire), 0);
+    assert_eq!(counts.source_fd_zero_retained.load(Ordering::Acquire), 0);
+    assert_eq!(
+        counts.data_created.load(Ordering::Acquire),
+        counts.destroyed.load(Ordering::Acquire)
+    );
+    assert_eq!(
+        counts.data_created.load(Ordering::Acquire),
+        counts.data_dropped.load(Ordering::Acquire)
+    );
+}
+
+#[test]
+#[ignore = "requires native owned compositor and original shared-client oracle"]
+fn retains_shared_client_after_caller_and_first_capture_release() {
+    let socket = env::var_os("MFS_P0_WLR_SOCKET").unwrap();
+    let directory =
+        PathBuf::from(env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap()).join("shared-client");
+    let oracle =
+        PathBuf::from(env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap()).join("shared-client");
+    std::fs::create_dir(&directory).unwrap();
+    let adapter = Adapter::open();
+    warm(&adapter);
+    let baseline_fds = fds();
+    let baseline_tasks = tasks();
+    let mut held_raw = Vec::new();
+    held_raw.try_reserve_exact(60).unwrap();
+    let mut held_bgr = Vec::new();
+    held_bgr.try_reserve_exact(60).unwrap();
+    for cycle in 0..20 {
+        let mut client = Client::new().unwrap();
+        assert!(client.connect(Path::new(&socket)).unwrap());
+        let client = client.into_shared().unwrap();
+        let owner = Arc::downgrade(&client);
+        let counts = client.context.counts.clone();
+        let client_context = Arc::downgrade(&client.context);
+        let mut first = Capture::from_client(client.clone()).unwrap();
+        let first_context = Arc::downgrade(&first.context);
+        let mut second = Capture::from_client(client.clone()).unwrap();
+        assert!(Arc::ptr_eq(
+            first.client.as_ref().unwrap(),
+            second.client.as_ref().unwrap()
+        ));
+        // Constructor snapshots point to the actual same client globals, while
+        // the mutable frame/buffer contexts are distinct.
+        assert!(!Arc::ptr_eq(&first.context, &second.context));
+        {
+            let a = first.context.state().unwrap();
+            let b = second.context.state().unwrap();
+            assert!(Arc::ptr_eq(
+                a.output.as_ref().unwrap(),
+                b.output.as_ref().unwrap()
+            ));
+            assert!(Arc::ptr_eq(
+                a.shm.as_ref().unwrap(),
+                b.shm.as_ref().unwrap()
+            ));
+            assert!(Arc::ptr_eq(
+                a.manager.as_ref().unwrap(),
+                b.manager.as_ref().unwrap()
+            ));
+        }
+        drop(client);
+        assert_eq!(owner.strong_count(), 2);
+        for call in 0..2 {
+            let source = if call == 0 { &mut first } else { &mut second };
+            held_bgr.push(context_capture(
+                source,
+                &adapter,
+                &directory,
+                &oracle,
+                &format!("shared-{cycle}-{call}"),
+                &mut held_raw,
+            ));
+            if call == 0 {
+                assert!(second.context.state().unwrap().buffer.is_none());
+            }
+        }
+        {
+            let a = first.context.state().unwrap();
+            let b = second.context.state().unwrap();
+            assert_ne!(
+                a.buffer.as_ref().unwrap().file.as_raw_fd(),
+                b.buffer.as_ref().unwrap().file.as_raw_fd()
+            );
+        }
+        drop(first);
+        assert!(first_context.upgrade().is_none());
+        assert_eq!(owner.strong_count(), 1);
+        held_bgr.push(context_capture(
+            &mut second,
+            &adapter,
+            &directory,
+            &oracle,
+            &format!("shared-{cycle}-2"),
+            &mut held_raw,
+        ));
+        // Only an idle, Ready-completed map is overwritten. All previously
+        // returned raw and BGR owners must remain independent of either buffer.
+        second
+            .context
+            .state()
+            .unwrap()
+            .buffer
+            .as_mut()
+            .unwrap()
+            .map
+            .fill(0);
+        assert_eq!(counts.frames.load(Ordering::Acquire), 3);
+        assert_eq!(second.evidence().fault, 0);
+        assert_eq!(second.evidence().buffer_error, 0);
+        drop(second);
+        assert!(owner.upgrade().is_none());
+        assert!(client_context.upgrade().is_none());
+        released_counts(&counts);
+        assert_eq!(fds(), baseline_fds);
+        assert_eq!(tasks(), baseline_tasks);
+        for sample in &held_raw {
+            raw(sample);
+        }
+        for image in &held_bgr {
+            bgr(image.pixels());
+        }
+        eprintln!(
+            "native Wlr shared cycle={cycle} held={} fds={} baseline_fds={baseline_fds} client_released=1 callbacks_released=1",
+            held_bgr.len(),
+            fds()
+        );
+    }
+    std::thread::spawn(move || {
+        for sample in held_raw {
+            raw(&sample);
+        }
+    })
+    .join()
+    .unwrap();
+    drop(held_bgr);
+    assert_eq!(adapter.owners(), 0);
+    drop(adapter);
+    assert_eq!(LOADER_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "native Rust Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained_raw=60 retained_bgr=60 independent_buffers=20 resources_balanced=1 passed"
+    );
+}
+
+#[test]
+#[ignore = "requires native owned compositor and original safe-reconnect oracle"]
+fn reconnects_same_and_changed_paths_after_old_capture_owners_end() {
+    let socket = PathBuf::from(env::var_os("MFS_P0_WLR_SOCKET").unwrap());
+    let alias = socket.parent().unwrap().join("mfs-rust-alias");
+    let missing = socket.parent().unwrap().join("mfs-rust-missing");
+    assert!(!alias.exists() && !missing.exists());
+    std::os::unix::fs::symlink(&socket, &alias).unwrap();
+    struct Alias(PathBuf);
+    impl Drop for Alias {
+        fn drop(&mut self) {
+            std::fs::remove_file(&self.0).unwrap();
+        }
+    }
+    let alias = Alias(alias);
+    let directory =
+        PathBuf::from(env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap()).join("reconnect");
+    let oracle =
+        PathBuf::from(env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap()).join("reconnect");
+    std::fs::create_dir(&directory).unwrap();
+    let adapter = Adapter::open();
+    warm(&adapter);
+    let baseline_fds = fds();
+    let baseline_tasks = tasks();
+    let mut held_raw = Vec::new();
+    held_raw.try_reserve_exact(20).unwrap();
+    let mut held_bgr = Vec::new();
+    held_bgr.try_reserve_exact(20).unwrap();
+    for cycle in 0..20 {
+        let mut client = Client::new().unwrap();
+        let counts = client.context.counts.clone();
+        assert!(client.connect(&socket).unwrap());
+        let output_id = client
+            .context
+            .state()
+            .unwrap()
+            .globals
+            .output
+            .as_ref()
+            .unwrap()
+            .proxy
+            .id()
+            .protocol_id();
+        let before = counts.outer.load(Ordering::Acquire);
+        let data_before = counts.data_created.load(Ordering::Acquire);
+        assert!(client.connect(&socket).unwrap());
+        assert_eq!(counts.outer.load(Ordering::Acquire), before);
+        assert_eq!(counts.data_created.load(Ordering::Acquire), data_before);
+        assert_eq!(
+            client
+                .context
+                .state()
+                .unwrap()
+                .globals
+                .output
+                .as_ref()
+                .unwrap()
+                .proxy
+                .id()
+                .protocol_id(),
+            output_id
+        );
+        client.close();
+        client.close();
+        assert!(!client.connected().unwrap());
+        released_counts(&counts);
+        assert!(client.connect(&socket).unwrap());
+        assert!(counts.outer.load(Ordering::Acquire) > before);
+        let before_change = counts.outer.load(Ordering::Acquire);
+        assert!(client.connect(&alias.0).unwrap());
+        assert!(counts.outer.load(Ordering::Acquire) > before_change);
+        let client = client.into_shared().unwrap();
+        let mut source = Capture::from_client(client.clone()).unwrap();
+        held_bgr.push(context_capture(
+            &mut source,
+            &adapter,
+            &directory,
+            &oracle,
+            &format!("reconnected-{cycle}"),
+            &mut held_raw,
+        ));
+        drop(source);
+        // Unique native owner is recovered only after all capture/proxy
+        // snapshots have ended. No disconnect under a foreign backend clone.
+        let mut client =
+            Arc::try_unwrap(client).unwrap_or_else(|_| panic!("live old client owner"));
+        assert!(client.connect(&missing).is_err());
+        assert!(!client.connected().unwrap());
+        assert!(client.channel.is_none());
+        assert!(client.context.state().unwrap().globals.output.is_none());
+        assert_eq!(client.socket_path, missing);
+        released_counts(&counts);
+        let before_missing = counts.outer.load(Ordering::Acquire);
+        assert!(client.connect(&missing).is_err());
+        assert_eq!(counts.outer.load(Ordering::Acquire), before_missing);
+        assert!(client.connect(&socket).unwrap());
+        client.close();
+        released_counts(&counts);
+        drop(client);
+        assert_eq!(fds(), baseline_fds);
+        assert_eq!(tasks(), baseline_tasks);
+        for sample in &held_raw {
+            raw(sample);
+        }
+        for image in &held_bgr {
+            bgr(image.pixels());
+        }
+        eprintln!(
+            "native Wlr reconnect cycle={cycle} fds={} baseline_fds={baseline_fds} roundtrips={}",
+            fds(),
+            counts.outer.load(Ordering::Acquire)
+        );
+    }
+    std::thread::spawn(move || {
+        for sample in held_raw {
+            raw(&sample);
+        }
+    })
+    .join()
+    .unwrap();
+    drop(held_bgr);
+    assert_eq!(adapter.owners(), 0);
+    drop(adapter);
+    assert_eq!(LOADER_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "native Rust Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 same_missing_retry=20 subsequent_connect=20 captures=20 retained_raw=20 retained_bgr=20 resources_balanced=1 passed"
+    );
+}
+
 #[test]
 fn rejects_overflowing_native_layouts_and_unsupported_source_conversions() {
     for layout in [
