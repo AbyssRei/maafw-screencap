@@ -14,6 +14,9 @@ use std::{
 #[path = "mapping_tests.rs"]
 mod mapping;
 
+#[path = "dma_tests.rs"]
+mod dma;
+
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 struct View {
