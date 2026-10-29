@@ -189,20 +189,24 @@ function Prepare-DmaKernelFixture {
     "scope=owned acceptance fixture only; no local/self-hosted module or permission changes"|Set-Content -LiteralPath $log -Encoding utf8
     # Root preparation is restricted to the ephemeral GitHub-hosted Linux VM.
     # Use only its installed kernel module; no module download/build.
-    if($env:GITHUB_ACTIONS -eq 'true' -and $env:RUNNER_ENVIRONMENT -eq 'github-hosted' -and -not(Test-Path -LiteralPath '/dev/udmabuf')){
-        $modinfo=Get-Command modinfo -ErrorAction SilentlyContinue
-        if($modinfo){
-            & $modinfo.Source -F filename udmabuf >> $log 2>&1
-            if($LASTEXITCODE -eq 0){
-                & sudo -n modprobe udmabuf >> $log 2>&1
-                "module_load_exit=$LASTEXITCODE"|Add-Content -LiteralPath $log -Encoding utf8
-                if(Test-Path -LiteralPath '/dev/udmabuf'){
-                    $fixtureUid=(& id -u|Out-String).Trim()
-                    if($LASTEXITCODE -ne 0 -or $fixtureUid -notmatch '^\d+$'){throw 'Cannot identify fixture user'}
-                    & sudo -n chown -- $fixtureUid /dev/udmabuf >> $log 2>&1
-                    "device_owner_exit=$LASTEXITCODE"|Add-Content -LiteralPath $log -Encoding utf8
+    if($env:GITHUB_ACTIONS -eq 'true' -and $env:RUNNER_ENVIRONMENT -eq 'github-hosted'){
+        if(-not(Test-Path -LiteralPath '/dev/udmabuf')){
+            $modinfo=Get-Command modinfo -ErrorAction SilentlyContinue
+            if($modinfo){
+                & $modinfo.Source -F filename udmabuf >> $log 2>&1
+                if($LASTEXITCODE -eq 0){
+                    & sudo -n modprobe udmabuf >> $log 2>&1
+                    "module_load_exit=$LASTEXITCODE"|Add-Content -LiteralPath $log -Encoding utf8
                 }
             }
+        }
+        # Hosted images may already load udmabuf as root:kvm. Its presence
+        # does not establish access by this isolated acceptance process.
+        if(Test-Path -LiteralPath '/dev/udmabuf'){
+            $fixtureUid=(& id -u|Out-String).Trim()
+            if($LASTEXITCODE -ne 0 -or $fixtureUid -notmatch '^\d+$'){throw 'Cannot identify fixture user'}
+            & sudo -n chown -- $fixtureUid /dev/udmabuf >> $log 2>&1
+            "device_owner_exit=$LASTEXITCODE"|Add-Content -LiteralPath $log -Encoding utf8
         }
     }
     foreach($path in @('/dev/udmabuf','/dev/dma_heap/system')){
