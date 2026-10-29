@@ -62,7 +62,7 @@ fn run(supplied_fd: bool) {
             .join(env::var("PIPEWIRE_REMOTE").unwrap()),
         Path::new(&socket)
     );
-    let node = env::var("MFS_P0_PIPEWIRE_NODE_ID")
+    let node: u32 = env::var("MFS_P0_PIPEWIRE_NODE_ID")
         .unwrap()
         .parse()
         .unwrap();
