@@ -195,6 +195,7 @@ void reconnect_client(const std::filesystem::path& socket,const std::filesystem:
     }
     std::cout<<"original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed\n";
 }
+#include "name-context.hpp"
 void fd_zero(const std::filesystem::path& directory) {
     constexpr int size=12288;
     const auto baseline_fds=count("/proc/self/fd");
@@ -265,7 +266,7 @@ std::string make_uuid() {
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager]");
+        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager|nul-names]");
         Dl_info owner{};
         // The linked wrapper has its own address; inspect the real target.
         require(dladdr(reinterpret_cast<void*>(&__real_wl_display_roundtrip),&owner)!=0 && owner.dli_fname,
@@ -284,6 +285,7 @@ int main(int argc,char** argv) {
             else if(mode=="manager") { manager_context(argv[1],directory); }
             else if(mode=="reconnect") { reconnect_client(argv[1],directory); }
             else if(mode=="fd-zero") { fd_zero(directory); }
+            else if(mode=="nul-names") { nul_names(argv[1],directory); }
             else { throw std::runtime_error("unknown original Wlr context mode"); }
             return 0;
         }
