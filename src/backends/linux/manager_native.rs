@@ -283,6 +283,9 @@ pub(in crate::backends::linux) enum Evidence {
 pub(in crate::backends::linux) struct Attempt<E> {
     pub result: Result<bool, CaptureFailure<E>>,
     pub evidence: Evidence,
+    // Original PipeWire consumer replay decision, without a new SDK policy.
+    // Other methods do not supply this evidence.
+    pub replayed: Option<bool>,
 }
 impl super::NativeManager {
     pub fn connect_native(&mut self) -> Result<Connection, Error> {
@@ -323,6 +326,7 @@ impl super::NativeManager {
         output: &mut C::Image,
         converter: &mut C,
     ) -> Attempt<C::Error> {
+        let mut replayed = None;
         let result = self.capture_with(output, |unit, output| match &mut unit.unit {
             Unit::None => {
                 let _ = converter;
@@ -342,6 +346,7 @@ impl super::NativeManager {
                 driver, consumer, ..
             } => {
                 let result = consumer.capture(driver, &mut PipeConverter(converter));
+                replayed = Some(result.replayed);
                 let image = match result.image {
                     Ok(Some(image)) => image,
                     Ok(None) => converter.empty().map_err(CaptureFailure::Conversion)?,
@@ -357,6 +362,7 @@ impl super::NativeManager {
         Attempt {
             result,
             evidence: self.native_evidence(),
+            replayed,
         }
     }
     fn native_evidence(&self) -> Evidence {
