@@ -26,6 +26,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../linux-manager" linux-manager)
 target_compile_definitions(mfs_pipewire_source_context PRIVATE _GNU_SOURCE)
 target_include_directories(mfs_pipewire_source_context PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/overlay" "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+    "${CMAKE_CURRENT_BINARY_DIR}/linux-manager" "${MFS_UPSTREAM_ROOT}/include"
     "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit" "${MFS_DRM_INCLUDE}"
     ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mfs_pipewire_source_context PRIVATE PkgConfig::PIPEWIRE Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
