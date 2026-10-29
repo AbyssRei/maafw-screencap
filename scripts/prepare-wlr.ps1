@@ -50,6 +50,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
             'original-wlr-fd-zero' {'original MemfdBuffer fd_zero=1 available=1 destructor_fd_retained=1 destructor_mapping_retained=1 fixture_reclaimed=1 product_cleanup_success=0 passed'}
+            'original-wlr-manager' {'original Wlr manager cycles=20 captures=60 connects=40 retained=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
             default {$null}
         }
         if($sourceSummary -and -not (Get-Content -LiteralPath $log -Raw).Contains($sourceSummary)){
@@ -82,6 +83,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         $rustContextSummary=switch($Name){
             'rust-wlr-shared-client' {'native Rust Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained_raw=60 retained_bgr=60 independent_buffers=20 resources_balanced=1 passed'}
             'rust-wlr-reconnect' {'native Rust Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 same_missing_retry=20 subsequent_connect=20 captures=20 retained_raw=20 retained_bgr=20 resources_balanced=1 passed'}
+            'rust-wlr-manager' {'native Rust Wlr manager cycles=20 captures=60 connects=40 retained_raw=60 retained_bgr=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
             default {$null}
         }
         if($rustContextSummary){
@@ -89,6 +91,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or -not $observed.Contains($rustContextSummary)){
                 throw 'Expected the complete native Rust shared-client/reconnect test and retained raw/BGR images'
             }
+        }
+        if($Name -eq 'rust-wlr-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+            throw 'Expected one actual native None/unimplemented-manager control'
         }
         $status='passed'
     }finally{$checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)});Write-Host "${Name}: $status"}
@@ -299,7 +304,7 @@ try{
     if($SourceReference){
         try { Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
-        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('fd-zero','fd-zero'))){
+        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('fd-zero','fd-zero'),@('manager','manager'))){
             $probeArtifacts=Join-Path $referenceArtifacts $probe[0]
             New-Item -ItemType Directory -Path $probeArtifacts|Out-Null
             try { Step ('original-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$probeArtifacts,$library,$probe[1]) }
@@ -308,8 +313,14 @@ try{
         $env:MFS_P1_WLR_SOURCE_ARTIFACTS=$referenceArtifacts
         $env:MFS_P1_WLR_RUST_ARTIFACTS=Join-Path $referenceArtifacts rust
         New-Item -ItemType Directory -Path $env:MFS_P1_WLR_RUST_ARTIFACTS -Force|Out-Null
+        $managerOracles=@(Get-ChildItem (Join-Path $referenceArtifacts manager) -File -Filter '*.bgr'|ForEach-Object{[ordered]@{name=$_.Name;sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant()}})
+        $managerHashes=Join-Path $referenceArtifacts manager-original-hashes.json
+        Json $managerHashes ([ordered]@{recorded_before_rust=$true;images=$managerOracles});Save $managerHashes
+        if($managerOracles.Count -ne 60){$failed=$true;Write-Host 'Original manager oracle is incomplete; retain failures without retry'}
         Json (Join-Path $env:MFS_P1_WLR_RUST_ARTIFACTS geometry.json) ([ordered]@{width=64;height=48;bgr_stride=192;raw_format='per-image metadata';scope='Private Rust Wlr migration: preserved recursive callback, frame alive through conversion, one added raw CPU copy; no full Wlr/P1 or public SDK acceptance.'})
         try { Step rust-wlr-layout-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::rejects_overflowing_native_layouts_and_unsupported_source_conversions','--','--exact','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-wlr-manager-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::manager::native::tests::','--','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         # Each native resource baseline belongs to a fresh isolated process,
         # without unrelated libtest worker/reader teardown in its task set.
@@ -323,6 +334,12 @@ try{
             try { Step ('rust-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr',('backends::linux::wlr::tests::'+$probe[1]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
+        try { Step rust-wlr-manager timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::forwards_native_manager_reconnects_and_retains_images_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        $managerPreserved=$managerOracles.Count -eq 60
+        foreach($oracle in $managerOracles){if((Get-FileHash (Join-Path (Join-Path $referenceArtifacts manager) $oracle.name)).Hash.ToLowerInvariant() -ne $oracle.sha256){$managerPreserved=$false}}
+        Json (Join-Path $referenceArtifacts manager-original-preserved.json) ([ordered]@{checked=$managerOracles.Count;all_original_hashes_unchanged=$managerPreserved})
+        if(-not $managerPreserved){$failed=$true;Write-Host 'Original manager oracle hashes changed or were incomplete'}
     }else{
         Step rust-wlr-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr','--','-D','warnings')
         Step rust-wlr-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--test','p0-interop','--features','prototype-linux-wlr','--','--include-ignored','--test-threads=1','--nocapture')

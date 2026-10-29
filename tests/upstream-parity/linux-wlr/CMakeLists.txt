@@ -16,6 +16,7 @@ if(NOT WAYLAND_VERSION STREQUAL MFS_WAYLAND_VERSION)
     message(FATAL_ERROR "Reference selected a different libwayland version")
 endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/pipewire-base-source.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/linux-manager-source.cmake")
 set(_mfs_root "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit")
 add_executable(mfs_wlr_source_context source-context.cpp
     "${_mfs_root}/Screencap/WlrScreencap.cpp"
@@ -28,7 +29,7 @@ add_executable(mfs_wlr_source_context source-context.cpp
 target_compile_definitions(mfs_wlr_source_context PRIVATE _GNU_SOURCE)
 target_include_directories(mfs_wlr_source_context PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/overlay" "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
-    "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
+    "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mfs_wlr_source_context PRIVATE
     PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
 # The wrapper only observes calls made by the compiled source and forwards each

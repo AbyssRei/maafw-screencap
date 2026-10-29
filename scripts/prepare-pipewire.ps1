@@ -154,6 +154,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected 960 exact original-body/Rust manager scripts and one actual test'
             }
         }
+        if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;') {
+            throw 'Expected the two native None/unimplemented-method and unsafe-FD boundary controls'
+        }
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
         }
@@ -416,11 +419,16 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-task-read-exit-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-read-exit-fixture',(Join-Path $referenceArtifacts task-read-exit)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        $managerTest=$null
         try {
             $env:MFS_P1_LINUX_MANAGER_MODEL_ARTIFACTS=Join-Path $referenceArtifacts manager-model
             $managerTest=Capture-TestProgram linux-manager-model-rust-build
             Step linux-manager-source-model timeout @('--signal=TERM','--kill-after=5s','180s',$managerTest,'backends::linux::manager::tests::matches_fixed_source_manager_reconnect_forwarding_and_uuid','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
+        if($managerTest){
+            try { Step rust-pipewire-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::native::tests::','--test-threads=1','--nocapture') }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+        }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
     }

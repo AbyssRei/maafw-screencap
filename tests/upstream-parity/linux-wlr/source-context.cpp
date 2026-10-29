@@ -1,6 +1,9 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "Screencap/WlrScreencap.h"
+#include "Screencap/NoneScreencap.h"
+#include "MaaFramework/MaaDef.h"
+#include "MaaUtils/Logger.h"
 #include <opencv2/imgproc.hpp>
 #include <array>
 #include <algorithm>
@@ -14,12 +17,19 @@
 #include <iostream>
 #include <iterator>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <sys/random.h>
 #include <sys/mman.h>
 #include <thread>
 #include <unistd.h>
 #include <vector>
+
+namespace MfsOriginalWlr {
+#define MFS_MANAGER_WLR
+#include "../linux-manager/native-shim.h"
+#undef MFS_MANAGER_WLR
+}
 
 namespace {
 uint64_t roundtrips=0;
@@ -94,6 +104,55 @@ void shared_client(const std::filesystem::path& socket,const std::filesystem::pa
         catch(...) { error=std::current_exception(); } });
     reader.join();if(error) { std::rethrow_exception(error); }
     std::cout<<"original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed\n";
+}
+void manager_context(const std::filesystem::path& socket,const std::filesystem::path& directory) {
+    const auto baseline_fds=count("/proc/self/fd");
+    const auto baseline_tasks=tasks();
+    std::vector<cv::Mat> held;held.reserve(60);
+    for(int cycle=0;cycle<20;++cycle) {
+        std::weak_ptr<MfsOriginalWlr::WaylandClient> owner;
+        {
+            MfsOriginalWlr::LinuxControlUnitConfig config;
+            config.screencap_method=MaaLinuxScreencapMethod_Wlr;config.wlr_socket_path=socket.string();
+            MfsOriginalWlr::LinuxControlUnitMgr manager(config);
+            require(manager.connect() && manager.connected(),"original Wlr manager initial connect failed");
+            owner=manager.wl_client_;
+            const auto* output=manager.wl_client_->get_output().get();
+            for(int call=0;call<3;++call) {
+                if(call==1) { require(manager.inactive(),"original Wlr manager inactive failed"); }
+                if(call==2) {
+                    const auto before=roundtrips;
+                    require(manager.connect() && manager.connected(),"original Wlr manager reconnect failed");
+                    require(roundtrips==before && manager.wl_client_->get_output().get()==output,
+                        "original manager unexpectedly reopened its retained client");
+                }
+                cv::Mat image;require(manager.screencap(image),"original Wlr manager forwarding failed");
+                pixels(image);save(image,directory/("manager-"+std::to_string(cycle)+"-"+std::to_string(call)+".bgr"));
+                held.push_back(std::move(image));
+            }
+        }
+        require(owner.expired(),"original Wlr manager left a live client owner");
+        require(count("/proc/self/fd")==baseline_fds && tasks()==baseline_tasks,"original Wlr manager resource mismatch");
+        std::cout<<"original Wlr manager cycle="<<cycle<<" held="<<held.size()<<" client_released=1 fds="<<baseline_fds<<'\n';
+    }
+    const auto missing=socket.parent_path()/"mfs-manager-missing";
+    require(!std::filesystem::exists(missing),"manager missing socket fixture exists");
+    {
+        MfsOriginalWlr::LinuxControlUnitConfig config;
+        config.screencap_method=MaaLinuxScreencapMethod_Wlr;config.wlr_socket_path=missing.string();
+        MfsOriginalWlr::LinuxControlUnitMgr manager(config);
+        require(!manager.connect() && !manager.connected(),"original failed client did not remain disconnected");
+        cv::Mat output=held.back();const auto* data=output.data;const int owners=output.u->refcount;
+        require(!manager.screencap(output) && output.data==data && output.u->refcount==owners,"original pre-reconnect failure changed output");
+        require(manager.connect() && manager.connected(),"original retained failed client connect state changed");
+        require(!manager.screencap(output) && output.data==data && output.u->refcount==owners,"original disconnected client changed output");
+        pixels(output);
+    }
+    require(count("/proc/self/fd")==baseline_fds && tasks()==baseline_tasks,"original failed manager resource mismatch");
+    std::exception_ptr error;
+    std::thread reader([&]{try {for(const auto& image:held) {pixels(image);} }catch(...) {error=std::current_exception();}});
+    reader.join();if(error) {std::rethrow_exception(error);}
+    std::cout<<"original Wlr manager cycles=20 captures=60 connects=40 retained=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed\n";
 }
 void reconnect_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
     const auto alias=socket.parent_path()/"mfs-source-alias";
@@ -206,7 +265,7 @@ std::string make_uuid() {
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero]");
+        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager]");
         Dl_info owner{};
         // The linked wrapper has its own address; inspect the real target.
         require(dladdr(reinterpret_cast<void*>(&__real_wl_display_roundtrip),&owner)!=0 && owner.dli_fname,
@@ -222,6 +281,7 @@ int main(int argc,char** argv) {
         if(argc==5) {
             const std::string mode=argv[4];
             if(mode=="shared") { shared_client(argv[1],directory); }
+            else if(mode=="manager") { manager_context(argv[1],directory); }
             else if(mode=="reconnect") { reconnect_client(argv[1],directory); }
             else if(mode=="fd-zero") { fd_zero(directory); }
             else { throw std::runtime_error("unknown original Wlr context mode"); }
