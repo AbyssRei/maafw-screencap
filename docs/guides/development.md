@@ -182,6 +182,8 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 据此修正测试的 proc 退出时点前提，待新原生验证：关闭前记录活跃 MaaScreencap 的 TID/starttime；原生 stop/join、对象销毁及严格 fd 检查之后，仅允许同身份任务已经消失或带 PF_EXITING 且无地址空间/RSS 时进入最长 100ms 的内核任务移除观察。原 baseline TID 必须全部保留，最终集合须完全恢复；未知任务、TID 替换、仍有用户态地址空间、fd 不符或逾期均失败。测试没有等待仍活跃的 callback 完成；旧批次的即时数量断言不改判，捕获实现、等待和销毁顺序保持原样。
 
+私有 Rust driver 新增 supplied-fd 建连切片，待原生验证：与 daemon 方式共用原顺序的 loop/context/core/listener/stream 建立，只在非空 core 后将原 fd 数值置为 -1，close 不恢复它，后续 init 沿用原源码的 daemon 选择。该入口是显式 unsafe 的 U 适配，要求调用方保证独占 socket、移交前解除原 owning handle、完成原生清理后才处理失败残留；没有推导空 core 的一般所有权，也没有添加泛用 fd 清理或重试。独立进程用例要求 20 次私有 socket、60 张 RGB、归还/持帧及已消费 fd 在原生关闭后为 EBADF；它验证 fd 传输成功路径，实际 Portal 授权、通用失败/重试和安全宿主接口仍未完成。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。

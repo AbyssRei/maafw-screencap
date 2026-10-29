@@ -160,6 +160,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64-pipewire/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/reference-u/artifacts/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-shm/artifacts/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-fd/artifacts/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-opencv/artifacts/**
           if-no-files-found: warn
       - name: Archive engineering evidence
