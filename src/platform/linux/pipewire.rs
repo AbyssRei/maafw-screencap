@@ -6,6 +6,10 @@
 pub(crate) use pipewire::{spa, sys};
 use std::{ffi::c_void, marker::PhantomData, ptr, rc::Rc};
 
+#[path = "pipewire_memory.rs"]
+mod memory;
+pub(crate) use memory::MemFdMap;
+
 #[derive(Debug)]
 pub(crate) struct NativeError {
     pub operation: &'static str,
