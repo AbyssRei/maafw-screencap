@@ -20,6 +20,9 @@ mod opencv;
 #[path = "reinit_tests.rs"]
 mod reinit;
 
+#[path = "fd_fault_tests.rs"]
+mod fd_fault;
+
 struct RawAudit;
 impl Converter<RawFrame> for RawAudit {
     type Image = RawFrame;

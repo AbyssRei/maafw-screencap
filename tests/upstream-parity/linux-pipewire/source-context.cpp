@@ -3,6 +3,7 @@
 // Compile the complete unedited original translation unit here, so its static
 // negotiation helpers are available to the explicit POD oracle below.
 #include "Screencap/PipeWireScreencap.cpp"
+#include "fd-fault.h"
 #include <pipewire/pipewire.h>
 #include <opencv2/imgproc.hpp>
 #include <algorithm>
@@ -39,6 +40,27 @@ constexpr int WIDTH=28,HEIGHT=24;
 void require(bool condition,const char* message) {
     if(!condition) { throw std::runtime_error(message); }
 }
+template<typename Function> Function fault_symbol(const char* name) {
+    void* pointer=dlsym(RTLD_DEFAULT,name);
+    const char* expected=std::getenv("MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY");
+    Dl_info info{};
+    require(pointer && expected && dladdr(pointer,&info)!=0 && info.dli_fname,
+        "explicit loaded FD fault control is absent");
+    require(std::filesystem::canonical(info.dli_fname)==std::filesystem::canonical(expected),
+        "FD fault control loaded from a different library");
+    return reinterpret_cast<Function>(pointer);
+}
+struct FdFaultControl {
+    decltype(&mfs_pw_fd_fault_arm) arm=fault_symbol<decltype(arm)>("mfs_pw_fd_fault_arm");
+    decltype(&mfs_pw_fd_fault_attempts) attempts=fault_symbol<decltype(attempts)>("mfs_pw_fd_fault_attempts");
+    decltype(&mfs_pw_fd_fault_rejections) rejections=fault_symbol<decltype(rejections)>("mfs_pw_fd_fault_rejections");
+    decltype(&mfs_pw_fd_fault_native_error) native_error=fault_symbol<decltype(native_error)>("mfs_pw_fd_fault_native_error");
+    decltype(&mfs_pw_fd_fault_control_error) control_error=fault_symbol<decltype(control_error)>("mfs_pw_fd_fault_control_error");
+    void check(uint32_t expected_attempts) const {
+        require(attempts()==expected_attempts && rejections()==1 && native_error()==ENOMEM && control_error()==0,
+            "native FD fault control attempts/rejection/error mismatch");
+    }
+};
 void verify_runtime() {
     const char* version=std::getenv("MFS_P0_PIPEWIRE_VERSION");
     const char* library=std::getenv("MFS_P1_PIPEWIRE_LIBRARY");
@@ -563,8 +585,10 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
     for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"held memfd image changed after all FDs closed"); }
     std::cout<<"original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed\n";
 }
-void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts) {
+void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
+    std::optional<FdFaultControl> fault;
+    if(inject_failure) { fault.emplace(); }
     cv::Mat raw(HEIGHT,WIDTH,CV_8UC3,cv::Scalar(1,2,3)),converted;
     cv::cvtColor(raw,converted,cv::COLOR_RGB2BGR);
     const size_t base_fds=count_entries("/proc/self/fd");
@@ -584,8 +608,21 @@ void reinitialization_context(const char* socket,uint32_t node,const std::filesy
         require(!source->connected() && socket_cookie(fd)==cookie,"pre-init close changed the offered socket");
         cv::Mat empty;
         require(!source->screencap(empty) && empty.empty(),"uninitialized source produced a frame");
+        if(fault) {
+            require(fault->arm(fd)==0,"cannot arm source FD fault");
+            require(!source->init(),"original source accepted the injected native ENOMEM");
+            source->close();
+            require(!source->connected() && socket_cookie(fd)==cookie,
+                "source failed teardown consumed/replaced the offered socket");
+            fault->check(1);
+            require(count_entries("/proc/self/fd")==base_fds+1 && task_ids()==baseline,
+                "failed source init did not clean native resources while retaining its offered socket");
+            std::cout<<"source fd-retry cycle="<<cycle<<" failed_errno="<<fault->native_error()
+                <<" retained_cookie="<<cookie<<" native_resources_closed=1\n";
+        }
         for(int session=0;session<2;++session) {
             require(source->init() && source->connected(),"source same-object init failed");
+            if(fault) { fault->check(2); }
             require(source->init(),"source already-connected init failed");
             for(int call=0;call<3;++call) {
                 if(call==1) { source->inactive();source->inactive(); }
@@ -643,7 +680,11 @@ void reinitialization_context(const char* socket,uint32_t node,const std::filesy
         catch(...) { error=std::current_exception(); }
     });
     reader.join();if(error) { std::rethrow_exception(error); }
-    std::cout<<"original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed\n";
+    if(inject_failure) {
+        std::cout<<"original PipeWire fd-retry objects=20 injected_failures=20 proven_live_retries=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed\n";
+    } else {
+        std::cout<<"original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed\n";
+    }
 }
 }
 int main(int argc,char** argv) {
@@ -674,12 +715,12 @@ int main(int argc,char** argv) {
             fd_add_io_error(argv[2]);
             return 0;
         }
-        if(argc==5 && std::string_view(argv[1])=="--reinit") {
+        if(argc==5 && (std::string_view(argv[1])=="--reinit" || std::string_view(argv[1])=="--fd-retry")) {
             const std::string_view id=argv[3];
             uint32_t node=0;
             const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
             require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid explicit reinit node ID");
-            reinitialization_context(argv[2],node,argv[4]);
+            reinitialization_context(argv[2],node,argv[4],std::string_view(argv[1])=="--fd-retry");
             return 0;
         }
         require(argc==4,"usage: source-context <private socket> <node ID> <artifact directory>");

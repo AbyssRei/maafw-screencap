@@ -6,6 +6,16 @@ use super::*;
 #[test]
 #[ignore = "explicit native supplied-fd then daemon reinitialization, not failed-offer recovery or a safe SDK policy"]
 fn reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images() {
+    run_reinit_probe(false);
+}
+
+#[test]
+#[ignore = "explicit real add_io ENOMEM with proven-live socket retry, not generic failed-FD recovery"]
+fn retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions() {
+    run_reinit_probe(true);
+}
+
+fn run_reinit_probe(inject_failure: bool) {
     let socket = env::var("MFS_P0_PIPEWIRE_SOCKET").unwrap();
     let remote = env::var("PIPEWIRE_REMOTE").unwrap();
     let runtime = env::var("PIPEWIRE_RUNTIME_DIR").unwrap();
@@ -14,7 +24,9 @@ fn reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images() {
         .unwrap()
         .parse::<u32>()
         .unwrap();
-    let directory = Path::new(&env::var("MFS_P1_PIPEWIRE_FD_ARTIFACTS").unwrap()).join("reinit");
+    let directory = Path::new(&env::var("MFS_P1_PIPEWIRE_FD_ARTIFACTS").unwrap())
+        .join(if inject_failure { "fd-retry" } else { "reinit" });
+    let fault = inject_failure.then(fd_fault::FdFault::new);
     fs::create_dir_all(&directory).unwrap();
     let fds = count("/proc/self/fd");
     let baseline = task_ids();
@@ -29,6 +41,7 @@ fn reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images() {
         let balance = BalanceInit;
         let mut native = native;
         let fd = offered.into_raw_fd();
+        let cookie = inject_failure.then(|| fd_fault::socket_cookie(fd));
         let mut consumer = Consumer::default();
         // Source close before its first init does not consume the pending FD.
         native.close();
@@ -41,10 +54,36 @@ fn reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images() {
             consumer.capture(&mut native, &mut RawAudit).image,
             Err(crate::backends::linux::pipewire::Error::Disconnected)
         ));
+        if let Some(fault) = &fault {
+            fault.arm(fd);
+            // SAFETY: Exactly one fresh uniquely offered socket. The injected
+            // native ENOMEM result is not assumed to retain it until after all
+            // native resources are destroyed and SO_COOKIE is checked below.
+            let error = unsafe { native.init_source(node) }.unwrap_err();
+            assert_eq!(error.operation, "pw_context_connect_fd");
+            assert_eq!(error.code, libc::ENOMEM);
+            native.close();
+            assert!(!native.connected());
+            assert_eq!(native.input_fd, fd);
+            assert!(native.resources.loop_.is_null());
+            assert!(native.resources.context.is_null());
+            assert!(native.resources.core.is_null());
+            assert!(native.resources.stream.is_null());
+            assert_eq!(Some(fd_fault::socket_cookie(fd)), cookie);
+            fault.check(1);
+            assert_resources(&directory, cycle + 60, fds + 1, &baseline, &[]);
+            eprintln!(
+                "native Rust fd-retry cycle={cycle} failed_errno={} retained_cookie={} native_objects_closed=1",
+                error.code,
+                cookie.unwrap()
+            );
+        }
         for session in 0..2 {
             if session == 0 {
-                // SAFETY: The fresh socket's sole owner was detached above.
-                // Failure stops this isolated probe; it does not guess a close.
+                // SAFETY: Sole owner detached above. On the one controlled
+                // failure path, full teardown plus the unchanged SO_COOKIE
+                // establish this same socket remains uniquely offered. The
+                // explicit second attempt is a test, not automatic recovery.
                 unsafe { native.init_source(node) }.unwrap();
             } else {
                 // Exact U stored-FD transition after a successful core and close.
@@ -53,6 +92,9 @@ fn reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images() {
                 native.init_daemon(node).unwrap();
             }
             assert_eq!(native.input_fd, -1);
+            if let Some(fault) = &fault {
+                fault.check(2);
+            }
             let objects = (
                 native.resources.loop_,
                 native.resources.core,
@@ -140,7 +182,13 @@ fn reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images() {
     })
     .join()
     .unwrap();
-    eprintln!(
-        "native Rust PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed"
-    );
+    if inject_failure {
+        eprintln!(
+            "native Rust PipeWire fd-retry objects=20 injected_failures=20 proven_live_retries=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed"
+        );
+    } else {
+        eprintln!(
+            "native Rust PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed"
+        );
+    }
 }
