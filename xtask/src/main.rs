@@ -116,6 +116,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity manager [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context pipewire  # original source context on native Linux x64\n\n\
+                      cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\

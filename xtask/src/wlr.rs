@@ -13,8 +13,18 @@ use std::{
 };
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_native(args, false)
+}
+
+pub fn run_reference(args: &[String]) -> Result<()> {
+    run_native(args, true)
+}
+
+fn run_native(args: &[String], reference: bool) -> Result<()> {
     if !args.is_empty() || !cfg!(target_os = "linux") || env::consts::ARCH != "x86_64" {
-        return Err("wlr-prototype requires a native Linux x64 host and no arguments".into());
+        return Err(
+            "Wlr prototype/source context requires a native Linux x64 host and no arguments".into(),
+        );
     }
     let path = env::var_os("MFS_REFERENCE_ROOT")
         .map(Into::into)
@@ -27,6 +37,9 @@ pub fn run(args: &[String]) -> Result<()> {
     let root = records::external_root(&path)?;
     crate::reference::verify(&root)?;
     let before: Index = records::read(&root.join("manifest.json"))?;
+    let source_baseline = reference
+        .then(|| crate::reference::selected(&root, &before))
+        .transpose()?;
     let rust_result = batch::run(&[]);
     let index: Index = records::read(&root.join("manifest.json"))?;
     if index.runs.len() <= before.runs.len() {
@@ -35,7 +48,12 @@ pub fn run(args: &[String]) -> Result<()> {
     let parent = index.runs.last().unwrap().clone();
     let rust_run: batch::Run = records::read(&records::verify(&root, &parent)?)?;
     let directory = root.join("runs").join(format!(
-        "p0-wlr-linux-{}",
+        "{}-{}",
+        if reference {
+            "p1-wlr-context-linux"
+        } else {
+            "p0-wlr-linux"
+        },
         SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos()
     ));
     fs::create_dir(&directory)?;
@@ -48,13 +66,24 @@ pub fn run(args: &[String]) -> Result<()> {
             .unwrap()
             .to_string_lossy()
             .into_owned(),
-        phase: "P0".into(),
+        phase: if reference { "P1" } else { "P0" }.into(),
         phase_status: "incomplete".into(),
         checks: Vec::new(),
         inputs: Vec::new(),
         pending: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut snapshot)?;
+    if reference {
+        let scope = inputs.join("wlr-context-scope.md");
+        fs::write(
+            &scope,
+            "# P1 original Wlr source context only\n\nCompile complete fixed WlrScreencap, WaylandClient, MemfdBuffer, WaylandHelper and generated C protocols unchanged. Use the exact extracted screenshot base, private namespace/logging overlays and an explicit kernel-random UUID name provider instead of unrelated Boost/MaaUtils UUID code. This is not a comparison of that UUID utility. Native Wayland/SHM/Mat/OpenCV capture paths remain real.\n\nOwned headless/Pixman scene only. Its explicit source-client mode supplies passive virtual keyboard/pointer manager globals required by the original client; no input actions or host devices. Twenty connection/capture/inactive/close lifecycles retain sixty known BGR images through native destruction and require exact FD/task identities. A forwarding linker wrapper observes recursive wl_display_roundtrip, preserving each real call and return. Capture waits/pixels are not retried. Build, library identity, native capture and compositor shutdown are distinct recorded checks.\n\nNo Rust Wlr product backend, native Rust parity, all-format/failure/client-close matrix, public SDK, P2 patch, P3 execution policy or full P1 acceptance.\n",
+        )?;
+        snapshot.inputs.push(records::artifact(&root, &scope)?);
+        snapshot
+            .inputs
+            .push(source_baseline.as_ref().unwrap().clone());
+    }
     let source = inputs.join("product-source");
     let lock = rust_run
         .inputs
@@ -67,7 +96,8 @@ pub fn run(args: &[String]) -> Result<()> {
         .inputs
         .push(records::artifact(&root, &destination)?);
     let deps = repository().parent().unwrap().join("maafw-screencap-deps");
-    let status = Command::new("pwsh")
+    let mut process = Command::new("pwsh");
+    process
         .args(["-NoProfile", "-File"])
         .arg(source.join("scripts/prepare-wlr.ps1"))
         .arg("-ReferenceRoot")
@@ -79,7 +109,15 @@ pub fn run(args: &[String]) -> Result<()> {
         .arg("-ConfigureTool")
         .arg(env::current_exe()?)
         .arg("-RustBatch")
-        .arg(&parent.path)
+        .arg(&parent.path);
+    if reference {
+        let baseline = records::verify(&root, source_baseline.as_ref().unwrap())?;
+        process
+            .arg("-SourceReference")
+            .arg("-UpstreamRoot")
+            .arg(baseline.parent().unwrap().join("reference/upstream"));
+    }
+    let status = process
         .current_dir(&source)
         .env("CARGO_HOME", deps.join("cargo-home"))
         .env("CARGO_TARGET_DIR", deps.join("target"))
@@ -93,12 +131,12 @@ pub fn run(args: &[String]) -> Result<()> {
     records::create_json(&manifest, &run)?;
     batch::verify(&root, &records::artifact(&root, &manifest)?)?;
     batch::register(&root, &manifest)?;
-    println!("Wlr prototype evidence archived at {}", manifest.display());
+    println!("Wlr native evidence archived at {}", manifest.display());
     // A failed dependency/convention gate is retained even when native probes
     // run successfully to collect useful diagnostic evidence. Never waive it.
     rust_result?;
     if !status.success() || run.checks.iter().any(|check| check.status != "passed") {
-        return Err("Wlr prototype checks failed; all attempted results were retained".into());
+        return Err("Wlr native checks failed; all attempted results were retained".into());
     }
     Ok(())
 }
