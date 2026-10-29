@@ -26,6 +26,7 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include "manager-native.h"
 
 namespace {
 constexpr int width=47,height=31;
@@ -93,7 +94,7 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
 }
 using Observation=MfsMacResources;
 Observation resources() { return mfs_mac_observe_resources(); }
-std::optional<cv::Mat> capture(MfsOriginalMac::ScreenCaptureKitScreencap& source) {
+template<class Source> std::optional<cv::Mat> capture(Source& source) {
     std::optional<cv::Mat> image;
     std::exception_ptr error;
     std::atomic<bool> done=false;
@@ -120,6 +121,50 @@ std::optional<cv::Mat> capture(MfsOriginalMac::ScreenCaptureKitScreencap& source
         <<std::chrono::duration_cast<std::chrono::microseconds>(Clock::now()-start).count()
         <<" engaged="<<image.has_value()<<" empty="<<(image ? image->empty() : true)<<'\n';
     return image;
+}
+struct ManagerCaller {
+    MfsMacManagerNative::MacOSControlUnitMgr manager;
+    explicit ManagerCaller(uint32_t id) : manager(id,MaaMacOSScreencapMethod_ScreenCaptureKit,MaaMacOSInputMethod_None) {}
+    std::optional<cv::Mat> screencap() {
+        if(!manager.connected()) {
+            const auto before=MfsMacManagerNative::calls.load();
+            require(manager.connect() && manager.connected(),"original manager connect failed");
+            require(MfsMacManagerNative::calls.load()==before,"original connect unexpectedly captured");
+        }
+        cv::Mat output;
+        if(!manager.screencap(output)) { return std::nullopt; }
+        require(manager.inactive(),"original manager inactive failed");
+        return output;
+    }
+};
+void manager_external_window(const std::filesystem::path& directory,const char* argument) {
+    const auto parsed=std::stoull(argument);
+    require(parsed>0 && parsed<=UINT32_MAX,"manager fixture window ID narrowing");
+    std::vector<cv::Mat> held;held.reserve(60);
+    for(int cycle=0;cycle<20;++cycle) {
+        {
+            ManagerCaller caller(static_cast<uint32_t>(parsed));
+            std::string uuid;
+            require(caller.manager.request_uuid(uuid) && uuid==std::to_string(parsed),"original manager UUID mismatch");
+            for(int call=0;call<3;++call) {
+                auto image=capture(caller);require(image.has_value(),"original manager capture failed");
+                pixels(*image,0);
+                save(*image,directory/("manager-cycle-"+std::to_string(cycle)+"-call-"+std::to_string(call)+".bgr"));
+                if(cycle==0 && call==0) { save(*image,directory/"external-window.bgr"); }
+                held.push_back(std::move(*image));
+            }
+        }
+        require(MfsMacManagerNative::creates.load()==static_cast<uint64_t>(cycle+1) &&
+            MfsMacManagerNative::drops.load()==static_cast<uint64_t>(cycle+1),"original manager source-owner mismatch");
+        for(const auto& image:held) { pixels(image,0); }
+    }
+    require(MfsMacManagerNative::calls.load()==60 && MfsMacManagerNative::input_attempts.load()==0,
+        "original manager forwarding or Input=None mismatch");
+    std::exception_ptr error;
+    std::thread reader([&] { try { for(const auto& image:held) { pixels(image,0); } }
+        catch(...) { error=std::current_exception(); } });
+    reader.join();if(error) { std::rethrow_exception(error); }
+    std::cout<<"original macOS manager cycles=20 captures=60 retained=60 connect_capture_calls=0 source_owners_released=20 input_attempts=0 passed\n";
 }
 void windows(NSApplication* app,const std::filesystem::path& directory) {
     {
@@ -230,6 +275,7 @@ int main(int argc,char** argv) {
             else if(mode=="display") { display(directory); }
             else if(mode=="scene") { scene(app,directory); }
             else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
+            else if(mode=="manager-external-window" && argc==4) { manager_external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }
         }
         return 0;

@@ -1,0 +1,41 @@
+# Exact fixed manager screenshot bodies. No source statement is rewritten.
+set(_mfs_manager_cpp "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit/Manager/MacOSControlUnitMgr.cpp")
+set(_mfs_manager_h "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit/Manager/MacOSControlUnitMgr.h")
+if(NOT CMAKE_SCRIPT_MODE_FILE)
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_mfs_manager_cpp}" "${_mfs_manager_h}")
+endif()
+file(READ "${_mfs_manager_cpp}" _mfs_manager_source)
+file(READ "${_mfs_manager_h}" _mfs_manager_header)
+string(REPLACE "\r\n" "\n" _mfs_manager_source "${_mfs_manager_source}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/macos-manager-source.inc" "// Exact fixed function bodies; LF-normalized only.\n")
+function(mfs_mac_manager_function begin end)
+    string(FIND "${_mfs_manager_source}" "${begin}" _begin)
+    if(_begin LESS 0)
+        message(FATAL_ERROR "Missing fixed macOS manager boundary: ${begin}")
+    endif()
+    string(SUBSTRING "${_mfs_manager_source}" ${_begin} -1 _tail)
+    string(FIND "${_tail}" "${end}" _end)
+    if(_end LESS_EQUAL 0)
+        message(FATAL_ERROR "Missing fixed macOS manager end: ${end}")
+    endif()
+    string(SUBSTRING "${_tail}" 0 ${_end} _body)
+    file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/macos-manager-source.inc" "${_body}\n")
+endfunction()
+mfs_mac_manager_function("MacOSControlUnitMgr::MacOSControlUnitMgr(" "bool MacOSControlUnitMgr::connect()")
+mfs_mac_manager_function("bool MacOSControlUnitMgr::connect()" "bool MacOSControlUnitMgr::connected()")
+mfs_mac_manager_function("bool MacOSControlUnitMgr::connected()" "bool MacOSControlUnitMgr::request_uuid(")
+mfs_mac_manager_function("bool MacOSControlUnitMgr::request_uuid(" "MaaControllerFeature MacOSControlUnitMgr::get_features()")
+mfs_mac_manager_function("bool MacOSControlUnitMgr::screencap(" "bool MacOSControlUnitMgr::click(")
+mfs_mac_manager_function("bool MacOSControlUnitMgr::inactive()" "json::object MacOSControlUnitMgr::get_info()")
+foreach(_field
+    "uint32_t window_id_ = 0;"
+    "MaaMacOSScreencapMethod screencap_method_ = MaaMacOSScreencapMethod_None;"
+    "MaaMacOSInputMethod input_method_ = MaaMacOSInputMethod_None;"
+    "bool connected_ = false;"
+    "std::shared_ptr<InputBase> input_ = nullptr;"
+    "std::shared_ptr<ScreencapBase> screencap_ = nullptr;")
+    string(FIND "${_mfs_manager_header}" "${_field}" _position)
+    if(_position LESS 0)
+        message(FATAL_ERROR "Fixed macOS manager declaration drift: ${_field}")
+    endif()
+endforeach()

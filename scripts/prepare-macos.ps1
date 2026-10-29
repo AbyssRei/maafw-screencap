@@ -41,7 +41,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display)(-original-oracle)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display|manager)(-original-oracle)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -54,13 +54,19 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'original-macos-display' -and $observed -notmatch 'original macOS display captures=1 retained=1 known_pixels=not_asserted passed'){
             $status='failed';throw 'Expected one actual original first-display layout/owner observation, separate from pixel acceptance'
         }
-        if($Name -eq 'rust-macos-core-dependencies' -and $observed -match '(?m)^(objc2-app-kit|opencv) v'){
+        if($Name -in @('rust-macos-core-dependencies','rust-macos-manager-dependencies') -and $observed -match '(?m)^(objc2-app-kit|opencv) v'){
             $status='failed';throw 'Direct capture-only core graph contains an acceptance/AppKit crate dependency'
         }
         if($Name -match '^rust-macos-(capture|exception|timeout|display)-original-oracle$' -and $observed -notmatch 'original macOS external_window captures=1 known_interior=1 passed'){
             $status='failed';throw 'Expected the unchanged source to capture the same owned external window'
         }
-        if($Name -match '^rust-macos-(capture|exception|timeout|display|layout|dimensions)$'){
+        if($Name -eq 'rust-macos-manager-original-oracle' -and -not $observed.Contains('original macOS manager cycles=20 captures=60 retained=60 connect_capture_calls=0 source_owners_released=20 input_attempts=0 passed')){
+            $status='failed';throw 'Expected twenty original manager/source lifecycles and sixty same-window oracle images'
+        }
+        if($Name -eq 'rust-macos-manager-controls' -and $observed -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;'){
+            $status='failed';throw 'Expected four actual portable macOS manager controls'
+        }
+        if($Name -match '^rust-macos-(capture|exception|timeout|display|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 $status='failed';throw 'Expected exactly one actual Rust macOS test, not a zero-test or ignored run'
             }
@@ -69,11 +75,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 'rust-macos-exception' {'native Rust macOS conversion_exception=1 unlock_after_exception=1 subsequent_capture=1 missing_window=1 fixture_reclaimed_refs=3 passed'}
                 'rust-macos-timeout' {'native Rust macOS timeout_seconds=5 delayed_conversion=1 late_conversion=1 native_inputs_retained=1 module_retained=1 late_owners_drained=1 fixture_reclaimed_refs=1 passed'}
                 'rust-macos-display' {'native Rust macOS first_display=1 callback_conversion=1 retained_cpu=1 known_pixels=not_asserted fixture_reclaimed_refs=1 passed'}
+                'rust-macos-manager' {'native Rust macOS manager cycles=20 captures=60 retained_bgr=60 missing_output_preserved=1 fixture_reclaimed_refs=61 input_none=1 passed'}
                 default {$null}
             }
             if($summary -and -not $observed.Contains($summary)){$status='failed';throw 'Expected the complete native Rust macOS ownership/capture summary'}
             if($summary -and -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1')){
                 $status='failed';throw 'Expected the explicit original-equivalent main-thread AppKit host and joined libtest worker'
+            }
+            if($Name -eq 'rust-macos-manager-scripts' -and -not $observed.Contains('original Rust macOS manager scripts=320 exact_bodies=1 output_and_unit_events=1 input_none=1 passed')){
+                $status='failed';throw 'Expected all 320 exact-body manager source/Rust script comparisons'
             }
         }
     }finally{
@@ -99,7 +109,7 @@ try {
     Json $configuration ([ordered]@{target='aarch64-apple-darwin';deployment_target=$env:MACOSX_DEPLOYMENT_TARGET;scope=($SourceReference ? 'P1 fixed original Objective-C++ source plus initial private Rust migration; full backend/P1 acceptance incomplete.' : 'P0 objc2/ScreenCaptureKit controlled-window sample-buffer capture and callback ownership only');sdk=(& xcrun --sdk macosx --show-sdk-version|Out-String).Trim();developer_dir=$env:DEVELOPER_DIR;sdkroot=$env:SDKROOT})
     $inputs.Add((Artifact $configuration))
     if($SourceReference){
-        try { Step rust-macos-migration-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-macos,macos-screen-capture-kit','--','-D','warnings') }
+        try { Step rust-macos-migration-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-macos,macos-manager','--','-D','warnings') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         # Direct Cargo consumer entry: explicit capture capability, without the
         # prototype's AppKit feature or its prepared P0 feature configuration.
@@ -110,6 +120,10 @@ try {
             try { Step rust-macos-core-only-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','macos-screen-capture-kit') }
             catch { $failed=$true;Write-Host $_.Exception.Message }
             try { Step rust-macos-core-dependencies cargo @('tree','--locked','--no-default-features','--features','macos-screen-capture-kit','--target','aarch64-apple-darwin','--edges','normal,build','--prefix','none') }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+            try { Step rust-macos-manager-only-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','macos-manager') }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+            try { Step rust-macos-manager-dependencies cargo @('tree','--locked','--no-default-features','--features','macos-manager','--target','aarch64-apple-darwin','--edges','normal,build','--prefix','none') }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }finally{$env:MFS_BUILD_CONFIGURATION=$prototypeConfiguration}
         . (Join-Path $PSScriptRoot prepare-macos-reference.ps1)
@@ -123,10 +137,15 @@ try {
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step original-macos-display $executable @('display',$display) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
-        $features='prototype-macos,macos-screen-capture-kit'
+        $features='prototype-macos,macos-manager'
         try { Step rust-macos-layout cargo @('test','--release','--locked','--lib','--features',$features,'platform::macos::pixel_buffer::tests::rejects_overflowing_or_unreadable_bgra_layouts','--','--exact','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-macos-dimensions cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::rejects_unrepresentable_source_config_dimensions','--','--exact','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-macos-manager-controls cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::tests::','--','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        $env:MFS_P1_MACOS_MANAGER_SCRIPTS=Join-Path $referenceArtifacts manager-scripts
+        try { Step rust-macos-manager-scripts cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::matches_original_manager_connect_forwarding_output_and_owner_scripts','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $rustArtifacts=Join-Path $referenceArtifacts rust
         New-Item -ItemType Directory -Path $rustArtifacts|Out-Null
@@ -134,7 +153,8 @@ try {
             @('rust-macos-capture','captures_original_window_with_callback_conversion_and_retained_cpu_owners'),
             @('rust-macos-exception','releases_native_lock_after_conversion_exception_and_rejects_missing_window'),
             @('rust-macos-timeout','retains_timed_out_callback_work_inputs_converter_and_late_result'),
-            @('rust-macos-display','captures_original_first_display_layout_and_retains_its_cpu_owners')
+            @('rust-macos-display','captures_original_first_display_layout_and_retains_its_cpu_owners'),
+            @('rust-macos-manager','forwards_manager_captures_and_keeps_outputs_through_manager_and_window_shutdown')
         )){
             try { Run-RustMacosProbe $probe[0] ('backends::macos::screen_capture_kit::tests::'+$probe[1]) $executable $rustArtifacts }
             catch { $failed=$true;Write-Host $_.Exception.Message }
@@ -181,7 +201,7 @@ try {
     Json (Join-Path $RunRoot native-result.json) ([ordered]@{
         layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete'
         checks=@($checks.ToArray());inputs=@($inputs.ToArray())
-        pending=@(($SourceReference ? 'Initial private Rust migration plus unchanged Objective-C++ context; no complete P1 acceptance. Native dispatch semaphore wait/signal and original unreleased create reference remain U. Rust fixture reclaims that reference only after all actual owners end; it is never product cleanup success. Checked dimensions/layout/locking, CPU copy and contained callback/conversion failures are explicit safety adaptations. Full semaphore/port-growth causality, native failures/formats/late races, known full-display pixels, manager and full Rust parity remain pending.' : 'P0 feasibility only; full target/format/failure matrix, original C++ parity and complete platform gates remain outstanding. Formal Xcode selection is distinct from successful SDK use and native execution.'),'Screen Recording/desktop unavailability is missing environment, never capture acceptance. No TCC database or host permission setting is modified.','Rust dependency and convention gates remain required even when this diagnostic native probe passes.')
+        pending=@(($SourceReference ? 'Initial private Rust capture/manager slice plus unchanged Objective-C++ capture and extracted exact manager bodies; no complete P1 acceptance. Native dispatch semaphore wait/signal and original unreleased create reference remain U. Rust fixture reclaims that reference only after all actual owners end; it is never product cleanup success. Checked dimensions/layout/locking, CPU copy and contained callback/conversion failures are explicit safety adaptations. Full semaphore/port-growth causality, native failures/formats/late races, known full-display pixels, complete manager/API/metadata and full Rust parity remain pending.' : 'P0 feasibility only; full target/format/failure matrix, original C++ parity and complete platform gates remain outstanding. Formal Xcode selection is distinct from successful SDK use and native execution.'),'Screen Recording/desktop unavailability is missing environment, never capture acceptance. No TCC database or host permission setting is modified.','Rust dependency and convention gates remain required even when this diagnostic native probe passes.')
     })
 }
 if($failed -or @($checks|Where-Object status -NE passed).Count){exit 1}
