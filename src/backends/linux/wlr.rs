@@ -165,8 +165,10 @@ struct Globals {
 struct Buffer {
     // Mapping is independent of the Wayland proxy owner; close_buffer retains
     // it until after the original destruction roundtrip, including failure.
-    file: File,
+    // Rust fields drop in declaration order: unmap before closing the memfd,
+    // matching the original MemfdBuffer destructor after proxy/pool release.
     map: MmapMut,
+    file: File,
     pool: Option<Owned<wl_shm_pool::WlShmPool>>,
     proxy: Option<Owned<wl_buffer::WlBuffer>>,
 }
@@ -412,8 +414,8 @@ fn prepare_buffer(
         let shm = {
             let mut s = ctx.state()?;
             s.buffer = Some(Buffer {
-                file,
                 map,
+                file,
                 pool: None,
                 proxy: None,
             });
@@ -483,9 +485,7 @@ impl ObjectData for Data {
         backend: &Backend,
         msg: Message<ObjectId, OwnedFd>,
     ) -> Option<Arc<dyn ObjectData>> {
-        let Some(ctx) = self.context.upgrade() else {
-            return None;
-        };
+        let ctx = self.context.upgrade()?;
         if std::thread::current().id() != ctx.owner {
             ctx.fail(-4);
             return None;
