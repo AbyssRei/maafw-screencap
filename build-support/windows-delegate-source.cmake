@@ -44,3 +44,20 @@ file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/delegate-condition.inc" "${_condition} {
 # Preserve the actual LibraryHolder algorithm. Only its DLL/log/runtime
 # boundary headers are explicitly overlaid by the scripted test fixture.
 configure_file("${_holder_h}" "${CMAKE_CURRENT_BINARY_DIR}/original-LibraryHolder.h" COPYONLY)
+
+# Preserve the real original export bodies as well as their declarations.
+# The native provider supplies only the explicitly scoped manager facade.
+set(_factory_cpp "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/API/Win32ControlUnitAPI.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_factory_cpp}")
+file(READ "${_factory_cpp}" _factory_source)
+string(REPLACE "\r\n" "\n" _factory_source "${_factory_source}")
+string(FIND "${_factory_source}" "MaaWin32ControlUnitHandle MaaWin32ControlUnitCreate(" _create_begin)
+string(FIND "${_factory_source}" "void MaaWin32ControlUnitDestroy(" _destroy_begin)
+if(_create_begin LESS 0 OR _destroy_begin LESS_EQUAL _create_begin)
+    message(FATAL_ERROR "Missing fixed native factory source boundaries")
+endif()
+math(EXPR _create_length "${_destroy_begin}-${_create_begin}")
+string(SUBSTRING "${_factory_source}" ${_create_begin} ${_create_length} _create_body)
+string(SUBSTRING "${_factory_source}" ${_destroy_begin} -1 _destroy_body)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/delegate-factory-create.inc" "${_create_body}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/delegate-factory-destroy.inc" "${_destroy_body}")

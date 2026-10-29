@@ -145,7 +145,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity manager [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity custom [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-custom <external directory> [--check-only]\n\n\
-                      cargo xtask upstream-delegate <win32|win32-native> <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
                       cargo xtask upstream-protocol wlr <external directory> [--check-only]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\

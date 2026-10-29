@@ -50,7 +50,9 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 原 DLL 静态链接 OpenCV 时，返回 Mat 的 allocator/vtable 可属于该 DLL；验收桥接在持有模块期间复制到独立 CPU 存储，并先销毁 DLL Mat。源 provider 增加一次边界复制；Rust facade 先复制借用图像到 provider Mat，再复制到桥接，增加两次边界复制，不将这些工作计为消除。图像仅保留桥接模块，原 provider 可完整卸载。C++ 异常在窄桥接内转成状态；编译使用 [/EHs](https://learn.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model)，避免 /EHc 将原 extern-C 工厂假定为不会抛异常。原生销毁消费不明时固定错误槽报告失败并保留模块；实现还必须断开所有 host/回调借用，仅保留模块不足以保证借用有效。此故障及分配耗尽仍待原生验证，不声称清理成功。
 
-`upstream-parity manager` 现编排独立的真实 DLL 测试、非零测试守卫、像素/模块/owner 记录校核和失败归档；该新增 CI 路径尚待原生 Actions 验证。显式离线 manager 输入须完整包含 19 份独立模型/原生 oracle、工具链与来源记录，缺失或重复时提前拒绝。上述本机原生构建明确重放已归档的 OpenCV/Boost/MaaUtils/VS/SDK 输入，Rust 依赖另按在线批次更新；不以此重放声称新一轮原生依赖在线验收。
+`upstream-parity manager` 现编排独立的真实 DLL 测试、非零测试守卫、像素/模块/owner 记录校核和失败归档；该新增 CI 路径尚待原生 Actions 验证。显式离线 manager 输入须完整包含 21 份独立模型/原生 oracle、工具链与来源记录（含完整原 Create/Destroy 函数体），缺失或重复时提前拒绝。上述本机原生构建明确重放已归档的 OpenCV/Boost/MaaUtils/VS/SDK 输入，Rust 依赖另按在线批次更新；不以此重放声称新一轮原生依赖在线验收。
+
+后续工厂补齐已移除源码 DLL 中其余方法的拒绝占位，改为共同编译原版六种方法及 helper，GDI 的 80 轮/160 张持帧回归通过。验收 Rust facade 也按原 API 接受空 HWND、零/组合/未知位选择器，将构造与连接校验分开；实际 manager 的构造/测速异常继续经 C++ 异常桥接返回，不压成普通 false。另有 `cargo xtask upstream-delegate win32-factory <外部记录目录> [--check-only]` 校核 36 组真实原接口构造/销毁、72 条事件、18 个 Rust context、模块卸载及无隐式连接/取帧；此入口不构造连接时才创建的 backend，不据此接受其余五种方法的真实取帧。完整六工厂运行、异常矩阵和 framework 接入继续待验收。
 
 原源码重连先替换 loader；加载/创建早期失败时，旧的 no-op shared view 可能仍存在，而它不保活实际 unit。模型观察该状态，跳过对已销毁对象的虚调用；Rust 保留对应部分状态和原释放顺序，但显式拒绝失效视图。该安全适配依据 [C++ 对象寿命规则](https://eel.is/c++draft/basic.life)与 [Rust 原始指针访问条件](https://doc.rust-lang.org/std/ptr/index.html#safety)，不是把未定义调用当作成功对照。新 loader 构造失败仍保留旧 owner，新 view 构造失败仍保留已创建的新 loader；这两项为 Rust 控制，原生分配耗尽/完整控制块故障仍待验证。调用方线程约束单独保留，不声明原生对象可跨线程。
 
