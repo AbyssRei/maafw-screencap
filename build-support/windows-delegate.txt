@@ -1,0 +1,6 @@
+# P1 optional Win32 module boundary, independently of prototype features.
+LoadLibraryExW
+FreeLibrary
+GetProcAddress
+GetLastError
+GetModuleHandleW

@@ -9,8 +9,10 @@ use std::{
 };
 #[path = "../../tests/upstream-parity/windows-delegate/cases.rs"]
 mod cases;
+#[path = "windows_delegate_native.rs"]
+mod native;
 
-pub const ORACLE_INPUTS: [&str; 8] = [
+pub const ORACLE_INPUTS: [&str; 19] = [
     "mfs_windows_delegate_model.exe",
     "windows-delegate-loader.inc",
     "windows-delegate-source.inc",
@@ -19,6 +21,17 @@ pub const ORACLE_INPUTS: [&str; 8] = [
     "windows-delegate-scope.txt",
     "windows-delegate-CMakeCache.txt",
     "windows-delegate-toolchain-Release.txt",
+    "mfs_delegate_bridge.dll",
+    "mfs_delegate_source.dll",
+    "mfs_delegate_missing_create.dll",
+    "mfs_delegate_missing_destroy.dll",
+    "mfs_delegate_rust.dll",
+    "mfs_delegate_native_source.exe",
+    "windows-delegate-native-scope.txt",
+    "windows-delegate-native-manager-source.inc",
+    "windows-delegate-native-manager-enum.inc",
+    "windows-delegate-native-manager-time.inc",
+    "windows-delegate-native-toolchain-Release.txt",
 ];
 pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
     for name in ORACLE_INPUTS {
@@ -35,6 +48,9 @@ pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|arg| arg == "win32-native") {
+        return native::run(&args[1..]);
+    }
     let (path, check_only) = match args {
         [kind, path] if kind == "win32" => (path, false),
         [kind, path, flag] if kind == "win32" && flag == "--check-only" => (path, true),
