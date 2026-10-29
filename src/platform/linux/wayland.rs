@@ -54,12 +54,6 @@ pub(crate) struct Channel {
 impl Channel {
     pub fn connect(path: &Path) -> Result<Self, Error> {
         let bytes = path.as_os_str().as_bytes();
-        if bytes.contains(&0) {
-            return Err(Error::new(
-                "Wayland socket contains NUL",
-                rustix::io::Errno::INVAL.raw_os_error(),
-            ));
-        }
         let length = bytes.len().checked_add(1).ok_or(Error::new(
             "Wayland socket size",
             rustix::io::Errno::OVERFLOW.raw_os_error(),
@@ -69,7 +63,11 @@ impl Channel {
             .map_err(|_| Error::allocation())?;
         name.extend_from_slice(bytes);
         name.push(0);
-        // SAFETY: Checked NUL-terminated native path remains initialized here.
+        // SAFETY: The complete initialized byte path has a terminating NUL.
+        // U passes filesystem::path::c_str(): an embedded NUL ends the native
+        // name, while Client retains the full path for reconnect identity.
+        // Even an empty/leading-NUL name is a nonnull pointer, never the null
+        // pointer which would select WAYLAND_DISPLAY/default in libwayland.
         // Use the original native connect entry, including its environment/FD
         // behavior, rather than replacing source selection with a Rust socket.
         let pointer = unsafe {

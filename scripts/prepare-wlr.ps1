@@ -51,6 +51,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
             'original-wlr-fd-zero' {'original MemfdBuffer fd_zero=1 available=1 destructor_fd_retained=1 destructor_mapping_retained=1 fixture_reclaimed=1 product_cleanup_success=0 passed'}
             'original-wlr-manager' {'original Wlr manager cycles=20 captures=60 connects=40 retained=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
+            'original-wlr-nul-names' {'original Wlr nul_names cycles=20 captures=60 retained=60 same_full_name_noop=20 suffix_reconnect=20 leading_nul_rejected=20 empty_rejected=20 manager_full_uuid=20 resources_balanced=1 passed'}
             default {$null}
         }
         if($sourceSummary -and -not (Get-Content -LiteralPath $log -Raw).Contains($sourceSummary)){
@@ -84,6 +85,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             'rust-wlr-shared-client' {'native Rust Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained_raw=60 retained_bgr=60 independent_buffers=20 resources_balanced=1 passed'}
             'rust-wlr-reconnect' {'native Rust Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 same_missing_retry=20 subsequent_connect=20 captures=20 retained_raw=20 retained_bgr=20 resources_balanced=1 passed'}
             'rust-wlr-manager' {'native Rust Wlr manager cycles=20 captures=60 connects=40 retained_raw=60 retained_bgr=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
+            'rust-wlr-nul-names' {'native Rust Wlr nul_names cycles=20 captures=60 retained_raw=60 retained_bgr=60 same_full_name_noop=20 suffix_reconnect=20 leading_nul_rejected=20 empty_rejected=20 json_manager_full_uuid=20 resources_balanced=1 passed'}
             default {$null}
         }
         if($rustContextSummary){
@@ -304,7 +306,7 @@ try{
     if($SourceReference){
         try { Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
-        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('fd-zero','fd-zero'),@('manager','manager'))){
+        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('fd-zero','fd-zero'),@('manager','manager'),@('nul-names','nul-names'))){
             $probeArtifacts=Join-Path $referenceArtifacts $probe[0]
             New-Item -ItemType Directory -Path $probeArtifacts|Out-Null
             try { Step ('original-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$probeArtifacts,$library,$probe[1]) }
@@ -330,7 +332,7 @@ try{
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-fd-zero timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::retains_original_fd_zero_residual_and_cpu_outputs_until_fixture_reclaim','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
-        foreach($probe in @(@('shared-client','retains_shared_client_after_caller_and_first_capture_release'),@('reconnect','reconnects_same_and_changed_paths_after_old_capture_owners_end'))){
+        foreach($probe in @(@('shared-client','retains_shared_client_after_caller_and_first_capture_release'),@('reconnect','reconnects_same_and_changed_paths_after_old_capture_owners_end'),@('nul-names','names::preserves_embedded_nul_native_name_and_full_reconnect_identity'))){
             try { Step ('rust-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr',('backends::linux::wlr::tests::'+$probe[1]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
