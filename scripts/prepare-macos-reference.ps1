@@ -39,11 +39,11 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
     Step macos-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/macos-screencap),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON','-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0',"-DCMAKE_OSX_SYSROOT:PATH=$($env:SDKROOT)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DCMAKE_OBJCXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream")
     Step macos-reference-build cmake @('--build',$build,'--parallel','4')
-    foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
+    foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('macos-manager-source.inc','macos-manager-source.inc'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $build $item[0]) -Destination $saved;Save $saved
     }
-    $identities=@(@('Base/UnitBase.h','Screencap/ScreenCaptureKitScreencap.h','Screencap/ScreenCaptureKitScreencap.mm')|ForEach-Object{
+    $identities=@(@('Base/UnitBase.h','Screencap/ScreenCaptureKitScreencap.h','Screencap/ScreenCaptureKitScreencap.mm','Manager/MacOSControlUnitMgr.cpp','Manager/MacOSControlUnitMgr.h')|ForEach-Object{
         $path=Join-Path $FixedUpstream "source/MaaMacOSControlUnit/$_"
         [ordered]@{path=[IO.Path]::GetRelativePath($FixedUpstream,$path).Replace('\','/');sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
     })
@@ -85,9 +85,10 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $env:MFS_P1_MACOS_SCENE_STOPPED=Join-Path $scene stopped.txt
         $env:MFS_P1_MACOS_RUST_ARTIFACTS=$directory
         $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
-        Step "$Name-original-oracle" $Executable @('external-window',$directory,[string]$identity.window_id)
+        $oracleMode=if($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
+        Step "$Name-original-oracle" $Executable @($oracleMode,$directory,[string]$identity.window_id)
         $env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr
-        Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-screen-capture-kit',$Test,'--','--exact','--ignored','--test-threads=1','--nocapture')
+        Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$Test,'--','--exact','--ignored','--test-threads=1','--nocapture')
     }catch{
         $log=Join-Path $logsRoot "$Name-probe-error.log"
         $_.Exception.ToString()|Set-Content -LiteralPath $log

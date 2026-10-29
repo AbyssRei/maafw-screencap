@@ -714,3 +714,346 @@ fn captures_original_first_display_layout_and_retains_its_cpu_owners() {
         "native Rust macOS first_display=1 callback_conversion=1 retained_cpu=1 known_pixels=not_asserted fixture_reclaimed_refs=1 passed"
     );
 }
+
+#[cfg(feature = "macos-manager")]
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+struct ManagerScript {
+    method: u64,
+    window_id: u32,
+    available: [u32; 2],
+    fail_create: [u32; 2],
+    outcomes: [u32; 3],
+}
+#[cfg(feature = "macos-manager")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ManagerEvent {
+    kind: u32,
+    unit: u32,
+    call: u32,
+    reserved: u32,
+}
+#[cfg(feature = "macos-manager")]
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct ManagerReport {
+    connect_status: [u32; 2],
+    connected: [u32; 3],
+    selected: [u32; 2],
+    capture_status: [u32; 4],
+    output_tokens: [u32; 4],
+    inactive: u32,
+    uuid_success: u32,
+    uuid_length: u32,
+    uuid: [u8; 11],
+    reserved: u8,
+    creates: u32,
+    calls: u32,
+    input_attempts: u32,
+    overflow: u32,
+    event_count: u32,
+    events: [ManagerEvent; 16],
+}
+#[cfg(feature = "macos-manager")]
+fn manager_event(report: &mut ManagerReport, kind: u32, unit: u32, call: u32) {
+    let index = usize::try_from(report.event_count).unwrap();
+    report.events[index] = ManagerEvent {
+        kind,
+        unit,
+        call,
+        reserved: 0,
+    };
+    report.event_count += 1;
+}
+#[cfg(feature = "macos-manager")]
+fn manager_model(script: ManagerScript) -> ManagerReport {
+    use crate::backends::macos::manager::Manager;
+    use std::{cell::RefCell, rc::Rc};
+    struct Unit {
+        id: u32,
+        script: ManagerScript,
+        report: Rc<RefCell<ManagerReport>>,
+    }
+    impl Drop for Unit {
+        fn drop(&mut self) {
+            manager_event(&mut self.report.borrow_mut(), 3, self.id, 0);
+        }
+    }
+    fn capture(
+        manager: &Manager<Unit>,
+        output: &mut u32,
+        report: &Rc<RefCell<ManagerReport>>,
+        index: usize,
+    ) {
+        let result = manager.capture_with(output, |unit| {
+            let mut ledger = report.borrow_mut();
+            if index == 1 {
+                ledger.selected[0] = unit.id;
+            }
+            if index == 3 {
+                ledger.selected[1] = unit.id;
+            }
+            let call = ledger.calls;
+            ledger.calls += 1;
+            manager_event(&mut ledger, 2, unit.id, call);
+            match unit.script.outcomes[usize::try_from(call).unwrap()] {
+                0 => Ok(None),
+                1 => Ok(Some(20 + call)),
+                2 => Ok(Some(0)),
+                3 => Err(()),
+                _ => panic!("unknown script outcome"),
+            }
+        });
+        let mut report = report.borrow_mut();
+        report.capture_status[index] = match result {
+            Ok(value) => u32::from(value),
+            Err(()) => 2,
+        };
+        report.output_tokens[index] = *output;
+    }
+    let report = Rc::new(RefCell::new(ManagerReport::default()));
+    let mut output = 99;
+    {
+        let mut manager = Manager::new(script.window_id, script.method);
+        report.borrow_mut().connected[0] = u32::from(manager.connected());
+        capture(&manager, &mut output, &report, 0);
+        for phase in 0..2 {
+            let result = manager.connect_with(script.available[phase] != 0, |window| {
+                assert_eq!(window, script.window_id);
+                let id = {
+                    let mut ledger = report.borrow_mut();
+                    ledger.creates += 1;
+                    let id = ledger.creates;
+                    manager_event(&mut ledger, 1, id, 0);
+                    id
+                };
+                if script.fail_create[phase] != 0 {
+                    return Err(());
+                }
+                Ok(Unit {
+                    id,
+                    script,
+                    report: report.clone(),
+                })
+            });
+            report.borrow_mut().connect_status[phase] = match result {
+                Ok(value) => u32::from(value),
+                Err(()) => 2,
+            };
+            report.borrow_mut().connected[phase + 1] = u32::from(manager.connected());
+            capture(
+                &manager,
+                &mut output,
+                &report,
+                if phase == 0 { 1 } else { 3 },
+            );
+            if phase == 0 {
+                report.borrow_mut().inactive = u32::from(manager.inactive());
+                capture(&manager, &mut output, &report, 2);
+            }
+        }
+        let mut uuid = String::new();
+        report.borrow_mut().uuid_success = u32::from(manager.request_uuid(&mut uuid).unwrap());
+        let mut ledger = report.borrow_mut();
+        ledger.uuid_length = u32::try_from(uuid.len()).unwrap();
+        ledger.uuid[..uuid.len()].copy_from_slice(uuid.as_bytes());
+    }
+    let final_report = report.borrow();
+    *final_report
+}
+
+#[cfg(feature = "macos-manager")]
+#[test]
+#[ignore = "exact compiled original manager bodies, scripted backend/platform and real cv::Mat"]
+fn matches_original_manager_connect_forwarding_output_and_owner_scripts() {
+    type Run = unsafe extern "C" fn(*const ManagerScript, *mut ManagerReport) -> i32;
+    let module = Module::open();
+    // SAFETY: manager-evidence.h is the private authority; actual layout and
+    // every scalar/array field are consumed and compared across 320 source cases.
+    let run = unsafe { module.symbol::<Run>(c"mfs_mac_manager_script") };
+    let layout = unsafe { module.symbol::<Layout>(c"mfs_mac_manager_layout") };
+    let mut owner = unsafe { std::mem::zeroed::<libc::Dl_info>() };
+    assert_ne!(unsafe { libc::dladdr(run as *const c_void, &mut owner) }, 0);
+    assert!(!owner.dli_fname.is_null());
+    let owner = unsafe { CStr::from_ptr(owner.dli_fname) };
+    assert_eq!(
+        std::fs::canonicalize(Path::new(std::ffi::OsStr::from_bytes(owner.to_bytes()))).unwrap(),
+        std::fs::canonicalize(env::var_os("MFS_P1_MACOS_OPENCV_ADAPTER").unwrap()).unwrap()
+    );
+    let reports = PathBuf::from(env::var_os("MFS_P1_MACOS_MANAGER_SCRIPTS").unwrap());
+    std::fs::create_dir_all(&reports).unwrap();
+    for (index, expected) in [
+        1,
+        size_of::<ManagerScript>(),
+        align_of::<ManagerScript>(),
+        offset_of!(ManagerScript, method),
+        offset_of!(ManagerScript, window_id),
+        offset_of!(ManagerScript, available),
+        offset_of!(ManagerScript, fail_create),
+        offset_of!(ManagerScript, outcomes),
+        size_of::<ManagerReport>(),
+        align_of::<ManagerReport>(),
+        offset_of!(ManagerReport, connect_status),
+        offset_of!(ManagerReport, connected),
+        offset_of!(ManagerReport, selected),
+        offset_of!(ManagerReport, capture_status),
+        offset_of!(ManagerReport, output_tokens),
+        offset_of!(ManagerReport, inactive),
+        offset_of!(ManagerReport, uuid_success),
+        offset_of!(ManagerReport, uuid_length),
+        offset_of!(ManagerReport, uuid),
+        offset_of!(ManagerReport, reserved),
+        offset_of!(ManagerReport, creates),
+        offset_of!(ManagerReport, calls),
+        offset_of!(ManagerReport, input_attempts),
+        offset_of!(ManagerReport, overflow),
+        offset_of!(ManagerReport, event_count),
+        offset_of!(ManagerReport, events),
+        size_of::<ManagerEvent>(),
+        align_of::<ManagerEvent>(),
+        offset_of!(ManagerEvent, kind),
+        offset_of!(ManagerEvent, unit),
+        offset_of!(ManagerEvent, call),
+        offset_of!(ManagerEvent, reserved),
+        usize::try_from(crate::backends::macos::manager::NONE).unwrap(),
+        usize::try_from(crate::backends::macos::manager::SCREEN_CAPTURE_KIT).unwrap(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        assert_eq!(unsafe { layout(u32::try_from(index).unwrap()) }, expected);
+    }
+    let mut cases = 0_usize;
+    for method in [0, 1, 2, u64::MAX] {
+        for available in 0..4 {
+            for failure in 0..4 {
+                for outcomes in [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 1, 2], [1, 0, 3]] {
+                    let script = ManagerScript {
+                        method,
+                        window_id: if cases.is_multiple_of(2) { u32::MAX } else { 0 },
+                        available: [available & 1, available >> 1],
+                        fail_create: [failure & 1, failure >> 1],
+                        outcomes,
+                    };
+                    let mut original = ManagerReport::default();
+                    assert_eq!(unsafe { run(&script, &mut original) }, 0);
+                    assert_eq!(original.overflow, 0);
+                    assert_eq!(original.input_attempts, 0);
+                    let expected = manager_model(script);
+                    std::fs::write(reports.join(format!("case-{cases}.txt")), format!(
+                        "method={}\nwindow_id={}\navailable={:?}\nfail_create={:?}\noutcomes={:?}\noriginal={original:?}\nrust={expected:?}\n",
+                        script.method, script.window_id, script.available, script.fail_create, script.outcomes
+                    )).unwrap();
+                    assert_eq!(original, expected, "manager case {cases}");
+                    cases += 1;
+                }
+            }
+        }
+    }
+    assert_eq!(cases, 320);
+    drop(module);
+    assert_eq!(MODULE_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "original Rust macOS manager scripts=320 exact_bodies=1 output_and_unit_events=1 input_none=1 passed"
+    );
+}
+
+#[cfg(feature = "macos-manager")]
+#[test]
+#[ignore = "owned native scene plus unchanged manager/source oracle and real OpenCV owners"]
+fn forwards_manager_captures_and_keeps_outputs_through_manager_and_window_shutdown() {
+    use crate::backends::macos::manager::{NativeManager, SCREEN_CAPTURE_KIT};
+    let oracle_path = env::var_os("MFS_P1_MACOS_EXTERNAL_ORACLE").unwrap();
+    let original = Path::new(&oracle_path).parent().unwrap();
+    let directory = directory();
+    let adapter = Adapter::open();
+    adapter.warm();
+    warm_capture(&adapter);
+    let samples = held();
+    let mut images = Vec::new();
+    images.try_reserve_exact(60).unwrap();
+    for cycle in 0..20 {
+        {
+            let mut manager = NativeManager::new(scene(), SCREEN_CAPTURE_KIT);
+            assert!(!manager.connected());
+            assert!(manager.connect_native().unwrap());
+            assert!(manager.connected());
+            let mut uuid = String::new();
+            assert!(manager.request_uuid(&mut uuid).unwrap());
+            assert_eq!(uuid, scene().to_string());
+            for call in 0..3 {
+                let trace = trace();
+                let mut output = Image::Empty;
+                let result = objc2::rc::autoreleasepool(|_| {
+                    manager.capture_native(
+                        &mut output,
+                        converter(&adapter, &trace, &samples, false, Duration::ZERO),
+                        trace.clone(),
+                    )
+                })
+                .unwrap();
+                assert!(result);
+                drained(&trace, true);
+                assert_eq!(trace.source_failure.load(Ordering::Acquire), 0);
+                trace.reclaim_source_semaphore_for_fixture();
+                bgr(output.pixels());
+                assert_eq!(
+                    output.pixels(),
+                    std::fs::read(original.join(format!("manager-cycle-{cycle}-call-{call}.bgr")))
+                        .unwrap()
+                );
+                std::fs::write(
+                    directory.join(format!("manager-cycle-{cycle}-call-{call}.bgr")),
+                    output.pixels(),
+                )
+                .unwrap();
+                images.push(output);
+                assert!(manager.inactive());
+            }
+        }
+        for image in &images {
+            bgr(image.pixels());
+        }
+    }
+    let mut missing = NativeManager::new(u32::MAX, SCREEN_CAPTURE_KIT);
+    assert!(missing.connect_native().unwrap());
+    let missing_trace = trace();
+    let mut output = images.pop().unwrap();
+    let expected = output.pixels().to_vec();
+    let expected_pointer = output.pixels().as_ptr();
+    let expected_owners = adapter.owners();
+    assert!(
+        !objc2::rc::autoreleasepool(|_| missing.capture_native(
+            &mut output,
+            converter(&adapter, &missing_trace, &samples, false, Duration::ZERO),
+            missing_trace.clone()
+        ))
+        .unwrap()
+    );
+    drained(&missing_trace, false);
+    assert_eq!(missing_trace.source_failure.load(Ordering::Acquire), 2);
+    assert_eq!(output.pixels(), expected);
+    assert_eq!(output.pixels().as_ptr(), expected_pointer);
+    assert_eq!(adapter.owners(), expected_owners);
+    missing_trace.reclaim_source_semaphore_for_fixture();
+    drop(missing);
+    images.push(output);
+    stop_scene();
+    std::thread::spawn(move || {
+        for image in images {
+            bgr(image.pixels());
+        }
+    })
+    .join()
+    .unwrap();
+    for sample in samples.lock().unwrap().iter() {
+        raw(sample);
+    }
+    assert_eq!(adapter.owners(), 0);
+    drop(adapter);
+    assert_eq!(MODULE_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "native Rust macOS manager cycles=20 captures=60 retained_bgr=60 missing_output_preserved=1 fixture_reclaimed_refs=61 input_none=1 passed"
+    );
+}

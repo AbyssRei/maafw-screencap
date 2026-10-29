@@ -19,6 +19,7 @@ windows-manager = ["windows-gdi", "windows-print-window", "windows-screen-dc", "
 linux-pipewire = ["dep:pipewire", "dep:rustix"]
 linux-wlr = ["dep:wayland-client", "dep:wayland-backend", "dep:wayland-protocols-wlr", "dep:wayland-protocols-misc", "dep:wayland-sys", "dep:rustix", "rustix/rand", "dep:memmap2", "dep:cc", "dep:pkg-config"]
 macos-screen-capture-kit = ["dep:objc2", "dep:block2", "dep:dispatch2", "dep:objc2-foundation", "dep:objc2-screen-capture-kit", "dep:objc2-core-media", "dep:objc2-core-video", "dep:objc2-core-foundation", "dep:objc2-core-graphics"]
+macos-manager = ["macos-screen-capture-kit"]
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
 prototype-windows-com = ["prototype-windows", "dep:windows-core", "dep:windows-future"]
 prototype-linux-pipewire = ["dep:pipewire"]
