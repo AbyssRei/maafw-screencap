@@ -5,6 +5,14 @@
 function Invoke-PipeWireDmaStream {
     $dmaStreamRoot=Join-Path $referenceArtifacts dma-stream
     New-Item -ItemType Directory -Path $dmaStreamRoot | Out-Null
+    # Compile independently of device availability. Missing kernel access must
+    # not conceal whether the producer itself builds with selected real headers.
+    $program=Join-Path $native mfs-p1-pipewire-dma-source
+    $dmaLibraryDirectory=Split-Path -Parent $env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY
+    Step native-dma-source-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)","-I$(Join-Path $productRoot tests/upstream-parity/linux-pipewire)",(Join-Path $productRoot tests/fixtures/pipewire-dma-source.c),$env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY,"-Wl,-rpath,$dmaLibraryDirectory","-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$program)
+    $savedProgram=Join-Path $nativeArtifacts mfs-p1-pipewire-dma-source
+    Copy-Item -LiteralPath $program -Destination $savedProgram
+    Save $savedProgram
     $exporterFile=Join-Path $dmaDirectory exporter.txt
     $exporter=if(Test-Path -LiteralPath $exporterFile){(Get-Content -LiteralPath $exporterFile -Raw).Trim()}else{'0'}
     if($exporter -notmatch '^[12]$'){
@@ -17,12 +25,6 @@ function Invoke-PipeWireDmaStream {
     $dmaRouter=$null;$dmaRouterOut=$null;$dmaRouterError=$null
     $oldNode=$env:MFS_P0_PIPEWIRE_NODE_ID
     try {
-        $program=Join-Path $native mfs-p1-pipewire-dma-source
-        $dmaLibraryDirectory=Split-Path -Parent $env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY
-        Step native-dma-source-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)","-I$(Join-Path $productRoot tests/upstream-parity/linux-pipewire)",(Join-Path $productRoot tests/fixtures/pipewire-dma-source.c),$env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY,"-Wl,-rpath,$dmaLibraryDirectory","-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$program)
-        $savedProgram=Join-Path $nativeArtifacts mfs-p1-pipewire-dma-source
-        Copy-Item -LiteralPath $program -Destination $savedProgram
-        Save $savedProgram
         # Native socket teardown precedes the daemon's registry notification.
         # Establish producer removal before publishing a new named fixture;
         # this waits for environment setup only, never retries a capture.
