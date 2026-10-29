@@ -157,9 +157,12 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial screenshot-manager migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-parity manager --offline-inputs $index.runs[-1].path
+          # This component adds its own meojson/original-body oracle. Earlier
+          # GDI/ScreenDC/DesktopDup batches did not prepare that offline input.
+          cargo xtask upstream-parity manager
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Compare portable PipeWire consumer model with exact source
         # A host control model, separate from Linux native capture acceptance.
