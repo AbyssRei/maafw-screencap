@@ -8,6 +8,7 @@
 #include <cstring>
 #include <dlfcn.h>
 #include <exception>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -15,7 +16,9 @@
 #include <memory>
 #include <stdexcept>
 #include <sys/random.h>
+#include <sys/mman.h>
 #include <thread>
+#include <unistd.h>
 #include <vector>
 
 namespace {
@@ -53,6 +56,115 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
         "cannot serialize unexpected Wlr image");
     for(int y=0;y<48;++y) { file.write(reinterpret_cast<const char*>(image.ptr(y)),64*3); }
     file.close();require(file.good(),"cannot save Wlr original image");
+}
+void shared_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
+    const auto baseline_fds=count("/proc/self/fd");
+    const auto baseline_tasks=tasks();
+    std::vector<cv::Mat> held;held.reserve(60);
+    for(int cycle=0;cycle<20;++cycle) {
+        auto client=std::make_shared<MfsOriginalWlr::WaylandClient>();
+        require(client->connect(socket),"original shared client connect failed");
+        std::weak_ptr<MfsOriginalWlr::WaylandClient> owner=client;
+        auto first=std::make_unique<MfsOriginalWlr::WlrScreencap>(client);
+        auto second=std::make_unique<MfsOriginalWlr::WlrScreencap>(client);
+        client.reset();
+        require(!owner.expired(),"source did not retain shared client");
+        for(int call=0;call<3;++call) {
+            if(call==2) {
+                first.reset();
+                require(!owner.expired(),"first source destruction closed second source client");
+            }
+            cv::Mat image;
+            auto& source=call==0 ? *first : *second;
+            require(source.screencap(image),"original shared source capture failed");
+            pixels(image);
+            save(image,directory/("shared-"+std::to_string(cycle)+"-"+std::to_string(call)+".bgr"));
+            held.push_back(std::move(image));
+        }
+        second.reset();
+        require(owner.expired(),"last source did not release shared client");
+        const auto actual_fds=count("/proc/self/fd");
+        require(actual_fds==baseline_fds && tasks()==baseline_tasks,
+            "original shared client resources did not return to baseline");
+        std::cout<<"original shared cycle="<<cycle<<" held="<<held.size()
+            <<" fds="<<actual_fds<<" baseline_fds="<<baseline_fds<<'\n';
+    }
+    std::exception_ptr error;
+    std::thread reader([&] { try { for(const auto& image:held) { pixels(image); } }
+        catch(...) { error=std::current_exception(); } });
+    reader.join();if(error) { std::rethrow_exception(error); }
+    std::cout<<"original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed\n";
+}
+void reconnect_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
+    const auto alias=socket.parent_path()/"mfs-source-alias";
+    const auto missing=socket.parent_path()/"mfs-source-missing";
+    require(!std::filesystem::exists(alias) && !std::filesystem::exists(missing),"source reconnect fixture path already exists");
+    std::filesystem::create_symlink(socket,alias);
+    struct Alias {
+        std::filesystem::path path;
+        ~Alias() { std::error_code ignored;std::filesystem::remove(path,ignored); }
+    } cleanup_alias{alias};
+    const auto baseline_fds=count("/proc/self/fd");
+    const auto baseline_tasks=tasks();
+    for(int cycle=0;cycle<20;++cycle) {
+        auto client=std::make_shared<MfsOriginalWlr::WaylandClient>();
+        require(client->connect(socket),"original initial connect failed");
+        const auto* output=client->get_output().get();
+        const auto before=roundtrips;
+        require(client->connect(socket) && client->get_output().get()==output && roundtrips==before,
+            "same-path connect unexpectedly reopened original client");
+        client->close();client->close();
+        require(!client->connected(),"original repeated close left connected state");
+        require(client->connect(socket) && roundtrips>before,"original same-path reopen failed");
+        const auto before_change=roundtrips;
+        require(client->connect(alias) && roundtrips>before_change,"changed-path original reconnect failed");
+        {
+            MfsOriginalWlr::WlrScreencap source(client);
+            cv::Mat image;require(source.screencap(image),"changed-path original capture failed");
+            pixels(image);save(image,directory/("reconnected-"+std::to_string(cycle)+".bgr"));
+        }
+        // No capture or external proxy owner survives these close/reopen calls.
+        require(!client->connect(missing) && !client->connected() && !client->get_output(),
+            "failed changed-path original connect did not clear old client");
+        require(client->connect(socket),"original connect after missing path failed");
+        client->close();client.reset();
+        const auto actual_fds=count("/proc/self/fd");
+        require(actual_fds==baseline_fds && tasks()==baseline_tasks,
+            "original reconnect resources did not return to baseline");
+        std::cout<<"original reconnect cycle="<<cycle<<" fds="<<actual_fds
+            <<" baseline_fds="<<baseline_fds<<" roundtrips="<<roundtrips<<'\n';
+    }
+    std::cout<<"original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed\n";
+}
+void fd_zero(const std::filesystem::path& directory) {
+    constexpr int size=12288;
+    const auto baseline_fds=count("/proc/self/fd");
+    const int saved=fcntl(STDIN_FILENO,F_DUPFD_CLOEXEC,3);
+    require(saved>=3,"cannot preserve isolated fixture stdin");
+    require(close(STDIN_FILENO)==0,"cannot free isolated fixture FD zero");
+    void* mapping=nullptr;
+    {
+        MfsOriginalWlr::MemfdBuffer buffer(size);
+        require(buffer.fd()==0 && buffer.available() && buffer.ptr()!=nullptr,
+            "original MemfdBuffer did not successfully own FD zero");
+        mapping=buffer.ptr();
+        static_cast<unsigned char*>(mapping)[0]=0xa5;
+    }
+    const int remaining=fcntl(STDIN_FILENO,F_GETFD);
+    const auto page=sysconf(_SC_PAGESIZE);require(page>0,"cannot query native page size");
+    std::vector<unsigned char> resident((static_cast<size_t>(size)+static_cast<size_t>(page)-1)/static_cast<size_t>(page));
+    const int mapped=mincore(mapping,size,resident.data());
+    require(remaining>=0 && mapped==0,"fixed-source FD-zero destructor residual was not observed");
+    require(static_cast<unsigned char*>(mapping)[0]==0xa5,"original residual mapping contents changed");
+    // Explicit fixture recovery AFTER observing the unchanged destructor. These
+    // calls are not source cleanup success and never execute in capture code.
+    require(munmap(mapping,size)==0 && close(STDIN_FILENO)==0,"fixture residual reclaim failed");
+    require(dup2(saved,STDIN_FILENO)==STDIN_FILENO && close(saved)==0,"fixture stdin restoration failed");
+    require(count("/proc/self/fd")==baseline_fds,"fixture recovery left an extra descriptor");
+    std::ofstream evidence(directory/"fd-zero.txt");
+    evidence<<"source_available=1\nsource_fd=0\nsource_destructor_fd_retained=1\nsource_destructor_mapping_retained=1\nfixture_reclaimed=1\nproduct_cleanup_success=0\n";
+    evidence.close();require(evidence.good(),"cannot save original FD-zero evidence");
+    std::cout<<"original MemfdBuffer fd_zero=1 available=1 destructor_fd_retained=1 destructor_mapping_retained=1 fixture_reclaimed=1 product_cleanup_success=0 passed\n";
 }
 }
 
@@ -94,7 +206,7 @@ std::string make_uuid() {
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4,"usage: source-context <private socket> <artifact dir> <libwayland path>");
+        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero]");
         Dl_info owner{};
         // The linked wrapper has its own address; inspect the real target.
         require(dladdr(reinterpret_cast<void*>(&__real_wl_display_roundtrip),&owner)!=0 && owner.dli_fname,
@@ -107,6 +219,14 @@ int main(int argc,char** argv) {
         // Initialize only conversion runtime before native resource baselines.
         cv::Mat warm(48,64,CV_8UC4,cv::Scalar(0,0,255,255)),converted;
         cv::cvtColor(warm,converted,cv::COLOR_BGRA2BGR);
+        if(argc==5) {
+            const std::string mode=argv[4];
+            if(mode=="shared") { shared_client(argv[1],directory); }
+            else if(mode=="reconnect") { reconnect_client(argv[1],directory); }
+            else if(mode=="fd-zero") { fd_zero(directory); }
+            else { throw std::runtime_error("unknown original Wlr context mode"); }
+            return 0;
+        }
         const auto fds=count("/proc/self/fd");
         const auto baseline_tasks=tasks();
         std::vector<cv::Mat> held;held.reserve(60);

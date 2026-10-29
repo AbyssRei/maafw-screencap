@@ -290,6 +290,8 @@ struct ConvertAudit {
     held: Arc<Mutex<Vec<Sample>>>,
     exception: bool,
     delay: Duration,
+    late_gate: Option<Arc<AtomicBool>>,
+    successes: Arc<AtomicUsize>,
 }
 impl Converter for ConvertAudit {
     type Image = Image;
@@ -307,6 +309,13 @@ impl Converter for ConvertAudit {
         if !self.delay.is_zero() {
             std::thread::sleep(self.delay);
         }
+        if let Some(gate) = &self.late_gate {
+            // Fixture-only synchronization: let the caller finish scene close
+            // and release its converter/module owners before conversion ends.
+            // Six seconds of real delay still precede this gate. A loaded
+            // runner cannot turn slow scene shutdown into a lifetime race.
+            wait(|| gate.load(Ordering::Acquire));
+        }
         assert_eq!(self.trace.pixels.unlocks.load(Ordering::Acquire), 0);
         let image =
             self.adapter
@@ -315,6 +324,7 @@ impl Converter for ConvertAudit {
             bgr(image.pixels());
         }
         assert_eq!(self.trace.pixels.unlocks.load(Ordering::Acquire), 0);
+        self.successes.fetch_add(1, Ordering::AcqRel);
         Ok(image)
     }
 }
@@ -339,6 +349,8 @@ fn converter(
         held: held.clone(),
         exception,
         delay,
+        late_gate: None,
+        successes: Arc::try_new(AtomicUsize::new(0)).unwrap(),
     })
     .unwrap()
 }
@@ -611,7 +623,10 @@ fn retains_timed_out_callback_work_inputs_converter_and_late_result() {
     warm_capture(&adapter);
     let trace = trace();
     let samples = held();
-    let converter = converter(&adapter, &trace, &samples, false, Duration::from_secs(6));
+    let late_gate = Arc::try_new(AtomicBool::new(false)).unwrap();
+    let mut converter = converter(&adapter, &trace, &samples, false, Duration::from_secs(6));
+    Arc::get_mut(&mut converter).unwrap().late_gate = Some(late_gate.clone());
+    let successes = converter.successes.clone();
     let start = Instant::now();
     let image = Capture::new(scene())
         .invoke(converter.clone(), trace.clone())
@@ -632,9 +647,11 @@ fn retains_timed_out_callback_work_inputs_converter_and_late_result() {
         0,
         "callback must own converter/module past caller timeout"
     );
+    late_gate.store(true, Ordering::Release);
     drained(&trace, true);
     assert!(trace.late_completed.load(Ordering::Acquire));
     assert_eq!(trace.pixels.conversions.load(Ordering::Acquire), 1);
+    assert_eq!(successes.load(Ordering::Acquire), 1);
     trace.reclaim_source_semaphore_for_fixture();
     wait(|| MODULE_CLOSED.load(Ordering::Acquire) == 1);
     assert_eq!(MODULE_ERROR.load(Ordering::Acquire), 0);

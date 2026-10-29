@@ -69,6 +69,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 default {$null}
             }
             if($summary -and -not $observed.Contains($summary)){$status='failed';throw 'Expected the complete native Rust macOS ownership/capture summary'}
+            if($summary -and -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1')){
+                $status='failed';throw 'Expected the explicit original-equivalent main-thread AppKit host and joined libtest worker'
+            }
         }
     }finally{
         $checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)})
