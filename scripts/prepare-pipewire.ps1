@@ -148,6 +148,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected twenty OpenCV conversion/owner lifecycles, sixty held BGR images and twenty actual native unlock witnesses'
             }
         }
+        if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
+            throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
+        }
         if ($Name -eq 'original-pipewire-source-reinit' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed') {
             throw 'Expected twenty original same-object lifecycles, forty sessions and 120 held BGR images'
         }
@@ -404,6 +407,8 @@ try {
             Step rust-pipewire-kernel-dma-helper timeout @('--signal=TERM','--kill-after=5s','180s',$dmaTest,'backends::linux::pipewire::native::tests::opencv::dma::matches_original_kernel_dma_maps_and_retains_independent_cpu_images','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-task-diagnostic-fixtures timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-diagnostic-fixtures',(Join-Path $referenceArtifacts task-diagnostic)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step native-task-read-exit-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-read-exit-fixture',(Join-Path $referenceArtifacts task-read-exit)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }

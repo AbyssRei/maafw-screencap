@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <latch>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -116,10 +117,7 @@ struct Task {
     uint64_t started,flags,address_space;
     int64_t resident_pages;
 };
-std::optional<Task> task(const std::string& id) {
-    errno=0;
-    std::ifstream input(std::filesystem::path("/proc/self/task")/id/"stat");
-    if(!input) { require(errno==ENOENT,"cannot inspect proc task");return std::nullopt; }
+std::string task_text(std::ifstream& input,const std::string& id) {
     std::string text;
     errno=0;
     std::getline(input,text);
@@ -132,6 +130,13 @@ std::optional<Task> task(const std::string& id) {
             <<" bytes="<<text.size()<<'\n';
     }
     require(input.good() || input.eof(),"cannot read proc task stat");
+    return text;
+}
+std::optional<Task> task(const std::string& id) {
+    errno=0;
+    std::ifstream input(std::filesystem::path("/proc/self/task")/id/"stat");
+    if(!input) { require(errno==ENOENT,"cannot inspect proc task");return std::nullopt; }
+    const auto text=task_text(input,id);
     const auto end=text.rfind(')');
     require(end!=std::string::npos,"invalid proc task comm field");
     std::istringstream body(text.substr(end+1));
@@ -294,6 +299,75 @@ void observe_joined_tasks(const std::filesystem::path& directory) {
     // Observational control only: zero and nonzero residuals are both retained.
     // It cannot excuse a failed capture test or serve as cleanup acceptance.
     std::cout<<"native joined-task observation cycles=10000 residual_enumerations="<<residual<<" observed\n";
+}
+void task_read_exit_fixture(const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    const auto baseline_fds=count_entries("/proc/self/fd");
+    const auto baseline_tasks=task_ids();
+    int native_error=0;
+    bool strict_rejected=false;
+    pid_t tid=-1;
+    {
+        struct Worker {
+            std::latch ready{1},release{1};
+            pid_t tid=-1;
+            bool released=false;
+            std::thread thread;
+            Worker():thread([this]{tid=gettid();ready.count_down();release.wait();}) {}
+            void finish() {
+                if(!released) { released=true;release.count_down(); }
+                if(thread.joinable()) { thread.join(); }
+            }
+            ~Worker() { finish(); }
+        } worker;
+        worker.ready.wait();
+        tid=worker.tid;
+        require(tid>0,"cannot obtain exit fixture task identity");
+        const auto id=std::to_string(tid);
+        const auto path=std::filesystem::path("/proc/self/task")/id/"stat";
+        // Both handles open while this gated task is still alive. Neither has
+        // read/buffered stat yet; no new task is created before the reads below.
+        std::ifstream input(path);
+        require(input.good(),"cannot open live exit fixture stat stream");
+        struct Descriptor {
+            int value;
+            ~Descriptor() { if(value>=0) { close(value); } }
+        } descriptor{open(path.c_str(),O_RDONLY|O_CLOEXEC)};
+        require(descriptor.value>=0,"cannot open live exit fixture stat fd");
+        const auto before=task(id);
+        require(before.has_value(),"gated exit fixture task disappeared early");
+        worker.finish();
+        // This deliberately selects the fully retired state for a causal
+        // procfs control. It is not a wait/retry in the capture/resource gate.
+        const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        while(std::filesystem::exists(path) && std::chrono::steady_clock::now()<deadline) {
+            std::this_thread::yield();
+        }
+        require(!std::filesystem::exists(path),"exit fixture task did not retire");
+        std::array<char,4096> bytes{};
+        errno=0;
+        const auto length=read(descriptor.value,bytes.data(),bytes.size());
+        native_error=errno;
+        require(length==-1 && native_error==ESRCH,"retired task stat fd did not report ESRCH");
+        try { static_cast<void>(task_text(input,id)); }
+        catch(const std::runtime_error& error) {
+            require(std::string_view(error.what())=="cannot read proc task stat","unexpected strict observer exception");
+            strict_rejected=true;
+        }
+        require(strict_rejected && input.bad() && input.fail() && !input.eof(),
+            "strict task observer did not retain its actual read failure");
+        require(!task(id).has_value(),"retired fixture task was not absent on a fresh open");
+        const int fd=std::exchange(descriptor.value,-1);
+        require(close(fd)==0,"cannot close exit fixture native stat fd");
+        input.clear();input.close();require(!input.fail(),"cannot close exit fixture stat stream");
+    }
+    require(count_entries("/proc/self/fd")==baseline_fds && task_ids()==baseline_tasks,
+        "task exit fixture resources did not return to baseline");
+    std::ofstream saved(directory/"observations.txt");
+    saved<<"tid="<<tid<<"\nopened_while_live=1\njoined_before_read=1\npath_absent=1\nread_bytes=-1\nread_errno="<<native_error
+        <<"\nstrict_observer_rejected="<<strict_rejected<<"\nfresh_open_absent=1\nresources_balanced=1\n";
+    saved.close();require(saved.good(),"cannot save task exit fixture observations");
+    std::cout<<"native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed\n";
 }
 int connect_socket(const char* path) {
     sockaddr_un address{};
@@ -797,6 +871,10 @@ int main(int argc,char** argv) {
         }
         if(argc==3 && std::string_view(argv[1])=="--task-diagnostic-fixtures") {
             task_diagnostic_fixtures(argv[2]);
+            return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--task-read-exit-fixture") {
+            task_read_exit_fixture(argv[2]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--fd-error") {
