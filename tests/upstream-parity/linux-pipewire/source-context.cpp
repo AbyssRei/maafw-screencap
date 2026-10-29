@@ -121,7 +121,16 @@ std::optional<Task> task(const std::string& id) {
     std::ifstream input(std::filesystem::path("/proc/self/task")/id/"stat");
     if(!input) { require(errno==ENOENT,"cannot inspect proc task");return std::nullopt; }
     std::string text;
+    errno=0;
     std::getline(input,text);
+    const int read_error=errno;
+    if(!input.good() && !input.eof()) {
+        // Observation only: retain the original failure condition. In
+        // particular, do not silently classify an unreadable task as gone.
+        std::cerr<<"proc task stat read id="<<id<<" errno="<<read_error
+            <<" bad="<<input.bad()<<" fail="<<input.fail()<<" eof="<<input.eof()
+            <<" bytes="<<text.size()<<'\n';
+    }
     require(input.good() || input.eof(),"cannot read proc task stat");
     const auto end=text.rfind(')');
     require(end!=std::string::npos,"invalid proc task comm field");
