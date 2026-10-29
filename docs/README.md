@@ -13,7 +13,7 @@ DesktopDup/Window 也已有独立内部迁移及 `upstream-parity desktop-dup` �
 
 截图 manager 已开始私有迁移，`upstream-parity manager` 对照原源码函数体的 122 个脚本，并通过本机 20 次真实 GDI manager 生命周期。它保留预热/测速、毫秒截断、候选与图像释放及 U 的调用线程 DPI 副作用；完整原生混合方法、包装和 framework 转发仍待验收，不构成公共 SDK。
 
-PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。daemon/SHM driver 的 20 生命周期/60 张独立 RGB 已有原生证据；独立 OpenCV 探针另通过 20 生命周期/60 张 BGR，七格式/28 组有效 POD 与精确转换字节对照也通过 Actions。不同批次的原 C++/Rust 即时线程数量断言仍有失败，已记录退出中的内核任务并准备修正测试观察前提；旧失败不撤销。Portal fd、映射/DMA-BUF、完整格式/故障及 P1 仍待完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
+PipeWire 已开始消费端算法迁移，`upstream-model pipewire` 在 Windows 工具链上比较原源码的等待、回放、停用、转换与所有权边界；本机 74 个案例/118 次操作匹配。受控原生批次中，完整原 C++、Rust daemon、Rust supplied-fd、Rust OpenCV 各通过 20 生命周期/60 张关闭后持帧；七格式/28 组有效 POD 与精确转换字节对照也通过 Actions。测试区分已 join 的内核退出任务与活跃线程，严格保留 fd/任务身份检查；旧即时数量断言失败不撤销。实际 Portal 授权、通用 fd 失败/重试、owned mapping/DMA-BUF、完整格式/故障及 P1 仍待完成，详见[开发指南](guides/development.md#当前-p1-迁移与对照)。
 
 | 文档 | 职责及当前状态 |
 | --- | --- |
