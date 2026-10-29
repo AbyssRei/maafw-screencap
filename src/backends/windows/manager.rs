@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Fixed Win32ControlUnitMgr screenshot path only; input remains excluded.
-use std::ffi::c_void;
+use std::{collections::TryReserveError, ffi::c_void, fmt::Write};
 
 #[path = "manager_native.rs"]
 mod system;
@@ -187,6 +187,16 @@ impl<U> Manager<U> {
     }
     pub fn selected(&self) -> Option<Method> {
         self.selected.as_ref().map(|(method, _)| *method)
+    }
+    pub fn get_info(&self) -> Result<String, TryReserveError> {
+        let mut value = String::new();
+        value.try_reserve_exact(256)?;
+        let hwnd =
+            u64::try_from(self.window.addr()).expect("planned Windows pointer width fits u64");
+        // The original casts method flags to int64 only in this metadata view.
+        let method = i64::from_ne_bytes(self.flags.to_ne_bytes());
+        write!(&mut value,"{{\"hwnd\":{hwnd},\"keyboard_method\":0,\"mouse_method\":0,\"screencap_method\":{method},\"type\":\"win32\"}}").expect("String formatting cannot fail");
+        Ok(value)
     }
     pub fn connect<C, P: Platform, F: Factory<Unit = U>>(
         &mut self,

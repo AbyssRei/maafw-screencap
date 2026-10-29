@@ -7,6 +7,7 @@ mod dependencies;
 mod licenses;
 mod linux_config;
 mod macos;
+mod manager_metadata;
 mod native;
 mod native_tools;
 mod pipewire;
@@ -65,6 +66,9 @@ fn run() -> Result<()> {
     }
     if argv.first().is_some_and(|arg| arg == "upstream-config") {
         return linux_config::run(&argv[1..]);
+    }
+    if argv.first().is_some_and(|arg| arg == "upstream-metadata") {
+        return manager_metadata::run(&argv[1..]);
     }
     if argv.first().is_some_and(|arg| arg == "pipewire-prototype") {
         return pipewire::run(&argv[1..]);
@@ -129,6 +133,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
+                      cargo xtask upstream-metadata <win32|macos> <external directory> [--check-only]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\
                       cargo xtask wlr-prototype       # native Linux x64 only\n\n\

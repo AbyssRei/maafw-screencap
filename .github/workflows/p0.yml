@@ -75,6 +75,9 @@ jobs:
           path: |
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/manifest.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/*-info-*.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-*.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-LICENSE
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/macos-arm64/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/macos-arm64/reference-u/artifacts/**
           if-no-files-found: warn
@@ -111,6 +114,11 @@ jobs:
           path: |
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/manifest.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/configuration-*/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/config-oracle-sources/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-*.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-LICENSE
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/*-info-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64-pipewire/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/reference-u/artifacts/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-shm/artifacts/**
@@ -201,9 +209,13 @@ jobs:
           path: |
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/manifest.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/*-info-*.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/meojson-*.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/meojson-LICENSE
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/*.bgr
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**/geometry.txt
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/manager-metadata/**
           if-no-files-found: warn
       - name: Archive engineering evidence
         if: always()

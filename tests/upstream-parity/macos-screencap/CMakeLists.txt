@@ -14,6 +14,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc)
 find_package(Threads REQUIRED)
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/macos-base-source.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/macos-manager-source.cmake")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../manager-metadata" metadata)
 set(_mfs_root "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit")
 add_executable(mfs_macos_source_context source-context.mm
     "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")

@@ -81,4 +81,6 @@ function Observe-LinuxConfigReference([string]$Build,[string]$InputDirectory) {
     finally { if(Test-Path -LiteralPath $observations){Get-ChildItem -LiteralPath $observations -Recurse -File|ForEach-Object{Save $_.FullName}} }
     $env:MFS_P1_LINUX_CONFIG_OBSERVATIONS=$observations
     $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS=Join-Path $InputDirectory configuration-rust
+    . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
+    Save-ManagerMetadataReference (Join-Path $managerBuild metadata) $InputDirectory (Join-Path $RunRoot linux-x64/reference-u/artifacts/manager-metadata)
 }

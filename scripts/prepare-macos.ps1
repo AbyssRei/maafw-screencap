@@ -63,8 +63,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'rust-macos-manager-original-oracle' -and -not $observed.Contains('original macOS manager cycles=20 captures=60 retained=60 connect_capture_calls=0 source_owners_released=20 input_attempts=0 passed')){
             $status='failed';throw 'Expected twenty original manager/source lifecycles and sixty same-window oracle images'
         }
-        if($Name -eq 'rust-macos-manager-controls' -and $observed -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;'){
+        if($Name -eq 'rust-macos-manager-controls' -and $observed -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;'){
             $status='failed';throw 'Expected four actual portable macOS manager controls'
+        }
+        if($Name -eq 'rust-macos-manager-metadata' -and ($observed -notmatch 'manager metadata kind=macos cases=66 exact_original_json=1 input_none=1 no_native_connection=1 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
+            $status='failed';throw 'Expected sixty-six actual original/Rust metadata queries, separate from native capture'
+        }
+        if($Name -eq 'rust-macos-manager-metadata') {
+            & $ConfigureTool upstream-metadata macos (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS macos) >> $log 2>&1
+            if($LASTEXITCODE -ne 0){$status='failed';throw 'Metadata source/Rust artifact validation failed'}
         }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -143,6 +150,8 @@ try {
         try { Step rust-macos-dimensions cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::rejects_unrepresentable_source_config_dimensions','--','--exact','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-macos-manager-controls cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::tests::','--','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-macos-manager-metadata cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::tests::metadata_matches_original_signed_selectors_and_window_identity','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $env:MFS_P1_MACOS_MANAGER_SCRIPTS=Join-Path $referenceArtifacts manager-scripts
         try { Step rust-macos-manager-scripts cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::matches_original_manager_connect_forwarding_output_and_owner_scripts','--','--exact','--ignored','--test-threads=1','--nocapture') }

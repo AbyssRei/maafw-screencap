@@ -25,6 +25,7 @@ if(DEFINED MFS_MEOJSON_INCLUDE)
         message(FATAL_ERROR "Configuration oracle requires its explicitly prepared latest formal meojson include prefix")
     endif()
     include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/linux-config-source.cmake")
+    add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../manager-metadata" metadata)
     add_executable(mfs_linux_config_model config-model.cpp)
     target_compile_definitions(mfs_linux_config_model PRIVATE MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-config-oracle")
     target_include_directories(mfs_linux_config_model PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/config-overlay"

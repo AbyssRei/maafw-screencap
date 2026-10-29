@@ -1,6 +1,18 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+#[test]
+#[ignore = "requires explicitly built original get_info model with current meojson"]
+fn metadata_matches_original_signed_selectors_and_pointer_identity() {
+    crate::backends::manager_metadata::compare("win32", |id, method| {
+        Manager::<()>::new(
+            std::ptr::without_provenance_mut(usize::try_from(id).unwrap()),
+            method,
+        )
+        .get_info()
+        .unwrap()
+    });
+}
 use crate::backends::windows::parity_adapter::{
     Adapter,
     manager::{Event, Report, Script, Step},
