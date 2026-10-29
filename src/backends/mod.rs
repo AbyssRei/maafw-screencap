@@ -12,6 +12,9 @@
 mod linux;
 #[cfg(any(all(target_os = "macos", feature = "macos-screen-capture-kit"), test))]
 mod macos;
+#[cfg(test)]
+#[path = "../../tests/upstream-parity/manager-metadata/compare.rs"]
+mod manager_metadata;
 #[cfg(all(
     target_os = "windows",
     any(

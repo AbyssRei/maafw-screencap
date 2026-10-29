@@ -41,6 +41,7 @@ $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
+$metadataEvidence = ''
 if ($PipeWireControl) {
     $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 74 scripts and 118 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
 }
@@ -160,6 +161,18 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact manager test did not execute one test' }
             if ($Name -eq 'manager-source-scripts' -and $observed -notmatch 'exact-source manager script cases=122') { throw 'Expected 122 source manager cases' }
+        }
+        if($Name -eq 'manager-metadata-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('manager metadata kind=win32 cases=88 exact_original_json=1 input_none=1 no_native_connection=1 passed') -or
+               -not $observed.Contains('manager metadata kind=macos cases=66 exact_original_json=1 input_none=1 no_native_connection=1 passed')) {
+                throw 'Expected actual Windows/macOS original-body metadata comparisons, separate from native capture'
+            }
+            foreach($kind in @('win32','macos')) {
+                & $ConfigureTool upstream-metadata $kind (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS $kind) >> $logPath 2>&1
+                if($LASTEXITCODE -ne 0){throw 'Metadata source/Rust artifact validation failed'}
+            }
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -507,6 +520,26 @@ try {
             Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
             Save-Input $saved
         }
+        $metadataEvidence=Join-Path $artifacts manager-metadata
+        if($offline) {
+            # This is an explicit archived reference oracle input, not a
+            # product/runtime dependency or a new online version selection.
+            $env:MFS_P1_MANAGER_METADATA_MODEL=Prepared-File mfs_manager_metadata_model.exe
+            Save-Input $env:MFS_P1_MANAGER_METADATA_MODEL
+            foreach($name in @('win32-info-source.inc','win32-info-members.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
+            $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
+        } else {
+            # Adapt the native batch's record helpers without shadowing inputs.
+            function Save([string]$RecordPath) {Save-Input $RecordPath}
+            function Json([string]$RecordPath,$Value) {Write-NewJson $RecordPath $Value}
+            . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
+            $meojson=Prepare-MeoJsonReference $inputsRoot
+            $metadataBuild=Join-Path $nativeRoot ('metadata-'+[DateTime]::UtcNow.Ticks)
+            Step manager-metadata-configure $cmake (@('-S',(Join-Path $productRoot tests/upstream-parity/manager-metadata),'-B',$metadataBuild,"-DMFS_UPSTREAM_ROOT=$UpstreamRoot","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)")+$generator)
+            Step manager-metadata-build $cmake @('--build',$metadataBuild,'--config','Release','--target','mfs_manager_metadata_model','--parallel','4')
+            . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
+            Save-ManagerMetadataReference $metadataBuild $inputsRoot $metadataEvidence
+        }
     }
     if ($PipeWireControl) {
         Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
@@ -629,6 +662,7 @@ try {
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
+                @{name='manager-metadata-parity';arguments=($parityArguments + @('--','metadata_matches_original','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))}
             )
@@ -699,6 +733,7 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}
     if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
         Get-ChildItem -LiteralPath $screenEvidence -File | ForEach-Object { Save-Input $_.FullName }
     }
