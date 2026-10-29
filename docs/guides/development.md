@@ -202,6 +202,8 @@ DMA-BUF 私有迁移已接入回调的单 plane packed 路径。首个原生批�
 
 原 helper 与 Rust 的 ENOTTY 控制使用明确无效的普通 MemFd，仅验证 START 失败／已有指针选择，不计为 DMA 成功。正向 helper 必须由 `/dev/udmabuf` 或 `/dev/dma_heap/system` 实际导出 DMA-BUF：每侧 20 个 fd/60 次复制，生产端 WRITE START/END，原 READ helper、Rust READ/SHARED/END/unmap、关闭后 RGB/BGR 持帧和 C ioctl ABI分别检查。Rust 额外 60 次权限观察映射独立计量。该夹具不证明实际 PipeWire DMA 回调或 GPU 完成同步。仅在 `RUNNER_ENVIRONMENT=github-hosted` 的临时 Actions Linux VM 上尝试加载已安装 udmabuf 模块并设置新测试设备 owner；不下载驱动，不对本地/自托管主机自动提权。两种 exporter 都不可用时返回 77，报告 `missing_environment`，保留其他独立结果且整批不通过。
 
+另已接入独立 CPU 写入的 kernel DMA 生产器和实际流验证入口，原生编译/运行尚未验收。普通 RGB 生产器与路由先完整停止，随后在同一私有 daemon 上创建新的 DMA 生产器与精确路由；注册/移除等待只属于夹具就绪，不重试捕获。生产端通过 ALLOC_BUFFERS 提供真实 DMA-BUF fd，完成 WRITE START/copy/END 后才归还，不设置 MAPPABLE；捕获端保留 U 的 MAP_BUFFERS。原源码与 Rust 各要求 20 个流生命周期/60 张已知图像，Rust 还要求真实回调的 60 次 NULL-data owning map、READ START/END/unmap、无 borrowed bypass、queue 与资源配平，关闭后仍保持独立 CPU 图像。原源码输出为 BGR，Rust 该入口保留 RGB；各自按生产序号核对，不声称同一时刻逐帧对照。原源码回调指针没有被单独插桩，GPU 异步完成与 Portal 授权仍未覆盖。
+
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
 macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。

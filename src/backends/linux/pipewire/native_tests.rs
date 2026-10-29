@@ -236,16 +236,22 @@ fn marker(frame: &RawFrame) -> u32 {
 #[test]
 #[ignore = "explicit native Linux owned-daemon SHM driver probe, not full source/OpenCV parity"]
 fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
-    run_raw_probe(false);
+    run_raw_probe(false, false);
 }
 
 #[test]
 #[ignore = "explicit native supplied-socket success ownership, not Portal authorization/failure acceptance"]
 fn captures_supplied_fd_shm_and_closes_twenty_consumed_sockets() {
-    run_raw_probe(true);
+    run_raw_probe(true, false);
 }
 
-fn run_raw_probe(supplied_fd: bool) {
+#[test]
+#[ignore = "requires the owned real kernel DMA producer and native source POD oracle"]
+fn captures_null_data_dma_stream_with_paired_sync_and_retained_cpu_samples() {
+    run_raw_probe(false, true);
+}
+
+fn run_raw_probe(supplied_fd: bool, dma_stream: bool) {
     let socket = env::var("MFS_P0_PIPEWIRE_SOCKET").expect("explicit private producer socket");
     let remote = env::var("PIPEWIRE_REMOTE").expect("explicit private daemon name");
     let runtime = env::var("PIPEWIRE_RUNTIME_DIR").expect("explicit private runtime");
@@ -254,7 +260,9 @@ fn run_raw_probe(supplied_fd: bool) {
         .unwrap()
         .parse::<u32>()
         .unwrap();
-    let directory = env::var(if supplied_fd {
+    let directory = env::var(if dma_stream {
+        "MFS_P1_PIPEWIRE_DMA_STREAM_ARTIFACTS"
+    } else if supplied_fd {
         "MFS_P1_PIPEWIRE_FD_ARTIFACTS"
     } else {
         "MFS_P1_PIPEWIRE_RUST_ARTIFACTS"
@@ -355,6 +363,15 @@ fn run_raw_probe(supplied_fd: bool) {
             "{evidence:?}"
         );
         assert_eq!(evidence.owned_maps, evidence.unmap_calls, "{evidence:?}");
+        if dma_stream {
+            // Three actual callback copies, each with NULL incoming data, must
+            // own a DMA map. Existing pointers bypass these sync counters in U;
+            // normal mapped MemFd frames cannot satisfy these assertions.
+            assert_eq!(evidence.owned_maps, 3, "{evidence:?}");
+            assert_eq!(evidence.dma.borrowed, 0, "{evidence:?}");
+            assert_eq!((evidence.dma.starts, evidence.dma.ends), (3, 3));
+            assert_eq!((evidence.dma.start_error, evidence.dma.end_error), (0, 0));
+        }
         assert_eq!(evidence.dequeued, evidence.returned, "{evidence:?}");
         assert_eq!(evidence.copies, 3, "{evidence:?}");
         assert_eq!(
@@ -390,7 +407,11 @@ fn run_raw_probe(supplied_fd: bool) {
     })
     .join()
     .unwrap();
-    if supplied_fd {
+    if dma_stream {
+        eprintln!(
+            "native Rust PipeWire DMA stream cycles=20 captures=60 NULL_data=60 READ_START=60 READ_END=60 unmaps=60 retained=60 passed"
+        );
+    } else if supplied_fd {
         eprintln!(
             "native Rust PipeWire supplied fd SHM cycles=20 captures=60 retained=60 consumed_sockets_closed=20 passed"
         );

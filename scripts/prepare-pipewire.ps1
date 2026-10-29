@@ -73,6 +73,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'original-pipewire-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire source cycles=20 captures=60 retained=60 passed') {
             throw 'Expected twenty original PipeWire source lifecycles and sixty retained images'
         }
+        if($Name -eq 'original-pipewire-dma-stream' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire source cycles=20 captures=60 retained=60 passed'){
+            throw 'Expected twenty original captures from the real kernel DMA producer with sixty retained BGR owners'
+        }
+        if($Name -eq 'rust-pipewire-dma-stream'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Rust PipeWire DMA stream cycles=20 captures=60 NULL_data=60 READ_START=60 READ_END=60 unmaps=60 retained=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected one real incoming NULL-data DMA test with paired native sync/unmap, queue and CPU owner checks'
+            }
+        }
         if ($Name -eq 'pipewire-fd-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_early_error result=null errno=\d+ input_fd_open=[01] observed') {
             throw 'Expected the real native early-error descriptor observation'
         }
@@ -502,6 +511,21 @@ try {
             $fdTest=Capture-TestProgram rust-pipewire-fd-retry-build
             Step rust-pipewire-supplied-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$fdTest,'backends::linux::pipewire::native::tests::reinit::retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
+        # End the ordinary producer/route premise before starting a separate
+        # kernel DMA producer. Product stream flags and routing policy stay U.
+        StopOwned route-supervisor $routeSupervisor $routeOut $routeError
+        $routeSupervisor=$null
+        StopOwned source $fixture $fixtureOut $fixtureError
+        $fixture=$null
+        . (Join-Path $PSScriptRoot validate-pipewire-dma-stream.ps1)
+        try { Invoke-PipeWireDmaStream }
+        catch {
+            $failed=$true
+            $dmaStreamError=Join-Path $logsRoot pipewire-dma-stream-error.log
+            $_.Exception.ToString()|Set-Content -LiteralPath $dmaStreamError -Encoding utf8
+            $checks.Add([ordered]@{name='pipewire-dma-stream-setup';status='failed';log=(Artifact $dmaStreamError)})
+            Write-Host $_.Exception.Message
+        }
     }
 } catch {
     $failed = $true
