@@ -37,6 +37,7 @@ if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the 
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
 if ($DesktopDupParity -and -not $GdiParity) { throw 'DesktopDup parity requires the explicit common adapter/regression target.' }
 if ($ManagerParity -and -not $GdiParity) { throw 'Manager parity requires the explicit common image adapter.' }
+if($ManagerParity){$pending.Add('The optional outer Win32 capture delegate adds 274 exact-source/Rust model cases and actual record validation with original loader/LibraryHolder, full original virtual declarations, Boost/std control blocks/mutex and Mat owners. DLL/log/path/backend boundaries are scripted; native module loading, real native factory, shared-loader/control-block-allocation failures and full delegate/framework/P1 acceptance remain pending. Source stale no-op views are observed without dead-object calls; Rust refusal is an explicit lifetime-safety adaptation. Input/gamepad behavior is excluded.')}
 if ($PipeWireControl -and -not $GdiParity) { throw 'PipeWire control model requires the explicit host regression/test entry.' }
 $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
@@ -44,6 +45,7 @@ $frameContextEvidence = ''
 $desktopEvidence = ''
 $metadataEvidence = ''
 $customEvidence = ''
+$delegateEvidence = ''
 if($CustomParity -and ($Desktop -or $GdiParity -or $FramePoolContext)) {throw 'Custom parity is an independent callback entry without desktop/GDI prerequisites'}
 if($CustomParity) {
     $pending.Add('Private Custom screenshot slice only: actual fixed callback table, selected original manager bodies, unchanged raw C setter and real MaaUtils ImageBuffer/vtable. Rust preserves synchronous nonzero-byte callback, borrowed table/context, false output and true-empty semantics; real Mat heads retain CPU storage after temporary buffer/context/input destruction. Ninety-six source/Rust cases and native callback exception/subsequent distinct capture are explicit. Native ABI/raw types use actual compiled header values, never frozen OpenCV 4 type packing. Input/app/shell actions, UUID/get_features/get_info, full manager virtual ABI/create-destroy exports, encoded/resize/all-type and all-platform/full P1 remain unaccepted. Opaque acceptance Mat heads add bookkeeping allocation; default product/core custom feature has no OpenCV dependency.')
@@ -187,6 +189,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                -not $observed.Contains('native Custom cases=96 source_rust_captures=192 retained=36 real_imagebuffer=1 caller_callbacks=1 false_output_preserved=1 true_empty=1 raw_setter_clone=1 borrowed_table_changes=1 native_exception=1 subsequent_capture=1 native_mat_heads_closed=1 passed')) {
                 throw 'Expected real original/Rust callback/ImageBuffer cases, retained native Mat owners and exception cleanup'
             }
+        }
+        if($Name -eq 'manager-delegate-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('original Rust Win32 delegate scripts=274 phases=548 source_bodies=1 real_mat=1 held_outputs=1 input_none=1 stale_source_calls_skipped=1 rust_stale_views_rejected=1 native_dll_loading=not_tested passed')) {
+                throw 'Expected all actual selected-source/Rust delegate model comparisons, not native DLL acceptance'
+            }
+            & $ConfigureTool upstream-delegate win32 $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Actual delegate model records failed validation'}
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -575,6 +586,8 @@ try {
             Save-Input $env:MFS_P1_MANAGER_METADATA_MODEL
             foreach($name in @('win32-info-source.inc','win32-info-members.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
+            $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
+            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt')) {Save-Input (Prepared-File $name)}
         } else {
             # Adapt the native batch's record helpers without shadowing inputs.
             function Save([string]$RecordPath) {Save-Input $RecordPath}
@@ -586,7 +599,18 @@ try {
             Step manager-metadata-build $cmake @('--build',$metadataBuild,'--config','Release','--target','mfs_manager_metadata_model','--parallel','4')
             . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
             Save-ManagerMetadataReference $metadataBuild $inputsRoot $metadataEvidence
+            $delegateBuild=Join-Path $nativeRoot ('delegate-'+[DateTime]::UtcNow.Ticks)
+            Step windows-delegate-configure $cmake (@('-S',(Join-Path $productRoot tests/upstream-parity/windows-delegate),'-B',$delegateBuild,"-DMFS_UPSTREAM_ROOT=$UpstreamRoot","-DMFS_MAAUTILS_ROOT=$maautils","-DMFS_BOOST_ROOT=$boost","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)","-DOpenCV_DIR=$opencvInstall")+$generator)
+            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','--parallel','4')
+            foreach($item in @(@('delegate-loader.inc','windows-delegate-loader.inc'),@('delegate-source.inc','windows-delegate-source.inc'),@('delegate-condition.inc','windows-delegate-condition.inc'),@('original-LibraryHolder.h','windows-delegate-LibraryHolder.h'),@('source-scope.txt','windows-delegate-scope.txt'),@('CMakeCache.txt','windows-delegate-CMakeCache.txt'),@('toolchain-Release.txt','windows-delegate-toolchain-Release.txt'),@('Release/mfs_windows_delegate_model.exe','mfs_windows_delegate_model.exe'))) {
+                $saved=Join-Path $inputsRoot $item[1]
+                Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
+                Save-Input $saved
+            }
+            $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Join-Path $inputsRoot mfs_windows_delegate_model.exe
         }
+        $delegateEvidence=Join-Path $artifacts windows-delegate
+        $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS=$delegateEvidence
     }
     if ($PipeWireControl) {
         Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
@@ -716,10 +740,13 @@ try {
         if ($ManagerParity) {
             # These cases run in distinct processes. Preserve any failed check
             # while continuing independent manager evidence, without retry.
+            $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
+            $caseSelection+=@('--skip',$delegateCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
                 @{name='manager-metadata-parity';arguments=($parityArguments + @('--','metadata_matches_original','--ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))}
             )
@@ -790,6 +817,7 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}
     if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
