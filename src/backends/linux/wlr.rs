@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Private first Wlr migration slice. A capture owns its client connection;
-//! shared-client forwarding/early-close and complete fault parity remain P1.
+//! Private Wlr migration. Captures retain one shared client and independent
+//! native buffer/result state; early-close and complete fault parity remain P1.
 //! Callback-internal roundtrips and frame lifetime through conversion stay U.
 use crate::platform::linux::wayland::{Channel, Error, callback_roundtrip};
 use memmap2::{MmapMut, MmapOptions};
@@ -11,7 +11,7 @@ use std::{
     mem::ManuallyDrop,
     os::fd::{AsFd, AsRawFd, OwnedFd},
     panic::{AssertUnwindSafe, catch_unwind},
-    path::Path,
+    path::{Path, PathBuf},
     rc::Rc,
     sync::{
         Arc, Mutex, MutexGuard, Weak,
@@ -630,14 +630,21 @@ pub(crate) struct Evidence {
     pub fault: i32,
     pub buffer_error: i32,
 }
-pub(crate) struct Capture {
+// The client context receives registry events; each capture has another Context
+// for its own frame callbacks. Only the scalar evidence ledger is shared. No
+// state guard or exclusive client borrow survives native dispatch.
+pub(crate) struct Client {
     context: Arc<Context>,
     channel: Option<Channel>,
-    _owner: PhantomData<Rc<()>>,
+    socket_path: PathBuf,
 }
-impl Capture {
-    pub fn connect(path: &Path) -> Result<Self, Error> {
-        let channel = Channel::connect(path)?;
+impl Client {
+    pub fn into_shared(self) -> Result<Arc<Self>, Error> {
+        // Standard shared ownership only. Channel's Rc marker keeps Client
+        // and every Arc<Client> on this native channel; no Send/Sync is asserted.
+        Arc::try_new(self).map_err(|_| Error::allocation())
+    }
+    pub fn new() -> Result<Self, Error> {
         let counts = Arc::try_new(Counts::default()).map_err(|_| Error::allocation())?;
         let context = Arc::try_new(Context {
             owner: std::thread::current().id(),
@@ -647,27 +654,54 @@ impl Capture {
             counts,
         })
         .map_err(|_| Error::allocation())?;
-        let result = Self {
+        Ok(Self {
             context,
-            channel: Some(channel),
-            _owner: PhantomData,
-        };
-        // SAFETY: Connection clones/proxies stay inside this Capture and its
-        // synchronous operations, destroyed before the owning Channel closes.
-        let conn = unsafe { result.channel.as_ref().unwrap().connection() };
+            channel: None,
+            socket_path: PathBuf::new(),
+        })
+    }
+    pub fn connect(&mut self, path: &Path) -> Result<bool, Error> {
+        if self.socket_path != path {
+            self.close();
+            self.socket_path.clear();
+            self.socket_path
+                .try_reserve_exact(path.as_os_str().len())
+                .map_err(|_| Error::allocation())?;
+            self.socket_path.push(path);
+        }
+        if self.channel.is_some() {
+            // Same live path is the source's no-op, including no roundtrip.
+            return self.connected();
+        }
+        self.channel = Some(Channel::connect(&self.socket_path)?);
+        if let Err(error) = self.bind_protocol() {
+            self.close();
+            return Err(error);
+        }
+        self.context.state()?.connected = true;
+        Ok(true)
+    }
+    pub fn connected(&self) -> Result<bool, Error> {
+        Ok(self.context.state()?.connected)
+    }
+    fn bind_protocol(&self) -> Result<(), Error> {
+        // SAFETY: All connection clones/proxies are internal. Captures retain
+        // Arc<Client> until their copied proxies/buffers have ended. connect
+        // and close need &mut Client, unavailable while any capture retains it.
+        // Closing/reconnecting with live snapshots is not yet migrated.
+        let conn = unsafe { self.channel.as_ref().unwrap().connection() };
         let registry = conn
             .display()
             .send_constructor::<wl_registry::WlRegistry>(
                 wl_display::Request::GetRegistry {},
-                data(&result.context, Kind::Registry)?,
+                data(&self.context, Kind::Registry)?,
             )
             .map_err(|_| Error::new("wl_display_get_registry", -1))?;
-        result.context.state()?.globals.registry =
-            Some(own(registry, local, &result.context.counts)?);
-        result.roundtrip()?;
-        result.context.check()?;
+        self.context.state()?.globals.registry = Some(own(registry, local, &self.context.counts)?);
+        self.roundtrip()?;
+        self.context.check()?;
         {
-            let mut s = result.context.state()?;
+            let s = self.context.state()?;
             // Exact original core prerequisite is &&, not ||.
             if (s.globals.output.is_none() && s.globals.shm.is_none())
                 || s.globals.manager.is_none()
@@ -679,16 +713,12 @@ impl Capture {
                     rustix::io::Errno::INVAL.raw_os_error(),
                 ));
             }
-            s.output = s.globals.output.clone();
-            s.shm = s.globals.shm.clone();
-            s.manager = s.globals.manager.clone();
-            s.connected = true;
         }
-        Ok(result)
+        Ok(())
     }
     fn roundtrip(&self) -> Result<(), Error> {
         self.context.counts.increment(&self.context.counts.outer);
-        // SAFETY: Temporary immutable connection borrow does not escape Capture.
+        // SAFETY: Temporary immutable connection borrow does not escape Client.
         unsafe {
             self.channel
                 .as_ref()
@@ -702,6 +732,78 @@ impl Capture {
         .map(|_| ())
         .map_err(|_| Error::new("wl_display_roundtrip", -1))
     }
+    pub fn close(&mut self) {
+        {
+            let mut s = self
+                .context
+                .state
+                .lock()
+                .unwrap_or_else(|poison| poison.into_inner());
+            s.connected = false;
+            // Original client order; no capture can retain a proxy while this
+            // unique client borrow exists. Registry callback data ends before
+            // the native display/backend queue owner below.
+            let g = &mut s.globals;
+            g.pointer.take();
+            g.keyboard.take();
+            g.manager.take();
+            g.seat.take();
+            g.shm.take();
+            g.output.take();
+            g.registry.take();
+        }
+        drop(self.channel.take());
+    }
+}
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+pub(crate) struct Capture {
+    context: Arc<Context>,
+    client: Option<Arc<Client>>,
+    _owner: PhantomData<Rc<()>>,
+}
+impl Capture {
+    pub fn connect(path: &Path) -> Result<Self, Error> {
+        let mut client = Client::new()?;
+        client.connect(path)?;
+        Self::from_client(client.into_shared()?)
+    }
+    pub fn from_client(client: Arc<Client>) -> Result<Self, Error> {
+        let state = {
+            let s = client.context.state()?;
+            State {
+                output: s.globals.output.clone(),
+                shm: s.globals.shm.clone(),
+                manager: s.globals.manager.clone(),
+                connected: true,
+                ..State::default()
+            }
+        };
+        let context = Arc::try_new(Context {
+            owner: std::thread::current().id(),
+            state: Mutex::new(state),
+            fault: AtomicI32::new(0),
+            buffer_error: AtomicI32::new(0),
+            counts: client.context.counts.clone(),
+        })
+        .map_err(|_| Error::allocation())?;
+        Ok(Self {
+            context,
+            client: Some(client),
+            _owner: PhantomData,
+        })
+    }
+    fn roundtrip(&self) -> Result<(), Error> {
+        let client = self.client.as_ref().ok_or(Error::new(
+            "closed Wlr client",
+            rustix::io::Errno::INVAL.raw_os_error(),
+        ))?;
+        client.roundtrip()?;
+        client.context.check()
+    }
     pub fn inactive(&mut self) {} // Original inherited ScreencapBase no-op.
     pub fn capture_with<T>(
         &mut self,
@@ -709,7 +811,13 @@ impl Capture {
     ) -> Result<T, Error> {
         let (manager, output) = {
             let s = self.context.state()?;
-            if !s.connected {
+            if !s.connected
+                || !self
+                    .client
+                    .as_ref()
+                    .ok_or(Error::new("closed Wlr source", -1))?
+                    .connected()?
+            {
                 return Err(Error::new(
                     "closed Wlr source",
                     rustix::io::Errno::INVAL.raw_os_error(),
@@ -834,20 +942,12 @@ impl Capture {
                 drop(buffer.pool.take());
                 drop(buffer);
             }
-            // Capture object references precede the original client close order.
+            // Capture snapshots end before the last shared client is released.
             s.output.take();
             s.shm.take();
             s.manager.take();
-            let g = &mut s.globals;
-            g.pointer.take();
-            g.keyboard.take();
-            g.manager.take();
-            g.seat.take();
-            g.shm.take();
-            g.output.take();
-            g.registry.take();
         }
-        drop(self.channel.take());
+        drop(self.client.take());
     }
     pub fn evidence(&self) -> Evidence {
         let c = &self.context.counts;
