@@ -29,6 +29,8 @@ static LOADER_ERROR: AtomicI32 = AtomicI32::new(0);
 mod names;
 #[path = "wlr_protocol_tests.rs"]
 mod protocol;
+#[path = "wlr_registry_tests.rs"]
+mod registry;
 struct Module(NonNull<c_void>);
 impl Module {
     fn open(path: &Path) -> Self {
