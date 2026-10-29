@@ -4,9 +4,12 @@
 use crate::{Result, records};
 use std::{fs, path::Path};
 #[path = "../../tests/upstream-parity/linux-wlr/protocol-cases.rs"]
-mod cases;
+pub(super) mod cases;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "wlr-registry") {
+        return crate::wlr_registry::run(&args[1..]);
+    }
     let (path, check_only) = match args {
         [kind, path] if kind == "wlr" => (path, false),
         [kind, path, flag] if kind == "wlr" && flag == "--check-only" => (path, true),

@@ -14,15 +14,26 @@
 #include <dlfcn.h>
 #include <limits.h>
 
+struct server;
+struct registry_output {
+    struct server* server;
+    struct wl_global* global;
+    unsigned generation;
+};
 struct server {
     struct wl_display* display;
     const char* directory;
     unsigned version, managers_created, managers_destroyed, frames_created, frames_destroyed, copies;
     int error;
     bool stopped;
+    bool registry;
+    struct registry_output outputs[22];
+    unsigned output_globals, output_removed, output_binds, output_destroys;
+    FILE* registry_rows;
 };
 struct manager { struct server* server; unsigned next; };
 struct frame { struct server* server; struct mfs_protocol_case input; bool copied; };
+static bool registry_advance(struct server* s, unsigned phase, unsigned round);
 static void failure(struct server* s, const char* message)
 {
     fprintf(stderr,"protocol fixture failure: %s\n",message);
@@ -57,9 +68,10 @@ static void copy(struct wl_client* client, struct wl_resource* resource, struct 
     wl_shm_buffer_begin_access(shm);
     uint8_t* bytes = wl_shm_buffer_get_data(shm);
     mfs_protocol_fill(f->input,bytes);
-    if (f->server->copies < 24) {
+    if (f->server->registry || f->server->copies < 24) {
         char name[4096];
-        int length = snprintf(name,sizeof name,"%s/case-%u.shm",f->server->directory,f->input.index);
+        int length = snprintf(name,sizeof name,"%s/case-%u.shm",f->server->directory,
+            f->server->registry ? f->server->copies : f->input.index);
         FILE* file = length > 0 && (size_t)length < sizeof name ? fopen(name,"wb") : NULL;
         const size_t size = 5 * f->input.stride;
         bool saved = file && fwrite(bytes,1,size,file) == size;
@@ -78,11 +90,26 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
     int32_t overlay_cursor, struct wl_resource* output)
 {
     struct manager* m = wl_resource_get_user_data(resource);
-    if (m->next >= 24 || overlay_cursor != 0 || !output) { failure(m->server,"unexpected capture request"); return; }
+    struct server* s = m->server;
+    if (m->next >= (s->registry ? 80u : 24u) || overlay_cursor != 0 || !output) { failure(s,"unexpected capture request"); return; }
+    const unsigned position = m->next++;
+    unsigned input = position;
+    if (s->registry) {
+        struct registry_output* selected = wl_resource_get_user_data(output);
+        const unsigned round = position / 4, phase = position % 4;
+        const unsigned expected = round + (phase < 2 ? 1 : 2);
+        if (!selected || selected->server != s || selected->generation != expected) {
+            failure(s,"registry output selection or retained snapshot differs"); return;
+        }
+        input = selected->generation % 2 ? 0 : 4;
+        if (fprintf(s->registry_rows,"%u\t%u\t%u\t%u\t%u\n",position,selected->generation,
+            wl_resource_get_id(output),input,wl_resource_get_version(output)) < 0
+            || fflush(s->registry_rows) != 0) { failure(s,"save actual registry selection"); return; }
+    }
     struct frame* f = calloc(1,sizeof *f);
     if (!f) { wl_client_post_no_memory(client); failure(m->server,"frame allocation"); return; }
     f->server = m->server;
-    f->input = mfs_protocol_case(m->next++);
+    f->input = mfs_protocol_case(input);
     struct wl_resource* frame = wl_resource_create(client,&zwlr_screencopy_frame_v1_interface,
         wl_resource_get_version(resource),id);
     if (!frame) { free(f); wl_client_post_no_memory(client); failure(m->server,"frame resource"); return; }
@@ -90,6 +117,7 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
     wl_resource_set_implementation(frame,&frame_requests,f,frame_destroyed);
     zwlr_screencopy_frame_v1_send_buffer(frame,f->input.format,7,5,f->input.stride);
     if (wl_resource_get_version(frame) >= 3) { zwlr_screencopy_frame_v1_send_buffer_done(frame); }
+    if (s->registry) { (void)registry_advance(s,position % 4,position / 4); }
 }
 static void capture_region(struct wl_client* client, struct wl_resource* resource, uint32_t id,
     int32_t overlay, struct wl_resource* output, int32_t x, int32_t y, int32_t w, int32_t h)
@@ -159,6 +187,45 @@ static void bind_output(struct wl_client* c, void* data, uint32_t version, uint3
     if (r) { wl_resource_set_implementation(r,&output_requests,data,NULL); }
     else { wl_client_post_no_memory(c); failure(data,"passive output resource"); }
 }
+static void registry_output_destroyed(struct wl_resource* r)
+{
+    struct registry_output* output = wl_resource_get_user_data(r);
+    ++output->server->output_destroys;
+}
+static void bind_registry_output(struct wl_client* c, void* data, uint32_t version, uint32_t id)
+{
+    struct registry_output* output = data;
+    struct wl_resource* r = wl_resource_create(c,&wl_output_interface,version,id);
+    if (!r) { wl_client_post_no_memory(c); failure(output->server,"registry output resource"); return; }
+    ++output->server->output_binds;
+    wl_resource_set_implementation(r,&output_requests,output,registry_output_destroyed);
+}
+static bool registry_add(struct server* s, unsigned generation)
+{
+    if (generation >= 22 || s->outputs[generation].global) { failure(s,"registry generation overflow"); return false; }
+    struct registry_output* output = &s->outputs[generation];
+    output->server = s; output->generation = generation;
+    // Alternate actual advertised versions. U binds the advertised version;
+    // version 1/2 use local proxy destruction, without output release requests.
+    output->global = wl_global_create(s->display,&wl_output_interface,1 + generation % 2,output,bind_registry_output);
+    if (!output->global) { failure(s,"registry output global"); return false; }
+    ++s->output_globals;
+    return true;
+}
+static bool registry_advance(struct server* s, unsigned phase, unsigned round)
+{
+    if (phase == 0) {
+        if (!registry_add(s,round + 2)) { return false; }
+        if (round == 0) {
+            wl_global_destroy(s->outputs[1].global); s->outputs[1].global = NULL; ++s->output_removed;
+        }
+    } else if (phase == 2) {
+        struct registry_output* output = &s->outputs[round + 2];
+        if (!output->global) { failure(s,"registry output already removed"); return false; }
+        wl_global_destroy(output->global); output->global = NULL; ++s->output_removed;
+    }
+    return true;
+}
 static int stop(int signal, void* data)
 {
     (void)signal;
@@ -169,7 +236,8 @@ static int stop(int signal, void* data)
 }
 int main(int argc, char** argv)
 {
-    if (argc != 4 || strlen(argv[1]) != 1 || argv[1][0] < '1' || argv[1][0] > '3') { return 64; }
+    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0)
+        || strlen(argv[1]) != 1 || argv[1][0] < '1' || argv[1][0] > '3') { return 64; }
     Dl_info owner;
     char actual[PATH_MAX],expected[PATH_MAX];
     if (!dladdr((void*)&wl_display_create,&owner) || !owner.dli_fname
@@ -178,7 +246,7 @@ int main(int argc, char** argv)
         return 1;
     }
     printf("native protocol server library=%s\n",actual);
-    struct server s = {.directory = argv[2], .version = (unsigned)(argv[1][0] - '0')};
+    struct server s = {.directory = argv[2], .version = (unsigned)(argv[1][0] - '0'), .registry = argc == 5};
     s.display = wl_display_create();
     if (!s.display) { return 1; }
     struct wl_event_loop* loop = wl_display_get_event_loop(s.display);
@@ -189,12 +257,18 @@ int main(int argc, char** argv)
     for (uint32_t kind = 2; kind < 6; ++kind) {
         if (!wl_display_add_shm_format(s.display,mfs_protocol_case(kind * 4).format)) { s.error = 1; goto cleanup; }
     }
-    if (!wl_global_create(s.display,&wl_output_interface,1,&s,bind_output)
-        || !wl_global_create(s.display,&zwlr_virtual_pointer_manager_v1_interface,1,&s,bind_pointer)
+    if (s.registry) {
+        char name[4096];
+        int length = snprintf(name,sizeof name,"%s/registry-requests.tsv",s.directory);
+        s.registry_rows = length > 0 && (size_t)length < sizeof name ? fopen(name,"wx") : NULL;
+        if (!s.registry_rows || !registry_add(&s,0) || !registry_add(&s,1)) { s.error = 1; goto cleanup; }
+    } else if (!wl_global_create(s.display,&wl_output_interface,1,&s,bind_output)) { s.error = 1; goto cleanup; }
+    if (!wl_global_create(s.display,&zwlr_virtual_pointer_manager_v1_interface,1,&s,bind_pointer)
         || !wl_global_create(s.display,&zwp_virtual_keyboard_manager_v1_interface,1,&s,bind_keyboard)
         || !wl_global_create(s.display,&zwlr_screencopy_manager_v1_interface,(int)s.version,&s,bind_manager)
         || wl_display_add_socket(s.display,"mfs-p1-protocol") != 0) { s.error = 1; goto cleanup; }
-    printf("protocol ready version=%u formats=6 cases=24 native_shm=1 compositor=0\n",s.version);
+    if (s.registry) { printf("registry ready rounds=20 captures=80 initial_outputs=2 compositor=0\n"); }
+    else { printf("protocol ready version=%u formats=6 cases=24 native_shm=1 compositor=0\n",s.version); }
     fflush(stdout);
     wl_display_run(s.display);
 cleanup:
@@ -202,8 +276,15 @@ cleanup:
     if (term) { wl_event_source_remove(term); }
     if (interrupt) { wl_event_source_remove(interrupt); }
     wl_display_destroy(s.display);
-    if (!s.stopped || s.error || s.managers_created != 40 || s.managers_destroyed != 40
-        || s.frames_created != 960 || s.frames_destroyed != 960 || s.copies != 960) { s.error = 1; }
+    if (s.registry_rows && fclose(s.registry_rows) != 0) { s.error = 1; }
+    const unsigned managers = s.registry ? 1 : 40, frames = s.registry ? 80 : 960;
+    if (!s.stopped || s.error || s.managers_created != managers || s.managers_destroyed != managers
+        || s.frames_created != frames || s.frames_destroyed != frames || s.copies != frames) { s.error = 1; }
+    if (s.registry) {
+        if (s.output_globals != 22 || s.output_removed != 21 || s.output_binds != 22 || s.output_destroys != 22) { s.error = 1; }
+        printf("registry stopped rounds=20 globals=%u removed=%u outputs=%u/%u frames=%u/%u copies=%u graceful=%d error=%d\n",
+            s.output_globals,s.output_removed,s.output_binds,s.output_destroys,s.frames_created,s.frames_destroyed,s.copies,s.stopped,s.error);
+    }
     printf("protocol stopped version=%u managers=%u/%u frames=%u/%u copies=%u graceful=%d error=%d\n",
         s.version,s.managers_created,s.managers_destroyed,s.frames_created,s.frames_destroyed,s.copies,s.stopped,s.error);
     return s.error;
