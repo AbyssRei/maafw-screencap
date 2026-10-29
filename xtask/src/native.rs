@@ -19,10 +19,14 @@ pub fn run(args: &[String]) -> Result<()> {
 
 pub fn run_parity(args: &[String]) -> Result<()> {
     let kind = match args.first().map(String::as_str) {
-        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool" | "desktop-dup" | "manager")) => kind,
-        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool|desktop-dup|manager> [--offline-inputs <native run manifest>]".into()),
+        Some(kind @ ("gdi" | "print-window" | "screen-dc" | "frame-pool" | "desktop-dup" | "manager" | "custom")) => kind,
+        _ => return Err("implemented parity entry: upstream-parity <gdi|print-window|screen-dc|frame-pool|desktop-dup|manager|custom> [--offline-inputs <native run manifest>]".into()),
     };
-    let mut native_args = vec!["--desktop".to_owned()];
+    let mut native_args = if kind == "custom" {
+        Vec::new()
+    } else {
+        vec!["--desktop".to_owned()]
+    };
     native_args.extend_from_slice(&args[1..]);
     run_native(&native_args, Some(kind))
 }
@@ -63,8 +67,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     let frame_parity = parity == Some("frame-pool");
     let desktop_parity = parity == Some("desktop-dup");
     let manager_parity = parity == Some("manager");
+    let custom_parity = parity == Some("custom");
     let pipewire_control = parity == Some("pipewire-control");
-    let gdi_parity = parity.is_some() && !frame_context;
+    let gdi_parity = parity.is_some() && !frame_context && !custom_parity;
     let print_parity = parity == Some("print-window");
     let screen_parity = parity == Some("screen-dc");
     let mut desktop = false;
@@ -178,6 +183,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "p1-desktop-dup-windows"
         } else if manager_parity {
             "p1-manager-windows"
+        } else if custom_parity {
+            "p1-custom-windows"
         } else if pipewire_control {
             "p1-pipewire-control-windows"
         } else if gdi_parity {
@@ -204,6 +211,16 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
         inputs: Vec::new(),
     };
     batch::snapshot_source(&root, &inputs, &mut source_snapshot)?;
+    if custom_parity {
+        let scope = inputs.join("custom-scope.md");
+        fs::write(
+            &scope,
+            "# P1 private Custom screenshot slice\n\nCompile exact fixed constructor/connect/connected/screencap/inactive and raw C setter. Real full upstream callback table and actual prepared MaaUtils ImageBuffer/vtable with OpenCV core/imgproc/imgcodecs, no fake buffer/codec symbols. Rust retains synchronous caller execution, current borrowed table fields, nonzero uint8 return normalization, false output preservation and true-empty replacement. Native stack scope surrounds callback and real Mat-owner extraction; opaque acceptance Mat heads add bookkeeping allocation, not another pixel copy. Native typed layouts/constants are consumed from compiled headers, including actual OpenCV CV_8UCn values.\n\n96 original/Rust cases, real callbacks/setter/storage overwrite, owner refcounts, retained outputs after context/input shutdown, borrowed table changes and actual C++ callback exception/subsequent distinct capture. Logging suppressed in selected-body model. This is not full manager virtual ABI/create/destroy API, UUID/get_features/get_info, input actions, encoded/resize/raw-type completeness, SDK provider registration/unregister or all-platform/P1 acceptance. Windows initial native entry only; core generic code has no OpenCV/native dependency.\n",
+        )?;
+        source_snapshot
+            .inputs
+            .push(records::artifact(&root, &scope)?);
+    }
     if pipewire_control {
         let scope = inputs.join("pipewire-control-scope.md");
         fs::write(
@@ -367,6 +384,9 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
     if manager_parity {
         process.arg("-ManagerParity");
     }
+    if custom_parity {
+        process.arg("-CustomParity");
+    }
     if pipewire_control {
         process.arg("-PipeWireControl");
     }
@@ -426,6 +446,8 @@ fn run_native(args: &[String], parity: Option<&str>) -> Result<()> {
             "P1 Desktop Duplication component"
         } else if manager_parity {
             "P1 screenshot-manager component"
+        } else if custom_parity {
+            "P1 Custom callback/ImageBuffer component"
         } else if pipewire_control {
             "P1 portable PipeWire consumer model (no Linux native acceptance)"
         } else if gdi_parity {

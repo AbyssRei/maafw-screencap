@@ -10,6 +10,8 @@ pub(crate) mod geometry;
 pub(crate) mod manager;
 #[cfg(any(feature = "windows-print-window", feature = "windows-frame-pool"))]
 pub(crate) mod pseudo_minimize;
+#[cfg(all(test, feature = "prototype-windows"))]
+pub(crate) mod test_library;
 #[cfg(feature = "windows-frame-pool")]
 pub(crate) mod wgc;
 #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]

@@ -8,6 +8,7 @@ license = "LGPL-3.0-or-later"
 
 [features]
 default = []
+custom-capture = []
 windows-gdi = ["dep:windows-bindgen", "dep:windows-link"]
 windows-print-window = ["dep:windows-bindgen", "dep:windows-link"]
 windows-screen-dc = ["dep:windows-bindgen", "dep:windows-link"]
