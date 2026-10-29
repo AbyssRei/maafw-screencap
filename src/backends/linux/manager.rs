@@ -12,7 +12,7 @@ pub(crate) const PIPEWIRE: u64 = 4;
 
 pub(crate) struct Config {
     pub method: u64,
-    // Native Linux filesystem path bytes, not lossy UTF-8 or a Windows Path.
+    // Original Config.h std::string bytes, without filesystem stream quoting.
     pub wlr_socket: Vec<u8>,
     pub pipewire_fd: i32,
     pub pipewire_node: u32,
@@ -123,26 +123,18 @@ impl<F: Factory> Manager<F> {
         let mut value = Vec::new();
         match self.config.method {
             WLR | EXT_IMAGE => {
-                // Linux filesystem::path stream insertion uses std::quoted:
-                // quote the byte string and escape only quote/backslash.
+                // Original Config.h uses std::string. Stream its bytes without
+                // filesystem quoting, escaping or a lossy encoding conversion.
                 let capacity = self
                     .config
                     .wlr_socket
                     .len()
-                    .checked_mul(2)
-                    .and_then(|size| size.checked_add(5))
+                    .checked_add(3)
                     .ok_or(UuidError::Size)?;
                 value
                     .try_reserve_exact(capacity)
                     .map_err(UuidError::Allocation)?;
-                value.push(b'"');
-                for &byte in &self.config.wlr_socket {
-                    if byte == b'"' || byte == b'\\' {
-                        value.push(b'\\');
-                    }
-                    value.push(byte);
-                }
-                value.push(b'"');
+                value.extend_from_slice(&self.config.wlr_socket);
             }
             PIPEWIRE => {
                 let mut decimal = String::new();

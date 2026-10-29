@@ -214,19 +214,14 @@ fn pipewire_prerequisite_is_and_and_ext_image_remains_unimplemented_in_u() {
     }
 }
 #[test]
-fn uuid_preserves_linux_path_quotes_bytes_and_signed_fd_identity() {
+fn uuid_preserves_socket_string_bytes_and_signed_fd_identity() {
     for method in [WLR, EXT_IMAGE] {
         let mut cfg = config(method);
         cfg.wlr_socket = vec![b'a', b'"', b'\\', 0xff, b'\n'];
         let manager = Manager::<Script>::new(cfg);
         let mut output = vec![99];
         assert!(manager.request_uuid(&mut output).unwrap());
-        assert_eq!(
-            output,
-            [
-                b'"', b'a', b'\\', b'"', b'\\', b'\\', 0xff, b'\n', b'"', b'_', b'-', b'1'
-            ]
-        );
+        assert_eq!(output, [b'a', b'"', b'\\', 0xff, b'\n', b'_', b'-', b'1']);
     }
     let mut cfg = config(PIPEWIRE);
     cfg.pipewire_fd = i32::MIN;
