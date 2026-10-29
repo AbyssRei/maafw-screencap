@@ -88,7 +88,18 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $oracleMode=if($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
         Step "$Name-original-oracle" $Executable @($oracleMode,$directory,[string]$identity.window_id)
         $env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr
+        $oracleFiles=@(Get-ChildItem -LiteralPath $directory -File|Where-Object{$_.Name -eq 'external-window.bgr' -or $_.Name -match '^manager-cycle-[0-9]+-call-[0-9]+\.bgr$'})
+        $expectedOracles=if($Name -eq 'rust-macos-manager'){61}else{1}
+        if($oracleFiles.Count -ne $expectedOracles){throw 'Incomplete original oracle files before Rust execution'}
+        $oracleRecords=@($oracleFiles|ForEach-Object{Artifact $_.FullName})
+        $oracleRecord=Join-Path $directory source-oracle-identities.json
+        Json $oracleRecord $oracleRecords;Save $oracleRecord
+        foreach($file in $oracleFiles){Save $file.FullName}
         Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$Test,'--','--exact','--ignored','--test-threads=1','--nocapture')
+        foreach($record in $oracleRecords){
+            $path=Join-Path $ReferenceRoot $record.path
+            if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $record.sha256){throw 'Rust probe changed an archived original oracle'}
+        }
     }catch{
         $log=Join-Path $logsRoot "$Name-probe-error.log"
         $_.Exception.ToString()|Set-Content -LiteralPath $log
