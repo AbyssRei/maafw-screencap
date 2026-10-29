@@ -1004,7 +1004,7 @@ fn forwards_manager_captures_and_keeps_outputs_through_manager_and_window_shutdo
                         .unwrap()
                 );
                 std::fs::write(
-                    directory.join(format!("manager-cycle-{cycle}-call-{call}.bgr")),
+                    directory.join(format!("rust-manager-cycle-{cycle}-call-{call}.bgr")),
                     output.pixels(),
                 )
                 .unwrap();
