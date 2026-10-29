@@ -157,6 +157,20 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;') {
             throw 'Expected the two native None/unimplemented-method and unsafe-FD boundary controls'
         }
+        if($Name -in @('original-pipewire-manager-daemon','original-pipewire-manager-fd','rust-pipewire-manager-daemon','rust-pipewire-manager-fd')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $fdMode=$Name.EndsWith('-fd')
+            $mode=$fdMode ? 'fd' : 'daemon'
+            $sessions=$fdMode ? 20 : 40
+            $images=$fdMode ? 60 : 120
+            $closed=$fdMode ? 20 : 0
+            $expected=$Name.StartsWith('original-') ?
+                "original PipeWire manager mode=$mode objects=20 sessions=$sessions captures=$images retained=$images consumed_sockets_closed=$closed resources_balanced=1 passed" :
+                "native Rust PipeWire manager mode=$mode objects=20 sessions=$sessions captures=$images retained_raw=$images retained_bgr=$images consumed_sockets_closed=$closed resources_balanced=1 passed"
+            if(-not $observed.Contains($expected) -or ($Name.StartsWith('rust-') -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
+                throw 'Expected the complete independent native manager capture, retained-image and resource checks'
+            }
+        }
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
         }
@@ -526,6 +540,15 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-opencv timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        foreach($probe in @(
+            @('daemon','--manager','reconnects_daemon_manager_and_retains_native_cpu_images'),
+            @('fd','--manager-fd','forwards_supplied_fd_manager_and_closes_consumed_socket')
+        )) {
+            try { Step ('original-pipewire-manager-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,$probe[1],$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts ('manager-'+$probe[0]))) }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+            try { Step ('rust-pipewire-manager-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire',('backends::linux::pipewire::native::tests::opencv::manager_capture::'+$probe[2]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+        }
         try { Step original-pipewire-source-reinit timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--reinit',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts reinit)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-supplied-fd-reinit timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::reinit::reinitializes_after_consumed_fd_and_retains_both_sessions_cpu_images','--','--exact','--ignored','--test-threads=1','--nocapture') }
