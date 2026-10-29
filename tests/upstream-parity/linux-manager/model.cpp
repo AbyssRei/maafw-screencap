@@ -24,14 +24,7 @@ struct NullLog { template<class T> const NullLog& operator<<(const T&) const { r
 #define LogError log
 #define LogFunc log
 #define VAR(...) 0
-struct LinuxControlUnitConfig {
-    MaaLinuxScreencapMethod screencap_method=MaaLinuxScreencapMethod_None;
-    MaaLinuxInputMethod input_method=MaaLinuxInputMethod_None;
-    std::filesystem::path wlr_socket_path,uinput_path,eis_socket_path;
-    int pw_socket_fd=-1;
-    uint32_t pw_node_id=0;
-    int uinput_screen_width=0,uinput_screen_height=0;
-};
+#include "linux-manager-config.inc"
 struct WaylandClient {
     bool connected_=false;
     WaylandClient() { event("client.create"); }

@@ -46,6 +46,8 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $manager -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-source.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-config.inc
+    Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-config.inc) -Destination $saved;Save $saved
     Step linux-manager-model-linkage ldd @($manager)
     $env:MFS_P1_LINUX_MANAGER_MODEL=$manager
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
