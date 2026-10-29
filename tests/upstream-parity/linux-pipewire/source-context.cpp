@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 #include <fcntl.h>
 #include <dlfcn.h>
@@ -167,6 +168,42 @@ bool only_retiring_tasks(const std::vector<std::string>& actual,const std::vecto
     }
     return true;
 }
+struct TaskRead {
+    uint64_t bytes=0;
+    int open_error=0,read_error=0,close_error=0;
+};
+TaskRead write_task_file(std::ostream& output,const std::filesystem::path& path) {
+    TaskRead result;
+    struct Input {
+        int fd;
+        ~Input() { if(fd>=0) { close(fd); } }
+    } input{open(path.c_str(),O_RDONLY|O_CLOEXEC)};
+    const int fd=input.fd;
+    if(fd<0) { result.open_error=errno; }
+    output<<path<<" open="<<(fd>=0)<<" open_errno="<<result.open_error<<'\n';
+    if(fd>=0) {
+        std::array<char,4096> bytes{};
+        for(;;) {
+            const auto count=read(fd,bytes.data(),bytes.size());
+            if(count==0) { break; }
+            if(count<0) {
+                if(errno==EINTR) { continue; }
+                result.read_error=errno;break;
+            }
+            const auto length=static_cast<uint64_t>(count);
+            if(result.bytes>UINT64_MAX-length) { result.read_error=EOVERFLOW;break; }
+            result.bytes+=length;
+            output.write(bytes.data(),static_cast<std::streamsize>(count));
+            if(!output) { break; } // retain the real output error, still close fd
+        }
+        if(close(std::exchange(input.fd,-1))<0) { result.close_error=errno; } // no uncertain close retry
+    }
+    output<<"\nread_bytes="<<result.bytes<<" read_errno="<<result.read_error
+        <<" close_errno="<<result.close_error<<'\n';
+    // A disappearing/empty proc input is diagnostic evidence, not an output
+    // write failure or proof that a native task/cleanup gate passed.
+    return result;
+}
 void task_snapshot(const std::filesystem::path& directory,const std::string& label,const std::vector<std::string>& tasks) {
     std::ofstream output(directory/("tasks-"+label+".txt"));
     require(output.good(),"cannot write task diagnostic");
@@ -174,13 +211,46 @@ void task_snapshot(const std::filesystem::path& directory,const std::string& lab
     for(const auto& tid:tasks) {
         for(const char* name:{"comm","stat","status","wchan"}) {
             const auto path=std::filesystem::path("/proc/self/task")/tid/name;
-            std::ifstream input(path);
-            output<<path<<" open="<<input.good()<<'\n';
-            if(input) { output<<input.rdbuf()<<'\n'; }
+            const auto read=write_task_file(output,path);
+            require(read.close_error==0,"cannot close task diagnostic input");
         }
     }
     output.close();
     require(output.good(),"cannot close task diagnostic");
+}
+void task_diagnostic_fixtures(const std::filesystem::path& directory) {
+    std::filesystem::create_directories(directory);
+    std::istringstream empty_input;
+    std::ostringstream old_output;
+    old_output<<empty_input.rdbuf();
+    require(old_output.fail(),"empty streambuf did not reproduce the old output failure");
+    const auto empty=directory/"empty.input";
+    const auto nonempty=directory/"bytes.input";
+    { std::ofstream file(empty);file.close();require(file.good(),"cannot create empty input fixture"); }
+    { std::ofstream file(nonempty);file<<"known task bytes\n";file.close();require(file.good(),"cannot create task input fixture"); }
+    require(!std::filesystem::exists(directory/"missing.input"),"missing-input fixture already exists");
+    std::ostringstream output;
+    const auto first=write_task_file(output,empty);
+    const auto second=write_task_file(output,nonempty);
+    const auto third=write_task_file(output,directory/"missing.input");
+    require(output.good() && first.bytes==0 && first.open_error==0 && first.read_error==0 && first.close_error==0,
+        "empty diagnostic input contaminated the output state");
+    require(second.bytes==17 && second.open_error==0 && second.read_error==0 && second.close_error==0 &&
+        output.str().find("known task bytes\n")!=std::string::npos,"nonempty diagnostic input changed");
+    require(third.bytes==0 && third.open_error==ENOENT && third.read_error==0 && third.close_error==0,
+        "missing diagnostic input was not explicitly recorded");
+    std::ofstream failed_output("/dev/full");
+    require(failed_output.good(),"cannot open native full-device output control");
+    const auto last=write_task_file(failed_output,nonempty);
+    errno=0;
+    failed_output.flush();
+    const int write_error=errno;
+    require(failed_output.fail() && write_error==ENOSPC && last.open_error==0 && last.read_error==0 && last.close_error==0,
+        "real diagnostic output write failure was lost");
+    failed_output.close();
+    std::ofstream saved(directory/"observations.txt");
+    saved<<output.str();saved.close();require(saved.good(),"cannot save task diagnostic fixtures");
+    std::cout<<"native task diagnostic empty_stream_failure=1 empty_file=1 bytes_file=1 missing_file=1 real_output_failure=1 passed\n";
 }
 void observe_joined_tasks(const std::filesystem::path& directory) {
     std::filesystem::create_directories(directory);
@@ -705,6 +775,10 @@ int main(int argc,char** argv) {
         }
         if(argc==3 && std::string_view(argv[1])=="--joined-task-observation") {
             observe_joined_tasks(argv[2]);
+            return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--task-diagnostic-fixtures") {
+            task_diagnostic_fixtures(argv[2]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--fd-error") {

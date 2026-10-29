@@ -77,6 +77,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'native-joined-task-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native joined-task observation cycles=10000 residual_enumerations=\d+ observed') {
             throw 'Expected the separate native pthread-join/proc visibility observation'
         }
+        if ($Name -eq 'native-task-diagnostic-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native task diagnostic empty_stream_failure=1 empty_file=1 bytes_file=1 missing_file=1 real_output_failure=1 passed') {
+            throw 'Expected empty/readable/missing task inputs and a real diagnostic write-error control'
+        }
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
         }
@@ -319,6 +322,8 @@ try {
         try { Step pipewire-source-memfd-fixtures timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--memfd-fixtures',$memfdDirectory) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-memfd-helper timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::mapping::matches_original_memfd_maps_and_retains_cpu_images_after_unmap','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step native-task-diagnostic-fixtures timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-diagnostic-fixtures',(Join-Path $referenceArtifacts task-diagnostic)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
