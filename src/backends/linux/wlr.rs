@@ -8,7 +8,8 @@ use memmap2::{MmapMut, MmapOptions};
 use std::{
     fs::File,
     marker::PhantomData,
-    os::fd::{AsFd, OwnedFd},
+    mem::ManuallyDrop,
+    os::fd::{AsFd, AsRawFd, OwnedFd},
     panic::{AssertUnwindSafe, catch_unwind},
     path::Path,
     rc::Rc,
@@ -99,6 +100,7 @@ struct Counts {
     outer: AtomicU64,
     copied: AtomicU64,
     frames: AtomicU64,
+    source_fd_zero_retained: AtomicU64,
     cleanup: AtomicI32,
 }
 impl Counts {
@@ -165,12 +167,36 @@ struct Globals {
 struct Buffer {
     // Mapping is independent of the Wayland proxy owner; close_buffer retains
     // it until after the original destruction roundtrip, including failure.
-    // Rust fields drop in declaration order: unmap before closing the memfd,
-    // matching the original MemfdBuffer destructor after proxy/pool release.
-    map: MmapMut,
-    file: File,
+    // Explicit drop keeps source unmap-before-close after proxy/pool release;
+    // its observed FD-zero residual is retained separately below.
+    map: ManuallyDrop<MmapMut>,
+    file: ManuallyDrop<File>,
     pool: Option<Owned<wl_shm_pool::WlShmPool>>,
     proxy: Option<Owned<wl_buffer::WlBuffer>>,
+    counts: Arc<Counts>,
+}
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        drop(self.proxy.take());
+        drop(self.pool.take());
+        if self.file.as_raw_fd() == 0 {
+            // U's fixed MemfdBuffer destructor returns immediately for !fd_.
+            // Preserve BOTH native residuals, as observed by the isolated
+            // original FD-zero probe. This is not successful product cleanup;
+            // P3 corrects ownership after U/P freeze. A fixture may reclaim
+            // them only after buffer/proxy/callback/native access has ended.
+            self.counts.increment(&self.counts.source_fd_zero_retained);
+            return;
+        }
+        // SAFETY: These are the sole initialized owners. Protocol owners have
+        // ended above, no pixel borrow escapes, and each manual owner is dropped
+        // exactly once here, in source unmap-before-close order. ManuallyDrop's
+        // field destruction does not release either owner a second time.
+        unsafe {
+            ManuallyDrop::drop(&mut self.map);
+            ManuallyDrop::drop(&mut self.file);
+        }
+    }
 }
 fn buffer_name() -> Result<[u8; 53], Error> {
     let mut random = [0u8; 16];
@@ -414,10 +440,11 @@ fn prepare_buffer(
         let shm = {
             let mut s = ctx.state()?;
             s.buffer = Some(Buffer {
-                map,
-                file,
+                map: ManuallyDrop::new(map),
+                file: ManuallyDrop::new(file),
                 pool: None,
                 proxy: None,
+                counts: ctx.counts.clone(),
             });
             s.layout = Some(layout);
             s.shm.clone().ok_or(Error::new(
@@ -598,6 +625,7 @@ pub(crate) struct Evidence {
     pub outer: u64,
     pub copied: u64,
     pub frames: u64,
+    pub source_fd_zero_retained: u64,
     pub cleanup: i32,
     pub fault: i32,
     pub buffer_error: i32,
@@ -831,6 +859,7 @@ impl Capture {
             outer: c.outer.load(Ordering::Acquire),
             copied: c.copied.load(Ordering::Acquire),
             frames: c.frames.load(Ordering::Acquire),
+            source_fd_zero_retained: c.source_fd_zero_retained.load(Ordering::Acquire),
             cleanup: c.cleanup.load(Ordering::Acquire),
             fault: self.context.fault.load(Ordering::Acquire),
             buffer_error: self.context.buffer_error.load(Ordering::Acquire),
