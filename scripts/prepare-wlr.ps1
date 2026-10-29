@@ -46,6 +46,23 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
             throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
         }
+        if($Name -eq 'rust-wlr-migration-capture'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Rust Wlr cycles=20 captures=60 retained_raw=60 retained_bgr=60 frame_conversion_lifetimes=60 overwritten_maps=60 resources_balanced=1 passed' -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected twenty native Wlr capture lifecycles and sixty owning raw/BGR images through conversion and shutdown'
+            }
+        }
+        if($Name -eq 'rust-wlr-conversion-exception'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Wlr conversion_exception=1 frame_released=1 subsequent_capture=1 native_owners_closed=1 passed' -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected the native Wlr/OpenCV exception, frame release and distinct subsequent capture'
+            }
+        }
+        if($Name -eq 'rust-wlr-layout-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+            throw 'Expected one checked Wlr layout/conversion test, separate from native capture'
+        }
         $status='passed'
     }finally{$checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)});Write-Host "${Name}: $status"}
 }
@@ -228,15 +245,17 @@ try{
     $library=(& readlink -f (Join-Path $prefix lib/libwayland-client.so)|Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $library)){throw 'Prepared native client library identity absent'}
     $env:MFS_P0_WAYLAND_LIBRARY=$library
+    . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family wlr
+    Save $env:MFS_BUILD_CONFIGURATION
     if($SourceReference){
+        try { Step rust-wlr-migration-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr,linux-wlr','--','-D','warnings') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         . (Join-Path $PSScriptRoot prepare-wlr-reference.ps1)
         $sourceExecutable=Prepare-WlrReference $UpstreamRoot
         $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
         New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
         Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=64;height=48;format='BGR';stride=192;pattern='top-left red, top-right green, bottom blue';scope='Original source context only; external UUID name provider and suppressed logging; no Rust capture comparison.'})
     }
-    . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family wlr
-    Save $env:MFS_BUILD_CONFIGURATION
     $runtime=Join-Path $DepsRoot ('runtime/wlr-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
     $socket=Join-Path $runtime mfs-p0-wlr
     if([Text.Encoding]::UTF8.GetByteCount($socket) -ge 108){throw 'Private Wayland socket exceeds Linux sun_path capacity'}
@@ -251,7 +270,20 @@ try{
     while(-not(Test-Path -LiteralPath $socket)){if($server.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Owned native compositor failed to start'};Start-Sleep -Milliseconds 50}
     $env:MFS_P0_WLR_SOCKET=$socket
     if($SourceReference){
-        Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library)
+        try { Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        $env:MFS_P1_WLR_SOURCE_ARTIFACTS=$referenceArtifacts
+        $env:MFS_P1_WLR_RUST_ARTIFACTS=Join-Path $referenceArtifacts rust
+        New-Item -ItemType Directory -Path $env:MFS_P1_WLR_RUST_ARTIFACTS -Force|Out-Null
+        Json (Join-Path $env:MFS_P1_WLR_RUST_ARTIFACTS geometry.json) ([ordered]@{width=64;height=48;bgr_stride=192;raw_format='per-image metadata';scope='Private Rust Wlr migration: preserved recursive callback, frame alive through conversion, one added raw CPU copy; no full Wlr/P1 or public SDK acceptance.'})
+        try { Step rust-wlr-layout-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::rejects_overflowing_native_layouts_and_unsupported_source_conversions','--','--exact','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        # Each native resource baseline belongs to a fresh isolated process,
+        # without unrelated libtest worker/reader teardown in its task set.
+        try { Step rust-wlr-migration-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::captures_source_scene_with_recursive_roundtrip_and_retained_outputs','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-wlr-conversion-exception timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::releases_frame_after_native_conversion_exception_and_captures_again','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
     }else{
         Step rust-wlr-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr','--','-D','warnings')
         Step rust-wlr-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--test','p0-interop','--features','prototype-linux-wlr','--','--include-ignored','--test-threads=1','--nocapture')
@@ -273,6 +305,6 @@ try{
         }catch{$status='failed';$_.Exception.ToString()|Add-Content -LiteralPath $log -Encoding utf8}
         finally{$checks.Add([ordered]@{name='compositor-stop';status=$status;log=(Artifact $log)});$server.Dispose()}
     }
-    Json (Join-Path $RunRoot native-result.json) ([ordered]@{layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete';checks=@($checks.ToArray());inputs=@($inputs.ToArray());pending=@(($SourceReference ? 'Fixed original Wlr source context only: native buffers/Mat owners and forwarding roundtrip recursion observation; private namespace/logging and a kernel-random external UUID name provider. Passive virtual input manager globals are a source prerequisite; no input actions or host devices. No Rust Wlr migration/parity, full source failure/format/client-close matrices or P1 acceptance.' : 'Native headless/Pixman Wlr feasibility only; full compositor/format/failure and C++ parity gates remain outstanding.'),'Compiler/make/bison/OS identities are recorded; complete latest native toolchain policy verification and offline entry remain pending.','No product backend, SDK target policy or ExtImage capture has been implemented.')})
+    Json (Join-Path $RunRoot native-result.json) ([ordered]@{layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete';checks=@($checks.ToArray());inputs=@($inputs.ToArray());pending=@(($SourceReference ? 'Fixed original Wlr source context only: native buffers/Mat owners and forwarding roundtrip recursion observation; private namespace/logging and a kernel-random external UUID name provider. Passive virtual input manager globals are a source prerequisite; no input actions or host devices. Private Rust migration is now included with separate build/layout/capture/exception probes; full source failure/format/client-close/FD0/partial-state parity and P1 remain unaccepted.' : 'Native headless/Pixman Wlr feasibility only; full compositor/format/failure and C++ parity gates remain outstanding.'),'Compiler/make/bison/OS identities are recorded; complete latest native toolchain policy verification and offline entry remain pending.','A private initial Rust Wlr capture slice is implemented but unvalidated; no public SDK target policy or ExtImage capture.')})
 }
 if($failed -or @($checks|Where-Object status -EQ failed).Count){exit 1}

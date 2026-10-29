@@ -6,6 +6,7 @@
     any(
         test,
         all(target_os = "linux", feature = "linux-pipewire"),
+        all(target_os = "linux", feature = "linux-wlr"),
         all(
             target_os = "windows",
             any(feature = "windows-print-window", feature = "windows-frame-pool")
