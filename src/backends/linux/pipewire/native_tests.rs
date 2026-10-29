@@ -17,6 +17,9 @@ use std::{
 #[path = "opencv_tests.rs"]
 mod opencv;
 
+#[path = "reinit_tests.rs"]
+mod reinit;
+
 struct RawAudit;
 impl Converter<RawFrame> for RawAudit {
     type Image = RawFrame;

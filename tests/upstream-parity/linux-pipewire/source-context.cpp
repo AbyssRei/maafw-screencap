@@ -563,6 +563,88 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
     for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"held memfd image changed after all FDs closed"); }
     std::cout<<"original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed\n";
 }
+void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts) {
+    std::filesystem::create_directories(artifacts);
+    cv::Mat raw(HEIGHT,WIDTH,CV_8UC3,cv::Scalar(1,2,3)),converted;
+    cv::cvtColor(raw,converted,cv::COLOR_RGB2BGR);
+    const size_t base_fds=count_entries("/proc/self/fd");
+    const auto baseline=task_ids();
+    task_snapshot(artifacts,"baseline",baseline);
+    std::vector<HeldImage> held;
+    held.reserve(120);
+    for(int cycle=0;cycle<20;++cycle) {
+        const int fd=connect_socket(socket);
+        const uint64_t cookie=socket_cookie(fd);
+        Source* created=nullptr;
+        try { created=new Source(fd,node); }
+        catch(...) { close(fd);throw; }
+        std::unique_ptr<Source,SourceOwner> source(created);
+        // Close before first init retains the offered socket in the source.
+        source->close();source->close();source->inactive();
+        require(!source->connected() && socket_cookie(fd)==cookie,"pre-init close changed the offered socket");
+        cv::Mat empty;
+        require(!source->screencap(empty) && empty.empty(),"uninitialized source produced a frame");
+        for(int session=0;session<2;++session) {
+            require(source->init() && source->connected(),"source same-object init failed");
+            require(source->init(),"source already-connected init failed");
+            for(int call=0;call<3;++call) {
+                if(call==1) { source->inactive();source->inactive(); }
+                cv::Mat image;
+                require(source->screencap(image),"source same-object screencap failed");
+                save(image,artifacts/("cycle-"+std::to_string(cycle)+"-session-"+std::to_string(session)+"-call-"+std::to_string(call)+".bgr"));
+                const uint32_t marker=known_pixels(image);
+                held.push_back({std::move(image),marker});
+            }
+            const auto live=live_tasks();
+            source->close();source->close();source->inactive();
+            require(!source->connected(),"closed same-object source remained connected");
+            cv::Mat rejected=held.back().image;
+            const auto* pixels=rejected.data;
+            require(!source->screencap(rejected) && rejected.data==pixels &&
+                known_pixels(rejected)==held.back().marker,"closed source changed the caller output");
+            if(session==0) {
+                errno=0;
+                require(fcntl(fd,F_GETFD)==-1 && errno==EBADF,"source initial socket not consumed/closed");
+            }
+            const size_t fds=count_entries("/proc/self/fd");
+            const auto immediate=task_ids();
+            bool settled=immediate==baseline;
+            if(fds==base_fds && !settled && only_retiring_tasks(immediate,baseline,live)) {
+                const auto label="cycle-"+std::to_string(cycle)+"-session-"+std::to_string(session);
+                task_snapshot(artifacts,label+"-kernel-retirement",immediate);
+                std::ofstream identities(artifacts/("tasks-"+label+"-live-identities.txt"));
+                for(const auto& value:live) {
+                    identities<<value.id<<' '<<value.name<<' '<<value.started<<' '<<value.flags<<' '<<value.address_space<<' '<<value.resident_pages<<'\n';
+                }
+                identities.close();require(identities.good(),"cannot archive reinit live identities");
+                const auto start=std::chrono::steady_clock::now();
+                for(;;) {
+                    const auto current=task_ids();
+                    if(current==baseline) { settled=true;break; }
+                    if(!only_retiring_tasks(current,baseline,live) ||
+                       std::chrono::steady_clock::now()-start>=std::chrono::milliseconds(100)) { break; }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
+            }
+            if(fds!=base_fds || !settled) {
+                task_snapshot(artifacts,"cycle-"+std::to_string(cycle)+"-session-"+std::to_string(session)+"-mismatch",immediate);
+            }
+            std::cout<<"source reinit closed cycle="<<cycle<<" session="<<session<<" fds="<<fds
+                <<" baseline_fds="<<base_fds<<" immediate_tasks="<<immediate.size()<<" settled="<<settled<<'\n';
+            require(fds==base_fds && settled,"source reinit resource mismatch or unretired/unknown/live task");
+            for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"reinit changed a held source image"); }
+        }
+        source.reset();
+        require(count_entries("/proc/self/fd")==base_fds && task_ids()==baseline,"source reinit destructor resource mismatch");
+    }
+    std::exception_ptr error;
+    std::thread reader([&] {
+        try { for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"post-reinit cross-thread source image changed"); } }
+        catch(...) { error=std::current_exception(); }
+    });
+    reader.join();if(error) { std::rethrow_exception(error); }
+    std::cout<<"original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed\n";
+}
 }
 int main(int argc,char** argv) {
     try {
@@ -590,6 +672,14 @@ int main(int argc,char** argv) {
         }
         if(argc==3 && std::string_view(argv[1])=="--fd-add-io-error") {
             fd_add_io_error(argv[2]);
+            return 0;
+        }
+        if(argc==5 && std::string_view(argv[1])=="--reinit") {
+            const std::string_view id=argv[3];
+            uint32_t node=0;
+            const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
+            require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid explicit reinit node ID");
+            reinitialization_context(argv[2],node,argv[4]);
             return 0;
         }
         require(argc==4,"usage: source-context <private socket> <node ID> <artifact directory>");

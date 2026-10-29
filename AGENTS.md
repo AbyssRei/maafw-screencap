@@ -61,6 +61,8 @@ PipeWire consumer control flow now has a private partial migration and an explic
 
 The first owned MemFd native batch stopped at Linux test compilation because the rustix permission-error constant was misspelled. No mapping helper, source capture or Rust stream probe ran in that batch. The spelling is corrected; native compilation and runtime evidence remain pending, and the failed batch remains archived.
 
+Separate original/Rust same-object success probes now cover pre-init close, repeated init/close/inactive, a consumed supplied socket followed by explicit daemon reinit, forty sessions per language and 120 retained images. They await native compilation/execution. They preserve the source's stored-FD transition for P1 comparison and do not establish failed-offer recovery, Portal authorization or a safe SDK fallback policy.
+
 Follow **P0 preparation → P1 complete upstream migration U → P2 fixed PR #1587 patch P → P3 SDK/correctness and planned native migrations → P4/P5 strategies, bindings and assets → P6 measured optimization**. All platform backends and direct screenshot helper/manager paths must pass P1 before P2 starts. Do not start final SDK implementation or additional behavior changes before P2 acceptance.
 
 U/P must preserve upstream defaults, method selection, pixel conversion timing, waiting/replay, native lifetimes, window adjustments, observation, and shutdown. Their parity target is Rust capture plus explicitly built C++/OpenCV acceptance adapters; conversions stay at the original point when timing or ownership requires it. E evolves the same implementation through separately justified changes. Store reconstructable U/P snapshots externally; do not maintain duplicate legacy/product backends or U/P/E semantic features.
