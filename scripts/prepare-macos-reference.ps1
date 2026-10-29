@@ -84,6 +84,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $env:MFS_P1_MACOS_SCENE_STOP=Join-Path $scene stop
         $env:MFS_P1_MACOS_SCENE_STOPPED=Join-Path $scene stopped.txt
         $env:MFS_P1_MACOS_RUST_ARTIFACTS=$directory
+        $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
         Step "$Name-original-oracle" $Executable @('external-window',$directory,[string]$identity.window_id)
         $env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr
         Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-screen-capture-kit',$Test,'--','--exact','--ignored','--test-threads=1','--nocapture')
