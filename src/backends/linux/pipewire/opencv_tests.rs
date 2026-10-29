@@ -20,6 +20,9 @@ mod dma;
 #[path = "manager_capture_tests.rs"]
 mod manager_capture;
 
+#[path = "sustained_tests.rs"]
+mod sustained;
+
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 struct View {

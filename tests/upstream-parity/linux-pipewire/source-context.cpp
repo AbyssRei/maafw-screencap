@@ -21,6 +21,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iomanip>
 #include <latch>
 #include <limits>
 #include <memory>
@@ -748,6 +749,7 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
 }
 #include "dma-fixtures.hpp"
 #include "manager-context.hpp"
+#include "sustained-context.hpp"
 void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
     std::optional<FdFaultControl> fault;
@@ -854,6 +856,13 @@ int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
         verify_runtime();
+        if(argc==4 && std::string_view(argv[1])=="--sustained-manager") {
+            uint32_t node=0;
+            const std::string_view id=argv[2];
+            const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
+            require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid sustained manager node ID");
+            sustained_manager_context(node,argv[3]);return 0;
+        }
         if(argc==5 && (std::string_view(argv[1])=="--manager" || std::string_view(argv[1])=="--manager-fd")) {
             uint32_t node=0;
             const std::string_view id=argv[3];
