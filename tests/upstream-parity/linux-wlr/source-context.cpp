@@ -266,7 +266,7 @@ std::string make_uuid() {
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager|nul-names]");
+        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager|nul-names|path-names]");
         Dl_info owner{};
         // The linked wrapper has its own address; inspect the real target.
         require(dladdr(reinterpret_cast<void*>(&__real_wl_display_roundtrip),&owner)!=0 && owner.dli_fname,
@@ -286,6 +286,7 @@ int main(int argc,char** argv) {
             else if(mode=="reconnect") { reconnect_client(argv[1],directory); }
             else if(mode=="fd-zero") { fd_zero(directory); }
             else if(mode=="nul-names") { nul_names(argv[1],directory); }
+            else if(mode=="path-names") { path_names(argv[1],directory); }
             else { throw std::runtime_error("unknown original Wlr context mode"); }
             return 0;
         }

@@ -140,3 +140,117 @@ fn preserves_embedded_nul_native_name_and_full_reconnect_identity() {
         "native Rust Wlr nul_names cycles=20 captures=60 retained_raw=60 retained_bgr=60 same_full_name_noop=20 suffix_reconnect=20 leading_nul_rejected=20 empty_rejected=20 json_manager_full_uuid=20 resources_balanced=1 passed"
     );
 }
+
+#[test]
+#[ignore = "requires native original filesystem paths and owned compositor"]
+fn preserves_source_path_components_and_native_reconnect_failures() {
+    let inputs: &[&[u8]] = &[
+        b"", b".", b"./", b"/", b"//", b"///", b"/.", b"/./", b"a", b"a/", b"a//", b"a/.", b"a/./",
+        b"./a", b"./a/", b"a//b", b"a/b", b"a/./b", b"a//./b", b"a/../b", b"a/../b/", b"../a",
+        b"a\0x", b"a\0x/", b"a\0x//b", b"a\0x/b", b"a/\0b", b"a/./\0b", b"a\xff",
+    ];
+    let socket = PathBuf::from(env::var_os("MFS_P0_WLR_SOCKET").unwrap());
+    let parent = socket.parent().unwrap().as_os_str().as_bytes();
+    let filename = socket.file_name().unwrap().as_bytes();
+    let dot = [parent, b"/./", filename].concat();
+    let repeated = [parent, b"//./", filename].concat();
+    let trailing = [socket.as_os_str().as_bytes(), b"/"].concat();
+    fn path(bytes: &[u8]) -> &Path {
+        Path::new(OsStr::from_bytes(bytes))
+    }
+    let directory =
+        PathBuf::from(env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap()).join("path-names");
+    let oracle =
+        PathBuf::from(env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap()).join("path-names");
+    std::fs::create_dir(&directory).unwrap();
+    let matrix = std::fs::read_to_string(oracle.join("path-equality.tsv")).unwrap();
+    let lines: Vec<_> = matrix.lines().collect();
+    assert_eq!(lines.len(), inputs.len() * inputs.len());
+    let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let mut observed = String::new();
+    for (index, line) in lines.iter().enumerate() {
+        let left = index / inputs.len();
+        let right = index % inputs.len();
+        let fields: Vec<_> = line.split('\t').collect();
+        assert_eq!(fields.len(), 5);
+        assert_eq!(fields[0], left.to_string());
+        assert_eq!(fields[1], right.to_string());
+        assert_eq!(fields[2], hex(inputs[left]));
+        assert_eq!(fields[3], hex(inputs[right]));
+        assert!(matches!(fields[4], "0" | "1"));
+        let equal = same_source_path(path(inputs[left]), path(inputs[right]));
+        assert_eq!(equal, fields[4] == "1", "native path pair {left},{right}");
+        observed.push_str(&format!(
+            "{left}\t{right}\t{}\t{}\t{}\n",
+            hex(inputs[left]),
+            hex(inputs[right]),
+            u8::from(equal)
+        ));
+    }
+    std::fs::write(directory.join("path-equality.tsv"), observed).unwrap();
+    // These Rust Path comparisons intentionally differ from the native source
+    // condition; the actual C++ matrix and real connection probes are the oracle.
+    assert_eq!(socket.as_path(), path(&dot));
+    assert_eq!(socket.as_path(), path(&trailing));
+    assert!(!same_source_path(&socket, path(&dot)));
+    assert!(!same_source_path(&socket, path(&trailing)));
+    assert!(same_source_path(path(&dot), path(&repeated)));
+    let adapter = Adapter::open();
+    warm(&adapter);
+    let baseline_fds = fds();
+    let baseline_tasks = tasks();
+    let mut held_raw = Vec::new();
+    let mut held_bgr = Vec::new();
+    held_raw.try_reserve_exact(20).unwrap();
+    held_bgr.try_reserve_exact(20).unwrap();
+    for cycle in 0..20 {
+        let mut client = Client::new().unwrap();
+        let counts = client.context.counts.clone();
+        assert!(client.connect(&socket).unwrap());
+        let before = counts.outer.load(Ordering::Acquire);
+        assert!(client.connect(path(&dot)).unwrap());
+        assert!(counts.outer.load(Ordering::Acquire) > before);
+        let before = counts.outer.load(Ordering::Acquire);
+        assert!(client.connect(path(&repeated)).unwrap());
+        assert_eq!(counts.outer.load(Ordering::Acquire), before);
+        let shared = client.into_shared().unwrap();
+        let mut capture = Capture::from_client(shared.clone()).unwrap();
+        held_bgr.push(context_capture(
+            &mut capture,
+            &adapter,
+            &directory,
+            &oracle,
+            &format!("path-{cycle}"),
+            &mut held_raw,
+        ));
+        drop(capture);
+        client = Arc::try_unwrap(shared).unwrap_or_else(|_| panic!("old path capture owner"));
+        assert!(client.connect(path(&trailing)).is_err());
+        assert!(!client.connected().unwrap());
+        assert!(client.channel.is_none());
+        assert!(client.context.state().unwrap().globals.output.is_none());
+        assert!(client.connect(&socket).unwrap());
+        drop(client);
+        released_counts(&counts);
+        assert_eq!(fds(), baseline_fds);
+        assert_eq!(tasks(), baseline_tasks);
+        eprintln!(
+            "native path-name cycle={cycle} held={} fds={baseline_fds} resources_balanced=1",
+            held_raw.len()
+        );
+    }
+    for sample in &held_raw {
+        raw(sample);
+    }
+    for image in &held_bgr {
+        bgr(image.pixels());
+    }
+    drop(held_raw);
+    drop(held_bgr);
+    assert_eq!(adapter.owners(), 0);
+    drop(adapter);
+    assert_eq!(LOADER_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "native Rust Wlr path_names matrix_cases=841 cycles=20 captures=20 retained_raw=20 retained_bgr=20 dot_reconnect=20 repeated_separator_noop=20 trailing_separator_rejected=20 explicit_recovery=20 resources_balanced=1 passed"
+    );
+}

@@ -51,6 +51,23 @@ pub(crate) struct Channel {
     _display: Display,
     _channel: PhantomData<Rc<()>>,
 }
+/// Linux std::filesystem::path equality in the fixed client compares path
+/// components without removing dot/dot-dot or a final empty filename. Rust's
+/// Path equality removes some of those components, so it cannot choose U's
+/// close/reopen branch. Preserve raw bytes, including embedded NUL suffixes.
+pub(crate) fn same_source_path(left: &Path, right: &Path) -> bool {
+    fn components(bytes: &[u8]) -> impl Iterator<Item = &[u8]> {
+        let trailing = bytes.last() == Some(&b'/') && bytes.iter().any(|b| *b != b'/');
+        bytes
+            .split(|b| *b == b'/')
+            .filter(|part| !part.is_empty())
+            .chain(trailing.then_some(b"".as_slice()))
+    }
+    let left = left.as_os_str().as_bytes();
+    let right = right.as_os_str().as_bytes();
+    left.starts_with(b"/") == right.starts_with(b"/") && components(left).eq(components(right))
+}
+
 impl Channel {
     pub fn connect(path: &Path) -> Result<Self, Error> {
         let bytes = path.as_os_str().as_bytes();

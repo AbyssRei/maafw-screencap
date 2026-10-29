@@ -3,7 +3,7 @@
 //! Private Wlr migration. Captures retain one shared client and independent
 //! native buffer/result state; early-close and complete fault parity remain P1.
 //! Callback-internal roundtrips and frame lifetime through conversion stay U.
-use crate::platform::linux::wayland::{Channel, Error, callback_roundtrip};
+use crate::platform::linux::wayland::{Channel, Error, callback_roundtrip, same_source_path};
 use memmap2::{MmapMut, MmapOptions};
 use std::{
     fs::File,
@@ -661,7 +661,7 @@ impl Client {
         })
     }
     pub fn connect(&mut self, path: &Path) -> Result<bool, Error> {
-        if self.socket_path != path {
+        if !same_source_path(&self.socket_path, path) {
             self.close();
             self.socket_path.clear();
             self.socket_path
