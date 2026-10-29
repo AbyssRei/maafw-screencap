@@ -30,13 +30,22 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     Copy-Item -LiteralPath (Join-Path $source LICENSE) -Destination $license;Save $license
     $downloads=Join-Path $DepsRoot downloads/opencv
     New-Item -ItemType Directory -Path $downloads -Force|Out-Null
-    $options=@('-DBUILD_LIST=core,imgproc','-DBUILD_SHARED_LIBS=OFF','-DBUILD_TESTS=OFF','-DBUILD_PERF_TESTS=OFF','-DBUILD_EXAMPLES=OFF','-DBUILD_opencv_apps=OFF','-DWITH_PROTOBUF=OFF','-DWITH_FLATBUFFERS=OFF','-DWITH_IPP=ON','-DBUILD_IPP_IW=ON')
+    $appleArm=$IsMacOS -and [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -eq 'Arm64'
+    $options=@('-DBUILD_LIST=core,imgproc','-DBUILD_SHARED_LIBS=OFF','-DBUILD_TESTS=OFF','-DBUILD_PERF_TESTS=OFF','-DBUILD_EXAMPLES=OFF','-DBUILD_opencv_apps=OFF','-DWITH_PROTOBUF=OFF','-DWITH_FLATBUFFERS=OFF')
+    if($appleArm){
+        # IPP is Intel-only. Retain OpenCV's native arm64 NEON baseline and
+        # supported dispatch defaults, verified by the real native consumer.
+        $options+=@('-DWITH_IPP=OFF','-DBUILD_IPP_IW=OFF')
+    }else{
+        $options+=@('-DWITH_IPP=ON','-DBUILD_IPP_IW=ON')
+    }
     # Excluded image-I/O modules must not export unbuilt codec archives.
     $unusedCodecs=@('AVIF','JPEG','JPEGXL','WEBP','OPENJPEG','JASPER','OPENEXR','PNG','SPNG','TIFF','GDAL','GDCM')
     $options+=@($unusedCodecs|ForEach-Object{"-DWITH_$($_)=OFF"})
     $options+='-DENABLE_PIC=ON'
     $identityRecord=[ordered]@{
         opencv_release=$release.tag_name;opencv_commit=$commit;cc=$env:CC;cxx=$env:CXX
+        architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
         compiler=(& $env:CXX --version|Out-String);cmake=(& cmake --version|Out-String)
         cflags=$env:CFLAGS;cxxflags=$env:CXXFLAGS;ldflags=$env:LDFLAGS;options=$options
         discovery=[ordered]@{
@@ -49,7 +58,7 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     $configuration=Join-Path $Directory native-configuration.json
     Json $configuration ([ordered]@{
         opencv=$identityRecord;context=$Context
-        codec_policy='Core/imgproc and raw pixel artifacts only; unused codec discovery disabled; CPU/IPP/HAL optimization retained.'
+        codec_policy=($appleArm ? 'Core/imgproc; unused codec discovery disabled; native NEON/CPU/HAL optimization retained, Intel IPP inapplicable.' : 'Core/imgproc and raw pixel artifacts only; unused codec discovery disabled; CPU/IPP/HAL optimization retained.')
     });Save $configuration
     # Backend context does not alter the OpenCV compilation. Archive it per run
     # but share the exact compiler/source/options cache after fresh resolution.
@@ -61,7 +70,7 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     Copy-Item -LiteralPath (Join-Path $build CMakeCache.txt) -Destination $cache;Save $cache
     $config=Join-Path $Directory opencv-cvconfig.h
     Copy-Item -LiteralPath (Join-Path $build cvconfig.h) -Destination $config;Save $config
-    if((Get-Content -LiteralPath $config -Raw) -notmatch '(?m)^#define HAVE_IPP\s*$' -or
+    if((-not $appleArm -and (Get-Content -LiteralPath $config -Raw) -notmatch '(?m)^#define HAVE_IPP\s*$') -or
        (Get-Content -LiteralPath $cache -Raw) -notmatch '(?m)^CV_DISABLE_OPTIMIZATION:BOOL=OFF\s*$' -or
        (Get-Content -LiteralPath $cache -Raw) -notmatch '(?m)^CPU_DISPATCH:STRING=\S+'){
         throw 'Reference OpenCV did not retain required IPP/CPU optimizations'

@@ -125,6 +125,16 @@ linux-pipewire adapter without a PipeWire runtime dependency. These acceptance
 targets and reference inputs remain outside default builds and SDK assets;
 their native/source licence materials are archived externally per batch.
 
+The explicit tests/upstream-parity/macos-screencap context compiles the fixed
+source/MaaMacOSControlUnit/Screencap/ScreenCaptureKitScreencap.{h,mm}
+unchanged, including its sample-buffer conversion. Its screenshot base is
+extracted from the same fixed Base/UnitBase.h; private namespace/logging exclude
+unrelated input/framework code. Original Objective-C manual reference counting,
+callback conversion and native waiting stay in that source. Self-owned AppKit
+fixtures and OpenCV acceptance preparation are separate; no Rust macOS product
+migration or completed P1 is claimed. Native inputs and their applicable notices
+remain external, and this target is excluded from default builds and SDK assets.
+
 Microsoft C++/WinRT
 =================
 

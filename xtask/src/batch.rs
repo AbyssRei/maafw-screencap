@@ -656,6 +656,8 @@ pub fn verify(root: &Path, artifact: &Artifact) -> Result<()> {
         Some("pipewire-context-scope.md")
     } else if run.run_id.starts_with("p1-wlr-context-linux-") {
         Some("wlr-context-scope.md")
+    } else if run.run_id.starts_with("p1-macos-context-") {
+        Some("macos-context-scope.md")
     } else {
         None
     };
@@ -764,6 +766,7 @@ mod tests {
             ("pipewire-control", "windows"),
             ("pipewire-context", "linux"),
             ("wlr-context", "linux"),
+            ("macos-context", "arm64"),
         ] {
             let run_id = format!("p1-{kind}-{platform}-fixture");
             let scope = fixture

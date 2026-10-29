@@ -59,6 +59,7 @@ cargo xtask upstream-model pipewire --offline-inputs runs/<prepared-native-run>/
 cargo xtask upstream-context pipewire # native Linux x64 original-source context
 cargo xtask upstream-context frame-pool
 cargo xtask upstream-context frame-pool --offline-inputs runs/<prepared-native-run>/manifest.json
+cargo xtask upstream-context macos # native macOS arm64 original Objective-C++ context
 ```
 
 `upstream-context frame-pool` 是独立的上游调用环境观察，不执行 Rust 对照。它把固定原 `FramePoolScreencap` 编译为独立 executable，分别在未初始化 COM、显式 MTA、MTA 加当前线程 dispatcher、STA 四个新进程中各调用一次原捕获，不在捕获内部添加 pump、等待或重试。自有绘图窗口有独立 UI owner/message loop；记录调用前后及原对象销毁后的 COM type/qualifier、原始 BGR、已知内部像素、耗时与窗口 owner。仅配平显式成功取得的初始化引用，dispatcher 在真实 shutdown 完成后退出。每个模式独立保存成功/失败，后续模式继续执行；完整原生、依赖、来源及许可材料进入外部 P1 incomplete 批次。
@@ -217,6 +218,10 @@ Linux 两个原源码入口共用 [OpenCV 准备函数](../../scripts/prepare-op
 原源码 Mat 不传 stride，Rust 继续其 packed-step 解释和未处理的反转 flag，并记录实际 native stride。独立 raw CPU 副本在 native lease/映射有效时产生，随后执行真实私有 C++/OpenCV 转换，frame 代理仍存活到转换结束；这增加复制成本，不称作消除工作。BGR 可复用独立 CPU owner。普通 create_buffer 失败继续原等待且不新增错误唤醒；Rust 自身回调 panic 以独立标量故障保存，不保证捕获原生/绑定的 aborting OOM。尺寸/跨度/窄化、超出绑定的协议版本、NUL 路径检查及 RAII 是明确安全适配；原 memfd FD0/失败部分状态、完整原错误/共享 client/early-close、所有格式/padding/flags、外国队列和 native mobility 尚未完成对照。该切片不最终确定 Frame/Session/ABI 或 P3 调度。
 
 源码入口先做独立原 C++ 捕获，再以单独进程运行 Rust 布局控制、20 生命周期/60 张 raw+BGR 和实际转换异常/后续捕获检查；每个进程单独记录 native fd/task 基线。探针覆盖逐次实际 OpenCV 转换时 frame 尚存活、返回后已销毁，空闲 SHM 覆写不改变已持有图像，关闭后的 CPU 持帧及所有原生/Mat owner。它们尚待真实 Linux 执行；Windows 本机的编译/格式/Clippy 只能证明对应宿主路径，不能冒充 Linux 捕获。
+
+`cargo xtask upstream-context macos` 在原生 macOS arm64 显式构建固定的完整 ScreenCaptureKitScreencap Objective-C++ 源码，当前尚待原生编译和运行。它仅抽取原 screenshot base 声明，并使用私有 namespace/logging 排除无关 framework/input；原 MRC、内容枚举/窗口或首 display 选择、config、回调内锁定/转换/释放和五秒 semaphore 等待均未改写。最新正式 Xcode 与 OpenCV 从源码准备，后者保留 arm64 NEON/CPU/HAL 默认优化并记录实际 build information；Intel IPP 对该架构不适用，Linux x64 仍使用原有 IPP 选项。核心 crate 不依赖 OpenCV。
+
+该入口的 AppKit 自有窗口在进程主线程创建、绘制和关闭，原同步捕获在逐次 join 的 caller 上执行，主线程只泵夹具事件。一个预热和 20 次窗口/source 生命周期要求 60 张 47×31 BGR，逐像素检查去掉两像素边缘后的 43×27 内部区域，并在 source/窗口关闭和另一读取线程上验证保活；完整保存行包含未断言的边缘。缺失 window 返回 nullopt，另一个进程以 window_id=0 观察首个 display 的实际非空图像、布局及 source 关闭后 owner；该 display 检查不称作已知桌面像素验收。资源 TSV 只观察 FD/thread/Mach-port 数量，不声称配平；原 semaphore 释放、晚到回调、超时、锁定/转换错误及完整 display/格式/manager 与 Rust 迁移仍待实现。八秒夹具 watchdog 只结束独立失败进程，不 detach/cancel 原生调用。缺少 Screen Recording 权限返回 missing_environment，不修改 TCC、不弹授权。构建、两种运行及轻量诊断 artifact 分别记录，阶段仍为 P1/incomplete。
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
