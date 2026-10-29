@@ -31,7 +31,7 @@ file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/toolchain-$<CONFIG>.txt" CONTE
     "compiler=${CMAKE_CXX_COMPILER}\ncompiler_id=${CMAKE_CXX_COMPILER_ID}\ncompiler_version=${CMAKE_CXX_COMPILER_VERSION}\nsdk=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}\nconfiguration=$<CONFIG>\nmsvc_runtime=$<TARGET_PROPERTY:mfs_windows_delegate_model,MSVC_RUNTIME_LIBRARY>\n")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
     "Capture-only exact init_win32_unit/screencap/inactive, optional selection expression, full original Win32ControlUnitLoader and prepared MaaUtils LibraryHolder. Real original ControlUnitAPI declarations, boost::function/shared control blocks/mutex/OpenCV Mats. Scripted DLL load/export/lookup and backend outcome boundaries, not native module loading, ViGEm/input, actual Win32 capture or complete delegate/P1 acceptance. Stale source views are observed without calling a dead object; Rust refusal is an explicit safety adaptation. Native/control-block allocation exhaustion and complete shared-loader failure behavior remain pending.\n")
-option(MFS_BUILD_NATIVE_DELEGATE "Build real GDI-only DLL/ABI consumption fixtures" OFF)
+option(MFS_BUILD_NATIVE_DELEGATE "Build real DLL/ABI consumption fixtures" OFF)
 if(MFS_BUILD_NATIVE_DELEGATE)
     include("${CMAKE_CURRENT_SOURCE_DIR}/native/targets.cmake")
 endif()

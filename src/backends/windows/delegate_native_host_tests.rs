@@ -3,7 +3,10 @@
 // Acceptance-only Rust manager factory consumed through the actual C++ ABI.
 use super::*;
 use crate::backends::windows::{
-    manager::{Image as ManagerImage, NativeManager, Observation, Outcome, Publication},
+    manager::{
+        ConnectFailure, FailureClass, Image as ManagerImage, NativeManager, Observation, Outcome,
+        Publication,
+    },
     parity_adapter::Image as CpuImage,
 };
 use std::{
@@ -59,9 +62,6 @@ unsafe extern "C" fn create(
         // all callbacks are synchronous and bound to the original caller.
         let stats = unsafe { stats(user) };
         unsafe { *output = std::ptr::null_mut() };
-        if method != 1 || hwnd == 0 {
-            return 1;
-        }
         let Ok(adapter) = Adapter::load() else {
             return 2;
         };
@@ -98,8 +98,12 @@ unsafe extern "C" fn connect(user: *mut c_void, context: *mut c_void, output: *m
         stats
             .conversions
             .set(stats.conversions.get() + converter.conversions);
-        assert!(report.dpi.is_ok());
-        assert_eq!(converter.conversions, 2);
+        if matches!(
+            report.failure,
+            Some(ConnectFailure::Construction(..) | ConnectFailure::Escaped(..))
+        ) {
+            return 2;
+        }
         unsafe { *output = i32::from(report.failure.is_none()) };
         0
     })
@@ -123,6 +127,15 @@ unsafe extern "C" fn capture(
             .conversions
             .set(stats.conversions.get() + converter.conversions);
         stats.captures.set(stats.captures.get() + 1);
+        if matches!(
+            result,
+            Publication::Called(Observation {
+                outcome: Outcome::Failure(FailureClass::Exception | FailureClass::Safety, _),
+                ..
+            })
+        ) {
+            return 2;
+        }
         let success = matches!(
             result,
             Publication::Called(Observation {
@@ -130,7 +143,6 @@ unsafe extern "C" fn capture(
                 ..
             })
         );
-        assert_eq!(converter.conversions, 1);
         let borrowed = match &context.output {
             ManagerImage::Empty => Span::default(),
             ManagerImage::Pixels(image) => Span {

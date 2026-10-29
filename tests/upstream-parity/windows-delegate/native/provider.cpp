@@ -1,6 +1,6 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-// Real original class ABI; GDI-only source manager, no input implementation.
+// Real original class ABI; original screenshot factories, no input implementation.
 #include "bridge.h"
 #include "MaaFramework/MaaPort.h"
 // Export only definitions below, allowing actual missing-export DLL controls.
@@ -10,6 +10,11 @@
 #include <windows.h>
 #ifndef MFS_RUST_PROVIDER
 #include "Screencap/GdiScreencap.h"
+#include "Screencap/FramePoolWithPseudoMinimizeScreencap.h"
+#include "Screencap/DesktopDupScreencap.h"
+#include "Screencap/DesktopDupWindowScreencap.h"
+#include "Screencap/PrintWindowWithPseudoMinimizeScreencap.h"
+#include "Screencap/ScreenDCScreencap.h"
 #endif
 #include "MaaUtils/Logger.h"
 #include <unordered_map>
@@ -22,26 +27,35 @@ struct GdiScreencap : MAA_CTRL_UNIT_NS::GdiScreencap {
     using MAA_CTRL_UNIT_NS::GdiScreencap::GdiScreencap;
     std::optional<cv::Mat> screencap() override { mfs_dn_event(6,0,0,0,0);return MAA_CTRL_UNIT_NS::GdiScreencap::screencap(); }
 };
-struct Unavailable : ScreencapBase {
-    explicit Unavailable(HWND) { throw std::logic_error("outside GDI-only provider"); }
-    std::optional<cv::Mat> screencap() override { return std::nullopt; }
-};
-using FramePoolWithPseudoMinimizeScreencap=Unavailable;
-using DesktopDupScreencap=Unavailable;
-using DesktopDupWindowScreencap=Unavailable;
-using PrintWindowWithPseudoMinimizeScreencap=Unavailable;
-using ScreenDCScreencap=Unavailable;
+using MAA_CTRL_UNIT_NS::FramePoolWithPseudoMinimizeScreencap;
+using MAA_CTRL_UNIT_NS::DesktopDupScreencap;
+using MAA_CTRL_UNIT_NS::DesktopDupWindowScreencap;
+using MAA_CTRL_UNIT_NS::PrintWindowWithPseudoMinimizeScreencap;
+using MAA_CTRL_UNIT_NS::ScreenDCScreencap;
 #include "../../native/manager-shim.h"
 #include "manager-time.inc"
 #include "manager-source.inc"
 }
 #endif
 namespace {
+void require_host(int32_t code,const char* operation) {
+    if(code==3) { throw std::bad_alloc(); }
+    if(code) { throw std::runtime_error(operation); }
+}
+struct Construction {
+    Construction(HWND hwnd,uint64_t method,uint64_t mouse,uint64_t keyboard) {
+        mfs_dn_event(1,reinterpret_cast<uintptr_t>(hwnd),method,mouse,keyboard);
+        if(mouse || keyboard) { throw std::logic_error("input must be None"); }
+        if(mfs_dn_mode()==1) { throw std::runtime_error("injected native create exception"); }
+    }
+};
 struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
+    Construction construction;
 #ifdef MFS_RUST_PROVIDER
     void* context=nullptr;
-    Unit(HWND hwnd,uint64_t method) {
-        if(mfs_dn_host_create(reinterpret_cast<uintptr_t>(hwnd),method,&context) || !context) { throw std::runtime_error("Rust host create"); }
+    Unit(HWND hwnd,uint64_t method,uint64_t mouse,uint64_t keyboard):construction(hwnd,method,mouse,keyboard) {
+        require_host(mfs_dn_host_create(reinterpret_cast<uintptr_t>(hwnd),method,&context),"Rust host create");
+        if(!context) { throw std::runtime_error("Rust host create returned no owner"); }
     }
     ~Unit() override {
         if(mfs_dn_host_destroy(context)) { mfs_dn_event(99,0,0,0,0); }
@@ -49,14 +63,14 @@ struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
     }
 #else
     Source::Win32ControlUnitMgr manager;
-    Unit(HWND hwnd,uint64_t method):manager(hwnd,method,0,0) {}
+    Unit(HWND hwnd,uint64_t method,uint64_t mouse,uint64_t keyboard):construction(hwnd,method,mouse,keyboard),manager(hwnd,method,mouse,keyboard) {}
     ~Unit() override { mfs_dn_event(5,0,0,0,0); }
 #endif
     bool connect() override {
         mfs_dn_event(2,0,0,0,0);
         if(mfs_dn_mode()==2) { throw std::runtime_error("injected native connect exception"); }
 #ifdef MFS_RUST_PROVIDER
-        int32_t result=0;if(mfs_dn_host_connect(context,&result)) { throw std::runtime_error("Rust host connect"); }return result!=0;
+        int32_t result=0;require_host(mfs_dn_host_connect(context,&result),"Rust host connect");return result!=0;
 #else
         return manager.connect();
 #endif
@@ -70,7 +84,7 @@ struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
         }
 #ifdef MFS_RUST_PROVIDER
         MfsDnImage span={};int32_t result=0;
-        if(mfs_dn_host_capture(context,&span,&result)) { throw std::runtime_error("Rust host capture"); }
+        require_host(mfs_dn_host_capture(context,&span,&result),"Rust host capture");
         if(result) {
             if(!span.data) { image.release(); }
             else {
@@ -88,7 +102,7 @@ struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
     bool inactive() override {
         mfs_dn_event(4,0,0,0,0);
 #ifdef MFS_RUST_PROVIDER
-        int32_t result=0;if(mfs_dn_host_inactive(context,&result)) { throw std::runtime_error("Rust host inactive"); }return result!=0;
+        int32_t result=0;require_host(mfs_dn_host_inactive(context,&result),"Rust host inactive");return result!=0;
 #else
         return manager.inactive();
 #endif
@@ -114,14 +128,13 @@ struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
 #undef MFS_EXCLUDED
 };
 }
+// The original export bodies construct this facade through the original
+// concrete class name. Interface inheritance and exported declarations remain
+// the actual original ABI; input operations remain deliberately excluded.
+namespace MAA_CTRL_UNIT_NS { using Win32ControlUnitMgr=::Unit; }
 #ifndef MFS_NO_CREATE
-extern "C" MaaWin32ControlUnitHandle MaaWin32ControlUnitCreate(void* hwnd,MaaWin32ScreencapMethod method,MaaWin32InputMethod mouse,MaaWin32InputMethod keyboard) {
-    mfs_dn_event(1,reinterpret_cast<uintptr_t>(hwnd),method,mouse,keyboard);
-    if(mouse || keyboard) { throw std::logic_error("input must be None"); }
-    if(mfs_dn_mode()==1) { throw std::runtime_error("injected native create exception"); }
-    return new Unit(static_cast<HWND>(hwnd),method);
-}
+#include "delegate-factory-create.inc"
 #endif
 #ifndef MFS_NO_DESTROY
-extern "C" void MaaWin32ControlUnitDestroy(MaaWin32ControlUnitHandle unit) { delete unit; }
+#include "delegate-factory-destroy.inc"
 #endif

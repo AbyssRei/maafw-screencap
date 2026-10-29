@@ -524,3 +524,103 @@ fn consumes_real_factory_and_releases_units_before_unloading_modules()
 fn window_handle(events: &[Event]) -> u64 {
     events.iter().find(|event| event.kind == 1).unwrap().a
 }
+
+#[test]
+#[ignore = "requires explicit real provider DLLs and acceptance converter; construction only, no capture acceptance"]
+fn constructs_original_selector_masks_without_connecting_or_capturing()
+-> Result<(), Box<dyn std::error::Error>> {
+    let build = std::fs::canonicalize(PathBuf::from(
+        std::env::var_os("MFS_DELEGATE_NATIVE_BUILD").ok_or("explicit native build required")?,
+    ))?;
+    let records = PathBuf::from(
+        std::env::var_os("MFS_DELEGATE_FACTORY_RECORDS")
+            .ok_or("new external factory records required")?,
+    );
+    assert!(records.is_absolute());
+    std::fs::create_dir(&records)?;
+    let records = std::fs::canonicalize(records)?;
+    let ops = Ops::load(&build.join("mfs_delegate_bridge.dll"))?;
+    ops.reset();
+    let host = host::Guard::new(&ops);
+    let mut cases = String::new();
+    for name in ["source", "rust"] {
+        let directory = records.join(name);
+        std::fs::create_dir(&directory)?;
+        let module = directory.join("MaaWin32ControlUnit.dll");
+        std::fs::copy(build.join(format!("mfs_delegate_{name}.dll")), &module)?;
+        // The original API constructor stores these selectors/handles without
+        // connecting or validating the target. The high value is NEVER passed
+        // to a native window operation or dereferenced by either implementation.
+        for hwnd in [0, 0xfedc_ba98_7654_3210usize] {
+            for method in [0, 1, 2, 4, 8, 16, 32, 63, u64::MAX] {
+                assert!(!library::loaded(&module));
+                let mut boundary = Native::new(&directory, &ops).unwrap();
+                let mut loader = boundary.new_loader().unwrap();
+                assert!(boundary.load(&mut loader).unwrap());
+                let unit = boundary.create(&mut loader, hwnd, method, 0, 0).unwrap();
+                assert!(unit.is_some());
+                drop(loader);
+                let unloaded = !library::loaded(&module);
+                assert!(unloaded);
+                use std::fmt::Write;
+                writeln!(
+                    cases,
+                    "{name}\t{hwnd}\t{method}\t{}\t{}",
+                    u8::from(unit.is_some()),
+                    u8::from(unloaded)
+                )?;
+                std::fs::write(records.join("cases.tsv"), &cases)?;
+            }
+        }
+    }
+    assert_eq!(host.counts(), [18, 18, 0, 0, 0]);
+    let counts = host.counts();
+    std::fs::write(
+        records.join("host-counts.tsv"),
+        format!(
+            "{}\t{}\t{}\t{}\t{}\n",
+            counts[0], counts[1], counts[2], counts[3], counts[4]
+        ),
+    )?;
+    let (events, owners) = ops.events();
+    assert_eq!(owners, 0);
+    assert_eq!(events.len(), 72);
+    let mut table = String::new();
+    let mut index = 0;
+    for _name in ["source", "rust"] {
+        for hwnd in [0, 0xfedc_ba98_7654_3210u64] {
+            for method in [0, 1, 2, 4, 8, 16, 32, 63, u64::MAX] {
+                let create = events[index];
+                let destroy = events[index + 1];
+                index += 2;
+                assert_eq!(
+                    (create.kind, create.a, create.b, create.c, create.d),
+                    (1, hwnd, method, 0, 0)
+                );
+                assert_eq!(
+                    (destroy.kind, destroy.a, destroy.b, destroy.c, destroy.d),
+                    (5, 0, 0, 0, 0)
+                );
+            }
+        }
+    }
+    for event in &events {
+        use std::fmt::Write;
+        assert_eq!(
+            event.thread,
+            crate::platform::windows::manager::probe::thread()
+        );
+        writeln!(
+            table,
+            "{}\t{}\t{}\t{}\t{}\t{}",
+            event.kind, event.thread, event.a, event.b, event.c, event.d
+        )?;
+    }
+    std::fs::write(records.join("events.tsv"), table)?;
+    assert_eq!(DESTROY_ERROR.load(Ordering::Acquire), 0);
+    assert_eq!(library::CLOSE_ERROR.load(Ordering::Acquire), 0);
+    println!(
+        "real factory selector cases=36; native Rust manager contexts=18; actual captures=0; backend creation on connect not exercised; module/unit ownership closed=1"
+    );
+    Ok(())
+}

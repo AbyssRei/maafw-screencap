@@ -160,3 +160,77 @@ fn pixels(bytes: &[u8]) -> Result<()> {
     }
     Ok(())
 }
+
+pub fn run_factory(args: &[String]) -> Result<()> {
+    let (path, check_only) = match args {
+        [path] => (path, false),
+        [path, flag] if flag == "--check-only" => (path, true),
+        _ => {
+            return Err(
+                "expected upstream-delegate win32-factory <external records> [--check-only]".into(),
+            );
+        }
+    };
+    let root = records::external_root(Path::new(path))?;
+    let cases = fs::read_to_string(root.join("cases.tsv"))?;
+    let events = fs::read_to_string(root.join("events.tsv"))?;
+    let mut rows = cases.lines();
+    let mut event_rows = events.lines();
+    let mut thread = None;
+    for provider in ["source", "rust"] {
+        for hwnd in [0, 0xfedc_ba98_7654_3210u64] {
+            for method in [0, 1, 2, 4, 8, 16, 32, 63, u64::MAX] {
+                if rows.next() != Some(format!("{provider}\t{hwnd}\t{method}\t1\t1").as_str()) {
+                    return Err("Factory selector/owner matrix differs".into());
+                }
+                for (kind, expected) in [(1, [hwnd, method, 0, 0]), (5, [0; 4])] {
+                    let values: Vec<u64> = event_rows
+                        .next()
+                        .ok_or("Missing actual factory event")?
+                        .split('\t')
+                        .map(str::parse)
+                        .collect::<std::result::Result<_, _>>()?;
+                    if values.len() != 6
+                        || values[0] != kind
+                        || values[1] == 0
+                        || values[2..] != expected
+                    {
+                        return Err("Factory create/destroy sequence or selectors differ".into());
+                    }
+                    if let Some(previous) = thread.replace(values[1])
+                        && previous != values[1]
+                    {
+                        return Err("Factory thread identity changed".into());
+                    }
+                }
+            }
+        }
+    }
+    if rows.next().is_some() || event_rows.next().is_some() {
+        return Err("Unexpected factory capture/connect/event".into());
+    }
+    if fs::read_to_string(root.join("host-counts.tsv"))?.replace("\r\n", "\n")
+        != "18\t18\t0\t0\t0\n"
+    {
+        return Err("Factory host ownership/no-capture counts differ".into());
+    }
+    let artifacts = ["cases.tsv", "events.tsv", "host-counts.tsv"]
+        .into_iter()
+        .map(|name| records::artifact(&root, &root.join(name)))
+        .collect::<Result<Vec<_>>>()?;
+    let report = serde_json::json!({"layout_version":1,"cases":36,"native_events":72,"captures":0,"artifacts":artifacts,
+        "scope":"Actual original class ABI/source and Rust manager facade create/destroy, nine selector masks with null and unvalidated opaque HWND, exact input None, no connected/capture gate during construction, module final unload. Original backend objects are constructed later on connect; this test does not connect, capture, exercise native six-backend factories or establish full P1 acceptance."});
+    let output = root.join("delegate-factory-validation.json");
+    if check_only && output.exists() {
+        let saved: serde_json::Value = records::read(&output)?;
+        if saved != report {
+            return Err("Saved factory validation differs".into());
+        }
+    } else if !check_only {
+        records::create_json(&output, &report)?;
+    }
+    println!(
+        "Win32 native factory construction cases=36 events=72 actual_captures=0 independent_records_verified=1 passed"
+    );
+    Ok(())
+}
