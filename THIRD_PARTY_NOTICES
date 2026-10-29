@@ -140,6 +140,16 @@ linux-pipewire adapter without a PipeWire runtime dependency. These acceptance
 targets and reference inputs remain outside default builds and SDK assets;
 their native/source licence materials are archived externally per batch.
 
+The separate self-owned Wlr protocol fixture uses the real libwayland-server
+IPC/SHM helper and generated server declarations from the prepared latest formal
+wlroots protocol XML. XML, generated files, corresponding source and original
+copyright/MIT notices are archived with each explicit native batch. The source
+client still compiles the fixed original generated protocols independently.
+This fixture is not a compositor, input provider or product backend; it compares
+original/Rust six-format bytes, including the original packed-step/YInvert
+limitations. RGB888 acceptance executes a real OpenCV copyTo; the preceding
+Rust independent CPU copy is an additional documented safety cost.
+
 The explicit tests/upstream-parity/macos-screencap context compiles the fixed
 source/MaaMacOSControlUnit/Screencap/ScreenCaptureKitScreencap.{h,mm}
 unchanged, including its sample-buffer conversion. Its screenshot base is

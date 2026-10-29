@@ -24,6 +24,7 @@
 #include <thread>
 #include <unistd.h>
 #include <vector>
+#include "protocol-pattern.h"
 
 namespace MfsOriginalWlr {
 #define MFS_MANAGER_WLR
@@ -67,6 +68,7 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
     for(int y=0;y<48;++y) { file.write(reinterpret_cast<const char*>(image.ptr(y)),64*3); }
     file.close();require(file.good(),"cannot save Wlr original image");
 }
+#include "protocol-context.hpp"
 void shared_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
     const auto baseline_fds=count("/proc/self/fd");
     const auto baseline_tasks=tasks();
@@ -266,7 +268,7 @@ std::string make_uuid() {
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager|nul-names|path-names]");
+        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager|nul-names|path-names|protocol-1|protocol-2|protocol-3]");
         Dl_info owner{};
         // The linked wrapper has its own address; inspect the real target.
         require(dladdr(reinterpret_cast<void*>(&__real_wl_display_roundtrip),&owner)!=0 && owner.dli_fname,
@@ -287,6 +289,9 @@ int main(int argc,char** argv) {
             else if(mode=="fd-zero") { fd_zero(directory); }
             else if(mode=="nul-names") { nul_names(argv[1],directory); }
             else if(mode=="path-names") { path_names(argv[1],directory); }
+            else if(mode=="protocol-1" || mode=="protocol-2" || mode=="protocol-3") {
+                protocol_context(argv[1],directory,static_cast<unsigned>(mode.back()-'0'));
+            }
             else { throw std::runtime_error("unknown original Wlr context mode"); }
             return 0;
         }
