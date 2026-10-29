@@ -5,11 +5,14 @@ param(
     [Parameter(Mandatory)][string]$DepsRoot,
     [Parameter(Mandatory)][string]$RunRoot,
     [Parameter(Mandatory)][string]$ConfigureTool,
-    [Parameter(Mandatory)][string]$RustBatch
+    [Parameter(Mandatory)][string]$RustBatch,
+    [switch]$SourceReference,
+    [string]$UpstreamRoot=''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference=$false
+if($SourceReference -and (-not $UpstreamRoot -or -not(Test-Path -LiteralPath $UpstreamRoot -PathType Container))){throw 'Wlr source context needs its verified upstream directory'}
 $productRoot=Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $productRoot
 $inputRoot=Join-Path $RunRoot inputs
@@ -19,6 +22,7 @@ $checks=[Collections.Generic.List[object]]::new()
 $inputs=[Collections.Generic.List[object]]::new()
 $libraries=[Collections.Generic.List[object]]::new()
 $server=$null; $serverOut=$null; $serverError=$null; $failed=$false
+$referenceArtifacts=$null
 
 function Artifact([string]$Path){
     $relative=[IO.Path]::GetRelativePath($ReferenceRoot,$Path).Replace('\','/')
@@ -39,6 +43,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
         if($code -ne 0){Get-Content -LiteralPath $log -Tail 45|ForEach-Object{Write-Host $_};throw "$Name exited with $code; see $log"}
+        if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
+            throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
+        }
         $status='passed'
     }finally{$checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)});Write-Host "${Name}: $status"}
 }
@@ -221,6 +228,13 @@ try{
     $library=(& readlink -f (Join-Path $prefix lib/libwayland-client.so)|Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or -not(Test-Path -LiteralPath $library)){throw 'Prepared native client library identity absent'}
     $env:MFS_P0_WAYLAND_LIBRARY=$library
+    if($SourceReference){
+        . (Join-Path $PSScriptRoot prepare-wlr-reference.ps1)
+        $sourceExecutable=Prepare-WlrReference $UpstreamRoot
+        $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
+        New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
+        Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=64;height=48;format='BGR';stride=192;pattern='top-left red, top-right green, bottom blue';scope='Original source context only; external UUID name provider and suppressed logging; no Rust capture comparison.'})
+    }
     . (Join-Path $PSScriptRoot configure-prototype.ps1) -ConfigureTool $ConfigureTool -RustBatch $RustBatch -ReferenceRoot $ReferenceRoot -Family wlr
     Save $env:MFS_BUILD_CONFIGURATION
     $runtime=Join-Path $DepsRoot ('runtime/wlr-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
@@ -231,17 +245,23 @@ try{
     # No host WAYLAND_DISPLAY or WAYLAND_SOCKET is consumed by either client.
     $env:WAYLAND_DISPLAY='mfs-p0-wlr';Remove-Item Env:WAYLAND_SOCKET -ErrorAction SilentlyContinue
     $start=[Diagnostics.ProcessStartInfo]::new($binary);$start.UseShellExecute=$false;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
+    if($SourceReference){$start.ArgumentList.Add('--source-client')}
     $server=[Diagnostics.Process]::Start($start);$serverOut=$server.StandardOutput.ReadToEndAsync();$serverError=$server.StandardError.ReadToEndAsync()
     $until=[DateTime]::UtcNow.AddSeconds(10)
     while(-not(Test-Path -LiteralPath $socket)){if($server.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Owned native compositor failed to start'};Start-Sleep -Milliseconds 50}
     $env:MFS_P0_WLR_SOCKET=$socket
-    Step rust-wlr-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr','--','-D','warnings')
-    Step rust-wlr-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--test','p0-interop','--features','prototype-linux-wlr','--','--include-ignored','--test-threads=1','--nocapture')
+    if($SourceReference){
+        Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library)
+    }else{
+        Step rust-wlr-clippy cargo @('clippy','--workspace','--all-targets','--locked','--features','prototype-linux-wlr','--','-D','warnings')
+        Step rust-wlr-capture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--test','p0-interop','--features','prototype-linux-wlr','--','--include-ignored','--test-threads=1','--nocapture')
+    }
 }catch{
     $failed=$true;$log=Join-Path $logsRoot preparation-error.log
     $_.Exception.ToString()|Set-Content -LiteralPath $log -Encoding utf8
     $checks.Add([ordered]@{name='wlr-preparation';status='failed';log=(Artifact $log)});Write-Host $_.Exception.ToString()
 }finally{
+    if($referenceArtifacts){Get-ChildItem -LiteralPath $referenceArtifacts -File -Recurse|ForEach-Object{Save $_.FullName}}
     if($server){
         $log=Join-Path $logsRoot compositor-stop.log;$status='passed'
         try{
@@ -253,6 +273,6 @@ try{
         }catch{$status='failed';$_.Exception.ToString()|Add-Content -LiteralPath $log -Encoding utf8}
         finally{$checks.Add([ordered]@{name='compositor-stop';status=$status;log=(Artifact $log)});$server.Dispose()}
     }
-    Json (Join-Path $RunRoot native-result.json) ([ordered]@{layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase='P0';phase_status='incomplete';checks=@($checks.ToArray());inputs=@($inputs.ToArray());pending=@('Native headless/Pixman Wlr feasibility only; full compositor/format/failure and C++ parity gates remain outstanding.','Compiler/make/bison/OS identities are recorded; complete latest native toolchain policy verification and offline entry remain pending.','No product backend, SDK target policy or ExtImage capture has been implemented.')})
+    Json (Join-Path $RunRoot native-result.json) ([ordered]@{layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete';checks=@($checks.ToArray());inputs=@($inputs.ToArray());pending=@(($SourceReference ? 'Fixed original Wlr source context only: native buffers/Mat owners and forwarding roundtrip recursion observation; private namespace/logging and a kernel-random external UUID name provider. Passive virtual input manager globals are a source prerequisite; no input actions or host devices. No Rust Wlr migration/parity, full source failure/format/client-close matrices or P1 acceptance.' : 'Native headless/Pixman Wlr feasibility only; full compositor/format/failure and C++ parity gates remain outstanding.'),'Compiler/make/bison/OS identities are recorded; complete latest native toolchain policy verification and offline entry remain pending.','No product backend, SDK target policy or ExtImage capture has been implemented.')})
 }
 if($failed -or @($checks|Where-Object status -EQ failed).Count){exit 1}

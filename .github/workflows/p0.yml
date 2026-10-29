@@ -77,6 +77,22 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: cargo xtask upstream-context pipewire
+      - name: Observe original Wlr source capture and recursive native dispatch
+        if: ${{ !cancelled() && runner.os == 'Linux' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: cargo xtask upstream-context wlr
+      - name: Upload Linux Wlr source diagnostics
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-linux-wlr-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/linux-x64-wlr/logs/*.log
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/linux-x64/reference-u/artifacts/**
+          if-no-files-found: warn
       - name: Validate Windows GDI and PrintWindow migration and native interop
         if: runner.os == 'Windows'
         env:
