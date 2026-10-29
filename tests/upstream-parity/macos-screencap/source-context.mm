@@ -4,6 +4,7 @@
 #import <ApplicationServices/ApplicationServices.h>
 #include "Screencap/ScreenCaptureKitScreencap.h"
 #include <opencv2/core.hpp>
+#include "resource-observation.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -90,41 +91,8 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
     }
     output.close();require(output.good(),"cannot save original macOS image");
 }
-struct Observation {
-    size_t descriptors=0,threads=0,ports=0;
-};
-Observation resources() {
-    Observation result;
-    const int bytes=proc_pidinfo(getpid(),PROC_PIDLISTFDS,0,nullptr,0);
-    require(bytes>=0,"cannot query own descriptor table");
-    const auto capacity=static_cast<size_t>(bytes)/sizeof(proc_fdinfo)+32;
-    require(capacity<=static_cast<size_t>(INT_MAX)/sizeof(proc_fdinfo),"descriptor table narrowing");
-    std::vector<proc_fdinfo> fds(capacity);
-    const int used=proc_pidinfo(getpid(),PROC_PIDLISTFDS,0,fds.data(),static_cast<int>(fds.size()*sizeof(proc_fdinfo)));
-    require(used>=0 && static_cast<size_t>(used)%sizeof(proc_fdinfo)==0,"cannot read own descriptor table");
-    result.descriptors=static_cast<size_t>(used)/sizeof(proc_fdinfo);
-    thread_act_array_t threads=nullptr;mach_msg_type_number_t thread_count=0;
-    require(task_threads(mach_task_self(),&threads,&thread_count)==KERN_SUCCESS,"cannot enumerate own threads");
-    result.threads=thread_count;
-    bool released=true;
-    for(mach_msg_type_number_t index=0;index<thread_count;++index) {
-        if(mach_port_deallocate(mach_task_self(),threads[index])!=KERN_SUCCESS) { released=false; }
-    }
-    if(vm_deallocate(mach_task_self(),reinterpret_cast<vm_address_t>(threads),
-        static_cast<vm_size_t>(thread_count)*sizeof(thread_t))!=KERN_SUCCESS) { released=false; }
-    require(released,"cannot release thread observation rights/storage");
-    mach_port_name_array_t names=nullptr;mach_port_type_array_t types=nullptr;
-    mach_msg_type_number_t name_count=0,type_count=0;
-    require(mach_port_names(mach_task_self(),&names,&name_count,&types,&type_count)==KERN_SUCCESS,
-        "cannot enumerate own Mach port names");
-    result.ports=name_count;
-    const auto names_result=vm_deallocate(mach_task_self(),reinterpret_cast<vm_address_t>(names),
-        static_cast<vm_size_t>(name_count)*sizeof(mach_port_name_t));
-    const auto types_result=vm_deallocate(mach_task_self(),reinterpret_cast<vm_address_t>(types),
-        static_cast<vm_size_t>(type_count)*sizeof(mach_port_type_t));
-    require(names_result==KERN_SUCCESS && types_result==KERN_SUCCESS,"cannot release port observation storage");
-    return result;
-}
+using Observation=MfsMacResources;
+Observation resources() { return mfs_mac_observe_resources(); }
 std::optional<cv::Mat> capture(MfsOriginalMac::ScreenCaptureKitScreencap& source) {
     std::optional<cv::Mat> image;
     std::exception_ptr error;
@@ -207,11 +175,42 @@ void display(const std::filesystem::path& directory) {
     require(held.type()==CV_8UC3 && held.data!=nullptr,"first-display owner did not survive source destruction");
     std::cout<<"original macOS display captures=1 retained=1 known_pixels=not_asserted passed\n";
 }
+void scene(NSApplication* app,const std::filesystem::path& directory) {
+    {
+    Window window(app,0);
+    const auto temporary=directory/"ready.tmp";
+    const auto ready=directory/"ready.json";
+    std::ofstream output(temporary);
+    output<<"{\"window_id\":"<<window.id()<<",\"width\":47,\"height\":31,\"colour\":\"green\",\"owner_pid\":"<<getpid()<<"}\n";
+    output.close();require(output.good(),"cannot publish fixture scene identity");
+    std::filesystem::rename(temporary,ready);
+    const auto until=Clock::now()+std::chrono::minutes(3);
+    while(!std::filesystem::exists(directory/"stop")) {
+        if(Clock::now()>=until) { throw std::runtime_error("scene fixture exceeded its isolated lifetime budget"); }
+        pump();
+    }
+    }
+    // Publish only after the owning main thread closed/released the window.
+    // The Rust reader may then check CPU owners without a mere stop-request race.
+    std::ofstream stopped(directory/"stopped.tmp");
+    stopped<<"window_closed=1\n";stopped.close();
+    require(stopped.good(),"cannot acknowledge scene window close");
+    std::filesystem::rename(directory/"stopped.tmp",directory/"stopped.txt");
+    std::cout<<"owned macOS scene stop=1 main_thread=1 passed\n";
+}
+void external_window(const std::filesystem::path& directory,const char* argument) {
+    const auto parsed=std::stoull(argument);
+    require(parsed>0 && parsed<=UINT32_MAX,"external fixture window ID narrowing");
+    MfsOriginalMac::ScreenCaptureKitScreencap source(static_cast<uint32_t>(parsed));
+    auto image=capture(source);require(image.has_value(),"original external-window capture failed");
+    save(*image,directory/"external-window.bgr");pixels(*image,0);
+    std::cout<<"original macOS external_window captures=1 known_interior=1 passed\n";
+}
 }
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==3,"usage: source-context <windows|display> <artifact directory>");
+        require(argc==3 || argc==4,"usage: source-context <windows|display|scene|external-window> <artifact directory> [window ID]");
         require([NSThread isMainThread],"AppKit context requires the process main thread");
         if(!CGPreflightScreenCaptureAccess()) {
             std::cerr<<"missing_environment: Screen Recording authorization unavailable; no prompt requested\n";
@@ -229,6 +228,8 @@ int main(int argc,char** argv) {
             const std::string mode=argv[1];
             if(mode=="windows") { windows(app,directory); }
             else if(mode=="display") { display(directory); }
+            else if(mode=="scene") { scene(app,directory); }
+            else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }
         }
         return 0;

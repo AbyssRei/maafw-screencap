@@ -135,6 +135,16 @@ fixtures and OpenCV acceptance preparation are separate; no Rust macOS product
 migration or completed P1 is claimed. Native inputs and their applicable notices
 remain external, and this target is excluded from default builds and SDK assets.
 
+src/backends/macos/screen_capture_kit.rs and the private platform pixel-buffer
+owner now begin Rust migration of that same fixed ScreenCaptureKitScreencap
+source, using maintained objc2/block2/dispatch2 bindings. Native semaphore
+waiting, callback conversion and source create-reference retention remain U;
+explicit test-only residual reclamation is separate from product cleanup.
+Checked layout/locking, a counted independent CPU copy and contained failures
+are documented safety adaptations. Same-window original/native Rust probes
+and C++ CPU Mat ownership tests are not full macOS/P1 acceptance or public SDK
+bindings. The shared OpenCV acceptance source remains outside the core tree.
+
 Microsoft C++/WinRT
 =================
 
