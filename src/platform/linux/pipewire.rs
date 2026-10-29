@@ -10,6 +10,10 @@ use std::{ffi::c_void, marker::PhantomData, ptr, rc::Rc};
 mod memory;
 pub(crate) use memory::MemFdMap;
 
+#[path = "pipewire_dma.rs"]
+mod dma;
+pub(crate) use dma::{DmaBufMap, DmaSyncEvidence, DmaSyncSnapshot};
+
 #[derive(Debug)]
 pub(crate) struct NativeError {
     pub operation: &'static str,

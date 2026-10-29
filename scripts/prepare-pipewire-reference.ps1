@@ -126,6 +126,12 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Save $saved
     Step pipewire-fd-fault-linkage ldd @($fault)
     $env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY=$fault
+    $dma=Join-Path $refBuild libmfs_pipewire_dma_fixture.so
+    $saved=Join-Path $refInputs libmfs_pipewire_dma_fixture.so
+    Copy-Item -LiteralPath $dma -Destination $saved
+    Save $saved
+    Step pipewire-dma-fixture-linkage ldd @($dma)
+    $env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY=$dma
     # libdrm's resolved source has no root COPYING. Preserve its actual project
     # license declaration/full notice plus all canonical header notices. The
     # complete source tar above remains an independent reconstructable input.

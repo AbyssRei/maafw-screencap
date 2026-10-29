@@ -115,6 +115,14 @@ impl Layout {
     pub fn readable_span(self) -> usize {
         self.span
     }
+    pub fn mapping_length(self) -> Result<usize, CopyError> {
+        let length = self
+            .stride
+            .checked_mul(self.rows)
+            .ok_or(CopyError::SizeOverflow)?;
+        isize::try_from(length).map_err(|_| CopyError::SizeOverflow)?;
+        Ok(length)
+    }
 }
 
 /// All bytes are initialized target pixels, in source row/channel order.

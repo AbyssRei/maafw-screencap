@@ -1,14 +1,16 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! First native driver slice: daemon/unsafe supplied-FD source connection and
-//! requested-frame copies from already mapped readable SHM. General FD ownership,
-//! owned mappings/DMA-BUF, all-format parity and complete P1 remain unfinished.
+//! requested-frame copies from readable SHM/owned MemFd/DMA mappings. General FD
+//! ownership, native incoming DMA/NULL-data streams and full P1 remain unfinished.
 use super::{
     Driver, Format,
     buffer::{Chunk, CopyError, CopyEvidence, Layout, RawCache, RawFrame},
     wait_until,
 };
-use crate::platform::linux::pipewire::{MemFdMap, NativeError, Resources, spa, sys};
+use crate::platform::linux::pipewire::{
+    DmaBufMap, DmaSyncEvidence, DmaSyncSnapshot, MemFdMap, NativeError, Resources, spa, sys,
+};
 use std::{
     cell::{Cell, UnsafeCell},
     ffi::{c_char, c_void},
@@ -57,6 +59,7 @@ struct Callbacks {
     unmap_error: AtomicI32,
     owned_maps: AtomicU64,
     unmap_calls: AtomicU64,
+    dma: DmaSyncEvidence,
     dequeued: Arc<AtomicU64>,
     returned: AtomicU64,
     copies: AtomicU64,
@@ -220,12 +223,17 @@ unsafe extern "C" fn on_process(data: *mut c_void) {
         let readable = spa::buffer::DataFlags::from_bits_retain(plane.flags)
             .contains(spa::buffer::DataFlags::READABLE);
         if !readable
-            || (kind != spa::buffer::DataType::MemFd && kind != spa::buffer::DataType::MemPtr)
+            || (kind != spa::buffer::DataType::MemFd
+                && kind != spa::buffer::DataType::MemPtr
+                && kind != spa::buffer::DataType::DmaBuf)
             || (plane.data.is_null() && kind == spa::buffer::DataType::MemPtr)
         {
-            // Explicit unfinished memory-path rejection. In particular an
-            // existing DMA-BUF pointer does not bypass the pending sync audit.
+            // Reject unsupported data kinds or a MemPtr with no readable data.
             callbacks.fail(4);
+            return;
+        }
+        if kind == spa::buffer::DataType::DmaBuf && buffer.n_datas != 1 {
+            callbacks.fail(4); // no implicit multi-plane/modifier interpretation
             return;
         }
         // No consumer wait/reentrant native operation occurs inside this block.
@@ -270,6 +278,18 @@ enum PlaneError {
     Copy(CopyError),
     Map(NativeError),
 }
+enum PlaneMap<'a> {
+    MemFd(MemFdMap<'a>),
+    Dma(DmaBufMap<'a>),
+}
+impl PlaneMap<'_> {
+    fn pointer(&self) -> *const u8 {
+        match self {
+            Self::MemFd(map) => map.pointer(),
+            Self::Dma(map) => map.pointer(),
+        }
+    }
+}
 /// # Safety
 /// Caller exclusively owns State (the actual loop lock for callback State).
 /// All descriptor/chunk fields and representable nonnegative FDs stay live.
@@ -298,23 +318,46 @@ unsafe fn copy_plane(
     let mapping = if plane.data.is_null() {
         // SAFETY: Same retained lease, checked target span and channel. The
         // platform owner verifies descriptor/file extent before its fresh mmap.
-        let mapping = unsafe {
-            MemFdMap::new(
-                plane,
-                layout.readable_span(),
-                &callbacks.unmap_error,
-                &callbacks.unmap_calls,
+        let mapping = if plane.type_ == spa::sys::SPA_DATA_DmaBuf {
+            // SAFETY: Same retained descriptor/native lease and exclusive
+            // provider handoff; the DMA owner preserves U's one-shot sync path.
+            PlaneMap::Dma(
+                unsafe {
+                    DmaBufMap::new(
+                        plane,
+                        layout.readable_span(),
+                        layout.mapping_length().map_err(PlaneError::Copy)?,
+                        &callbacks.dma,
+                        &callbacks.unmap_error,
+                        &callbacks.unmap_calls,
+                    )
+                }
+                .map_err(PlaneError::Map)?,
             )
-        }
-        .map_err(PlaneError::Map)?;
+        } else {
+            PlaneMap::MemFd(
+                unsafe {
+                    MemFdMap::new(
+                        plane,
+                        layout.readable_span(),
+                        &callbacks.unmap_error,
+                        &callbacks.unmap_calls,
+                    )
+                }
+                .map_err(PlaneError::Map)?,
+            )
+        };
         callbacks.add(&callbacks.owned_maps, 1);
         Some(mapping)
     } else {
+        if plane.type_ == spa::sys::SPA_DATA_DmaBuf {
+            callbacks.dma.borrowed_pointer();
+        }
         None
     };
     let pointer = mapping
         .as_ref()
-        .map_or(plane.data.cast_const().cast(), MemFdMap::pointer);
+        .map_or(plane.data.cast_const().cast(), PlaneMap::pointer);
     // SAFETY: MAP_BUFFERS retains existing SHM pointers (including native mapoffset)
     // or the owned map covers these checked target rows. No padding is borrowed.
     // Guard drop finishes unmap before wanted/signal and the outer buffer return.
@@ -340,6 +383,7 @@ pub(super) struct Evidence {
     pub unmap_error: i32,
     pub owned_maps: u64,
     pub unmap_calls: u64,
+    pub dma: DmaSyncSnapshot,
     pub dequeued: u64,
     pub returned: u64,
     pub copies: u64,
@@ -359,6 +403,7 @@ impl Native {
             unmap_error: AtomicI32::new(0),
             owned_maps: AtomicU64::new(0),
             unmap_calls: AtomicU64::new(0),
+            dma: DmaSyncEvidence::default(),
             dequeued: Arc::try_new(AtomicU64::new(0))?,
             returned: AtomicU64::new(0),
             copies: AtomicU64::new(0),
@@ -515,6 +560,7 @@ impl Native {
             unmap_error: self.callbacks.unmap_error.load(Ordering::Acquire),
             owned_maps: self.callbacks.owned_maps.load(Ordering::Acquire),
             unmap_calls: self.callbacks.unmap_calls.load(Ordering::Acquire),
+            dma: self.callbacks.dma.snapshot(),
             dequeued: self.callbacks.dequeued.load(Ordering::Acquire),
             returned: self.callbacks.returned.load(Ordering::Acquire),
             copies: self.callbacks.copies.load(Ordering::Acquire),

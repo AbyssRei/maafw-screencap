@@ -4,6 +4,7 @@
 // negotiation helpers are available to the explicit POD oracle below.
 #include "Screencap/PipeWireScreencap.cpp"
 #include "fd-fault.h"
+#include "dma-fixture.h"
 #include <pipewire/pipewire.h>
 #include <opencv2/imgproc.hpp>
 #include <algorithm>
@@ -32,6 +33,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
 
@@ -655,6 +657,7 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
     for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"held memfd image changed after all FDs closed"); }
     std::cout<<"original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed\n";
 }
+#include "dma-fixtures.hpp"
 void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
     std::optional<FdFaultControl> fault;
@@ -772,6 +775,12 @@ int main(int argc,char** argv) {
         if(argc==3 && std::string_view(argv[1])=="--memfd-fixtures") {
             save_memfd_fixtures(argv[2]);
             return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--dma-fixtures") {
+            return save_dma_fixtures(argv[2]);
+        }
+        if(argc==2 && std::string_view(argv[1])=="--dma-error-control") {
+            dma_error_control();return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--joined-task-observation") {
             observe_joined_tasks(argv[2]);
