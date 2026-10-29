@@ -326,7 +326,10 @@ impl super::NativeManager {
         output: &mut C::Image,
         converter: &mut C,
     ) -> Attempt<C::Error> {
+        #[cfg(feature = "linux-pipewire")]
         let mut replayed = None;
+        #[cfg(not(feature = "linux-pipewire"))]
+        let replayed = None;
         let result = self.capture_with(output, |unit, output| match &mut unit.unit {
             Unit::None => {
                 let _ = converter;
