@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! First native driver slice: daemon connection, source negotiation/control and
-//! requested-frame copies from already mapped readable SHM. Portal FD ownership,
+//! First native driver slice: daemon/unsafe supplied-FD source connection and
+//! requested-frame copies from already mapped readable SHM. General FD ownership,
 //! owned mappings/DMA-BUF, all-format parity and complete P1 remain unfinished.
 use super::{
     Driver, Format,
@@ -279,6 +279,7 @@ pub(super) struct Native {
     callbacks: Box<Callbacks>,
     epoch: Instant,
     locked: bool,
+    input_fd: i32,
 }
 #[derive(Debug)]
 pub(super) struct Evidence {
@@ -317,9 +318,38 @@ impl Native {
             callbacks,
             epoch: Instant::now(),
             locked: false,
+            input_fd: -1,
         })
     }
+    /// # Safety
+    /// `fd` must identify the caller's valid uniquely offered socket. Detach any
+    /// owning handle before `init_source`; no independent close/reuse may race
+    /// it. Before an init attempt the caller still owns that descriptor. After
+    /// a null native core, consumption/residual ownership is protocol-specific;
+    /// only act on it after complete close, using separately proven ownership.
+    /// This private U entry intentionally is not a safe host FD contract.
+    pub unsafe fn with_fd(fd: i32) -> Result<Self, std::alloc::AllocError> {
+        assert!(fd >= 0);
+        let mut result = Self::new()?;
+        result.input_fd = fd;
+        Ok(result)
+    }
     pub fn init_daemon(&mut self, node: u32) -> Result<(), NativeError> {
+        assert!(
+            self.input_fd < 0,
+            "pending supplied fd requires unsafe init_source"
+        );
+        self.initialize(node)
+    }
+    /// # Safety
+    /// If a supplied descriptor remains pending, the `with_fd` contract must
+    /// still hold for this attempt, including after a previous native failure.
+    /// Successful native core creation consumes it; subsequent initialization
+    /// follows source daemon mode after close. No new recovery policy is added.
+    pub unsafe fn init_source(&mut self, node: u32) -> Result<(), NativeError> {
+        self.initialize(node)
+    }
+    fn initialize(&mut self, node: u32) -> Result<(), NativeError> {
         if self.connected() {
             return Ok(());
         }
@@ -328,9 +358,15 @@ impl Native {
             let data = ptr::from_ref(&*self.callbacks).cast_mut().cast();
             // SAFETY: Box address/event records stay fixed through stop, hook
             // removal and resource destruction; all setup calls are serialized.
+            // A pending fd is reachable only through unsafe init_source and its
+            // ownership contract; the safe daemon entry rejects pending offers.
             unsafe {
-                self.resources
-                    .create_daemon(data, &CORE_EVENTS, &STREAM_EVENTS)?;
+                self.resources.create_source(
+                    &mut self.input_fd,
+                    data,
+                    &CORE_EVENTS,
+                    &STREAM_EVENTS,
+                )?;
             }
             self.callbacks.loop_.set(self.resources.loop_);
             self.callbacks.stream.set(self.resources.stream);

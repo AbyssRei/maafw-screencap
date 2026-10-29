@@ -2,7 +2,17 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 use crate::backends::linux::pipewire::{Consumer, Conversion, Converter};
-use std::{env, ffi::CStr, fs, path::Path, time::Duration};
+use std::{
+    env,
+    ffi::CStr,
+    fs,
+    os::{
+        fd::{AsRawFd, IntoRawFd},
+        unix::net::UnixStream,
+    },
+    path::Path,
+    time::Duration,
+};
 
 #[path = "opencv_tests.rs"]
 mod opencv;
@@ -220,6 +230,16 @@ fn marker(frame: &RawFrame) -> u32 {
 #[test]
 #[ignore = "explicit native Linux owned-daemon SHM driver probe, not full source/OpenCV parity"]
 fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
+    run_raw_probe(false);
+}
+
+#[test]
+#[ignore = "explicit native supplied-socket success ownership, not Portal authorization/failure acceptance"]
+fn captures_supplied_fd_shm_and_closes_twenty_consumed_sockets() {
+    run_raw_probe(true);
+}
+
+fn run_raw_probe(supplied_fd: bool) {
     let socket = env::var("MFS_P0_PIPEWIRE_SOCKET").expect("explicit private producer socket");
     let remote = env::var("PIPEWIRE_REMOTE").expect("explicit private daemon name");
     let runtime = env::var("PIPEWIRE_RUNTIME_DIR").expect("explicit private runtime");
@@ -228,8 +248,12 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
         .unwrap()
         .parse::<u32>()
         .unwrap();
-    let directory =
-        env::var("MFS_P1_PIPEWIRE_RUST_ARTIFACTS").expect("explicit artifact directory");
+    let directory = env::var(if supplied_fd {
+        "MFS_P1_PIPEWIRE_FD_ARTIFACTS"
+    } else {
+        "MFS_P1_PIPEWIRE_RUST_ARTIFACTS"
+    })
+    .expect("explicit artifact directory");
     fs::create_dir_all(&directory).unwrap();
     let expected = env::var("MFS_P0_PIPEWIRE_VERSION").expect("explicit native version");
     let oracle =
@@ -266,10 +290,27 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
     held.try_reserve_exact(60).unwrap();
     for cycle in 0..20 {
         // new is fallible only before it performs raw global initialization.
-        let native = Native::new().unwrap();
+        let offered = supplied_fd.then(|| UnixStream::connect(&socket).unwrap());
+        let native = if let Some(stream) = &offered {
+            // SAFETY: Fresh uniquely owned private socket. No initialization
+            // occurs yet; the owning handle is detached immediately below,
+            // before any native transfer. A constructor error retains it.
+            unsafe { Native::with_fd(stream.as_raw_fd()) }.unwrap()
+        } else {
+            Native::new().unwrap()
+        };
         let balance_init = BalanceInit;
         let mut native = native;
-        native.init_daemon(node).unwrap();
+        let input_fd = offered.map(IntoRawFd::into_raw_fd);
+        if supplied_fd {
+            // SAFETY: Sole ownership was detached for this one native attempt.
+            // A failed attempt fails this isolated process; no generic residual
+            // close or automatic FD retry is inferred from a null native core.
+            unsafe { native.init_source(node) }.unwrap();
+            assert_eq!(native.input_fd, -1, "non-null core consumed the offer");
+        } else {
+            native.init_daemon(node).unwrap();
+        }
         let mut consumer = Consumer::default();
         for call in 0..3 {
             if call == 1 {
@@ -311,6 +352,16 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
         eprintln!("native Rust SHM closed cycle={cycle} evidence={evidence:?}");
         drop(native);
         drop(balance_init);
+        if let Some(fd) = input_fd {
+            // SAFETY: Observe only, before opening any diagnostic descriptors.
+            // The input number was detached and consumed by the successful core;
+            // no owning Rust handle can double-close it. No close occurs here.
+            assert_eq!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, -1);
+            assert_eq!(
+                std::io::Error::last_os_error().raw_os_error(),
+                Some(libc::EBADF)
+            );
+        }
         assert_resources(Path::new(&directory), cycle, fds, &baseline, &live);
         for (frame, serial) in &held {
             assert_eq!(marker(frame), *serial, "retained sample identity changed");
@@ -327,7 +378,13 @@ fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
     })
     .join()
     .unwrap();
-    eprintln!(
-        "native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed; OpenCV conversion/source parity pending"
-    );
+    if supplied_fd {
+        eprintln!(
+            "native Rust PipeWire supplied fd SHM cycles=20 captures=60 retained=60 consumed_sockets_closed=20 passed"
+        );
+    } else {
+        eprintln!(
+            "native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed; OpenCV conversion/source parity pending"
+        );
+    }
 }
