@@ -18,7 +18,8 @@ struct MfsPwBgrView {
     int32_t width;
     int32_t height;
 };
-// Modes: 1 BGRA2BGR, 2 RGBA2BGR, 3 RGB2BGR, 4 YUV2BGR_YUY2.
+// Modes: 1 BGRA2BGR, 2 RGBA2BGR, 3 RGB2BGR, 4 YUV2BGR_YUY2,
+// 5 real packed BGR Mat copyTo (three channels only; Wlr acceptance).
 // Return 0 success, 1 invalid arguments/layout, 2 OpenCV exception,
 // 3 allocation failure, 4 another contained exception. Failure clears output.
 // Borrowed input is immutable and retained only for the synchronous call.

@@ -38,15 +38,17 @@ int32_t mfs_pw_convert(const uint8_t* input,size_t length,int32_t width,int32_t 
     case 2: conversion=cv::COLOR_RGBA2BGR;break;
     case 3: conversion=cv::COLOR_RGB2BGR;break;
     case 4: conversion=cv::COLOR_YUV2BGR_YUY2;break;
+    case 5: if(channels!=3) { return 1; } break;
     default: return 1;
     }
     try {
-        // Only the header borrows input. cvtColor reads it synchronously; the
-        // independent destination owns its actual OpenCV allocation. No moved
-        // conversion or second full-frame CPU copy is hidden in this adapter.
+        // Only the header borrows input. Conversion or explicit BGR copyTo
+        // reads it synchronously into an independent real Mat allocation.
+        // The caller's prior safety copy is separate, not eliminated work.
         const cv::Mat raw(height,width,CV_8UC(channels),const_cast<uint8_t*>(input),stride);
         cv::Mat bgr;
-        cv::cvtColor(raw,bgr,conversion);
+        if(mode==5) { raw.copyTo(bgr); }
+        else { cv::cvtColor(raw,bgr,conversion); }
         auto owner=std::make_unique<Image>(std::move(bgr));
         *output=owner.release();
         return 0;

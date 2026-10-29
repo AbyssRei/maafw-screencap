@@ -46,6 +46,18 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
             throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
         }
+        if($Name -match '^(original|rust)-wlr-protocol-v([123])$'){
+            $side=$Matches[1];$version=$Matches[2]
+            $observed=Get-Content -LiteralPath $log -Raw
+            $summary=if($side -eq 'original'){
+                "original Wlr protocol version=$version cycles=20 captures=480 retained=480 formats=6 layouts=4 resources_balanced=1 legacy_packed=1 passed"
+            }else{
+                "native Rust Wlr protocol version=$version cycles=20 captures=480 retained_raw=480 retained_bgr=480 formats=6 layouts=4 resources_balanced=1 legacy_packed=1 native_copy=1 passed"
+            }
+            if(-not $observed.Contains($summary) -or ($side -eq 'rust' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')){
+                throw 'Expected the complete real protocol matrix, not a zero-test or partial run'
+            }
+        }
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
@@ -340,6 +352,9 @@ try{
         }
         try { Step rust-wlr-manager timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::forwards_native_manager_reconnects_and_retains_images_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
+        . (Join-Path $PSScriptRoot validate-wlr-protocol.ps1)
+        try{Test-WlrProtocolMatrix $sourceExecutable $library $runtime $referenceArtifacts}
+        catch{$failed=$true;Write-Host $_.Exception.Message}
         $managerPreserved=$managerOracles.Count -eq 60
         foreach($oracle in $managerOracles){if((Get-FileHash (Join-Path (Join-Path $referenceArtifacts manager) $oracle.name)).Hash.ToLowerInvariant() -ne $oracle.sha256){$managerPreserved=$false}}
         Json (Join-Path $referenceArtifacts manager-original-preserved.json) ([ordered]@{checked=$managerOracles.Count;all_original_hashes_unchanged=$managerPreserved})

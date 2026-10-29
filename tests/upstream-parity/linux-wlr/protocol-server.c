@@ -1,0 +1,210 @@
+// Copyright (C) 2026 AbyssRei
+// SPDX-License-Identifier: LGPL-3.0-or-later
+// Owned native IPC/SHM protocol fixture, not a compositor or desktop capture.
+#include <wayland-server-core.h>
+#include <wayland-server-protocol.h>
+#include "screencopy-server.h"
+#include "pointer-server.h"
+#include "keyboard-server.h"
+#include "protocol-pattern.h"
+#include <signal.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <dlfcn.h>
+#include <limits.h>
+
+struct server {
+    struct wl_display* display;
+    const char* directory;
+    unsigned version, managers_created, managers_destroyed, frames_created, frames_destroyed, copies;
+    int error;
+    bool stopped;
+};
+struct manager { struct server* server; unsigned next; };
+struct frame { struct server* server; struct mfs_protocol_case input; bool copied; };
+static void failure(struct server* s, const char* message)
+{
+    fprintf(stderr,"protocol fixture failure: %s\n",message);
+    s->error = 1;
+    wl_display_terminate(s->display);
+}
+static void destroy_request(struct wl_client* client, struct wl_resource* resource)
+{
+    (void)client;
+    wl_resource_destroy(resource);
+}
+static void frame_destroyed(struct wl_resource* resource)
+{
+    struct frame* f = wl_resource_get_user_data(resource);
+    ++f->server->frames_destroyed;
+    free(f);
+}
+static void copy(struct wl_client* client, struct wl_resource* resource, struct wl_resource* buffer)
+{
+    (void)client;
+    struct frame* f = wl_resource_get_user_data(resource);
+    struct wl_shm_buffer* shm = wl_shm_buffer_get(buffer);
+    if (f->copied || !shm || wl_shm_buffer_get_width(shm) != 7 || wl_shm_buffer_get_height(shm) != 5
+        || wl_shm_buffer_get_format(shm) != f->input.format
+        || wl_shm_buffer_get_stride(shm) != (int32_t)f->input.stride) {
+        failure(f->server,"actual native SHM input differs");
+        return;
+    }
+    f->copied = true;
+    // The real libwayland-server SHM helper owns the mapped received FD.
+    // Access ends before Ready; no pointer/reference escapes this callback.
+    wl_shm_buffer_begin_access(shm);
+    uint8_t* bytes = wl_shm_buffer_get_data(shm);
+    mfs_protocol_fill(f->input,bytes);
+    if (f->server->copies < 24) {
+        char name[4096];
+        int length = snprintf(name,sizeof name,"%s/case-%u.shm",f->server->directory,f->input.index);
+        FILE* file = length > 0 && (size_t)length < sizeof name ? fopen(name,"wb") : NULL;
+        const size_t size = 5 * f->input.stride;
+        bool saved = file && fwrite(bytes,1,size,file) == size;
+        if (file && fclose(file) != 0) { saved = false; }
+        if (!saved) { wl_shm_buffer_end_access(shm); failure(f->server,"save actual producer input"); return; }
+    }
+    wl_shm_buffer_end_access(shm);
+    ++f->server->copies;
+    zwlr_screencopy_frame_v1_send_flags(resource,f->input.inverted);
+    zwlr_screencopy_frame_v1_send_ready(resource,0,2000 + f->input.index,1000 + f->input.index);
+}
+static const struct zwlr_screencopy_frame_v1_interface frame_requests = {
+    .copy = copy, .destroy = destroy_request, .copy_with_damage = copy,
+};
+static void capture(struct wl_client* client, struct wl_resource* resource, uint32_t id,
+    int32_t overlay_cursor, struct wl_resource* output)
+{
+    struct manager* m = wl_resource_get_user_data(resource);
+    if (m->next >= 24 || overlay_cursor != 0 || !output) { failure(m->server,"unexpected capture request"); return; }
+    struct frame* f = calloc(1,sizeof *f);
+    if (!f) { wl_client_post_no_memory(client); failure(m->server,"frame allocation"); return; }
+    f->server = m->server;
+    f->input = mfs_protocol_case(m->next++);
+    struct wl_resource* frame = wl_resource_create(client,&zwlr_screencopy_frame_v1_interface,
+        wl_resource_get_version(resource),id);
+    if (!frame) { free(f); wl_client_post_no_memory(client); failure(m->server,"frame resource"); return; }
+    ++m->server->frames_created;
+    wl_resource_set_implementation(frame,&frame_requests,f,frame_destroyed);
+    zwlr_screencopy_frame_v1_send_buffer(frame,f->input.format,7,5,f->input.stride);
+    if (wl_resource_get_version(frame) >= 3) { zwlr_screencopy_frame_v1_send_buffer_done(frame); }
+}
+static void capture_region(struct wl_client* client, struct wl_resource* resource, uint32_t id,
+    int32_t overlay, struct wl_resource* output, int32_t x, int32_t y, int32_t w, int32_t h)
+{
+    (void)client; (void)id; (void)overlay; (void)output; (void)x; (void)y; (void)w; (void)h;
+    struct manager* m = wl_resource_get_user_data(resource);
+    failure(m->server,"unexpected region request");
+}
+static const struct zwlr_screencopy_manager_v1_interface manager_requests = {
+    .capture_output = capture, .capture_output_region = capture_region, .destroy = destroy_request,
+};
+static void manager_destroyed(struct wl_resource* resource)
+{
+    struct manager* m = wl_resource_get_user_data(resource);
+    ++m->server->managers_destroyed;
+    free(m);
+}
+static void bind_manager(struct wl_client* client, void* data, uint32_t version, uint32_t id)
+{
+    struct server* s = data;
+    struct manager* m = calloc(1,sizeof *m);
+    if (!m) { wl_client_post_no_memory(client); failure(s,"manager allocation"); return; }
+    m->server = s;
+    struct wl_resource* resource = wl_resource_create(client,&zwlr_screencopy_manager_v1_interface,version,id);
+    if (!resource) { free(m); wl_client_post_no_memory(client); failure(s,"manager resource"); return; }
+    ++s->managers_created;
+    wl_resource_set_implementation(resource,&manager_requests,m,manager_destroyed);
+}
+static void deny_pointer(struct wl_client* c, struct wl_resource* r, struct wl_resource* seat, uint32_t id)
+{
+    (void)c; (void)seat; (void)id;
+    wl_resource_post_error(r,0,"input requests are outside the owned capture fixture");
+}
+static void deny_pointer_output(struct wl_client* c, struct wl_resource* r, struct wl_resource* seat,
+    struct wl_resource* output, uint32_t id)
+{
+    (void)output;
+    deny_pointer(c,r,seat,id);
+}
+static const struct zwlr_virtual_pointer_manager_v1_interface pointer_requests = {
+    .create_virtual_pointer = deny_pointer, .destroy = destroy_request,
+    .create_virtual_pointer_with_output = deny_pointer_output,
+};
+static void deny_keyboard(struct wl_client* c, struct wl_resource* r, struct wl_resource* seat, uint32_t id)
+{
+    deny_pointer(c,r,seat,id);
+}
+static const struct zwp_virtual_keyboard_manager_v1_interface keyboard_requests = {
+    .create_virtual_keyboard = deny_keyboard,
+};
+static const struct wl_output_interface output_requests = { .release = destroy_request };
+static void bind_pointer(struct wl_client* c, void* data, uint32_t version, uint32_t id)
+{
+    struct wl_resource* r = wl_resource_create(c,&zwlr_virtual_pointer_manager_v1_interface,version,id);
+    if (r) { wl_resource_set_implementation(r,&pointer_requests,data,NULL); }
+    else { wl_client_post_no_memory(c); failure(data,"passive pointer resource"); }
+}
+static void bind_keyboard(struct wl_client* c, void* data, uint32_t version, uint32_t id)
+{
+    struct wl_resource* r = wl_resource_create(c,&zwp_virtual_keyboard_manager_v1_interface,version,id);
+    if (r) { wl_resource_set_implementation(r,&keyboard_requests,data,NULL); }
+    else { wl_client_post_no_memory(c); failure(data,"passive keyboard resource"); }
+}
+static void bind_output(struct wl_client* c, void* data, uint32_t version, uint32_t id)
+{
+    struct wl_resource* r = wl_resource_create(c,&wl_output_interface,version,id);
+    if (r) { wl_resource_set_implementation(r,&output_requests,data,NULL); }
+    else { wl_client_post_no_memory(c); failure(data,"passive output resource"); }
+}
+static int stop(int signal, void* data)
+{
+    (void)signal;
+    struct server* s = data;
+    s->stopped = true;
+    wl_display_terminate(s->display);
+    return 0;
+}
+int main(int argc, char** argv)
+{
+    if (argc != 4 || strlen(argv[1]) != 1 || argv[1][0] < '1' || argv[1][0] > '3') { return 64; }
+    Dl_info owner;
+    char actual[PATH_MAX],expected[PATH_MAX];
+    if (!dladdr((void*)&wl_display_create,&owner) || !owner.dli_fname
+        || !realpath(owner.dli_fname,actual) || !realpath(argv[3],expected) || strcmp(actual,expected) != 0) {
+        fprintf(stderr,"protocol fixture loaded a different native server library\n");
+        return 1;
+    }
+    printf("native protocol server library=%s\n",actual);
+    struct server s = {.directory = argv[2], .version = (unsigned)(argv[1][0] - '0')};
+    s.display = wl_display_create();
+    if (!s.display) { return 1; }
+    struct wl_event_loop* loop = wl_display_get_event_loop(s.display);
+    struct wl_event_source* term = wl_event_loop_add_signal(loop,SIGTERM,stop,&s);
+    struct wl_event_source* interrupt = wl_event_loop_add_signal(loop,SIGINT,stop,&s);
+    if (!term || !interrupt || zwlr_screencopy_manager_v1_interface.version != 3
+        || wl_display_init_shm(s.display) != 0) { s.error = 1; goto cleanup; }
+    for (uint32_t kind = 2; kind < 6; ++kind) {
+        if (!wl_display_add_shm_format(s.display,mfs_protocol_case(kind * 4).format)) { s.error = 1; goto cleanup; }
+    }
+    if (!wl_global_create(s.display,&wl_output_interface,1,&s,bind_output)
+        || !wl_global_create(s.display,&zwlr_virtual_pointer_manager_v1_interface,1,&s,bind_pointer)
+        || !wl_global_create(s.display,&zwp_virtual_keyboard_manager_v1_interface,1,&s,bind_keyboard)
+        || !wl_global_create(s.display,&zwlr_screencopy_manager_v1_interface,(int)s.version,&s,bind_manager)
+        || wl_display_add_socket(s.display,"mfs-p1-protocol") != 0) { s.error = 1; goto cleanup; }
+    printf("protocol ready version=%u formats=6 cases=24 native_shm=1 compositor=0\n",s.version);
+    fflush(stdout);
+    wl_display_run(s.display);
+cleanup:
+    wl_display_destroy_clients(s.display);
+    if (term) { wl_event_source_remove(term); }
+    if (interrupt) { wl_event_source_remove(interrupt); }
+    wl_display_destroy(s.display);
+    if (!s.stopped || s.error || s.managers_created != 40 || s.managers_destroyed != 40
+        || s.frames_created != 960 || s.frames_destroyed != 960 || s.copies != 960) { s.error = 1; }
+    printf("protocol stopped version=%u managers=%u/%u frames=%u/%u copies=%u graceful=%d error=%d\n",
+        s.version,s.managers_created,s.managers_destroyed,s.frames_created,s.frames_destroyed,s.copies,s.stopped,s.error);
+    return s.error;
+}
