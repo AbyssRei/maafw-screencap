@@ -76,7 +76,7 @@ fn run(supplied_fd: bool) {
     // Prepare conversion runtime before the exact native-resource baseline.
     let warm = [1_u8; 12];
     let mut cache = RawCache::default();
-    let layout = Layout::checked(2, 2, Format::Rgb, 6, None).unwrap();
+    let layout = Layout::checked(2, 2, Format::Rgb, 12, None).unwrap();
     // SAFETY: Complete initialized rows, copied into isolated owned CPU storage.
     unsafe { cache.copy_native(warm.as_ptr(), layout) }.unwrap();
     drop(
@@ -169,12 +169,12 @@ fn run(supplied_fd: bool) {
                 fs::write(directory.join(format!("{stem}.bgr")), image.pixels()).unwrap();
                 let serial = known_bgr(&image);
                 assert_eq!(serial, marker(raw));
-                for (rgb, bgr) in raw
-                    .pixels()
-                    .chunks_exact(3)
-                    .zip(image.pixels().chunks_exact(3))
-                {
-                    assert_eq!(bgr, [rgb[2], rgb[1], rgb[0]]);
+                let (rgb_rows, rgb_tail) = raw.pixels().as_chunks::<3>();
+                let (bgr_rows, bgr_tail) = image.pixels().as_chunks::<3>();
+                assert!(rgb_tail.is_empty() && bgr_tail.is_empty());
+                assert_eq!(rgb_rows.len(), bgr_rows.len());
+                for (rgb, bgr) in rgb_rows.iter().zip(bgr_rows) {
+                    assert_eq!(*bgr, [rgb[2], rgb[1], rgb[0]]);
                 }
                 identities.push(serial);
                 held.push((image, serial));

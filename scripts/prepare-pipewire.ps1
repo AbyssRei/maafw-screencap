@@ -170,6 +170,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             if(-not $observed.Contains($expected) -or ($Name.StartsWith('rust-') -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
                 throw 'Expected the complete independent native manager capture, retained-image and resource checks'
             }
+            if($Name.StartsWith('original-') -and -not $observed.Contains('manager Mat control shallow_output_reuse_mutates_alias=1 moved_owner_preserved=1 passed')) {
+                throw 'Expected the real OpenCV shallow-alias/moved-owner premise control'
+            }
         }
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
