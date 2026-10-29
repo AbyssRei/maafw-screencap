@@ -37,6 +37,7 @@
 #include <pthread.h>
 #include <sys/socket.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/un.h>
 #include <unistd.h>
@@ -124,17 +125,80 @@ struct Task {
     uint64_t started,flags,address_space;
     int64_t resident_pages;
 };
+struct TaskStatReadFailure:std::runtime_error {
+    std::string id;
+    int native_error;
+    bool bad,failed,eof;
+    size_t bytes;
+    TaskStatReadFailure(const std::string& task_id,int code,bool is_bad,bool is_failed,bool is_eof,size_t length)
+        :std::runtime_error("cannot read proc task stat"),id(task_id),native_error(code),
+         bad(is_bad),failed(is_failed),eof(is_eof),bytes(length) {}
+};
+struct TaskAbsence {
+    bool stat_opened=false,directory_exists=false;
+    int stat_error=0,close_error=0,directory_error=0;
+};
+bool known_live_source_task(const Task& before) {
+    return !before.id.empty() && std::all_of(before.id.begin(),before.id.end(),[](char byte){return byte>='0' && byte<='9';}) &&
+        before.name=="MaaScreencap" && before.started!=0 && !(before.flags&0x4) && before.address_space!=0;
+}
+bool exact_retired_read_failure(const Task& before,const TaskStatReadFailure& failure) {
+    return known_live_source_task(before) && failure.id==before.id && failure.native_error==ESRCH &&
+        failure.bad && failure.failed && !failure.eof && failure.bytes==0;
+}
+TaskAbsence probe_task_absence(const std::string& id) {
+    // Single fresh native observations, not a retry of the failed stream read.
+    // ENOENT on BOTH stat open and task-directory stat is required. All other
+    // errors, an opened file or a still-present directory refuse classification.
+    const auto directory=std::filesystem::path("/proc/self/task")/id;
+    TaskAbsence observed;
+    errno=0;
+    const int fd=open((directory/"stat").c_str(),O_RDONLY|O_CLOEXEC);
+    if(fd>=0) {
+        observed.stat_opened=true;
+        if(close(fd)!=0) {observed.close_error=errno;}
+        return observed;
+    }
+    observed.stat_error=errno;
+    if(observed.stat_error!=ENOENT) {return observed;}
+    struct stat info{};
+    errno=0;
+    if(::stat(directory.c_str(),&info)==0) {observed.directory_exists=true;}
+    else {observed.directory_error=errno;}
+    return observed;
+}
+bool proved_task_absent(const TaskAbsence& observed) {
+    return !observed.stat_opened && observed.stat_error==ENOENT && observed.close_error==0 &&
+        !observed.directory_exists && observed.directory_error==ENOENT;
+}
+bool same_generation_kernel_retirement(const Task& before,const Task& after) {
+    return known_live_source_task(before) && after.id==before.id && after.name==before.name &&
+        after.started==before.started && (after.flags&0x4) && after.address_space==0 && after.resident_pages==0;
+}
+bool observe_post_join_failed_task(const Task& before,const TaskStatReadFailure& failure,TaskAbsence& observed) {
+    if(!exact_retired_read_failure(before,failure)) {return false;}
+    observed=probe_task_absence(before.id);
+    const bool absent=proved_task_absent(observed);
+    std::cout<<"post_join_task_read id="<<before.id<<" started="<<before.started
+        <<" read_errno="<<failure.native_error<<" bad="<<failure.bad<<" fail="<<failure.failed
+        <<" eof="<<failure.eof<<" bytes="<<failure.bytes<<" fresh_stat_open="<<observed.stat_opened
+        <<" fresh_stat_errno="<<observed.stat_error<<" fresh_close_errno="<<observed.close_error
+        <<" fresh_directory_exists="<<observed.directory_exists
+        <<" fresh_directory_errno="<<observed.directory_error<<" proved_absent="<<absent<<'\n';
+    return absent;
+}
 std::string task_text(std::ifstream& input,const std::string& id) {
     std::string text;
     errno=0;
     std::getline(input,text);
     const int read_error=errno;
     if(!input.good() && !input.eof()) {
-        // Observation only: retain the original failure condition. In
-        // particular, do not silently classify an unreadable task as gone.
+        // Default/live observations remain strict. Only the separate post-join
+        // path may classify this exact evidence with fresh absence proof.
         std::cerr<<"proc task stat read id="<<id<<" errno="<<read_error
             <<" bad="<<input.bad()<<" fail="<<input.fail()<<" eof="<<input.eof()
             <<" bytes="<<text.size()<<'\n';
+        throw TaskStatReadFailure(id,read_error,input.bad(),input.fail(),input.eof(),text.size());
     }
     require(input.good() || input.eof(),"cannot read proc task stat");
     return text;
@@ -173,20 +237,26 @@ std::vector<Task> live_tasks() {
     return result;
 }
 bool only_retiring_tasks(const std::vector<std::string>& actual,const std::vector<std::string>& baseline,const std::vector<Task>& live) {
+    // PRECONDITION: source close/stop/join has returned and native owners have
+    // completed their scoped teardown. Every caller is after that boundary.
+    // This never waits for active callbacks or permits asynchronous cleanup.
     for(const auto& id:baseline) {
         if(std::find(actual.begin(),actual.end(),id)==actual.end()) { return false; }
     }
     for(const auto& id:actual) {
         if(std::find(baseline.begin(),baseline.end(),id)!=baseline.end()) { continue; }
         const auto before=std::find_if(live.begin(),live.end(),[&](const Task& value){return value.id==id;});
-        if(before==live.end() || before->name!="MaaScreencap" ||
-           (before->flags&0x4) || before->address_space==0) { return false; }
-        if(auto after=task(id)) {
-            // Only a known same-generation PF_EXITING task with no userspace
-            // address space can finish kernel retirement here. Never a live
-            // worker, an unknown TID, or asynchronous callback/native cleanup.
-            if(after->started!=before->started || !(after->flags&0x4) ||
-               after->address_space!=0 || after->resident_pages!=0) { return false; }
+        if(before==live.end() || !known_live_source_task(*before)) { return false; }
+        try {
+            if(auto after=task(id)) {
+                // Only a known same-generation PF_EXITING task with no userspace
+                // address space can finish kernel retirement here. Never a live
+                // worker, an unknown TID, or asynchronous callback/native cleanup.
+                if(!same_generation_kernel_retirement(*before,*after)) { return false; }
+            }
+        }catch(const TaskStatReadFailure& failure) {
+            TaskAbsence observed;
+            if(!observe_post_join_failed_task(*before,failure,observed)) {return false;}
         }
     }
     return true;
@@ -376,6 +446,7 @@ void task_read_exit_fixture(const std::filesystem::path& directory) {
     saved.close();require(saved.good(),"cannot save task exit fixture observations");
     std::cout<<"native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed\n";
 }
+#include "task-retirement-context.hpp"
 int connect_socket(const char* path) {
     sockaddr_un address{};
     address.sun_family=AF_UNIX;
@@ -899,6 +970,10 @@ int main(int argc,char** argv) {
         }
         if(argc==3 && std::string_view(argv[1])=="--task-read-exit-fixture") {
             task_read_exit_fixture(argv[2]);
+            return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--task-retirement-read-fixture") {
+            task_retirement_read_fixture(argv[2]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--fd-error") {

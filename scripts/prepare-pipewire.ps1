@@ -198,6 +198,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
         }
+        if($Name -eq 'native-task-retirement-read-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task retirement-read exact_ESRCH=1 joined_before_read=1 fresh_stat_and_directory_absent=1 real_live_path_refused=1 real_EMFILE_refused=1 synthetic_metadata_negatives=24 fd_limit_restored=1 resources_balanced=1 passed')) {
+            throw 'Expected actual held-stat ESRCH after join, strict fresh absence proof, real live/EMFILE refusals and labelled synthetic negatives'
+        }
         if ($Name -eq 'original-pipewire-source-reinit' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed') {
             throw 'Expected twenty original same-object lifecycles, forty sessions and 120 held BGR images'
         }
@@ -456,6 +459,8 @@ try {
         try { Step native-task-diagnostic-fixtures timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-diagnostic-fixtures',(Join-Path $referenceArtifacts task-diagnostic)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-task-read-exit-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-read-exit-fixture',(Join-Path $referenceArtifacts task-read-exit)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step native-task-retirement-read-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-retirement-read-fixture',(Join-Path $referenceArtifacts task-retirement-read)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         $managerTest=$null
         try {
