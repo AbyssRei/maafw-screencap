@@ -17,7 +17,8 @@
 namespace {
 struct Fd { int value;~Fd() { if(value>=0) { close(value); } } };
 int sync(int fd,bool start) noexcept {
-    dma_buf_sync value{DMA_BUF_SYNC_WRITE|(start ? DMA_BUF_SYNC_START : DMA_BUF_SYNC_END)};
+    dma_buf_sync value{};
+    value.flags=DMA_BUF_SYNC_WRITE|(start ? DMA_BUF_SYNC_START : DMA_BUF_SYNC_END);
     return ioctl(fd,DMA_BUF_IOCTL_SYNC,&value)<0 ? errno : 0;
 }
 }
