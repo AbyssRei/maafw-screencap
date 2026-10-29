@@ -39,7 +39,7 @@ pub(crate) fn run(tests: &[&test::TestDescAndFn]) {
             // SAFETY: Native process main thread; framework's live default run
             // loop/mode; bounded fixture iteration, without capture state locks.
             unsafe {
-                let mode = NSDefaultRunLoopMode.expect("native default run-loop mode");
+                let mode = NSDefaultRunLoopMode;
                 NSRunLoop::currentRunLoop()
                     .runMode_beforeDate(mode, &NSDate::dateWithTimeIntervalSinceNow(0.01));
             }
