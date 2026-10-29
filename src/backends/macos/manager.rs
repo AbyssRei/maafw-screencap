@@ -74,7 +74,7 @@ impl<B> Manager<B> {
 #[path = "manager_native.rs"]
 mod native;
 #[cfg(all(target_os = "macos", feature = "macos-manager"))]
-pub(crate) use native::NativeManager;
+pub(crate) type NativeManager = Manager<std::sync::Arc<super::screen_capture_kit::Capture>>;
 
 #[cfg(test)]
 mod tests {
