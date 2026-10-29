@@ -255,6 +255,205 @@ fn warm(adapter: &Adapter) {
     assert_eq!(adapter.owners(), 0);
 }
 
+struct ManagerConvert<'a> {
+    adapter: &'a Adapter,
+    held: Vec<Sample>,
+}
+impl<'a> crate::backends::linux::manager::native::Converter for ManagerConvert<'a> {
+    type Image = Option<Image<'a>>;
+    type Error = Error;
+    fn wlr(&mut self, sample: Sample) -> Result<Self::Image, Error> {
+        raw(&sample);
+        self.held.push(sample.clone());
+        self.adapter.convert(sample, 0).map(Some)
+    }
+    #[cfg(feature = "linux-pipewire")]
+    fn pipewire(
+        &mut self,
+        _: Option<crate::backends::linux::pipewire::RawFrame>,
+        _: crate::backends::linux::pipewire::Conversion,
+    ) -> Result<Option<Self::Image>, Error> {
+        unreachable!("Wlr manager cannot select PipeWire")
+    }
+    #[cfg(feature = "linux-pipewire")]
+    fn pipewire_reuse(
+        &mut self,
+        _: Option<crate::backends::linux::pipewire::RawFrame>,
+    ) -> Option<Self::Image> {
+        unreachable!("Wlr manager cannot reuse PipeWire")
+    }
+    #[cfg(feature = "linux-pipewire")]
+    fn empty(&mut self) -> Result<Self::Image, Error> {
+        unreachable!("Wlr manager has no empty source sample")
+    }
+}
+
+#[test]
+#[ignore = "requires original native Wlr manager oracle and owned compositor"]
+fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
+    use crate::backends::linux::manager::{
+        self,
+        native::{CaptureFailure, Evidence as ManagerEvidence},
+    };
+    let socket = env::var_os("MFS_P0_WLR_SOCKET").unwrap();
+    let directory =
+        PathBuf::from(env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap()).join("manager");
+    let source = PathBuf::from(env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap()).join("manager");
+    std::fs::create_dir(&directory).unwrap();
+    let adapter = Adapter::open();
+    warm(&adapter);
+    let baseline_fds = fds();
+    let baseline_tasks = tasks();
+    let mut converter = ManagerConvert {
+        adapter: &adapter,
+        held: Vec::new(),
+    };
+    converter.held.try_reserve_exact(60).unwrap();
+    let mut held = Vec::new();
+    held.try_reserve_exact(60).unwrap();
+    for cycle in 0..20 {
+        let mut manager = manager::NativeManager::new(manager::Config {
+            method: manager::WLR,
+            wlr_socket: socket.as_os_str().as_bytes().to_vec(),
+            pipewire_fd: -1,
+            pipewire_node: 0,
+        });
+        let connected = manager.connect_native().unwrap();
+        assert!(connected.connected && connected.failure.is_none());
+        let ManagerEvidence::Wlr(initial) = connected.evidence else {
+            panic!("missing initial Wlr evidence")
+        };
+        let first_close = connected.close.unwrap();
+        assert!(first_close.take().is_none());
+        let mut final_close = None;
+        assert_eq!(initial.frames, 0, "connect must not capture");
+        let mut last_outer = initial.outer;
+        let mut output = None;
+        for call in 0..3 {
+            if call == 1 {
+                assert!(manager.inactive_native());
+            }
+            if call == 2 {
+                let connected = manager.connect_native().unwrap();
+                assert!(connected.connected && connected.failure.is_none());
+                let ManagerEvidence::Wlr(e) = connected.evidence else {
+                    panic!("missing reconnect evidence")
+                };
+                assert_eq!(
+                    (e.frames, e.outer),
+                    (2, last_outer),
+                    "reconnect must reuse client without capture/roundtrip"
+                );
+                let Some(ManagerEvidence::Wlr(closed)) = first_close.take() else {
+                    panic!("old capture not closed")
+                };
+                assert_eq!((closed.frames, closed.cleanup, closed.fault), (2, 0, 0));
+                assert!(
+                    closed.data_created > closed.data_dropped,
+                    "client globals must remain live through reconnect"
+                );
+                final_close = connected.close;
+            }
+            let result = manager.capture_native(&mut output, &mut converter);
+            assert!(result.result.unwrap());
+            let ManagerEvidence::Wlr(e) = result.evidence else {
+                panic!("missing capture evidence")
+            };
+            assert_eq!((e.frames, e.copied), (call + 1, call + 1));
+            assert_eq!((e.cleanup, e.fault, e.buffer_error), (0, 0, 0));
+            last_outer = e.outer;
+            let image = output.take().unwrap();
+            bgr(image.pixels());
+            let stem = format!("manager-{cycle}-{call}");
+            std::fs::write(directory.join(format!("{stem}.bgr")), image.pixels()).unwrap();
+            assert_eq!(
+                image.pixels(),
+                std::fs::read(source.join(format!("{stem}.bgr"))).unwrap()
+            );
+            let sample = converter.held.last().unwrap();
+            std::fs::write(directory.join(format!("{stem}.raw")), sample.pixels()).unwrap();
+            std::fs::write(directory.join(format!("{stem}.meta.txt")),format!("conversion={:?}\nwidth={}\nheight={}\nnative_stride={}\nready_time={:?}\nflags={:?}\n",sample.conversion,sample.width,sample.height,sample.native_stride,sample.ready_time,sample.flags)).unwrap();
+            held.push(image);
+        }
+        drop(manager);
+        let Some(ManagerEvidence::Wlr(closed)) = final_close.unwrap().take() else {
+            panic!("missing completed manager close")
+        };
+        assert_eq!((closed.frames, closed.copied), (3, 3));
+        assert_eq!(
+            (closed.cleanup, closed.fault, closed.buffer_error),
+            (0, 0, 0)
+        );
+        assert_eq!(closed.data_created, closed.destroyed);
+        assert_eq!(closed.data_created, closed.data_dropped);
+        assert_eq!(fds(), baseline_fds);
+        assert_eq!(tasks(), baseline_tasks);
+        for image in &held {
+            bgr(image.pixels());
+        }
+        eprintln!(
+            "native Wlr manager cycle={cycle} retained={} fds={} baseline_fds={baseline_fds} reconnect_roundtrip=0",
+            held.len(),
+            fds()
+        );
+    }
+    let missing = Path::new(&socket)
+        .parent()
+        .unwrap()
+        .join("mfs-rust-manager-missing");
+    assert!(!missing.exists());
+    let mut manager = manager::NativeManager::new(manager::Config {
+        method: manager::WLR,
+        wlr_socket: missing.as_os_str().as_bytes().to_vec(),
+        pipewire_fd: -1,
+        pipewire_node: 0,
+    });
+    let connected = manager.connect_native().unwrap();
+    assert!(!connected.connected && connected.failure.is_some());
+    let mut output = Some(held.pop().unwrap());
+    let pointer = output.as_ref().unwrap().pixels().as_ptr();
+    let before_owners = adapter.owners();
+    assert!(
+        !manager
+            .capture_native(&mut output, &mut converter)
+            .result
+            .unwrap()
+    );
+    assert_eq!(adapter.owners(), before_owners);
+    let connected = manager.connect_native().unwrap();
+    assert!(connected.connected && connected.failure.is_none());
+    assert!(matches!(
+        manager.capture_native(&mut output, &mut converter).result,
+        Err(CaptureFailure::Wayland(_))
+    ));
+    assert_eq!(output.as_ref().unwrap().pixels().as_ptr(), pointer);
+    bgr(output.as_ref().unwrap().pixels());
+    assert_eq!(adapter.owners(), before_owners);
+    assert_eq!(
+        converter.held.len(),
+        60,
+        "failed client must not enter conversion"
+    );
+    drop(manager);
+    assert_eq!(fds(), baseline_fds);
+    assert_eq!(tasks(), baseline_tasks);
+    held.push(output.take().unwrap());
+    std::thread::spawn(move || {
+        for sample in converter.held {
+            raw(&sample);
+        }
+    })
+    .join()
+    .unwrap();
+    drop(held);
+    assert_eq!(adapter.owners(), 0);
+    drop(adapter);
+    assert_eq!(LOADER_ERROR.load(Ordering::Acquire), 0);
+    eprintln!(
+        "native Rust Wlr manager cycles=20 captures=60 connects=40 retained_raw=60 retained_bgr=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed"
+    );
+}
+
 fn context_capture<'a>(
     capture: &mut Capture,
     adapter: &'a Adapter,

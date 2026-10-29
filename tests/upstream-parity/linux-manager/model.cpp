@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Exact manager bodies with explicitly scripted backend/client boundaries and
-// real standard shared owners, filesystem streaming and OpenCV output Mats.
+// real standard shared owners, original Config.h members and OpenCV output Mats.
 // Input=None only. No Linux daemon, compositor, config JSON or capture claim.
 #include "MaaFramework/MaaDef.h"
 #include <opencv2/core.hpp>

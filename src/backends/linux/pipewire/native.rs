@@ -367,7 +367,7 @@ fn copy_fault(error: CopyError) -> u32 {
     16 + error as u32
 }
 
-pub(super) struct Native {
+pub(in crate::backends::linux) struct Native {
     resources: Resources,
     callbacks: Box<Callbacks>,
     epoch: Instant,
@@ -375,7 +375,7 @@ pub(super) struct Native {
     input_fd: i32,
 }
 #[derive(Debug)]
-pub(super) struct Evidence {
+pub(in crate::backends::linux) struct Evidence {
     pub fault: u32,
     pub queue_error: i32,
     pub core_disconnect_error: i32,
@@ -390,6 +390,9 @@ pub(super) struct Evidence {
     pub allocated: u64,
 }
 impl Native {
+    pub fn pending_source_fd(&self) -> Option<i32> {
+        (self.input_fd >= 0).then_some(self.input_fd)
+    }
     pub fn new() -> Result<Self, std::alloc::AllocError> {
         let resources = Resources::new()?;
         let callbacks = Box::try_new(Callbacks {

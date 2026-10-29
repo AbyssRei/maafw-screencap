@@ -6,7 +6,9 @@ use std::time::Duration;
 
 mod buffer;
 #[cfg(all(target_os = "linux", feature = "linux-pipewire"))]
-mod native;
+pub(super) use buffer::RawFrame;
+#[cfg(all(target_os = "linux", feature = "linux-pipewire"))]
+pub(super) mod native;
 
 /// Symbolic formats, not SPA numeric values or a public format/ABI contract.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

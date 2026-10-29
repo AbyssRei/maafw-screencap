@@ -1,8 +1,21 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Fixed Linux manager screenshot orchestration, restricted to Input=None.
-//! Private U logic; native factories/config JSON and full parity remain P1.
+//! Private U logic with selected native factories; config JSON/full parity
+//! remain P1, and this module defines no public SDK.
 use std::{collections::TryReserveError, fmt::Write};
+
+#[cfg(all(
+    target_os = "linux",
+    any(feature = "linux-wlr", feature = "linux-pipewire")
+))]
+#[path = "manager_native.rs"]
+pub(super) mod native;
+#[cfg(all(
+    target_os = "linux",
+    any(feature = "linux-wlr", feature = "linux-pipewire")
+))]
+pub(super) type NativeManager = Manager<native::NativeFactory>;
 
 // Original MaaDef.h selectors; these are not SDK ABI values.
 pub(crate) const NONE: u64 = 0;
