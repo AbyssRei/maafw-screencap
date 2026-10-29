@@ -148,6 +148,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected twenty OpenCV conversion/owner lifecycles, sixty held BGR images and twenty actual native unlock witnesses'
             }
         }
+        if ($Name -eq 'linux-manager-source-model') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('Linux manager source model cases=960 source_body_comparisons=960 two_connects=1920 real_mat_outputs=1 scripted_backends=1 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected 960 exact original-body/Rust manager scripts and one actual test'
+            }
+        }
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
         }
@@ -410,6 +416,11 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-task-read-exit-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-read-exit-fixture',(Join-Path $referenceArtifacts task-read-exit)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        try {
+            $env:MFS_P1_LINUX_MANAGER_MODEL_ARTIFACTS=Join-Path $referenceArtifacts manager-model
+            $managerTest=Capture-TestProgram linux-manager-model-rust-build
+            Step linux-manager-source-model timeout @('--signal=TERM','--kill-after=5s','180s',$managerTest,'backends::linux::manager::tests::matches_fixed_source_manager_reconnect_forwarding_and_uuid','--exact','--ignored','--test-threads=1','--nocapture')
+        } catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
     }

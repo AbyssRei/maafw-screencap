@@ -16,6 +16,7 @@ impl Drop for Owner {
 struct Unit {
     _owner: Owner,
     _client: Option<Rc<Owner>>,
+    method: u64,
 }
 #[derive(Default)]
 struct Script {
@@ -57,6 +58,7 @@ impl Factory for Script {
         Ok(Unit {
             _owner: self.owner("capture.create", "capture.drop"),
             _client: client.cloned(),
+            method: config.method,
         })
     }
     fn create_none_input(&mut self) -> Result<Owner, Self::Error> {
@@ -65,9 +67,9 @@ impl Factory for Script {
         }
         Ok(self.owner("input.create", "input.drop"))
     }
-    fn init_capture(&mut self, _: &mut Unit) -> Result<bool, Self::Error> {
+    fn init_capture(&mut self, unit: &mut Unit) -> Result<bool, Self::Error> {
         self.events.borrow_mut().push("capture.init");
-        Ok(!self.init_fails)
+        Ok(unit.method != PIPEWIRE || !self.init_fails)
     }
     fn init_none_input(&mut self, _: &mut Owner) -> Result<bool, Self::Error> {
         self.events.borrow_mut().push("input.init");
@@ -238,4 +240,161 @@ fn uuid_preserves_linux_path_quotes_bytes_and_signed_fd_identity() {
         assert!(manager.request_uuid(&mut output).unwrap());
         assert_eq!(output, b"-1_-1");
     }
+}
+
+#[test]
+#[ignore = "requires explicitly built original Linux manager model and real OpenCV"]
+fn matches_fixed_source_manager_reconnect_forwarding_and_uuid() {
+    use std::{fmt::Write, path::PathBuf, process::Command};
+    let program = std::env::var_os("MFS_P1_LINUX_MANAGER_MODEL").unwrap();
+    let directory =
+        PathBuf::from(std::env::var_os("MFS_P1_LINUX_MANAGER_MODEL_ARTIFACTS").unwrap());
+    std::fs::create_dir(&directory).unwrap();
+    let mut paths = vec![b"socket".to_vec(), b"a\"\\\n b".to_vec(), Vec::new()];
+    if cfg!(target_os = "linux") {
+        paths.push(vec![b'/', 0xff, 0x80]);
+    }
+    let mut cases = 0;
+    for method in [NONE, WLR, EXT_IMAGE, PIPEWIRE, 3, u64::MAX] {
+        for (fd, node) in [(-1, 0), (-1, 7), (0, 0), (i32::MIN, u32::MAX)] {
+            for client_fails in [false, true] {
+                for init_fails in [false, true] {
+                    for input_throws in [false, true] {
+                        for outcome in 0..5 {
+                            let socket = paths[cases % paths.len()].clone();
+                            let hex = |bytes: &[u8]| {
+                                let mut result = String::new();
+                                for byte in bytes {
+                                    write!(&mut result, "{byte:02x}").unwrap();
+                                }
+                                result
+                            };
+                            let arguments = [
+                                method.to_string(),
+                                fd.to_string(),
+                                node.to_string(),
+                                u8::from(!client_fails).to_string(),
+                                u8::from(!init_fails).to_string(),
+                                u8::from(input_throws).to_string(),
+                                outcome.to_string(),
+                                hex(&socket),
+                            ];
+                            let native = Command::new(&program).args(&arguments).output().unwrap();
+                            std::fs::write(
+                                directory.join(format!("case-{cases}.arguments.txt")),
+                                arguments.join("\n"),
+                            )
+                            .unwrap();
+                            std::fs::write(
+                                directory.join(format!("case-{cases}.original.txt")),
+                                &native.stdout,
+                            )
+                            .unwrap();
+                            std::fs::write(
+                                directory.join(format!("case-{cases}.stderr.txt")),
+                                &native.stderr,
+                            )
+                            .unwrap();
+                            assert!(
+                                native.status.success(),
+                                "source model failed case {cases}: {:?}",
+                                native.status
+                            );
+                            assert!(native.stderr.is_empty());
+                            let mut script = Script {
+                                client_fails,
+                                init_fails,
+                                input_throws,
+                                ..Script::default()
+                            };
+                            let mut manager = Manager::new(Config {
+                                method,
+                                wlr_socket: socket,
+                                pipewire_fd: fd,
+                                pipewire_node: node,
+                            });
+                            let mut observed =
+                                format!("initial={}\n", u8::from(manager.connected()));
+                            let mut uuid = b"unchanged".to_vec();
+                            let uuid_success = manager.request_uuid(&mut uuid).unwrap();
+                            writeln!(
+                                &mut observed,
+                                "uuid_success={}\nuuid={}",
+                                u8::from(uuid_success),
+                                hex(&uuid)
+                            )
+                            .unwrap();
+                            let mut output = 99;
+                            for attempt in 0..2 {
+                                let connected = manager.connect(&mut script).map_or(2, u8::from);
+                                writeln!(
+                                    &mut observed,
+                                    "connect{attempt}={connected}\nconnected{attempt}={}",
+                                    u8::from(manager.connected())
+                                )
+                                .unwrap();
+                                let captured = manager
+                                    .capture_with(&mut output, |unit, output| {
+                                        script.events.borrow_mut().push("capture.call");
+                                        if unit.method == NONE
+                                            || (unit.method == WLR && client_fails)
+                                        {
+                                            return Ok(false);
+                                        }
+                                        match outcome {
+                                            0 => Ok(false),
+                                            1 => {
+                                                *output = 7;
+                                                Ok(true)
+                                            }
+                                            2 => {
+                                                *output = 0;
+                                                Ok(true)
+                                            }
+                                            3 => Err("scripted backend exception"),
+                                            4 => {
+                                                *output = 7;
+                                                Ok(false)
+                                            }
+                                            _ => unreachable!(),
+                                        }
+                                    })
+                                    .map_or(2, u8::from);
+                                writeln!(
+                                    &mut observed,
+                                    "capture{attempt}={captured}\noutput{attempt}={output}"
+                                )
+                                .unwrap();
+                                writeln!(
+                                    &mut observed,
+                                    "inactive{attempt}={}",
+                                    u8::from(manager.inactive(&mut script))
+                                )
+                                .unwrap();
+                            }
+                            drop(manager);
+                            writeln!(&mut observed, "events={}", script.take().join(",")).unwrap();
+                            std::fs::write(
+                                directory.join(format!("case-{cases}.rust.txt")),
+                                &observed,
+                            )
+                            .unwrap();
+                            assert_eq!(
+                                String::from_utf8(native.stdout)
+                                    .unwrap()
+                                    .replace("\r\n", "\n"),
+                                observed,
+                                "source manager case {cases}"
+                            );
+                            cases += 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert_eq!(cases, 960);
+    eprintln!(
+        "Linux manager source model cases=960 source_body_comparisons=960 two_connects=1920 real_mat_outputs=1 scripted_backends=1 passed"
+    );
 }
