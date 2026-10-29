@@ -2,29 +2,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Real Boost DLL boundary, complete original loader and outer capture bodies.
 #include "bridge.h"
-#include "MaaControlUnit/Win32ControlUnitAPI.h"
-#include "original-LibraryHolder.h"
-#include <windows.h>
+#include "delegate-source.hpp"
 #include <iostream>
 #include <memory>
 #include <filesystem>
-namespace MaaNS {
-std::filesystem::path directory;
-inline std::filesystem::path library_dir() { return directory; }
-}
-namespace Source {
-using namespace MaaNS;
-using namespace MAA_CTRL_UNIT_NS;
-#include "delegate-loader.inc"
-struct GamepadControlUnitMgr {
-    bool init_win32_unit();bool screencap(cv::Mat&);bool inactive();
-    HWND hwnd_=nullptr;
-    MaaWin32ScreencapMethod screencap_method_=MaaWin32ScreencapMethod_GDI;
-    std::unique_ptr<Win32ControlUnitLoader> win32_loader_;
-    std::shared_ptr<ControlUnitAPI> win32_unit_;
-};
-#include "delegate-source.inc"
-}
 int wmain(int argc,wchar_t** argv) {
     try {
         if(argc!=4) { throw std::logic_error("expected directory hwnd output"); }
