@@ -1,8 +1,8 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Native resource ordering for the fixed PipeWire screenshot implementation.
-//! This first driver slice uses its daemon mode. Portal FD/error ownership and
-//! CPU mapping/DMA synchronization remain separate, unfinished migration work.
+//! Daemon and explicitly unsafe supplied-FD setup share source ordering. General
+//! FD failure ownership and CPU mapping/DMA synchronization remain unfinished.
 pub(crate) use pipewire::{spa, sys};
 use std::{ffi::c_void, marker::PhantomData, ptr, rc::Rc};
 
@@ -59,8 +59,13 @@ impl Resources {
     /// must remain valid and contain callbacks matching that owner's discipline.
     /// Raw global pw_init must already be held independently of these objects.
     /// All calls occur serially on the owning consumer channel.
-    pub unsafe fn create_daemon(
+    /// If `input_fd` is nonnegative, it must be a valid uniquely offered socket.
+    /// No independent owner may close it during or after a successful native
+    /// transfer. A null core does not establish consumption on every protocol;
+    /// the caller must resolve residual ownership after complete native teardown.
+    pub unsafe fn create_source(
         &mut self,
+        input_fd: &mut i32,
         data: *mut c_void,
         core_events: &'static sys::pw_core_events,
         stream_events: &'static sys::pw_stream_events,
@@ -76,10 +81,22 @@ impl Resources {
             if self.context.is_null() {
                 return Err(NativeError::last("pw_context_new"));
             }
-            self.core = sys::pw_context_connect(self.context, ptr::null_mut(), 0);
+            self.core = if *input_fd >= 0 {
+                sys::pw_context_connect_fd(self.context, *input_fd, ptr::null_mut(), 0)
+            } else {
+                sys::pw_context_connect(self.context, ptr::null_mut(), 0)
+            };
             if self.core.is_null() {
-                return Err(NativeError::last("pw_context_connect"));
+                return Err(NativeError::last(if *input_fd >= 0 {
+                    "pw_context_connect_fd"
+                } else {
+                    "pw_context_connect"
+                }));
             }
+            // Exact U transition: clear the stored number ONLY after a non-null
+            // core. Source close does not restore it, and later init uses daemon
+            // mode. No general null-result FD cleanup is inferred here.
+            *input_fd = -1;
             let interface = self.core.cast::<spa::sys::spa_interface>();
             let methods = (*interface).cb.funcs.cast::<sys::pw_core_methods>();
             let add = (*methods).add_listener.ok_or(NativeError {

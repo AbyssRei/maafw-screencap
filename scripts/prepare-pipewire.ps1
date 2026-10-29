@@ -33,6 +33,7 @@ $routeReady = $null
 $failed = $false
 $referenceArtifacts = $null
 $rustArtifacts = $null
+$fdArtifacts = $null
 $bgrArtifacts = $null
 
 function Artifact([string]$Path) {
@@ -92,6 +93,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'native Rust PipeWire daemon SHM cycles=20 captures=60 retained=60 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 throw 'Expected one native driver test, twenty Rust daemon/SHM lifecycles and sixty retained raw RGB samples'
+            }
+        }
+        if ($Name -eq 'rust-pipewire-supplied-fd-shm') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if($observed -notmatch 'native Rust PipeWire supplied fd SHM cycles=20 captures=60 retained=60 consumed_sockets_closed=20 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected twenty supplied-fd SHM lifecycles, sixty owning CPU images and twenty consumed sockets closed'
             }
         }
         if ($Name -eq 'rust-pipewire-opencv') {
@@ -262,14 +269,17 @@ try {
         Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';pattern='asymmetric RGB bars with row/column/channel/producer-serial xor; RGB(0,0) holds 24-bit serial';scope='Fixture serial/retention observed; original API capture time and replay status are not exposed. Repeated markers are diagnostic, not rejected.'})
         $podDirectory=Join-Path $referenceArtifacts negotiation
         $rustArtifacts=Join-Path $RunRoot linux-x64/rust-shm/artifacts
+        $fdArtifacts=Join-Path $RunRoot linux-x64/rust-fd/artifacts
         $bgrArtifacts=Join-Path $RunRoot linux-x64/rust-opencv/artifacts
-        New-Item -ItemType Directory -Path $rustArtifacts,$bgrArtifacts -Force|Out-Null
+        New-Item -ItemType Directory -Path $rustArtifacts,$fdArtifacts,$bgrArtifacts -Force|Out-Null
         $env:MFS_P1_PIPEWIRE_RUST_ARTIFACTS=$rustArtifacts
+        $env:MFS_P1_PIPEWIRE_FD_ARTIFACTS=$fdArtifacts
         $env:MFS_P1_PIPEWIRE_BGR_ARTIFACTS=$bgrArtifacts
         $env:MFS_P1_PIPEWIRE_POD_ORACLE=$podDirectory
         $formatDirectory=Join-Path $referenceArtifacts formats
         $env:MFS_P1_PIPEWIRE_FORMAT_ORACLE=$formatDirectory
         Json (Join-Path $rustArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Raw native driver probe; RawAudit preserves RGB and does not implement OpenCV conversion or source/BGR parity.'})
+        Json (Join-Path $fdArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='RGB';scope='Explicit unsafe supplied private socket success path, twenty consumed descriptors closed after native teardown; no Portal authorization, generic failure ownership or safe host FD contract is established.'})
         Json (Join-Path $bgrArtifacts geometry.json) ([ordered]@{width=28;height=24;stride=84;format='BGR';scope='Actual C++/OpenCV conversion after native unlock; twenty callback-progress witnesses add diagnostic waiting, not source latency parity. Native opaque Mat/loader mobility and full all-format/fault parity remain pending.'})
         try { Step pipewire-source-negotiation-pods $sourceExecutable @('--pods',$podDirectory) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
@@ -370,6 +380,8 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-daemon-shm timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-supplied-fd-shm timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::captures_supplied_fd_shm_and_closes_twenty_consumed_sockets','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-opencv timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::captures_bgr_after_native_unlock_and_retains_opencv_owners_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
     }
@@ -380,7 +392,7 @@ try {
     $checks.Add([ordered]@{name='pipewire-preparation';status='failed';log=(Artifact $log)})
     Write-Host $_.Exception.ToString()
 } finally {
-    foreach($directory in @($referenceArtifacts,$rustArtifacts,$bgrArtifacts)){
+    foreach($directory in @($referenceArtifacts,$rustArtifacts,$fdArtifacts,$bgrArtifacts)){
         if($directory){Get-ChildItem -LiteralPath $directory -File -Recurse|ForEach-Object{Save $_.FullName}}
     }
     StopOwned route-supervisor $routeSupervisor $routeOut $routeError
