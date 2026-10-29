@@ -115,6 +115,11 @@ impl Adapter {
             Conversion::Rgb => (3, 3),
             Conversion::BgrCopy => return Err(Error::new("test BGR fault unsupported", 22)),
         };
+        assert!((0..=1).contains(&fault));
+        // A valid two-channel Mat with the BGRA conversion code triggers a
+        // real cv::Exception inside the unchanged adapter. Its header has no
+        // synthetic fault argument; retain that exact eight-argument ABI.
+        let native_channels = if fault == 1 { 2 } else { channels };
         let mut output = std::ptr::null_mut();
         // SAFETY: Sample owns exact initialized packed source-Mat bytes through
         // this synchronous conversion; returned Mat has independent storage.
@@ -125,9 +130,8 @@ impl Adapter {
                 i32::try_from(sample.width).unwrap(),
                 i32::try_from(sample.height).unwrap(),
                 usize::try_from(sample.width).unwrap() * usize::try_from(channels).unwrap(),
-                channels,
+                native_channels,
                 mode,
-                fault,
                 &mut output,
             )
         };
@@ -423,13 +427,9 @@ fn releases_frame_after_native_conversion_exception_and_captures_again() {
         assert_eq!(counts.destroyed.load(Ordering::Acquire), before);
         adapter.convert(sample, 1)
     });
-    assert!(matches!(
-        result,
-        Err(Error {
-            operation: "native Wlr conversion",
-            code: 2
-        })
-    ));
+    // Consume the Result here, releasing its possible image/module borrow
+    // before the adapter is explicitly unloaded at the end of this test.
+    assert_eq!(result.err(), Some(Error::new("native Wlr conversion", 2)));
     assert_eq!(counts.destroyed.load(Ordering::Acquire), before + 1);
     let image = capture
         .capture_with(|sample| adapter.convert(sample, 0))

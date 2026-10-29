@@ -330,14 +330,14 @@ fn global(
         }
         "zwlr_screencopy_manager_v1" => {
             g.manager = Some(own(
-                bind(registry, name, version, ctx)?,
+                bind::<manager::ZwlrScreencopyManagerV1>(registry, name, version, ctx)?,
                 |p| p.send_request(manager::Request::Destroy {}),
                 &ctx.counts,
             )?)
         }
         "zwlr_virtual_pointer_manager_v1" => {
             g.pointer = Some(own(
-                bind(registry, name, version, ctx)?,
+                bind::<pointer::ZwlrVirtualPointerManagerV1>(registry, name, version, ctx)?,
                 |p| p.send_request(pointer::Request::Destroy {}),
                 &ctx.counts,
             )?)
