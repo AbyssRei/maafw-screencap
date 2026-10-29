@@ -125,7 +125,7 @@ static void state_changed(void *data, enum pw_stream_state old, enum pw_stream_s
     if (!p->timer) return; // disconnect/destruction after timer release
     if (state == PW_STREAM_STATE_ERROR) fail(p, error ? error : "DMA stream failed");
     else if (state == PW_STREAM_STATE_STREAMING) {
-        const struct timespec start = { .tv_nsec = 1 }, interval = { .tv_nsec = 40000000 };
+        struct timespec start = { .tv_nsec = 1 }, interval = { .tv_nsec = 40000000 };
         if (pw_loop_update_timer(pw_main_loop_get_loop(p->loop), p->timer, &start, &interval, false) < 0)
             fail(p, "DMA timer start failed");
     } else if (state == PW_STREAM_STATE_PAUSED &&
