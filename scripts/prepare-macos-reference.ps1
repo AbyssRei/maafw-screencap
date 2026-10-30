@@ -57,6 +57,10 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_macos_source_context
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
     Step macos-reference-linkage otool @('-L',$executable)
+    $script:MacosObservedExecutable=Join-Path $build mfs_macos_observed_context
+    $saved=Join-Path $refInputs mfs_macos_observed_context
+    Copy-Item -LiteralPath $script:MacosObservedExecutable -Destination $saved;Save $saved
+    Step macos-dispatch-observer-linkage otool @('-L',$script:MacosObservedExecutable)
     $adapter=Join-Path $build libmfs_macos_opencv.dylib
     $saved=Join-Path $refInputs libmfs_macos_opencv.dylib
     Copy-Item -LiteralPath $adapter -Destination $saved;Save $saved
@@ -122,6 +126,16 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $oracleRecord=Join-Path $directory source-oracle-identities.json
         Json $oracleRecord $oracleRecords;Save $oracleRecord
         foreach($file in $oracleFiles){Save $file.FullName}
+        if($displayPatch){
+            # A distinct executable/child directory instruments the real
+            # semaphore calls. Its timing/logging is diagnostic only; it never
+            # supplies or replaces the unchanged oracle's status or images.
+            $observed=Join-Path $directory dispatch-observer
+            New-Item -ItemType Directory -Path $observed|Out-Null
+            $observedArguments=@($oracleArguments);$observedArguments[1]=$observed
+            try {Step "$Name-dispatch-observer" $script:MacosObservedExecutable $observedArguments}
+            catch {Write-Host $_.Exception.Message}
+        }
         Step $Name cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$Test,'--','--exact','--ignored','--test-threads=1','--nocapture')
         foreach($record in $oracleRecords){
             $path=Join-Path $ReferenceRoot $record.path

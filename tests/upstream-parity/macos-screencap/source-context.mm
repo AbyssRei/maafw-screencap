@@ -278,6 +278,10 @@ int main(int argc,char** argv) {
             build.close();require(build.good(),"cannot save actual OpenCV optimization information");
             require(cv::useOptimized() && cv::checkHardwareSupport(CV_CPU_NEON),"native NEON/OpenCV optimization unavailable");
             const std::string mode=argv[1];
+#ifdef MFS_MAC_DISPATCH_OBSERVER
+            require(mode=="display-patch" || mode=="display-patch-host-premise","dispatch observer requires an explicit display diagnostic");
+            MfsMacObserve::event("scope",16,1,"diagnostic_only_not_parity_oracle");
+#endif
             if(mode=="windows") { windows(app,directory); }
             else if(mode=="display") { display(directory); }
             else if(mode=="scene") { scene(app,directory); }
@@ -289,6 +293,18 @@ int main(int argc,char** argv) {
             else { throw std::runtime_error("unknown original macOS context mode"); }
         }
         return 0;
-    }catch(const std::exception& error) { std::cerr<<"original macOS context failure: "<<error.what()<<'\n';return 1; }
-    catch(...) { std::cerr<<"original macOS context unknown exception\n";return 2; }
+    }catch(const std::exception& error) {
+        std::cerr<<"original macOS context failure: "<<error.what()<<'\n';
+#ifdef MFS_MAC_DISPATCH_OBSERVER
+        MfsMacObserve::observe_late([] {pump();});
+#endif
+        return 1;
+    }
+    catch(...) {
+        std::cerr<<"original macOS context unknown exception\n";
+#ifdef MFS_MAC_DISPATCH_OBSERVER
+        MfsMacObserve::observe_late([] {pump();});
+#endif
+        return 2;
+    }
 }
