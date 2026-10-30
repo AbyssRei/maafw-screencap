@@ -69,6 +69,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected eighty native registry captures and actual retained-output/closure assertions, not a zero-test run'
             }
         }
+        if($Name -in @('original-wlr-failures','rust-wlr-failures')){
+            $observed=Get-Content -LiteralPath $log -Raw
+            $summary=if($Name -eq 'original-wlr-failures'){
+                'original Wlr failures cycles=20 operations=100 ready=40 failed_events=40 disconnects=20 false_output_preserved=60 connected_retained=20 held=40 fd_tasks_balanced=1 passed'
+            }else{
+                'native Rust Wlr failures cycles=20 operations=100 ready=40 failed_events=40 disconnects=20 failed_conversions=0 connected_retained=20 held_raw=40 held_bgr=40 fd_tasks_balanced=1 cleanup_errors_recorded=1 passed'
+            }
+            if(-not $observed.Contains($summary) -or ($Name -eq 'rust-wlr-failures' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')){
+                throw 'Expected actual Failed/SHM/EOF operations and full owner checks, not a zero-test or partial run'
+            }
+        }
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
@@ -366,9 +377,11 @@ try{
         . (Join-Path $PSScriptRoot validate-wlr-protocol.ps1)
         try{Test-WlrProtocolMatrix $sourceExecutable $library $runtime $referenceArtifacts}
         catch{$failed=$true;Write-Host $_.Exception.Message}
-        . (Join-Path $PSScriptRoot validate-wlr-registry.ps1)
-        try{Test-WlrRegistry $sourceExecutable $library $runtime $referenceArtifacts}
-        catch{$failed=$true;Write-Host $_.Exception.Message}
+        . (Join-Path $PSScriptRoot validate-wlr-context.ps1)
+        foreach($mode in @('registry','failures')){
+            try{Test-WlrProtocolContext $sourceExecutable $library $runtime $referenceArtifacts $mode}
+            catch{$failed=$true;Write-Host $_.Exception.Message}
+        }
         $managerPreserved=$managerOracles.Count -eq 60
         foreach($oracle in $managerOracles){if((Get-FileHash (Join-Path (Join-Path $referenceArtifacts manager) $oracle.name)).Hash.ToLowerInvariant() -ne $oracle.sha256){$managerPreserved=$false}}
         Json (Join-Path $referenceArtifacts manager-original-preserved.json) ([ordered]@{checked=$managerOracles.Count;all_original_hashes_unchanged=$managerPreserved})

@@ -42,6 +42,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
+Wlr 另新增真实协议失败入口，随 `upstream-context wlr` 原生运行；当前 Actions 结果待验证。源码与 Rust 各执行 20 次独立连接，每次依次收到 Buffer 前的 Failed、Ready、实际覆写同一 SHM 后的 Failed、再次 Ready，以及等待时服务端主动断开该 client。它检查失败时保留调用方输出、失败路径不调用 Rust 转换器、相同布局复用同一 `wl_buffer`、断连后原 connected 标志不自动清除、独立成功图像持有到全部原生资源关闭，以及 fd/任务退出。源调用方在后续成功写入前显式分离 Mat，避免把原版可写输出别名误称为独立帧；这项宿主操作不是后端修复。`cargo xtask upstream-protocol wlr-failures <外部目录> [--check-only]` 校核实际请求、120 份 SHM 输入及双方即时/持帧等共 440 份像素文件。刻意断连后的 Rust 原生清理错误与主要失败分开记录，fd/任务数量回落不证明所有协议销毁请求成功。该已声明的负向场景不重试失败断言；任意断连时点、活跃快照下显式 client close、完整故障矩阵及 P1 仍未验收。
+
 Wlr 新增显式 registry/SHM 验收入口，由 `upstream-context wlr` 编排；原生 Actions 结果待验证。源码与 Rust 各自独立的真实 libwayland-server 进程从两个输出开始，在同一连接内执行 20 轮公告新输出、保留旧截图对象、移除新输出及再次构造，共各 80 次取帧。不同输出使用不同像素，客户端快照 ID/公告版本须与服务端实际请求相符；另保存关闭后的 BGR 持帧、实际 SHM 输入、fd/任务与原生服务端对象退出记录。`cargo xtask upstream-protocol wlr-registry <外部目录> [--check-only]` 独立复算这些记录。它保持原版“最后公告输出”、构造时快照及忽略 `global_remove` 的行为；此夹具没有 compositor 或宿主桌面，尚不代表多显示器桌面、活跃快照下 client close、完整故障矩阵或 P1 验收。
 
 可选外层 Windows 截图委托现有私有 Rust 状态迁移及 `cargo xtask upstream-delegate win32 <外部记录目录> [--check-only]`，由 `upstream-parity manager` 显式编排。它仅覆盖固定 `GamepadControlUnitMgr` 的截图初始化/转发/停用、完整 `Win32ControlUnitLoader` 与 MaaUtils `LibraryHolder` 源函数体，不实现手柄或输入操作。真实原接口声明、Boost function/shared owner/mutex 与 OpenCV Mat 在 C++ 模型中消费；该模型的 DLL/日志/路径和底层截图结果仍是明确脚本边界。274 个案例、548 个阶段（含 8 个可选方式未选择阶段）已在本机匹配，覆盖可选条件、64 位选择器、两个输入选择器 None、加载/符号/构造/连接失败及异常、直接输出修改、空图、停用和关闭后持帧；实际双侧记录另校验像素、owner/event 配平与失效视图未调用。
