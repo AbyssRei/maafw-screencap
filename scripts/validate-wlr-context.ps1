@@ -5,6 +5,12 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
     $matrix=Join-Path $Artifacts $Mode
     New-Item -ItemType Directory -Path $matrix|Out-Null
     $errors=[Collections.Generic.List[string]]::new()
+    if($Mode -eq 'failures') {
+        $control=Join-Path $matrix disconnect-control
+        New-Item -ItemType Directory -Path $control|Out-Null
+        try { Step native-wlr-deferred-disconnect-control timeout @('--signal=TERM','--kill-after=5s','30s',$env:MFS_P1_WLR_PROTOCOL_SERVER,'3',$control,$env:MFS_P1_WLR_PROTOCOL_SERVER_LIBRARY,'--disconnect-control') }
+        catch { $errors.Add($_.Exception.Message) }
+    }
     foreach($side in @('source','rust')){
         $directory=Join-Path $matrix $side
         $producer=Join-Path $directory producer
@@ -60,7 +66,8 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
                 }else{
                     'failures stopped clients=20/20 frames=80/80 copies=60 failed=40 disconnected=20 graceful=1 error=0'
                 }
-                if($premature -or $process.ExitCode -ne 0 -or -not $out.Contains($required)){throw 'Context fixture native counters/graceful stop failed'}
+                $deferred= $Mode -ne 'failures' -or ($out -split '\r?\n') -ccontains 'deferred disconnect scheduled=20 executed=20 cancelled=0 pending=0'
+                if($premature -or $process.ExitCode -ne 0 -or -not $out.Contains($required) -or -not $deferred){throw 'Context fixture native counters/graceful stop failed'}
                 $status='passed'
             }catch{
                 $_.Exception.Message|Add-Content -LiteralPath $log -Encoding utf8
