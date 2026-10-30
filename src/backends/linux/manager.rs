@@ -67,7 +67,7 @@ pub(crate) trait Factory {
     fn inactive_input(input: &mut Self::Input);
 }
 
-pub(crate) struct Manager<F: Factory> {
+pub(super) struct Manager<F: Factory> {
     config: Config,
     connected: bool,
     capture: Option<F::Unit>,

@@ -400,7 +400,9 @@ impl<F: Factory<Unit = Box<Backend>>> super::Manager<F> {
 
 #[path = "manager_native_host.rs"]
 mod host;
-pub(in crate::backends::linux) use host::{HostConnection, HostedFactory};
+pub(in crate::backends::linux) use host::HostConnection;
+pub(in crate::backends::linux) type HostedFactory<H> =
+    super::host::WithInput<NativeFactory, H>;
 
 #[cfg(test)]
 #[path = "manager_native_tests.rs"]
