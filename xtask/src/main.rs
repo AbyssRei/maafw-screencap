@@ -177,6 +177,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace macos-display-patch <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-host-premise <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-distinct-host <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace macos-display-foundation-consumer <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-sample-matrix <external directory> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
                       cargo xtask upstream-config linux-compat <original executable> <new external source directory>\n\

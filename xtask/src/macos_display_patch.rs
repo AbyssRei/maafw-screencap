@@ -32,6 +32,7 @@ pub(crate) enum Probe {
     Queried,
     HostPremise,
     DistinctHost,
+    FoundationConsumer,
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -47,6 +48,15 @@ struct SceneExecutable {
 }
 impl SceneExecutable {
     fn validate(&self, owner_pid: u32, consumer: &[u8], scene: &[u8]) -> Result<()> {
+        self.validate_paths(owner_pid, consumer, scene, true)
+    }
+    fn validate_paths(
+        &self,
+        owner_pid: u32,
+        consumer: &[u8],
+        scene: &[u8],
+        distinct: bool,
+    ) -> Result<()> {
         let native_path = |path: &str| {
             path.starts_with('/')
                 && !path.contains(['\\', '\0', '\n', '\r'])
@@ -60,7 +70,7 @@ impl SceneExecutable {
             || self.scene_pid != owner_pid
             || !native_path(&self.consumer_path)
             || !native_path(&self.scene_path)
-            || self.consumer_path == self.scene_path
+            || (self.consumer_path != self.scene_path) != distinct
             || self.consumer_path.rsplit_once('/').map(|p| p.0)
                 != self.scene_path.rsplit_once('/').map(|p| p.0)
             || self.consumer_sha256.len() != 64
@@ -75,7 +85,7 @@ impl SceneExecutable {
             || self.consumer_unix_mode > 0o7777
             || self.consumer_unix_mode & 0o100 == 0
         {
-            return Err("distinct scene host requires the same binary bytes/mode, another absolute path and the actual owned PID".into());
+            return Err("scene host requires the declared path relation, identical binary bytes/mode and actual owned PID".into());
         }
         Ok(())
     }
@@ -109,14 +119,19 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     {
         return Err("wrong owned display scene premise".into());
     }
-    if probe == Probe::DistinctHost {
+    if matches!(probe, Probe::DistinctHost | Probe::FoundationConsumer) {
         let identity: SceneExecutable =
             serde_json::from_slice(&read("scene-executable-identity.json")?)?;
-        identity.validate(
-            scene.owner_pid,
-            &read("scene-executables/consumer")?,
-            &read("scene-executables/scene")?,
-        )?;
+        let consumer = read("scene-executables/consumer")?;
+        let host = read("scene-executables/scene")?;
+        if probe == Probe::DistinctHost {
+            identity.validate(scene.owner_pid, &consumer, &host)?;
+        } else {
+            identity.validate_paths(scene.owner_pid, &consumer, &host, false)?;
+        }
+    }
+    if probe == Probe::FoundationConsumer {
+        foundation_state(&read("foundation-consumer-state.txt")?)?;
     }
     let original: OriginalStatus = serde_json::from_slice(&read("source-oracle-status.json")?)?;
     original_status(original, host_premise)?;
@@ -193,10 +208,18 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         report["paired_acceptance"] = false.into();
         report["scope"] = "Uninstrumented original display-patch consumer plus independent Rust capture of an owned scene hosted by a byte-identical executable copied to another pathname. Native records require identical SHA256 and executable modes and the actual scene PID. Consumer geometry queries and the original capture/default/five-second wait remain unchanged. All six captures, eighteen immediate/held payloads, known green ROI, complete Rust conversion, native ownership and scene shutdown pass the same strict checks. The copied host and original consumer binary inputs are archived for independent byte verification. This is an executable-path diagnostic, not an acceptance or replacement of the separate same-path failures, proof of root cause, or full P1 acceptance; scheduling and system-service state remain uncontrolled.".into();
     }
+    if probe == Probe::FoundationConsumer {
+        report["source_nsapplication_initialized"] = false.into();
+        report["same_scene_executable_path"] = true.into();
+        report["diagnostic_only"] = true.into();
+        report["paired_acceptance"] = false.into();
+        report["scope"] = "Same-path, byte-identical source consumer and AppKit scene executable; only the source consumer fixture skips NSApplication initialization and pumps its Foundation default run loop. The source capture class, native geometry queries, default first display and original five-second wait are unchanged and uninstrumented. Records require NSApp nil before/after, successful original captures, exact scene PID/path/binary/mode, all six known-patch captures, eighteen payloads, full Rust conversion and owner checks. Rust retains its existing separate AppKit test host. This is a consumer-host control, not acceptance or replacement of same-path AppKit failures, proof of a system mechanism, or complete P1 acceptance.".into();
+    }
     let output = root.join(match probe {
         Probe::HostPremise => "display-host-premise-validation.json",
         Probe::DistinctHost => "display-distinct-host-validation.json",
         Probe::Queried => "display-patch-validation.json",
+        Probe::FoundationConsumer => "display-foundation-consumer-validation.json",
     });
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -209,6 +232,10 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         println!(
             "macOS display_host_premise source_captures=3 rust_captures=3 payloads=18 consumer_geometry_queries=0 live_consumer_display_identity_observed=0 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
         );
+    } else if probe == Probe::FoundationConsumer {
+        println!(
+            "macOS display_foundation_consumer source_captures=3 rust_captures=3 payloads=18 source_nsapplication_initialized=0 same_binary_and_path_verified=1 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
     } else if probe == Probe::DistinctHost {
         println!(
             "macOS display_distinct_host source_captures=3 rust_captures=3 payloads=18 same_binary_sha256_verified=1 distinct_scene_executable_path=1 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
@@ -217,6 +244,12 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         println!(
             "macOS display_patch source_captures=3 rust_captures=3 payloads=18 actual_native_geometry=1 known_owned_patch=6 full_image_rust_conversion=3 retained_cpu_verified=1 full_desktop_known_pixels=0 full_P1_acceptance=0 passed"
         );
+    }
+    Ok(())
+}
+fn foundation_state(bytes: &[u8]) -> Result<()> {
+    if bytes != b"nsapplication_initialized=0\nnsapp_nil_before=1\nnsapp_nil_after=1\nsource_capture_passed=1\n" {
+        return Err("Foundation consumer initialized NSApplication, changed premise or failed its original capture".into());
     }
     Ok(())
 }
@@ -320,6 +353,24 @@ mod tests {
             scene_pid: 7,
         };
         good.validate(7, bytes, bytes).unwrap();
+        let same = SceneExecutable {
+            scene_path: good.consumer_path.clone(),
+            ..good.clone()
+        };
+        same.validate_paths(7, bytes, bytes, false).unwrap();
+        assert!(same.validate(7, bytes, bytes).is_err());
+        assert!(good.validate_paths(7, bytes, bytes, false).is_err());
+        let state = b"nsapplication_initialized=0\nnsapp_nil_before=1\nnsapp_nil_after=1\nsource_capture_passed=1\n";
+        foundation_state(state).unwrap();
+        for invalid in [
+            String::from_utf8_lossy(state)
+                .replace("source_capture_passed=1", "source_capture_passed=0"),
+            String::from_utf8_lossy(state).replace("nsapp_nil_after=1", "nsapp_nil_after=0"),
+            String::from_utf8_lossy(state)
+                .replace("nsapplication_initialized=0", "nsapplication_initialized=1"),
+        ] {
+            assert!(foundation_state(invalid.as_bytes()).is_err());
+        }
         assert!(good.validate(7, bytes, b"changed executable").is_err());
         for bad in [
             SceneExecutable {
