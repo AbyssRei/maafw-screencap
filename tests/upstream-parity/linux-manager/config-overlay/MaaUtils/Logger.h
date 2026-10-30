@@ -8,5 +8,6 @@ inline const NullLog sink;
 // Explicit configuration oracle logging suppression; no timing claim.
 #define LogFunc MfsConfigLog::sink
 #define LogError MfsConfigLog::sink
+#define LogWarn MfsConfigLog::sink
 #define VAR(x) x
 #define VAR_VOIDP(x) x

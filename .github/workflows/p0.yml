@@ -129,6 +129,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/manifest.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/native-result.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/configuration-*/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/compat/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/config-oracle-sources/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-LICENSE
