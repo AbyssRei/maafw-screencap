@@ -7,6 +7,9 @@
 extern "C" {
 #endif
 MFS_PARITY_EXPORT int32_t mfs_screen_parity_reference(void* window, MfsParityImage* output);
+// Direct pinned HwndUtils helper, with actual Win32 calls on the calling thread.
+// The host separately observes asynchronous completion on its own UI fixture.
+MFS_PARITY_EXPORT int32_t mfs_screen_parity_ensure_geometry(void* window);
 // Two outputs: native GdiFlush BOOL and DwmFlush HRESULT. Status 1 only denotes
 // invalid output storage; native failure remains in the respective output.
 MFS_PARITY_EXPORT int32_t mfs_screen_fixture_present(int32_t* output, size_t capacity);

@@ -23,6 +23,9 @@ struct Pattern {
     uintptr_t paint_dc = 0;
     uintptr_t paint_bitmap = 0;
     bool alternative = false;
+    int64_t geometry_messages = 0;
+    std::array<int64_t, 5> last_position {};
+    POINT geometry_max_track {};
 };
 struct Fixture {
     HINSTANCE module = nullptr;
@@ -36,6 +39,8 @@ struct Fixture {
     Pattern popup_pattern { true };
     bool transitions_disabled = false;
     bool topmost_requested = false;
+    DWORD corner_preference = DWMWCP_DEFAULT;
+    HRESULT corner_result = E_PENDING;
 };
 
 void draw(HWND hwnd, HDC dc, Pattern& pattern) noexcept
@@ -67,6 +72,22 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
     }
     auto* pattern = reinterpret_cast<Pattern*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (pattern && message == WM_GETMINMAXINFO && lparam
+        && pattern->geometry_max_track.x > 0 && pattern->geometry_max_track.y > 0) {
+        DefWindowProcW(hwnd, message, wparam, lparam);
+        auto& bounds = *reinterpret_cast<MINMAXINFO*>(lparam);
+        bounds.ptMaxTrackSize.x = std::max(bounds.ptMaxTrackSize.x, pattern->geometry_max_track.x);
+        bounds.ptMaxTrackSize.y = std::max(bounds.ptMaxTrackSize.y, pattern->geometry_max_track.y);
+        return 0;
+    }
+    if (pattern && message == WM_WINDOWPOSCHANGING && lparam) {
+        const auto& position = *reinterpret_cast<const WINDOWPOS*>(lparam);
+        if ((position.flags & (SWP_NOMOVE | SWP_NOSIZE)) != (SWP_NOMOVE | SWP_NOSIZE)) {
+            if (pattern->geometry_messages == INT64_MAX) { pattern->failed = true; }
+            else { ++pattern->geometry_messages; }
+            pattern->last_position = { position.x, position.y, position.cx, position.cy, position.flags };
+        }
+    }
     if (pattern && message == WM_PAINT) {
         PAINTSTRUCT paint {};
         HDC dc = BeginPaint(hwnd, &paint);
@@ -97,6 +118,67 @@ bool region(int32_t x, int32_t y, int32_t width, int32_t height, const cv::Mat& 
         && static_cast<int64_t>(y) + height <= image.rows;
 }
 #endif
+}
+
+int32_t mfs_print_parity_geometry(void* context, const int64_t* input, size_t count,
+    int64_t* output, size_t capacity)
+{
+    if (!context || !input || count != 6 || !output || capacity != 31) { return 1; }
+    auto& fixture = *static_cast<Fixture*>(context);
+    const HWND window = fixture.main;
+    if (!window || fixture.child || fixture.popup
+        || GetCurrentThreadId() != GetWindowThreadProcessId(window, nullptr)) { return 1; }
+    if (input[0] == 1) {
+        if (input[1] < 0 || input[1] > UINT32_MAX || input[4] <= 0 || input[5] <= 0) { return 1; }
+        for (size_t i = 2; i < 6; ++i) {
+            if (input[i] < INT32_MIN || input[i] > INT32_MAX) { return 1; }
+        }
+        const DWORD style = static_cast<DWORD>(input[1]);
+        const DWORD extended = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE));
+        RECT outer { 0, 0, static_cast<LONG>(input[4]), static_cast<LONG>(input[5]) };
+        if (!AdjustWindowRectExForDpi(&outer, style, FALSE, extended, GetDpiForWindow(window))) { return 1; }
+        const std::array<int64_t, 4> position { input[2] + outer.left, input[3] + outer.top,
+            static_cast<int64_t>(outer.right) - outer.left, static_cast<int64_t>(outer.bottom) - outer.top };
+        for (const auto value : position) { if (value < INT32_MIN || value > INT32_MAX) { return 1; } }
+        // Only this explicitly configured fixture opts into a larger native
+        // tracking limit. Otherwise an ordinary framed window can be clamped
+        // before the capture helper ever receives the requested client size.
+        fixture.main_pattern.geometry_max_track = {
+            static_cast<LONG>(position[2]), static_cast<LONG>(position[3]) };
+        SetLastError(ERROR_SUCCESS);
+        if (!SetWindowLongPtrW(window, GWL_STYLE, static_cast<LONG_PTR>(style)) && GetLastError()) { return 1; }
+        // Fixture premise only. DWM corner blending belongs to the visible
+        // desktop image; do not ignore those pixels or change capture's crop.
+        fixture.corner_preference = DWMWCP_DONOTROUND;
+        fixture.corner_result = DwmSetWindowAttribute(window, DWMWA_WINDOW_CORNER_PREFERENCE,
+            &fixture.corner_preference, sizeof(fixture.corner_preference));
+        if (FAILED(fixture.corner_result)) { return 1; }
+        if (!SetWindowPos(window, nullptr, static_cast<int>(position[0]), static_cast<int>(position[1]),
+                static_cast<int>(position[2]), static_cast<int>(position[3]),
+                SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED)) { return 1; }
+    }
+    else if (input[0] == 2) {
+        if (!RedrawWindow(window, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN)
+            || !GdiFlush()) { return 1; }
+    }
+    else if (input[0] != 0) { return 1; }
+    MONITORINFO monitor { sizeof(MONITORINFO) };
+    RECT outer {}, client {};
+    POINT origin {};
+    const HMONITOR display = MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST);
+    if (!display || !GetMonitorInfoW(display, &monitor) || !GetWindowRect(window, &outer)
+        || !GetClientRect(window, &client) || !ClientToScreen(window, &origin)) { return 1; }
+    const auto& pattern = fixture.main_pattern;
+    const int64_t values[31] { monitor.rcMonitor.left, monitor.rcMonitor.top, monitor.rcMonitor.right, monitor.rcMonitor.bottom,
+        monitor.rcWork.left, monitor.rcWork.top, monitor.rcWork.right, monitor.rcWork.bottom,
+        outer.left, outer.top, outer.right, outer.bottom, client.left, client.top, client.right, client.bottom,
+        origin.x, origin.y, static_cast<uint32_t>(GetWindowLongPtrW(window, GWL_STYLE)),
+        static_cast<uint32_t>(GetWindowLongPtrW(window, GWL_EXSTYLE)), pattern.geometry_messages,
+        pattern.last_position[0], pattern.last_position[1], pattern.last_position[2], pattern.last_position[3],
+        pattern.last_position[4], GetDpiForWindow(window), fixture.corner_preference, fixture.corner_result,
+        pattern.geometry_max_track.x, pattern.geometry_max_track.y };
+    std::copy_n(values, 31, output);
+    return pattern.failed ? 1 : 0;
 }
 
 #if defined(MFS_UPSTREAM_PRINT_CPP)

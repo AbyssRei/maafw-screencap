@@ -21,6 +21,16 @@ pub struct Fixture {
     failed_close: bool,
 }
 impl Adapter {
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn screen_ensure_geometry(&self, window: *mut c_void) -> Result<(), Box<dyn Error>> {
+        type Ensure = unsafe extern "C" fn(*mut c_void) -> i32;
+        // SAFETY: Exact screen-parity.h signature, live module and owned HWND.
+        let ensure: Ensure = unsafe { self.module.symbol(c"mfs_screen_parity_ensure_geometry")? };
+        if unsafe { ensure(window) } != 0 {
+            return Err("original native window geometry helper failed".into());
+        }
+        Ok(())
+    }
     pub fn screen_fixture(&self) -> Result<Fixture, Box<dyn Error>> {
         self.render_fixture(37, 23)
     }
@@ -94,6 +104,29 @@ impl Adapter {
     }
 }
 impl Fixture {
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn geometry(&self, input: [i64; 6]) -> Result<[i64; 31], Box<dyn Error>> {
+        type Geometry =
+            unsafe extern "C" fn(*mut c_void, *const i64, usize, *mut i64, usize) -> i32;
+        // SAFETY: Exact print-thread.h declaration and fixed array lengths.
+        // The bridge copies the request before posting to its retained UI owner
+        // and waits for that owner to finish before writing this output.
+        let geometry: Geometry = unsafe { self.module.symbol(c"mfs_print_thread_geometry")? };
+        let mut output = [0; 31];
+        if unsafe {
+            geometry(
+                self.span.owner,
+                input.as_ptr(),
+                input.len(),
+                output.as_mut_ptr(),
+                output.len(),
+            )
+        } != 0
+        {
+            return Err("owned native fixture geometry request failed".into());
+        }
+        Ok(output)
+    }
     #[cfg(feature = "windows-desktop-dup")]
     pub fn start_desktop_updates(&mut self) -> Result<(), Box<dyn Error>> {
         type Start = unsafe extern "C" fn(*mut c_void) -> i32;

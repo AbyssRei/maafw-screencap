@@ -4,6 +4,9 @@ use super::*;
 #[cfg(feature = "prototype-windows")]
 #[path = "screen_dc_fault_tests.rs"]
 mod native_failures;
+#[cfg(feature = "prototype-windows")]
+#[path = "screen_dc_geometry_tests.rs"]
+mod native_geometry;
 
 #[cfg(feature = "prototype-windows")]
 #[test]
