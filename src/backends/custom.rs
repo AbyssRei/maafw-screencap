@@ -48,6 +48,33 @@ pub(crate) trait IdentityBoundary: Boundary {
     fn features(&self) -> Option<Result<u64, Self::Error>>;
 }
 
+pub(crate) type InfoCallback<B> =
+    fn(&B, &mut <B as InfoBoundary>::InfoBuffer) -> Result<u8, <B as Boundary>::Error>;
+
+/// Callback access remains on the same borrowed manager. The explicit value
+/// adapter retains the source parser's byte, number and duplicate-key rules.
+pub(crate) trait InfoBoundary: Boundary {
+    type InfoBuffer;
+    fn info_callback(&self) -> Option<InfoCallback<Self>>;
+    fn with_info_buffer<T>(
+        &self,
+        action: impl FnOnce(&mut Self::InfoBuffer) -> Result<T, Self::Error>,
+    ) -> Result<T, Self::Error>;
+}
+
+/// Private source-value operations, supplied even when the callback table is
+/// absent. This does not select a public JSON representation or core dependency.
+pub(crate) trait InfoObjects {
+    type Buffer;
+    type Info;
+    type Error;
+    fn empty_object(&self) -> Result<Self::Info, Self::Error>;
+    // Copy an independent object while the real temporary StringBuffer lives.
+    // Invalid JSON and non-object values return None; exceptions remain errors.
+    fn parse_object(&self, buffer: &Self::Buffer) -> Result<Option<Self::Info>, Self::Error>;
+    fn set_custom_type(&self, info: &mut Self::Info) -> Result<(), Self::Error>;
+}
+
 pub(crate) struct Manager<'a, B> {
     boundary: Option<&'a B>,
 }
@@ -123,6 +150,30 @@ impl<B: IdentityBoundary> Manager<'_, B> {
 
     pub fn get_features(&self) -> Result<u64, B::Error> {
         self.boundary.and_then(B::features).unwrap_or(Ok(0))
+    }
+}
+
+impl<B: InfoBoundary> Manager<'_, B> {
+    pub fn get_info<V>(&self, values: &V) -> Result<V::Info, B::Error>
+    where
+        V: InfoObjects<Buffer = B::InfoBuffer, Error = B::Error>,
+    {
+        let mut info = values.empty_object()?;
+        if let Some(boundary) = self.boundary
+            && let Some(callback) = boundary.info_callback()
+            && let Some(extra) = boundary.with_info_buffer(|buffer| {
+                if callback(boundary, buffer)? == 0 {
+                    return Ok(None);
+                }
+                values.parse_object(buffer)
+            })?
+        {
+            info = extra;
+        }
+        // Source ends get_info_from_controller's stack buffer before replacing
+        // type, including when parsing supplied an independently owned object.
+        values.set_custom_type(&mut info)?;
+        Ok(info)
     }
 }
 

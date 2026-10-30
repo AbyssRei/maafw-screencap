@@ -58,6 +58,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or -not $observed.Contains('event=wait_return slot=0'))){
             $status='failed';throw 'Expected the separate diagnostic executable and a real native wait return, never a parity oracle'
         }
+        if($Name -eq 'custom-metadata-parity'){
+            $status='failed';Assert-CustomMetadataLog $observed;$status='passed'
+        }
         if($Name -eq 'custom-native-parity'){
             $status='failed';Assert-CustomNativeLog $observed;$status='passed'
         }

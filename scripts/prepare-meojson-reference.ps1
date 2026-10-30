@@ -60,6 +60,24 @@ function Prepare-MeoJsonReference([string]$InputDirectory) {
     return [ordered]@{Include=$prefix;Version=$release.tag_name;Commit=$actual}
 }
 
+function Restore-MeoJsonReference([string]$Archive,[string]$Identity,[string]$Destination) {
+    # Caller verified archived input digests. Reconstruct headers exclusively
+    # from that batch, then validate every staged byte; never query online here.
+    New-Item -ItemType Directory -Path $Destination|Out-Null
+    Step custom-meojson-replay tar @('-xf',$Archive,'-C',$Destination)
+    $prefix=Join-Path $Destination staged
+    New-Item -ItemType Directory -Path $prefix|Out-Null
+    Copy-Item -LiteralPath (Join-Path $Destination include) -Destination (Join-Path $prefix meojson) -Recurse
+    $identityValue=Get-Content -LiteralPath $Identity -Raw|ConvertFrom-Json
+    foreach($header in $identityValue.headers) {
+        if([IO.Path]::IsPathRooted($header.path) -or $header.path -match '(^|[/\\])\.\.([/\\]|$)'){throw 'Invalid archived meojson header path'}
+        $path=Join-Path (Join-Path $prefix meojson) $header.path
+        if((Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -ne $header.sha256){throw 'Archived meojson header changed'}
+    }
+    if(@(Get-ChildItem (Join-Path $prefix meojson) -File -Recurse).Count -ne @($identityValue.headers).Count){throw 'Archived meojson header inventory differs'}
+    return [ordered]@{Include=$prefix;Version=$identityValue.version;Commit=$identityValue.commit}
+}
+
 # The owning native batch builds the explicit target alongside its source
 # reference. Preserve exact copied declarations/extracted bodies and every case,
 # including partial records on a failed observation; never rerun a failed case.

@@ -53,7 +53,7 @@ $customEvidence = ''
 $delegateEvidence = ''
 if($CustomParity -and ($Desktop -or $GdiParity -or $FramePoolContext)) {throw 'Custom parity is an independent callback entry without desktop/GDI prerequisites'}
 if($CustomParity) {
-    $pending.Add('Private Custom screenshot slice only: actual fixed callback table, selected original manager bodies, unchanged raw C setter and real MaaUtils ImageBuffer/vtable. Rust preserves synchronous nonzero-byte callback, borrowed table/context, false output and true-empty semantics; real Mat heads retain CPU storage after temporary buffer/context/input destruction. Ninety-six source/Rust cases and native callback exception/subsequent distinct capture are explicit. Native ABI/raw types use actual compiled header values, never frozen OpenCV 4 type packing. Input/app/shell actions, UUID/get_features/get_info, full manager virtual ABI/create-destroy exports, encoded/resize/all-type and all-platform/full P1 remain unaccepted. Opaque acceptance Mat heads add bookkeeping allocation; default product/core custom feature has no OpenCV dependency.')
+    $pending.Add('Private Custom screenshot slice only: actual fixed callback table, selected original manager bodies, unchanged raw C setter and real MaaUtils ImageBuffer/vtable. Rust preserves synchronous nonzero-byte callback, borrowed table/context, false output and true-empty semantics; real Mat heads retain CPU storage after temporary buffer/context/input destruction. Ninety-six source/Rust cases and native callback exception/subsequent distinct capture are explicit. Native ABI/raw types use actual compiled header values, never frozen OpenCV 4 type packing. Additional selected-body UUID/features and metadata gates use actual StringBuffer/meojson and retain original scope/order/bytes. Input/app/shell actions, full manager virtual ABI/create-destroy exports, encoded/resize/all-type and all-platform/full P1 remain unaccepted. Opaque acceptance Mat/object heads add bookkeeping allocations; default product/core custom feature has no OpenCV/JSON dependency.')
 }
 if ($PipeWireControl) {
     $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 74 scripts and 118 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
@@ -234,6 +234,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
                -not $observed.Contains('native Custom cases=96 source_rust_captures=192 retained=36 real_imagebuffer=1 caller_callbacks=1 false_output_preserved=1 true_empty=1 raw_setter_clone=1 borrowed_table_changes=1 native_exception=1 subsequent_capture=1 native_mat_heads_closed=1 passed')) {
                 throw 'Expected real original/Rust callback/ImageBuffer cases, retained native Mat owners and exception cleanup'
+            }
+        }
+        if($Name -eq 'custom-metadata-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('Custom metadata cases=592 payloads=37 source_rust_outputs=1184 actual_stringbuffer_meojson=1 parse_inside_scope=1 type_after_scope=1 borrowed_table_changes=1 exceptions_contained=1 retained_pairs=592 input_actions=0 passed')) {
+                throw 'Expected complete Custom metadata parser, callback and native scope/owner execution'
             }
         }
         if($Name -eq 'manager-delegate-parity' -and $exitCode -eq 0) {
@@ -602,6 +609,18 @@ try {
     if ($ManagerParity) { $parityOptions += @('-DMFS_BUILD_MANAGER_PARITY=ON','-DMFS_BUILD_RENDER_FIXTURE=ON') }
     if ($PipeWireControl) { $parityOptions += '-DMFS_BUILD_PIPEWIRE_CONTROL=ON' }
     if ($CustomParity) { $parityOptions += @('-DMFS_BUILD_CUSTOM_PARITY=ON','-DMFS_BUILD_REFERENCE=OFF') }
+    if($CustomParity) {
+        function Save([string]$RecordPath) {Save-Input $RecordPath}
+        function Json([string]$RecordPath,$Value) {Write-NewJson $RecordPath $Value}
+        . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
+        if($offline) {
+            $jsonArchive=Prepared-File meojson-source.tar
+            $jsonIdentity=Prepared-File meojson-prepared.json
+            foreach($name in @('meojson-source.tar','meojson-prepared.json','meojson-LICENSE')){Save-Input (Prepared-File $name)}
+            $customJson=Restore-MeoJsonReference $jsonArchive $jsonIdentity (Join-Path $replayRoot ('custom-json-'+[DateTime]::UtcNow.Ticks))
+        } else {$customJson=Prepare-MeoJsonReference $inputsRoot}
+        $parityOptions+="-DMFS_MEOJSON_INCLUDE=$($customJson.Include)"
+    }
     Step 'reference-configure' $cmake (@('-S', (Join-Path $productRoot tests/upstream-parity/native), '-B', $build,
         "-DOpenCV_DIR=$opencvInstall", "-DMFS_UPSTREAM_ROOT=$UpstreamRoot", "-DMFS_MAAUTILS_ROOT=$maautils", "-DMFS_BOOST_ROOT=$boost") + $generator + $parityOptions)
     $referenceCache = Get-Content -LiteralPath (Join-Path $build CMakeCache.txt) -Raw
@@ -628,6 +647,8 @@ try {
         Step custom-native-records $ConfigureTool @('upstream-custom',$customEvidence)
         Step custom-identity-parity cargo ($customArgs+@('backends::custom::native_tests::identity::preserves_uuid_bytes_features_failures_and_borrowed_callbacks','--','--exact','--ignored','--test-threads=1','--nocapture'))
         Step custom-identity-records $ConfigureTool @('upstream-trace','custom-identity',(Join-Path $customEvidence identity))
+        Step custom-metadata-parity cargo ($customArgs+@('backends::custom::native_tests::metadata::preserves_metadata_parser_bytes_scope_order_defaults_and_exceptions','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-metadata-records $ConfigureTool @('upstream-trace','custom-metadata',(Join-Path $customEvidence metadata))
         $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
         if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
         Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))

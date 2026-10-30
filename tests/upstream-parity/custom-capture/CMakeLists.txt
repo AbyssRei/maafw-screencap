@@ -9,7 +9,7 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_MSVC_RUNTIME_LIBRARY MultiThreadedDLL)
 set(OpenCV_STATIC ON)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs)
-foreach(_input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT)
+foreach(_input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_MEOJSON_INCLUDE)
     if(NOT IS_DIRECTORY "${${_input}}")
         message(FATAL_ERROR "Explicit ${_input} is required")
     endif()
@@ -18,11 +18,11 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/custom-capture-sourc
 add_library(mfs_custom_capture SHARED bridge.cpp)
 target_include_directories(mfs_custom_capture PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_UPSTREAM_ROOT}/include"
-    "${MFS_MAAUTILS_ROOT}/include" ${OpenCV_INCLUDE_DIRS})
+    "${MFS_MAAUTILS_ROOT}/include" "${MFS_MEOJSON_INCLUDE}" ${OpenCV_INCLUDE_DIRS})
 target_compile_definitions(mfs_custom_capture PRIVATE MAA_FRAMEWORK_EXPORTS NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(mfs_custom_capture PRIVATE ${OpenCV_LIBS})
 if(MSVC)
     target_compile_options(mfs_custom_capture PRIVATE /utf-8 /EHsc)
 endif()
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
-    "Exact fixed constructor/connect/connected/screencap/inactive/request_uuid/get_features and raw C setter; native full upstream callback table and actual prepared MaaUtils ImageBuffer/StringBuffer/vtables plus OpenCV core/imgproc/imgcodecs. Logging suppressed. No fake buffer/codec symbols. Selected-body manager model only, not full manager virtual ABI, create/destroy API, get_info, input actions or SDK provider. C++ exceptions contained at private adapter boundaries. Scope keeps original stack temporary buffers and real Mat/string ownership; Rust opaque Mat heads add acceptance bookkeeping allocation but no second pixel copy.\n")
+    "Exact fixed constructor/connect/connected/screencap/inactive/request_uuid/get_features/get_info/get_info_from_controller and raw C setter; native full upstream callback table, actual prepared MaaUtils ImageBuffer/StringBuffer/vtables, meojson parser/objects and OpenCV core/imgproc/imgcodecs. Logging suppressed. No fake buffer/parser/codec symbols. Selected-body manager model only, not full manager virtual ABI, create/destroy API, input actions or SDK provider. C++ exceptions contained at private adapter boundaries. Scope keeps original stack temporary buffers and real Mat/string/object ownership. Opaque Mat/object heads add acceptance bookkeeping allocations; no second pixel copy. JSON parse/object copy remains inside the temporary buffer, type replacement follows its destruction.\n")

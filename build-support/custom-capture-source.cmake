@@ -34,6 +34,8 @@ mfs_custom_extract("bool CustomControlUnitMgr::connected()" "bool CustomControlU
 mfs_custom_extract("bool CustomControlUnitMgr::request_uuid(" "bool CustomControlUnitMgr::start_app(")
 mfs_custom_extract("bool CustomControlUnitMgr::screencap(" "bool CustomControlUnitMgr::click(")
 mfs_custom_extract("bool CustomControlUnitMgr::inactive()" "json::object CustomControlUnitMgr::get_info()")
+mfs_custom_extract("json::object CustomControlUnitMgr::get_info()" "std::optional<json::object> CustomControlUnitMgr::get_info_from_controller()")
+mfs_custom_extract("std::optional<json::object> CustomControlUnitMgr::get_info_from_controller()" "MAA_CTRL_UNIT_NS_END")
 string(FIND "${_raw_text}" "MaaBool MaaImageBufferSetRawData(" _raw_begin)
 string(FIND "${_raw_text}" "MaaBool MaaImageBufferResize(" _raw_end)
 if(_raw_begin LESS 0 OR _raw_end LESS_EQUAL _raw_begin)

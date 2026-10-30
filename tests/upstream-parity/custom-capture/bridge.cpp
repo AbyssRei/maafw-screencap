@@ -3,6 +3,7 @@
 #include "bridge.h"
 #include "MaaUtils/Buffer/ImageBuffer.hpp"
 #include "MaaUtils/Buffer/StringBuffer.hpp"
+#include <meojson/json.hpp>
 #include <atomic>
 #include <limits>
 #include <memory>
@@ -15,6 +16,7 @@ inline const Null sink;
 #define LogFunc MfsCustomLog::sink
 #define LogTrace MfsCustomLog::sink
 #define LogError MfsCustomLog::sink
+#define LogWarn MfsCustomLog::sink
 #define VAR(x) x
 #define VAR_VOIDP(x) x
 namespace MfsCustomSource {
@@ -24,6 +26,8 @@ struct CustomControlUnitMgr {
     CustomControlUnitMgr(MaaCustomControllerCallbacks*,void*);
     bool connect();bool connected() const;bool inactive();bool screencap(cv::Mat&);
     bool request_uuid(std::string&);MaaControllerFeature get_features() const;
+    json::object get_info() const;
+    std::optional<json::object> get_info_from_controller() const;
     MaaCustomControllerCallbacks* controller_=nullptr;
     void* controller_arg_=nullptr;
 };
@@ -33,14 +37,21 @@ struct CustomControlUnitMgr {
 namespace {
 std::atomic<uint64_t> images=0,contexts=0,entered=0,exited=0;
 std::atomic<uint64_t> uuid_entered=0,uuid_exited=0,uuid_outputs=0;
+thread_local uint32_t active_string_scopes=0;
+std::atomic<uint64_t> info_counts[5]{}; // live, empty, parse attempts, parsed objects, type sets
+struct Info {
+    json::object value;
+    explicit Info(json::object object):value(std::move(object)){++info_counts[0];}
+    ~Info(){--info_counts[0];}
+};
 struct UuidOutput {
     std::string value;
     explicit UuidOutput(std::string text):value(std::move(text)){++uuid_outputs;}
     ~UuidOutput(){--uuid_outputs;}
 };
 struct StringScope {
-    StringScope(){++uuid_entered;}
-    ~StringScope(){++uuid_exited;}
+    StringScope(){++uuid_entered;++active_string_scopes;}
+    ~StringScope(){--active_string_scopes;++uuid_exited;}
 };
 struct Image {
     cv::Mat value;
@@ -234,4 +245,52 @@ int32_t mfs_custom_uuid_source(void* context,void* output,uint8_t* result) noexc
 int32_t mfs_custom_identity_fault(void* context,uint32_t operation) noexcept {
     if(!context || operation>1)return 1;auto& c=*static_cast<Context*>(context);
     if(operation==0)c.table.request_uuid=uuid_fault;else c.table.get_features=features_fault;return 0;
+}
+size_t mfs_custom_info_abi(uint32_t index) noexcept {
+    const size_t values[]={sizeof(MfsCustomInfo),offsetof(MaaCustomControllerCallbacks,get_info)};
+    return index<std::size(values)?values[index]:SIZE_MAX;
+}
+int32_t mfs_custom_info_configure(void* context,MfsCustomInfo callback,void* arg) noexcept {
+    if(!context)return 1;auto& c=*static_cast<Context*>(context);
+    c.table.get_info=callback;c.manager.controller_arg_=arg;return 0;
+}
+uint8_t mfs_custom_has_info(void* context) noexcept {
+    if(!context)return 0;const auto& c=*static_cast<Context*>(context);return c.has_table&&c.table.get_info;
+}
+int32_t mfs_custom_info_invoke(void* context,MaaStringBuffer* buffer,uint8_t* result) noexcept {
+    if(!context || !buffer || !result)return 1;*result=0;
+    return guarded([&]{auto& c=*static_cast<Context*>(context);
+        if(!c.has_table || !c.table.get_info)return -1;
+        *result=c.table.get_info(c.manager.controller_arg_,buffer);return 0;});
+}
+int32_t mfs_custom_info_empty(void** output) noexcept {
+    if(!output)return 1;*output=nullptr;
+    return guarded([&]{*output=new Info(json::object{});++info_counts[1];return 0;});
+}
+int32_t mfs_custom_info_parse(MaaStringBuffer* buffer,void** output) noexcept {
+    if(!output)return 1;*output=nullptr;
+    if(!buffer || active_string_scopes!=1)return 1;
+    return guarded([&]{++info_counts[2];auto parsed=json::parse(buffer->get());
+        if(!parsed || !parsed->is_object())return 0;
+        // Exact source as_object copy, obtained before stack StringBuffer ends.
+        *output=new Info(parsed->as_object());++info_counts[3];return 0;});
+}
+int32_t mfs_custom_info_type(void* info) noexcept {
+    if(!info || active_string_scopes!=0)return 1;
+    return guarded([&]{static_cast<Info*>(info)->value["type"]="custom";++info_counts[4];return 0;});
+}
+int32_t mfs_custom_info_source(void* context,void** output) noexcept {
+    if(!output)return 1;*output=nullptr;if(!context)return 1;
+    return guarded([&]{*output=new Info(static_cast<Context*>(context)->manager.get_info());return 0;});
+}
+void mfs_custom_info_release(void* info) noexcept {delete static_cast<Info*>(info);}
+int32_t mfs_custom_info_serialize(void* info,void** output) noexcept {
+    if(!output)return 1;*output=nullptr;if(!info)return 1;
+    return guarded([&]{*output=new UuidOutput(json::value(static_cast<Info*>(info)->value).to_string());return 0;});
+}
+int32_t mfs_custom_info_fault(void* context) noexcept {
+    if(!context)return 1;static_cast<Context*>(context)->table.get_info=uuid_fault;return 0;
+}
+uint64_t mfs_custom_info_count(uint32_t index) noexcept {
+    return index<std::size(info_counts)?info_counts[index].load():UINT64_MAX;
 }

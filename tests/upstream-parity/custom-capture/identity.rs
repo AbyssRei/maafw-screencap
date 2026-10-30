@@ -4,7 +4,7 @@
 use super::*;
 use std::io::Write;
 
-pub(super) struct UuidBuffer(NonNull<OpaqueString>);
+pub(super) struct UuidBuffer(pub(super) NonNull<OpaqueString>);
 impl Native<'_> {
     fn request_uuid(&self, buffer: &mut UuidBuffer) -> Result<u8, i32> {
         let mut value = 0;

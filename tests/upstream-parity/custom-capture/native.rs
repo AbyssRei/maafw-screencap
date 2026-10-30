@@ -87,6 +87,7 @@ struct View {
     references: i32,
 }
 struct Lib {
+    metadata: metadata::Api,
     _module: loader::Module,
     abi: unsafe extern "C" fn(u32) -> usize,
     create: unsafe extern "C" fn(u8, *mut *mut c_void) -> i32,
@@ -140,6 +141,7 @@ impl Lib {
         // optional callback pointers have C's null/function representation.
         unsafe {
             Self {
+                metadata: metadata::Api::open(&module),
                 abi: module.symbol(c"mfs_custom_abi"),
                 create: module.symbol(c"mfs_custom_create"),
                 destroy: module.symbol(c"mfs_custom_destroy"),
@@ -190,6 +192,8 @@ impl Lib {
 
 #[path = "identity.rs"]
 mod identity;
+#[path = "metadata.rs"]
+mod metadata;
 struct Image<'a> {
     pointer: NonNull<c_void>,
     lib: &'a Lib,
