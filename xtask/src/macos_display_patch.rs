@@ -298,6 +298,214 @@ fn foundation_state(bytes: &[u8]) -> Result<()> {
     }
     Ok(())
 }
+
+/// Instrumented same-path control only. Its images never supply an unchanged
+/// source oracle or a source/Rust paired-acceptance record.
+pub(crate) fn run_observer_same_path(args: &[String]) -> Result<()> {
+    let (path, check_only) = match args {
+        [path] => (path, false),
+        [path, flag] if flag == "--check-only" => (path, true),
+        _ => return Err("expected upstream-trace macos-display-observer-same-path <external directory> [--check-only]".into()),
+    };
+    let root = records::external_root(Path::new(path))?;
+    let mut artifacts = Vec::new();
+    let mut read = |name: &str| -> Result<Vec<u8>> {
+        let path = root.join(name);
+        artifacts.push(records::artifact(&root, &path)?);
+        Ok(fs::read(path)?)
+    };
+    if read("diagnostic-only.txt")?
+        != b"observer_same_path=1\noriginal_oracle=0\nrust_comparison=0\n"
+    {
+        return Err("observer control must remain separate from original/Rust parity".into());
+    }
+    let scene: Scene = serde_json::from_slice(&read("scene/ready.json")?)?;
+    if scene.width != 47
+        || scene.height != 31
+        || scene.colour != "green"
+        || scene.display_patch != 1
+    {
+        return Err("observer same-path owned scene premise differs".into());
+    }
+    let identity: SceneExecutable =
+        serde_json::from_slice(&read("scene-executable-identity.json")?)?;
+    identity.validate_paths(
+        scene.owner_pid,
+        &read("scene-executables/consumer")?,
+        &read("scene-executables/scene")?,
+        false,
+    )?;
+    let geometry_bytes = read("scene/display-geometry.tsv")?;
+    let g = macos_display_geometry::parse(std::str::from_utf8(&geometry_bytes)?)?;
+    if g.window != scene.window_id
+        || g.pid != scene.owner_pid
+        || read("consumer/source-display-geometry.tsv")? != geometry_bytes
+        || read("scene/stopped.txt")? != b"window_closed=1\n"
+    {
+        return Err(
+            "observer scene/consumer geometry or acknowledged window closure differs".into(),
+        );
+    }
+    let scope = "dispatch_observer event=scope slot=16 value=1";
+    let scene_errors = read("scene-stderr.log")?;
+    let scene_output = read("scene-stdout.log")?;
+    if !std::str::from_utf8(&scene_errors)?.contains(scope)
+        || std::str::from_utf8(&scene_errors)?.contains("dispatch_observer event=create")
+        || !std::str::from_utf8(&scene_output)?
+            .contains("owned macOS scene stop=1 main_thread=1 passed")
+    {
+        return Err(
+            "observer scene did not use the diagnostic host or performed source capture".into(),
+        );
+    }
+    let consumer_bytes = read("consumer-log.txt")?;
+    let consumer_log = std::str::from_utf8(&consumer_bytes)?;
+    let programs = consumer_log
+        .lines()
+        .filter_map(|line| line.strip_prefix("program="))
+        .collect::<Vec<_>>();
+    let arguments = consumer_log
+        .lines()
+        .filter_map(|line| line.strip_prefix("arguments="))
+        .collect::<Vec<_>>();
+    let exits = consumer_log
+        .lines()
+        .filter_map(|line| line.strip_prefix("exit="))
+        .collect::<Vec<_>>();
+    if programs != [identity.consumer_path.as_str()] || arguments.len() != 1 || exits != ["0"] {
+        return Err(
+            "observer consumer invocation/status differs from archived executable identity".into(),
+        );
+    }
+    let arguments: Vec<String> = serde_json::from_str(arguments[0])?;
+    if arguments.len() != 3
+        || arguments[0] != "display-patch"
+        || arguments[2] != scene.window_id.to_string()
+        || !arguments[1].starts_with('/')
+        || !arguments[1].ends_with("/consumer")
+    {
+        return Err("observer consumer changed its original display mode or owned target".into());
+    }
+    if !consumer_log.contains("original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed") {
+        return Err("instrumented observer consumer failed or captured an incomplete patch series".into());
+    }
+    let waits = observer_waits(consumer_log)?;
+    for call in 0..3 {
+        let pixels = read(&format!("consumer/display-call-{call}.source.bgr"))?;
+        g.pixels(&pixels, 3)?;
+        if read(&format!("consumer/display-held-{call}.source.bgr"))? != pixels {
+            return Err("observer CPU image changed after capture owner closure".into());
+        }
+    }
+    let report = serde_json::json!({"layout_version":1,"diagnostic_only":true,"original_oracle":false,
+        "paired_acceptance":false,"rust_comparison":false,"same_executable_path":true,
+        "observed_captures":3,"payloads":6,"native_successful_waits":3,"owned_window":g.window,"owned_pid":g.pid,
+        "wait_timestamps_create_enter_return_signal_enter_return":waits,"artifacts":artifacts,
+        "scope":"Both owned scene and consumer use the same instrumented executable pathname and identical archived bytes/mode. Producer uses the existing Foundation scene loop; consumer captures the original first display with native semaphore wrappers that log real create/wait/signal calls and preserve original values/default five-second wait. All three known patch images, held bytes, geometry/window/PID, actual successful native waits, caller/signal thread continuity and acknowledged scene closure are checked. Instrumentation changes binary identity and timing. This removes the previous different scene-path confound only for this observer control; it does not prove root cause, accept any uninstrumented failure, reclaim residual source references, prove late-owner drain or establish source/Rust/full P1 acceptance."});
+    let output = root.join("observer-same-path-validation.json");
+    if check_only && output.exists() {
+        if records::read::<serde_json::Value>(&output)? != report {
+            return Err("observer same-path report differs from raw native records".into());
+        }
+    } else if !check_only {
+        records::create_json(&output, &report)?;
+    }
+    println!(
+        "macOS display_observer_same_path observed_captures=3 payloads=6 native_successful_waits=3 same_binary_path_mode_pid=1 diagnostic_only=1 original_oracle=0 rust_comparison=0 paired_acceptance=0 full_P1_acceptance=0 passed"
+    );
+    Ok(())
+}
+
+fn observer_waits(text: &str) -> Result<[[u64; 5]; 3]> {
+    let mut times = [[None; 5]; 3];
+    let mut threads = [[0; 5]; 3];
+    let mut scopes = 0;
+    for line in text
+        .lines()
+        .filter_map(|line| line.strip_prefix("dispatch_observer "))
+    {
+        let parts = line.splitn(7, ' ').collect::<Vec<_>>();
+        if parts.len() != 7 {
+            return Err("incomplete native observer event".into());
+        }
+        let mut fields = Vec::new();
+        for (key, part) in [
+            "event",
+            "slot",
+            "value",
+            "monotonic_ns",
+            "thread",
+            "thread_error",
+            "message",
+        ]
+        .into_iter()
+        .zip(parts)
+        {
+            fields.push(
+                part.strip_prefix(&format!("{key}="))
+                    .ok_or("invalid native observer event fields")?,
+            );
+        }
+        let number = |index: usize| -> Result<u64> {
+            let value: u64 = fields[index].parse()?;
+            if value.to_string() != fields[index] {
+                return Err("noncanonical native observer integer".into());
+            }
+            Ok(value)
+        };
+        let slot = usize::try_from(number(1)?)?;
+        let value = number(2)?;
+        let time = number(3)?;
+        let thread = number(4)?;
+        if time == 0 || thread == 0 || number(5)? != 0 {
+            return Err("native observer lacks clock/thread evidence".into());
+        }
+        if fields[0] == "scope" {
+            if slot != 16 || value != 1 || fields[6] != "diagnostic_only_not_parity_oracle" {
+                return Err("observer scope relabelled as parity".into());
+            }
+            scopes += 1;
+            continue;
+        }
+        let kind = match fields[0] {"create"=>0,"wait_enter"=>1,"wait_return"=>2,"signal_enter"=>3,"signal_return"=>4,_=>return Err("observer source error, late observation or unknown event cannot certify this successful series".into())};
+        if slot >= 3
+            || (kind != 4 && value != 0)
+            || fields[6]
+                != if kind == 0 {
+                    "native_create_returned"
+                } else {
+                    ""
+                }
+            || times[slot][kind].replace(time).is_some()
+        {
+            return Err(
+                "observer wait failed, native create was null or event was duplicated".into(),
+            );
+        }
+        threads[slot][kind] = thread;
+    }
+    if scopes != 1 {
+        return Err("missing or duplicated diagnostic observer scope".into());
+    }
+    let mut output = [[0; 5]; 3];
+    for slot in 0..3 {
+        for kind in 0..5 {
+            output[slot][kind] =
+                times[slot][kind].ok_or("incomplete native observer semaphore lifetime")?;
+        }
+        let [create, enter, returned, signal, signalled] = output[slot];
+        if create > enter
+            || enter > returned
+            || create > signal
+            || signal > signalled
+            || threads[slot][0..3] != [threads[slot][0]; 3]
+            || threads[slot][3] != threads[slot][4]
+        {
+            return Err("observer native wait/signal clock or thread continuity differs".into());
+        }
+    }
+    Ok(output)
+}
 fn appkit_state(bytes: &[u8]) -> Result<[u64; 3]> {
     appkit_loop_state(bytes, "source_capture_passed")
 }
@@ -431,6 +639,45 @@ fn traces(text: &str, g: &Geometry) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_failed_missing_duplicate_and_late_observer_wait_records() {
+        let mut good = String::from(
+            "dispatch_observer event=scope slot=16 value=1 monotonic_ns=1 thread=1 thread_error=0 message=diagnostic_only_not_parity_oracle\n",
+        );
+        for slot in 0..3 {
+            for (event, time, thread, message, value) in [
+                ("create", 10, 7, "native_create_returned", 0),
+                ("wait_enter", 20, 7, "", 0),
+                ("signal_enter", 30, 9, "", 0),
+                ("signal_return", 40, 9, "", 1),
+                ("wait_return", 50, 7, "", 0),
+            ] {
+                good.push_str(&format!("dispatch_observer event={event} slot={slot} value={value} monotonic_ns={time} thread={thread} thread_error=0 message={message}\n"));
+            }
+        }
+        assert_eq!(observer_waits(&good).unwrap(), [[10, 20, 50, 30, 40]; 3]);
+        for bad in [
+            good.replace(
+                "event=wait_return slot=0 value=0",
+                "event=wait_return slot=0 value=1",
+            ),
+            good.replace("event=wait_return slot=0", "event=wait_return slot=3"),
+            good.replace("thread_error=0", "thread_error=1"),
+            good.replace("thread=7", "thread=0"),
+            good.replace(
+                "message=native_create_returned",
+                "message=native_create_null",
+            ),
+            good.replace("monotonic_ns=50", "monotonic_ns=19"),
+            good.replace("event=signal_return", "event=late_observation_end"),
+            good.replace("event=wait_enter", "event=wait_return"),
+            good.lines().skip(1).collect::<Vec<_>>().join("\n"),
+            good.lines().take(15).collect::<Vec<_>>().join("\n"),
+            good.clone() + good.lines().next().unwrap() + "\n",
+        ] {
+            assert!(observer_waits(&bad).is_err(), "accepted {bad}");
+        }
+    }
     #[test]
     fn rejects_unclosed_scene_missing_polling_and_consumer_completion_substitution() {
         let good = "nsapplication_initialized=1\nnsapp_present_before=1\nnsapp_present_after=1\nmain_thread=1\npolls=7\nevents=0\nupdates=7\nwindow_closed=1\n";

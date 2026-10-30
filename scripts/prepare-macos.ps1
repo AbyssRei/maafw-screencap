@@ -41,13 +41,19 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
             throw "$Name exited with $code ($status); see $log"
         }
         $observed=Get-Content -LiteralPath $log -Raw
+        if($Name -eq 'macos-display-observer-same-path-consumer' -and
+            (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or
+             -not $observed.Contains('event=wait_return slot=0 value=0') -or
+             -not $observed.Contains('original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed'))){
+            $status='failed';throw 'Expected the separate same-path observer and three actual known-patch captures; no original/Rust parity claim'
+        }
         if($Name -match '^rust-macos-display-(patch|host-premise)-dispatch-observer$' -and
             (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or -not $observed.Contains('event=wait_return slot=0'))){
             $status='failed';throw 'Expected the separate diagnostic executable and a real native wait return, never a parity oracle'
@@ -217,6 +223,8 @@ try {
             try { Run-RustMacosProbe $probe[0] ('backends::macos::screen_capture_kit::tests::'+$probe[1]) $executable $rustArtifacts }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
+        try {Run-ObservedMacosSamePathProbe $rustArtifacts}
+        catch {$failed=$true;Write-Host $_.Exception.Message}
     }else{
     $messages=Join-Path $inputRoot compiler-artifacts.jsonl
     $log=Join-Path $logsRoot native-build.log

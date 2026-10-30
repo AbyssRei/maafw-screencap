@@ -301,7 +301,7 @@ int main(int argc,char** argv) {
             build.close();require(build.good(),"cannot save actual OpenCV optimization information");
             require(cv::useOptimized() && cv::checkHardwareSupport(CV_CPU_NEON),"native NEON/OpenCV optimization unavailable");
 #ifdef MFS_MAC_DISPATCH_OBSERVER
-            require(mode=="display-patch" || mode=="display-patch-host-premise","dispatch observer requires an explicit display diagnostic");
+            require(mode=="display-patch" || mode=="display-patch-host-premise" || mode=="display-scene","dispatch observer requires an explicit display diagnostic or its owned scene");
             MfsMacObserve::event("scope",16,1,"diagnostic_only_not_parity_oracle");
 #endif
             if(mode=="windows") { windows(app,directory); }

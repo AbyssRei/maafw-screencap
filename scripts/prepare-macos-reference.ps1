@@ -230,3 +230,78 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         if($originalFailure){throw $originalFailure}
     }
 }
+
+# Independent instrumented control. Never writes source-oracle-status.json or
+# supplies its images to an unchanged-source/Rust acceptance probe.
+function Run-ObservedMacosSamePathProbe([string]$Artifacts) {
+    $directory=Join-Path $Artifacts display-observer-same-path
+    $scene=Join-Path $directory scene
+    $consumer=Join-Path $directory consumer
+    New-Item -ItemType Directory -Path $directory,$scene,$consumer|Out-Null
+    [IO.File]::WriteAllText((Join-Path $directory diagnostic-only.txt),"observer_same_path=1`noriginal_oracle=0`nrust_comparison=0`n")
+    $server=$null;$serverOut=$null;$serverError=$null;$consumerFailure=$null
+    try {
+        $program=$script:MacosObservedExecutable
+        $info=[Diagnostics.ProcessStartInfo]::new($program)
+        $info.ArgumentList.Add('display-scene');$info.ArgumentList.Add($scene)
+        $info.UseShellExecute=$false;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
+        $server=[Diagnostics.Process]::Start($info)
+        $serverOut=$server.StandardOutput.ReadToEndAsync();$serverError=$server.StandardError.ReadToEndAsync()
+        $ready=Join-Path $scene ready.json
+        $until=[DateTime]::UtcNow.AddSeconds(20)
+        while(-not(Test-Path -LiteralPath $ready)) {
+            if($server.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Same-path observer scene did not publish its owned identity'}
+            Start-Sleep -Milliseconds 25
+        }
+        $identity=Get-Content -LiteralPath $ready -Raw|ConvertFrom-Json
+        if($identity.owner_pid -ne $server.Id -or $identity.display_patch -ne 1 -or $identity.width -ne 47 -or $identity.height -ne 31 -or $identity.window_id -le 0 -or $identity.colour -ne 'green'){throw 'Same-path observer scene identity differs'}
+        $hash=(Get-FileHash -LiteralPath $program -Algorithm SHA256).Hash.ToLowerInvariant()
+        $mode=[int][IO.File]::GetUnixFileMode($program)
+        $binaries=Join-Path $directory scene-executables
+        New-Item -ItemType Directory -Path $binaries|Out-Null
+        foreach($side in @('consumer','scene')) {
+            $saved=Join-Path $binaries $side
+            [IO.File]::Copy($program,$saved,$false)
+            if((Get-FileHash -LiteralPath $saved -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash){throw 'Observer archived executable changed'}
+        }
+        Json (Join-Path $directory scene-executable-identity.json) ([ordered]@{
+            layout_version=1;consumer_path=$program;scene_path=$program
+            consumer_sha256=$hash;scene_sha256=$hash;consumer_unix_mode=$mode;scene_unix_mode=$mode;scene_pid=$server.Id
+        })
+        try {Step macos-display-observer-same-path-consumer $program @('display-patch',$consumer,[string]$identity.window_id)}
+        catch {$consumerFailure=$_}
+        Copy-Item -LiteralPath (Join-Path $logsRoot macos-display-observer-same-path-consumer.log) -Destination (Join-Path $directory consumer-log.txt)
+        if((Get-FileHash -LiteralPath $program -Algorithm SHA256).Hash.ToLowerInvariant() -ne $hash -or [int][IO.File]::GetUnixFileMode($program) -ne $mode){throw 'Running observer executable identity changed'}
+    }catch{
+        $log=Join-Path $logsRoot macos-display-observer-same-path-probe-error.log
+        $_.Exception.ToString()|Set-Content -LiteralPath $log
+        $classification=if($server -and $server.HasExited -and $server.ExitCode -eq 77){'missing_environment'}else{'failed'}
+        $checks.Add([ordered]@{name='macos-display-observer-same-path-probe';status=$classification;log=(Artifact $log)})
+        throw
+    }finally{
+        if($server) {
+            $log=Join-Path $logsRoot macos-display-observer-same-path-scene-stop.log
+            $status='failed'
+            try {
+                $unexpected=$server.HasExited -and -not(Test-Path -LiteralPath (Join-Path $scene stop))
+                if(-not $server.HasExited){[IO.File]::WriteAllText((Join-Path $scene stop),'stop')}
+                $forced=-not $server.WaitForExit(10000)
+                if($forced){$server.Kill();$server.WaitForExit()}
+                $stdout=$serverOut.GetAwaiter().GetResult();$stderr=$serverError.GetAwaiter().GetResult()
+                [IO.File]::WriteAllText((Join-Path $directory scene-stdout.log),$stdout)
+                [IO.File]::WriteAllText((Join-Path $directory scene-stderr.log),$stderr)
+                "owned_pid=$($server.Id)`nexit=$($server.ExitCode)`nunexpected=$unexpected`nforced=$forced"|Set-Content -LiteralPath $log
+                if(-not $unexpected -and -not $forced -and $server.ExitCode -eq 0 -and $stdout.Contains('owned macOS scene stop=1 main_thread=1 passed') -and $stderr.Contains('dispatch_observer event=scope slot=16 value=1')){$status='passed'}
+                elseif($server.ExitCode -eq 77){$status='missing_environment'}
+            }finally{
+                $checks.Add([ordered]@{name='macos-display-observer-same-path-scene-stop';status=$status;log=(Artifact $log)})
+                $server.Dispose()
+            }
+        }
+    }
+    $recordFailure=$null
+    try {Step macos-display-observer-same-path-records $ConfigureTool @('upstream-trace','macos-display-observer-same-path',$directory)}
+    catch {$recordFailure=$_}
+    if($consumerFailure){throw $consumerFailure}
+    if($recordFailure){throw $recordFailure}
+}
