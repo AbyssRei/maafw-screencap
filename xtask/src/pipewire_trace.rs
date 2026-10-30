@@ -26,6 +26,9 @@ pub fn run(args: &[String]) -> Result<()> {
         Some("macos-display-distinct-host") => {
             Some(crate::macos_display_patch::Probe::DistinctHost)
         }
+        Some("macos-display-foundation-consumer") => {
+            Some(crate::macos_display_patch::Probe::FoundationConsumer)
+        }
         _ => None,
     };
     if let Some(probe) = display_probe {
