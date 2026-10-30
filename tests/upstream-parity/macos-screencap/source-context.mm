@@ -269,15 +269,21 @@ int main(int argc,char** argv) {
             return 77;
         }
         @autoreleasepool {
-            NSApplication* app=[NSApplication sharedApplication];
-            require([app setActivationPolicy:NSApplicationActivationPolicyAccessory],"fixture activation policy rejected");
-            [app finishLaunching];
+            const std::string mode=argv[1];
+            const bool foundation_consumer=mode=="display-patch-foundation-consumer";
+            NSApplication* app=nil;
+            if(foundation_consumer) {
+                require(NSApp==nil,"Foundation consumer already has an NSApplication instance");
+            } else {
+                app=[NSApplication sharedApplication];
+                require([app setActivationPolicy:NSApplicationActivationPolicyAccessory],"fixture activation policy rejected");
+                [app finishLaunching];
+            }
             const std::filesystem::path directory=argv[2];std::filesystem::create_directories(directory);
             std::ofstream build(directory/"opencv-build.txt");
             build<<cv::getBuildInformation()<<"\nCPU features: "<<cv::getCPUFeaturesLine()<<'\n';
             build.close();require(build.good(),"cannot save actual OpenCV optimization information");
             require(cv::useOptimized() && cv::checkHardwareSupport(CV_CPU_NEON),"native NEON/OpenCV optimization unavailable");
-            const std::string mode=argv[1];
 #ifdef MFS_MAC_DISPATCH_OBSERVER
             require(mode=="display-patch" || mode=="display-patch-host-premise","dispatch observer requires an explicit display diagnostic");
             MfsMacObserve::event("scope",16,1,"diagnostic_only_not_parity_oracle");
@@ -288,6 +294,7 @@ int main(int argc,char** argv) {
             else if(mode=="display-scene") { display_patch_scene(app,directory); }
             else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
             else if(mode=="display-patch-host-premise" && argc==5) { display_patch_host_premise(directory,argv[3],argv[4]); }
+            else if(foundation_consumer && argc==4) { display_patch_foundation_consumer(directory,argv[3]); }
             else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
             else if(mode=="manager-external-window" && argc==4) { manager_external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }

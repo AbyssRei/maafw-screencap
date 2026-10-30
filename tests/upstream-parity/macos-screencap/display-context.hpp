@@ -100,6 +100,32 @@ void display_patch(const std::filesystem::path& directory,const char* argument) 
     for(size_t call=0;call<held.size();++call) {save(held[call],directory/("display-held-"+std::to_string(call)+".source.bgr"));display_pixels(held[call],g);}
     std::cout<<"original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed\n";
 }
+// Same native display queries, source class, five-second wait and main-thread
+// Foundation run loop. Only the fixture's NSApplication initialization differs;
+// the owned scene continues to use AppKit in its separate same-path process.
+void display_patch_foundation_consumer(const std::filesystem::path& directory,const char* argument) {
+    require(NSApp==nil,"Foundation consumer unexpectedly initialized AppKit before capture");
+    // Do not add file IO before the original call: earlier instrumentation
+    // already changed outcomes. Record the observed premise only afterward.
+    const auto record=[&](bool passed) {
+        std::ofstream state(directory/"foundation-consumer-state.txt",std::ios::binary);
+        state<<"nsapplication_initialized=0\nnsapp_nil_before=1\nnsapp_nil_after="<<(NSApp==nil)
+             <<"\nsource_capture_passed="<<passed<<'\n';state.close();
+        require(state.good(),"cannot record Foundation consumer premise");
+    };
+    try {
+        display_patch(directory,argument);
+    } catch(...) {
+        const auto primary=std::current_exception();
+        try {record(false);} catch(const std::exception& error) {
+            std::cerr<<"Foundation consumer state recording also failed: "<<error.what()<<'\n';
+        }
+        std::rethrow_exception(primary);
+    }
+    record(true);
+    require(NSApp==nil,"Foundation consumer premise changed during native capture");
+    std::cout<<"original macOS foundation_consumer nsapplication_initialized=0 nsapp_nil_before=1 nsapp_nil_after=1 captures=3 passed\n";
+}
 // A separate diagnostic process deliberately performs no consumer-side native
 // geometry queries. The scene host's snapshot is an EXPECTATION, not evidence
 // of which display this consumer actually enumerated. Limit it to one display;
