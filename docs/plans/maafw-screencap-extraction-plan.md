@@ -77,7 +77,7 @@ Node.js、Zig、Go、Java、C# 按实际消费者需求逐项加入；异步流�
 | 项目 | 来源基线或实际构建记录 |
 | --- | --- |
 | 原始 MaaFramework 祖先 | `0fc6025c2fc224a171b57d89505e8d47acd2a8b1`；历史 U 的来源及新版 fork 的范围比较依据 |
-| 当前提取来源 F | `AbyssRei/MaaFramework` 的 `ee2569a531666a1911b4c306e4c7f734b6bcb774`，tree `984738aa7cacd6d8fb141983d5025c7e78679493`；仅正式测试相对父修订改变，生产 helper 字节未变；分支名不能替代固定身份，来源准备不等于完整 F 验收 |
+| 当前提取来源 F | `AbyssRei/MaaFramework` 的 `3fa6dc4f61a1f159dfeed371dfa784d939e90bb9`，tree `5555b9fba77108d3dab322561ce5a574cd89d34d`；包含全屏候选的一次有界复核、精确回归及根 CI 接入；分支名不能替代固定身份，来源准备不等于完整 F 验收 |
 | PR #1587 | F 包含成员评审后的修复；旧 `54b116aa89f70e5ae156c05120cabaddca7702a8` / `f603a04633b0e43a8bbcb94ddef60fc349ad29a1` 仅作历史来源，不能当作修正版或在 P2 重复应用 |
 | MaaUtils | 参考程序需要时采用最新正式版；与固定上游调用不兼容的构建适配单独验证并记录 |
 | OpenCV | 参考程序、F 验收 binding/适配器及调用端适配验收采用最新正式版；记录实际解析版本、来源、模块与构建选项，最终基础核心不依赖且首版产品包不附带其二进制 |
@@ -127,12 +127,12 @@ P5 按实际源码/二进制组成及动态/静态链接方式核验 LGPL 分发
 
 2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：采用修正后的 fork 作为提取来源，替代 2026-10-26 固定旧 head 的计划。[成员 MistEO 的评审](https://github.com/MaaXYZ/MaaFramework/pull/1587#issuecomment-6492173498)指出全局 rcMonitor 和 ±8px 外窗口判据的回归。旧两条提交及累计差异保留为历史，不再是计划中的最终修复。
 
-fork 已新增并推送修复提交 `a434521e7f49cff97f92117add554038b523eef9` 及正式测试后继 `ee2569a531666a1911b4c306e4c7f734b6bcb774`。当前 F 以独立修订归档后者的实际 commit/tree、四条提交、累计差异和来源文件哈希，旧 F 及其结果保持原身份；累计差异精确限定为 HwndUtils.hpp 与三份 window_geometry 测试文件，生产 helper 在两版 F 之间字节不变。不得跟随滚动分支，也不得仅因 PR 状态改变自动换源，不顺便更新无关 upstream 源码。新版正式 CTest 2/2、52 个脚本与 3 个真实 Win32 几何及屏幕像素场景通过，首次屏幕像素见证失败继续保留；完整截图调用链仍须新版验收。
+fork 当前 head 为 `3fa6dc4f61a1f159dfeed371dfa784d939e90bb9`。在 a434521e 的精确客户区修复和 ee2569a5 的正式像素测试之后，7dc130bb 加入一次全屏候选复核、精确位置/尺寸断言与根工程 CI，3fa6dc4f 调整 CI 配置位置以避免与上游无关更新冲突。当前 F 独立归档六条提交、实际 commit/tree 和精确六文件累计差异：HwndUtils.hpp、三份 window_geometry 测试、根 CMakeLists.txt 与 test.yml。旧 F 及其结果保持原身份；来源策略分别验证 v1 四文件与 v2 六文件，不覆盖旧清单。不得跟随滚动分支或顺便更新无关 upstream 源码。本机正式 CTest 2/2、58 个脚本与 3 个真实 Win32 几何/屏幕像素场景通过，61 组 C++/Rust helper 对照通过；首次屏幕像素失败继续保留。完整截图调用链仍须新版验收，CI 状态按确切 head 单独记录。
 
 变更集中在 `source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp` 的 `ensure_window_on_screen`：
 
 1. 普通窗口保留工作区 `rcWork` 校正，避免客户区留在任务栏下方。
-2. 沿现有 `WS_POPUP` 判据，在取得客户区及屏幕原点后，只有客户区屏幕矩形四边精确等于所选显示器 `rcMonitor` 时跳过校正。删除外窗口 `covers_monitor` / `fits_monitor` 及固定 ±8px 容差，不更改其他调用者的全屏定义。
+2. 沿现有 `WS_POPUP` 判据，在取得客户区及屏幕原点后，只有客户区屏幕矩形四边精确等于所选显示器 `rcMonitor` 时跳过校正。删除外窗口 `covers_monitor` / `fits_monitor` 及固定 ±8px 容差，不更改其他调用者的全屏定义。 候选豁免须再读一次外矩形、客户区、原点和 style；仅客户区/原点不变且仍为 popup 时豁免，变化则以新几何继续工作区校正，复核查询失败返回失败。这是一次有界复核，不保证外部窗口的原子快照或之后不再变化。
 3. 偏移、尺寸不符、过大或越界客户区继续执行原工作区尺寸钳制和归位；保留查询失败路径、最大化/最小化豁免、调整优先级及原 SetWindowPos flags。坐标比较使用一致的调用线程 DPI 上下文和 RECT 排他右/下边界，Rust 算术保持受检。
 
 上述修正进入 P1 的完整提取，实现与修正版参考程序一致；P2 只冻结和验收，不重复应用旧补丁。完整回归矩阵见第 14.3 节。当前来源工具与 Rust helper 已同步，完整原生捕获与调用链仍待验收，不能因局部通过就称为完整 F 已实现。

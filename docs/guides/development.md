@@ -4,16 +4,16 @@
 
 ## 修正 fork 来源的实施交接
 
-2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：以修正 fork 的确切提交作为完整提取来源 F，PR #1587 的修复进入 P1；P2 改为来源冻结与完整提取验收，不再重复打旧补丁。当前 F 锁定至正式测试后继 `ee2569a531666a1911b4c306e4c7f734b6bcb774`，生产 helper 与父修订 `a434521e7f49cff97f92117add554038b523eef9` 字节相同；两份来源及证据独立保留。来源准备与 Rust/C++ helper 同步已实现；下文既有 U/未打补丁来源结果保持实际历史含义，不重命名为 F。完整新版原生/调用链验收仍未完成。
+2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：以修正 fork 的确切提交作为完整提取来源 F，PR #1587 的修复进入 P1；P2 改为来源冻结与完整提取验收，不再重复打旧补丁。当前 F 锁定至评审后继 `3fa6dc4f61a1f159dfeed371dfa784d939e90bb9`；早期 a434521e/ee2569a5 及各自证据独立保留。7dc130bb 修正全屏候选复核、精确断言和 CI，3fa6dc4f 隔离 CI 配置以保持上游可合并。来源准备与 Rust/C++ helper 同步已实现；下文既有 U/未打补丁来源结果保持实际历史含义，不重命名为 F。完整新版原生/调用链验收仍未完成。
 
 主会话实施顺序：
 
-1. fork 已修正并正常推送：普通窗口按 rcWork 校正，仅 WS_POPUP 客户区屏幕矩形精确等于 rcMonitor 时豁免，删除外窗口 ±8px 条件，保留失败、调整优先级和 flags。新版正式 CTest 2/2 通过，包含 52 个真实头文件脚本案例和 3 个真实 Win32 几何及屏幕像素场景；首次屏幕像素见证失败仍保留。这不等于[计划 §14.3](../plans/maafw-screencap-extraction-plan.md#143-三阶段验收与-pr-专项矩阵)的完整截图验收。
-2. `cargo xtask reference prepare-fork --revision client-exact-ee2569a5 --head ee2569a531666a1911b4c306e4c7f734b6bcb774` 已准备真实 commit/tree、四条提交、75 份来源与精确四文件累计差异。父修订的来源清单与结果保持原字节。旧 `reference prepare` 和固定常量继续校核历史 U/PR；新记录保存在独立 `baselines/f/`、修订级补丁目录，由索引的 `selected_baseline` 指向。新原生批次只消费该明确选择的 F，缺失时拒绝，不回退旧来源。`reference verify` 仍检查历史记录；来源准备本身不重新登记或改写旧结果。
-3. `geometry.rs` 与 WindowApi 脚本已同步，55 个客户区/任务栏/边界/失败案例及完整 C++/Rust 调用序列匹配，既有 helper 检查也通过；私有适配边界由六槽改为八槽以传递实际 rcWork/rcMonitor，并在调用前校核布局，旧适配器明确拒绝。本机显式重放归档 OpenCV/MaaUtils/Boost 输入，从不可变 F 快照重建的适配器另通过 20 轮普通受控窗口 ScreenDC 对照，40 份实际 BGR 文件逐字节匹配已知图样，关闭后持帧断言通过；这不表示新的原生依赖在线验收或精确全屏等专项截图矩阵已通过。受影响 ScreenDC、DesktopDupWindow、manager/factory 的完整新版捕获仍待验收；保留转换、等待和清理时点，无变化的其他平台旧证据须核对来源及范围后才能引用。
+1. fork 已修正并正常推送：普通窗口按 rcWork 校正，仅 WS_POPUP 客户区屏幕矩形精确等于 rcMonitor 时豁免，删除外窗口 ±8px 条件，保留失败、调整优先级和 flags。新版正式 CTest 2/2 通过，包含 58 个真实头文件脚本案例和 3 个真实 Win32 几何及屏幕像素场景；首次屏幕像素见证失败仍保留。这不等于[计划 §14.3](../plans/maafw-screencap-extraction-plan.md#143-三阶段验收与-pr-专项矩阵)的完整截图验收。
+2. `cargo xtask reference prepare-fork --revision client-confirmed-3fa6dc4f --head 3fa6dc4f61a1f159dfeed371dfa784d939e90bb9` 准备真实 commit/tree、六条提交及精确六文件累计差异（helper、三份测试、根 CMake 与 test workflow）。v2 策略显式收录 CI 输入，v1 四文件及其原来源清单仍可验证。父修订的来源清单与结果保持原字节。旧 `reference prepare` 和固定常量继续校核历史 U/PR；新记录保存在独立 `baselines/f/`、修订级补丁目录，由索引的 `selected_baseline` 指向。新原生批次只消费该明确选择的 F，缺失时拒绝，不回退旧来源。`reference verify` 仍检查历史记录；来源准备本身不重新登记或改写旧结果。
+3. `geometry.rs` 与 WindowApi 脚本已同步，61 个客户区/任务栏/边界/失败及查询间 resize/move/style 变化案例的完整 C++/Rust 调用序列匹配。候选豁免只复核一次，使用新几何回落并传播复核错误；不是原子窗口快照。旧 55 案例结果保留其原身份；私有适配边界由六槽改为八槽以传递实际 rcWork/rcMonitor，并在调用前校核布局，旧适配器明确拒绝。本机显式重放归档 OpenCV/MaaUtils/Boost 输入，从不可变 F 快照重建的适配器另通过 20 轮普通受控窗口 ScreenDC 对照，40 份实际 BGR 文件逐字节匹配已知图样，关闭后持帧断言通过；这不表示新的原生依赖在线验收或精确全屏等专项截图矩阵已通过。受影响 ScreenDC、DesktopDupWindow、manager/factory 的完整新版捕获仍待验收；保留转换、等待和清理时点，无变化的其他平台旧证据须核对来源及范围后才能引用。
 4. 本地历史已按用户要求整理：F 准备先于首次 helper 提取，修正及测试在首次提取内同步，后续原生入口继续选择 F；已折叠重复的后期准备提交，将后期修正提交整理为验收记录。两个仓库 refs/worktrees、bundle、旧新映射及原有工作均外置保全；逐快照无关文件未变，最终整树与整理前相同。重建后的初始迁移通过 32 项 workspace 测试、Windows helper 编译、格式、Clippy，以及从当前不可变 F 重建适配器的 55 组 C++/Rust 对照。原生依赖明确重放已有归档，不宣称新一轮原生依赖在线验收。初次候选编译失败与 DLL 路径加载失败分别保留，后者经独立原生加载实验定位后改用解析后的 Windows 路径，源码及 DLL 未变。新历史保存在独立分支，原分支保留；没有强推或改写 fork。
 
-P1 尚未完整验收；P2 来源冻结和 P3 SDK/原生现代化门禁不因该修订提前通过。原 FramePool 包装已知颜色失败、WGC 卸载异常及其他历史失败继续独立保留。fork 的目标提交已通过最新 build/test，PR #1587 已按授权转为 Ready for review，原监控已暂停；这不是合并或本项目全平台验收。
+P1 尚未完整验收；P2 来源冻结和 P3 SDK/原生现代化门禁不因该修订提前通过。原 FramePool 包装已知颜色失败、WGC 卸载异常及其他历史失败继续独立保留。ee2569a5 曾通过 build/test 并转为 Ready for review；3fa6dc4f 的新 build/test 已启动，结果按该 head 单独记录，PR 保持 Ready；这不是合并或本项目全平台验收。
 
 ## 当前仓库与本机命令
 
