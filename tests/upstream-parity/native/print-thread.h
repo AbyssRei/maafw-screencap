@@ -30,6 +30,10 @@ MFS_PARITY_EXPORT int32_t mfs_print_thread_activation_info(void* owner, uint64_t
 MFS_PARITY_EXPORT int32_t mfs_print_thread_prepare(void* owner, uint32_t layered);
 // Synchronous palette update on the actual UI owner; no redraw/capture.
 MFS_PARITY_EXPORT int32_t mfs_print_thread_scene(void* owner, uint32_t alternative);
+// Executes the print-parity geometry control on the existing joined UI owner.
+// Arrays are copied before posting; caller storage is not borrowed by callbacks.
+MFS_PARITY_EXPORT int32_t mfs_print_thread_geometry(void* owner,
+    const int64_t* input, size_t count, int64_t* output, size_t capacity);
 // Diagnostic fixture control only: reproduce layered/transparent restoration
 // with alpha 0 or 255, optionally forcing an owner-thread redraw/presentation.
 // No screenshot call is retried or altered. Not a product helper operation.
