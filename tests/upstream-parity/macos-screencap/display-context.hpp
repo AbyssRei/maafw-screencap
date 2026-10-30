@@ -60,6 +60,8 @@ void display_pixels(const cv::Mat& image,const DisplayGeometry& g) {
     }}
 }
 void display_patch_scene(NSApplication* app,const std::filesystem::path& directory) {
+    const bool nsapp_before=NSApp!=nil;
+    if(appkit_scene) {require(nsapp_before && [NSThread isMainThread],"AppKit scene premise missing before window creation");}
     {
         Window window(app,0);const auto first=display_geometry(0);NSScreen* selected=nil;
         for(NSScreen* screen in [NSScreen screens]) {
@@ -77,6 +79,20 @@ void display_patch_scene(NSApplication* app,const std::filesystem::path& directo
         ready.close();require(ready.good(),"cannot publish display scene identity");std::filesystem::rename(directory/"ready.tmp",directory/"ready.json");
         const auto until=Clock::now()+std::chrono::minutes(3);
         while(!std::filesystem::exists(directory/"stop")) {require(Clock::now()<until,"display scene exceeded lifetime budget");pump();}
+    }
+    if(appkit_scene) {
+        // The Window owner has closed/released on main. Save the producer's
+        // state before acknowledging stop to the independent Rust CPU reader.
+        // This process does not perform or certify the source consumer capture.
+        std::ofstream state(directory/"appkit-scene-state.txt",std::ios::binary);
+        state<<"nsapplication_initialized=1\nnsapp_present_before="<<nsapp_before
+             <<"\nnsapp_present_after="<<(NSApp!=nil)<<"\nmain_thread="<<[NSThread isMainThread]
+             <<"\npolls="<<appkit_polls<<"\nevents="<<appkit_events<<"\nupdates="<<appkit_updates
+             <<"\nwindow_closed=1\n";state.close();
+        require(state.good(),"cannot record AppKit scene premise");
+        require(NSApp!=nil && [NSThread isMainThread] && appkit_polls>0 &&
+            appkit_polls==appkit_updates && appkit_events<=appkit_polls,"AppKit scene event loop premise changed");
+        std::cout<<"owned macOS appkit_scene main_thread=1 event_polling=1 window_closed=1 passed\n";
     }
     std::ofstream stopped(directory/"stopped.tmp");stopped<<"window_closed=1\n";stopped.close();
     require(stopped.good(),"cannot acknowledge display scene closure");std::filesystem::rename(directory/"stopped.tmp",directory/"stopped.txt");

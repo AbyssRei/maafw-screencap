@@ -41,7 +41,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -73,7 +73,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'rust-macos-manager-original-oracle' -and -not $observed.Contains('original macOS manager cycles=20 captures=60 retained=60 connect_capture_calls=0 source_owners_released=20 input_attempts=0 passed')){
             $status='failed';throw 'Expected twenty original manager/source lifecycles and sixty same-window oracle images'
         }
-        if($Name -in @('rust-macos-display-patch-original-oracle','rust-macos-display-distinct-host-original-oracle','rust-macos-display-foundation-consumer-original-oracle','rust-macos-display-appkit-consumer-original-oracle') -and -not $observed.Contains('original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed')){
+        if($Name -in @('rust-macos-display-patch-original-oracle','rust-macos-display-distinct-host-original-oracle','rust-macos-display-foundation-consumer-original-oracle','rust-macos-display-appkit-consumer-original-oracle','rust-macos-display-appkit-scene-original-oracle') -and -not $observed.Contains('original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed')){
             $status='failed';throw 'Expected unchanged original first-display capture of the actual owned patch and native geometry'
         }
         if($Name -eq 'rust-macos-display-foundation-consumer-original-oracle' -and -not $observed.Contains('original macOS foundation_consumer nsapplication_initialized=0 nsapp_nil_before=1 nsapp_nil_after=1 captures=3 passed')) {
@@ -95,7 +95,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             & $ConfigureTool upstream-metadata macos (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS macos) >> $log 2>&1
             if($LASTEXITCODE -ne 0){$status='failed';throw 'Metadata source/Rust artifact validation failed'}
         }
-        if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
+        if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 $status='failed';throw 'Expected exactly one actual Rust macOS test, not a zero-test or ignored run'
             }
@@ -109,6 +109,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 'rust-macos-display-distinct-host' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
                 'rust-macos-display-foundation-consumer' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
                 'rust-macos-display-appkit-consumer' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
+                'rust-macos-display-appkit-scene' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
                 'rust-macos-sample-matrix' {'native macOS sample_matrix cases=4 cycles=20 samples=80 source_images=80 rust_raw=80 rust_bgr=80 retained_cpu=240 native_overwrite=80 native_refs_closed=80 cross_thread_cpu_release=1 capture_permission_requested=0 passed'}
                 'rust-macos-manager' {'native Rust macOS manager cycles=20 captures=60 retained_bgr=60 missing_output_preserved=1 fixture_reclaimed_refs=61 input_none=1 passed'}
                 default {$null}
@@ -210,6 +211,7 @@ try {
             @('rust-macos-display-distinct-host','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
             @('rust-macos-display-foundation-consumer','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
             @('rust-macos-display-appkit-consumer','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
+            @('rust-macos-display-appkit-scene','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
             @('rust-macos-manager','forwards_manager_captures_and_keeps_outputs_through_manager_and_window_shutdown')
         )){
             try { Run-RustMacosProbe $probe[0] ('backends::macos::screen_capture_kit::tests::'+$probe[1]) $executable $rustArtifacts }

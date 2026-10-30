@@ -40,13 +40,13 @@ using Clock=std::chrono::steady_clock;
 void require(bool condition,const char* message) {
     if(!condition) { throw std::runtime_error(message); }
 }
-// Only the explicit AppKit consumer control changes event delivery. Existing
+// Only the explicit AppKit consumer/scene controls change event delivery. Existing
 // Foundation-loop modes remain available with their original failed records.
-bool appkit_consumer=false;
+bool appkit_consumer=false,appkit_scene=false;
 uint64_t appkit_polls=0,appkit_events=0,appkit_updates=0;
 void pump() {
     @autoreleasepool {
-        if(appkit_consumer) {
+        if(appkit_consumer || appkit_scene) {
             require([NSThread isMainThread] && NSApp!=nil,"AppKit event control requires its initialized main-thread host");
             [NSApp updateWindows];++appkit_updates;
             NSEvent* event=[NSApp nextEventMatchingMask:NSEventMaskAny
@@ -285,6 +285,7 @@ int main(int argc,char** argv) {
         @autoreleasepool {
             const std::string mode=argv[1];
             appkit_consumer=mode=="display-patch-appkit-consumer";
+            appkit_scene=mode=="display-scene-appkit";
             const bool foundation_consumer=mode=="display-patch-foundation-consumer";
             NSApplication* app=nil;
             if(foundation_consumer) {
@@ -306,7 +307,7 @@ int main(int argc,char** argv) {
             if(mode=="windows") { windows(app,directory); }
             else if(mode=="display") { display(directory); }
             else if(mode=="scene") { scene(app,directory); }
-            else if(mode=="display-scene") { display_patch_scene(app,directory); }
+            else if(mode=="display-scene" || appkit_scene) { display_patch_scene(app,directory); }
             else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
             else if(mode=="display-patch-host-premise" && argc==5) { display_patch_host_premise(directory,argv[3],argv[4]); }
             else if(foundation_consumer && argc==4) { display_patch_foundation_consumer(directory,argv[3]); }

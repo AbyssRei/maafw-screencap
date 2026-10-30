@@ -38,6 +38,7 @@ pub fn run(args: &[String]) -> Result<()> {
         Some("macos-display-appkit-consumer") => {
             Some(crate::macos_display_patch::Probe::AppkitConsumer)
         }
+        Some("macos-display-appkit-scene") => Some(crate::macos_display_patch::Probe::AppkitScene),
         _ => None,
     };
     if let Some(probe) = display_probe {
