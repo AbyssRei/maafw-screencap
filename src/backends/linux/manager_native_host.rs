@@ -5,9 +5,7 @@ use super::super::{
     Manager,
     host::{InputProvider, WithInput},
 };
-use super::{Client, CloseWatch, Error, Evidence, NativeFactory, SourceFailure};
-
-pub(in crate::backends::linux) type HostedFactory<H> = WithInput<NativeFactory, H>;
+use super::{Client, CloseWatch, Error, Evidence, HostedFactory, NativeFactory, SourceFailure};
 #[derive(Debug)]
 pub(in crate::backends::linux) struct HostConnection {
     pub result: Result<bool, Error>,
