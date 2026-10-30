@@ -20,6 +20,7 @@ mod reference;
 mod review;
 mod windows_delegate;
 mod wlr;
+mod wlr_failures;
 mod wlr_protocol;
 mod wlr_registry;
 
@@ -153,7 +154,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
-                      cargo xtask upstream-protocol <wlr|wlr-registry> <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-protocol <wlr|wlr-registry|wlr-failures> <external directory> [--check-only]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context pipewire  # original source context on native Linux x64\n\n\
                       cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\

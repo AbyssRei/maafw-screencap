@@ -25,6 +25,8 @@ type Release = unsafe extern "C" fn(*mut c_void);
 type Owners = unsafe extern "C" fn() -> u64;
 type Abi = unsafe extern "C" fn(u32) -> usize;
 static LOADER_ERROR: AtomicI32 = AtomicI32::new(0);
+#[path = "wlr_failure_tests.rs"]
+mod failures;
 #[path = "wlr_name_tests.rs"]
 mod names;
 #[path = "wlr_protocol_tests.rs"]
