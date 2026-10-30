@@ -18,6 +18,9 @@ pub fn run(args: &[String]) -> Result<()> {
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
     let mut cleanup_errors = Vec::new();
+    let control = root.join("disconnect-control/disconnect-control.tsv");
+    disconnect_controls(&fs::read_to_string(&control)?)?;
+    artifacts.push(records::artifact(&root, &control)?);
     for side in ["source", "rust"] {
         let directory = root.join(side);
         if side == "rust" {
@@ -79,13 +82,15 @@ pub fn run(args: &[String]) -> Result<()> {
         let log = fs::read_to_string(&path)?;
         if !log.contains("failures ready cycles=20 operations=100 scripted_failed=40 disconnects=20 compositor=0")
             || !log.contains("failures stopped clients=20/20 frames=80/80 copies=60 failed=40 disconnected=20 graceful=1 error=0")
-            || !log.contains("protocol stopped version=3 managers=20/20 frames=80/80 copies=60 graceful=1 error=0") {
+            || !log.contains("protocol stopped version=3 managers=20/20 frames=80/80 copies=60 graceful=1 error=0")
+            || !log.lines().any(|line| line == "deferred disconnect scheduled=20 executed=20 cancelled=0 pending=0") {
             return Err("Native Failed/EOF fixture lifetime/stop evidence differs".into());
         }
         artifacts.push(records::artifact(&root, &path)?);
     }
     let report = serde_json::json!({"layout_version":1,"cycles_per_side":20,"operations_per_side":100,
         "ready_per_side":40,"failed_events_per_side":40,"disconnects_per_side":20,
+        "deferred_disconnect_control_cases":3,"deferred_disconnect_executed_per_side":20,
         "native_producer_inputs":120,"caller_outputs":200,"held_bgr_images":80,"rust_raw_images":40,
         "rust_cleanup_codes":cleanup_errors,"artifacts":artifacts,
         "scope":"Actual native Wayland IPC/SHM fixture: Failed before Buffer, Ready, Failed after an actual SHM overwrite, Ready using the same wl_buffer, and deliberate server client destruction while waiting. No retry of failed assertions. Original source/Rust preserve old output, do no conversion for failed operations, retain the source connected flag after EOF and retain independent successful CPU images through complete native teardown. Rust's absent output API is exercised by a caller retaining its previous owning image. Source host explicitly detaches its output before later successful writes to retain original Mat owners. EOF cleanup error codes are preserved separately from primary failure; balanced fd/task counts do not prove successful protocol destruction. Passive input managers perform no actions. Not a compositor, host desktop, arbitrary disconnect timing, explicit client-close with live snapshots, complete error/resource matrix, public SDK or full P1 acceptance."});
@@ -101,6 +106,28 @@ pub fn run(args: &[String]) -> Result<()> {
     println!(
         "Wlr native failures sides=2 cycles=40 operations=200 ready=80 failed_events=80 disconnects=40 payloads=440 actual_bytes_requests_resources_verified=1 cleanup_errors_preserved=1 full_P1_acceptance=0 passed"
     );
+    Ok(())
+}
+fn disconnect_controls(text: &str) -> Result<()> {
+    let rows = text.lines().collect::<Vec<_>>();
+    if rows.len() != 3 {
+        return Err("Incomplete native disconnect execution/cancellation controls".into());
+    }
+    let mut baseline = None;
+    for (cycle, line) in rows.iter().enumerate() {
+        let v = row(line)?;
+        let cycle = i64::try_from(cycle)?;
+        if v.len() != 8
+            || v[..5] != [cycle, cycle + 1, 1, cycle, 0]
+            || v[5] <= 0
+            || v[5] != v[6]
+            || v[7] != 1
+            || baseline.is_some_and(|previous| previous != v[5])
+        {
+            return Err("Native deferred disconnect control owner/counter mismatch".into());
+        }
+        baseline = Some(v[5]);
+    }
     Ok(())
 }
 fn payload(
@@ -233,6 +260,19 @@ fn resources(text: &str, rust: bool) -> Result<Vec<i64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_uncancelled_idle_or_unclosed_native_control_owners() {
+        let rows = "0\t1\t1\t0\t0\t8\t8\t1\n1\t2\t1\t1\t0\t8\t8\t1\n2\t3\t1\t2\t0\t8\t8\t1\n";
+        assert!(disconnect_controls(rows).is_ok());
+        for bad in [
+            rows.replace("\t8\t8", "\t8\t9"),
+            rows.replacen("1\t2\t1\t1\t0", "1\t2\t1\t0\t1", 1),
+            rows.replacen("2\t3\t1\t2", "2\t3\t2\t1", 1),
+            rows.lines().take(2).collect::<Vec<_>>().join("\n"),
+        ] {
+            assert!(disconnect_controls(&bad).is_err());
+        }
+    }
     #[test]
     fn rejects_failure_relabeling_copied_before_buffer_and_changed_buffer_owners() {
         let observations_text = (0..100)

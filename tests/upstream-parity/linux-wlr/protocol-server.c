@@ -13,8 +13,19 @@
 #include <stdlib.h>
 #include <dlfcn.h>
 #include <limits.h>
+#include <dirent.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
 struct server;
+struct pending_disconnect {
+    struct server* server;
+    struct wl_client* client;
+    struct wl_event_source* idle;
+    struct wl_listener destroyed;
+};
 struct registry_output {
     struct server* server;
     struct wl_global* global;
@@ -34,6 +45,9 @@ struct server {
     FILE* failure_rows;
     unsigned failed_frames, disconnected_clients;
     uint32_t failure_buffers[20];
+    // Stable callback addresses until clients and idle owners have drained.
+    struct pending_disconnect disconnects[20];
+    unsigned disconnect_scheduled, disconnect_executed, disconnect_cancelled, disconnect_pending;
 };
 struct manager { struct server* server; unsigned next, cycle; };
 struct frame { struct server* server; struct mfs_protocol_case input; bool copied; unsigned cycle, phase; };
@@ -43,6 +57,68 @@ static void failure(struct server* s, const char* message)
     fprintf(stderr,"protocol fixture failure: %s\n",message);
     s->error = 1;
     wl_display_terminate(s->display);
+}
+static void disconnect_cancelled(struct wl_listener* listener, void* data)
+{
+    struct pending_disconnect* pending = wl_container_of(listener,pending,destroyed);
+    struct server* s = pending->server;
+    if (data != pending->client || !pending->idle || !s->disconnect_pending) {
+        failure(s,"invalid pending disconnect cancellation");
+        abort(); // Corrupted fixture ownership cannot be safely reclaimed.
+    }
+    // Called only BEFORE the idle callback. That source is still registered;
+    // cancelling during/after its callback would be undefined by libwayland.
+    wl_event_source_remove(pending->idle);
+    pending->idle = NULL;
+    pending->client = NULL;
+    wl_list_remove(&pending->destroyed.link);
+    wl_list_init(&pending->destroyed.link);
+    --s->disconnect_pending;
+    ++s->disconnect_cancelled;
+}
+static void disconnect_idle(void* data)
+{
+    struct pending_disconnect* pending = data;
+    struct server* s = pending->server;
+    struct wl_client* client = pending->client;
+    if (!client || !pending->idle || !s->disconnect_pending) {
+        failure(s,"invalid pending disconnect dispatch");
+        abort(); // Never retain a dangling auto-destroyed idle source.
+    }
+    // libwayland automatically destroys this one-shot source after return.
+    // Detach the client listener first; never remove this running idle source.
+    pending->idle = NULL;
+    pending->client = NULL;
+    wl_list_remove(&pending->destroyed.link);
+    wl_list_init(&pending->destroyed.link);
+    --s->disconnect_pending;
+    wl_client_destroy(client);
+    ++s->disconnect_executed;
+    ++s->disconnected_clients;
+}
+static bool schedule_disconnect(struct server* s, struct wl_client* client, unsigned cycle)
+{
+    if (cycle >= 20 || s->disconnects[cycle].client || s->disconnects[cycle].idle) {
+        failure(s,"duplicate or invalid disconnect owner");
+        return false;
+    }
+    struct pending_disconnect* pending = &s->disconnects[cycle];
+    pending->server = s;
+    pending->client = client;
+    pending->destroyed.notify = disconnect_cancelled;
+    wl_list_init(&pending->destroyed.link);
+    wl_client_add_destroy_listener(client,&pending->destroyed);
+    pending->idle = wl_event_loop_add_idle(wl_display_get_event_loop(s->display),disconnect_idle,pending);
+    if (!pending->idle) {
+        wl_list_remove(&pending->destroyed.link);
+        wl_list_init(&pending->destroyed.link);
+        pending->client = NULL;
+        failure(s,"disconnect idle allocation");
+        return false;
+    }
+    ++s->disconnect_scheduled;
+    ++s->disconnect_pending;
+    return true;
 }
 static void destroy_request(struct wl_client* client, struct wl_resource* resource)
 {
@@ -121,10 +197,9 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
                 || fflush(s->failure_rows) != 0) { failure(s,"save failure request"); return; }
         }
         if (position == 4) {
-            // Deliberate EOF while the real client waits for this request. Do
-            // not dereference m/resource after destroying their native owner.
-            ++s->disconnected_clients;
-            wl_client_destroy(client);
+            // Deliberate EOF while the client waits, after the request dispatch
+            // returns. Its libwayland caller still needs client/connection.
+            (void)schedule_disconnect(s,client,m->cycle);
             return;
         }
         input = position < 2 ? 0 : 4;
@@ -277,9 +352,72 @@ static int stop(int signal, void* data)
     wl_display_terminate(s->display);
     return 0;
 }
+static int fd_count(void)
+{
+    DIR* directory = opendir("/proc/self/fd");
+    if (!directory) { return -1; }
+    int count = 0;
+    struct dirent* entry;
+    errno = 0;
+    while ((entry = readdir(directory))) {
+        if (strcmp(entry->d_name,".") && strcmp(entry->d_name,"..")) { ++count; }
+    }
+    const int read_error = errno;
+    if (closedir(directory) != 0 || read_error) { return -1; }
+    return count;
+}
+static bool disconnect_control(struct server* s)
+{
+    char name[4096];
+    const int length = snprintf(name,sizeof name,"%s/disconnect-control.tsv",s->directory);
+    FILE* rows = length > 0 && (size_t)length < sizeof name ? fopen(name,"wx") : NULL;
+    if (!rows) { failure(s,"open disconnect control record"); return false; }
+    const int baseline = fd_count();
+    bool okay = baseline > 0;
+    for (unsigned cycle = 0; cycle < 3 && okay; ++cycle) {
+        int pair[2] = {-1,-1};
+        struct wl_client* client = NULL;
+        if (socketpair(AF_UNIX,SOCK_STREAM | SOCK_CLOEXEC,0,pair) != 0) { okay = false; }
+        const int server_fd = pair[0];
+        if (okay) {
+            client = wl_client_create(s->display,pair[0]);
+            if (client) { pair[0] = -1; } // Native client now owns this endpoint.
+            else { okay = false; }
+        }
+        if (okay) { okay = schedule_disconnect(s,client,cycle); }
+        if (okay) {
+            if (cycle == 0) { wl_event_loop_dispatch_idle(wl_display_get_event_loop(s->display)); }
+            else if (cycle == 1) { wl_client_destroy(client); }
+            else { wl_display_destroy_clients(s->display); }
+            client = NULL;
+            // No fd allocation intervenes between native destruction and this
+            // observation. Then dispatch again to reject a surviving idle owner.
+            errno = 0;
+            okay = fcntl(server_fd,F_GETFD) == -1 && errno == EBADF;
+            wl_event_loop_dispatch_idle(wl_display_get_event_loop(s->display));
+        }
+        // Failure cleanup is observed separately; it cannot rescue a failed case.
+        wl_display_destroy_clients(s->display);
+        for (unsigned side = 0; side < 2; ++side) {
+            if (pair[side] >= 0 && close(pair[side]) != 0) { okay = false; }
+        }
+        const int final = fd_count();
+        okay = okay && !s->error && final == baseline && wl_list_empty(wl_display_get_client_list(s->display))
+            && s->disconnect_scheduled == cycle + 1 && s->disconnect_executed == 1
+            && s->disconnect_cancelled == cycle && s->disconnect_pending == 0
+            && !s->disconnects[cycle].client && !s->disconnects[cycle].idle;
+        if (fprintf(rows,"%u\t%u\t%u\t%u\t%u\t%d\t%d\t%d\n",cycle,s->disconnect_scheduled,
+            s->disconnect_executed,s->disconnect_cancelled,s->disconnect_pending,baseline,final,okay) < 0
+            || fflush(rows) != 0) { okay = false; }
+    }
+    if (fclose(rows) != 0) { okay = false; }
+    if (!okay) { failure(s,"native disconnect execution/cancellation/owner control"); }
+    else { printf("native deferred disconnect control cases=3 executed=1 client_cancelled=1 shutdown_cancelled=1 pending=0 native_fds_balanced=1 passed\n"); }
+    return okay;
+}
 int main(int argc, char** argv)
 {
-    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0 && strcmp(argv[4],"--failures") != 0)
+    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0 && strcmp(argv[4],"--failures") != 0 && strcmp(argv[4],"--disconnect-control") != 0)
         || strlen(argv[1]) != 1 || argv[1][0] < '1' || argv[1][0] > '3') { return 64; }
     Dl_info owner;
     char actual[PATH_MAX],expected[PATH_MAX];
@@ -294,6 +432,12 @@ int main(int argc, char** argv)
         .failures = argc == 5 && strcmp(argv[4],"--failures") == 0};
     s.display = wl_display_create();
     if (!s.display) { return 1; }
+    if (argc == 5 && strcmp(argv[4],"--disconnect-control") == 0) {
+        const bool okay = disconnect_control(&s);
+        wl_display_destroy_clients(s.display);
+        wl_display_destroy(s.display);
+        return okay ? 0 : 1;
+    }
     struct wl_event_loop* loop = wl_display_get_event_loop(s.display);
     struct wl_event_source* term = wl_event_loop_add_signal(loop,SIGTERM,stop,&s);
     struct wl_event_source* interrupt = wl_event_loop_add_signal(loop,SIGINT,stop,&s);
@@ -335,7 +479,13 @@ cleanup:
     if (!s.stopped || s.error || s.managers_created != managers || s.managers_destroyed != managers
         || s.frames_created != frames || s.frames_destroyed != frames || s.copies != copies) { s.error = 1; }
     if (s.failures) {
-        if (s.failed_frames != 40 || s.disconnected_clients != 20) { s.error = 1; }
+        if (s.failed_frames != 40 || s.disconnected_clients != 20 || s.disconnect_scheduled != 20
+            || s.disconnect_executed != 20 || s.disconnect_cancelled != 0 || s.disconnect_pending != 0) { s.error = 1; }
+        for (unsigned cycle = 0; cycle < 20; ++cycle) {
+            if (s.disconnects[cycle].client || s.disconnects[cycle].idle) { s.error = 1; }
+        }
+        printf("deferred disconnect scheduled=%u executed=%u cancelled=%u pending=%u\n",
+            s.disconnect_scheduled,s.disconnect_executed,s.disconnect_cancelled,s.disconnect_pending);
         printf("failures stopped clients=%u/%u frames=%u/%u copies=%u failed=%u disconnected=%u graceful=%d error=%d\n",
             s.managers_created,s.managers_destroyed,s.frames_created,s.frames_destroyed,s.copies,
             s.failed_frames,s.disconnected_clients,s.stopped,s.error);

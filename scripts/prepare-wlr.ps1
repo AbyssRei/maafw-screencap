@@ -69,6 +69,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected eighty native registry captures and actual retained-output/closure assertions, not a zero-test run'
             }
         }
+        if($Name -eq 'native-wlr-deferred-disconnect-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^native deferred disconnect control cases=3 executed=1 client_cancelled=1 shutdown_cancelled=1 pending=0 native_fds_balanced=1 passed\r?$') {
+            throw 'Expected native idle execution, early client/shutdown cancellation and balanced fd owners'
+        }
         if($Name -in @('original-wlr-failures','rust-wlr-failures')){
             $observed=Get-Content -LiteralPath $log -Raw
             $summary=if($Name -eq 'original-wlr-failures'){
