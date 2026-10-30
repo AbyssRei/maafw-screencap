@@ -206,6 +206,14 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected real native host true/false/error capture, retained pixels and native-before-host close'
             }
         }
+        if($Name -in @('original-pipewire-host-offer','rust-pipewire-host-offer')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $prefix=$Name.StartsWith('original-') ? 'original' : 'native Rust'
+            $expected=$prefix+' PipeWire host offer cycles=20 create_errors=20 native_init=0 retained_identity=20 unconsumed_after_destroy=20 fixture_reclaims=20 capture=0 passed'
+            if(-not $observed.Contains($expected) -or ($Name.StartsWith('rust-') -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
+                throw 'Expected exact native pre-init host error, retained socket identity and separately labelled fixture reclaim'
+            }
+        }
         if($Name -in @('original-pipewire-manager-daemon','original-pipewire-manager-fd','rust-pipewire-manager-daemon','rust-pipewire-manager-fd')) {
             $observed=Get-Content -LiteralPath $log -Raw
             $fdMode=$Name.EndsWith('-fd')
@@ -512,6 +520,15 @@ try {
         # The enclosing finally archives all referenceArtifacts, including a
         # partial causal fixture on failure. Do not register the same file twice.
         try { Step rust-task-observer-controls timeout @('--signal=TERM','--kill-after=5s','30s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::task_observer::tests::','--','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        $offerMatrix=Join-Path $referenceArtifacts manager-host-offer-matrix
+        New-Item -ItemType Directory -Path $offerMatrix|Out-Null
+        $env:MFS_P1_PIPEWIRE_OFFER_ARTIFACTS=Join-Path $offerMatrix rust
+        try { Step original-pipewire-host-offer timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--manager-host-offer',(Join-Path $offerMatrix source)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-host-offer timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::manager::native::offer_tests::retains_the_unconsumed_offer_after_host_construction_error_until_fixture_reclaim','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-host-offer-records $ConfigureTool @('upstream-trace','pipewire-host-offer',$offerMatrix) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         $managerTest=$null
         try {

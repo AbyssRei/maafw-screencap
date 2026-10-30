@@ -29,9 +29,10 @@ struct NoneInput : InputBase {};
 struct WlrInput : InputBase { explicit WlrInput(std::shared_ptr<WaylandClient>) { throw std::logic_error("input excluded"); } };
 #if defined(MFS_MANAGER_HOST_INPUT)
 struct HostInputInitFailure : std::runtime_error { HostInputInitFailure() : std::runtime_error("controlled host init97") {} };
+struct HostInputCreateFailure : std::runtime_error { HostInputCreateFailure() : std::runtime_error("controlled host create98") {} };
 struct HostInputState {
     bool enabled=false;
-    unsigned outcome=0,native_constructed=0,created=0,initialized=0,inactive=0,destroyed=0;
+    unsigned outcome=0,native_constructed=0,creation_attempts=0,created=0,initialized=0,inactive=0,destroyed=0;
     unsigned native_closed_before_input=0,host_fds_closed=0,errors=0;
     int capture_observation_error=0;
     std::array<int,2> close_errors{0,0};
@@ -44,6 +45,8 @@ struct UInput : InputBase {
         if(!host_input.enabled) { throw std::logic_error("input excluded outside the named host entry"); }
         host_input.native_constructed=1; // Original create_input follows PW construction.
         if(path.string()!="/capture-only-host" || width!=17 || height!=19) { throw std::logic_error("retained host configuration differs"); }
+        ++host_input.creation_attempts;
+        if(host_input.outcome==3) { throw HostInputCreateFailure(); }
         if(::socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,owned.data())!=0) { throw std::runtime_error("host socketpair construction failed"); }
         ++host_input.created;
     }

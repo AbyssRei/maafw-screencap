@@ -295,9 +295,13 @@ PipeWire manager 首轮批次保留 81 项通过和 5 项失败：新的常量 c
 同一个私有 Linux manager 现保留非 None 输入相关的原截图初始化顺序：截图或输入选择 Wlr 时才创建共享 client，先构造截图再检查输入 selector，随后依次初始化截图和宿主提供的输入 owner；输入构造/初始化失败后仍保留截图转发与 inactive，原 get_features 从现存输入 owner 查询并掩码原两项标志，不依赖 connected。`Factory` 的输入边界只包含构造、init、features 和 inactive，不包含输入动作。默认 native factory 仍只提供 None；非 None 的已知 selector 明确返回 HostInputRequired，不能静默改配置，也不表示完整兼容入口已经接通。新增原函数体模型编译未改写 get_features 和 create_input，输入类由标明的宿主脚本提供；本机 2304 案例对照覆盖六种输入值、四种截图值、共享 client、两次连接、构造/初始化异常与 false、持存截图和 features，未执行原生输入或后端捕获。manager 控制与精确源模型入口加入 PipeWire 编排；原生结果按实际批次记录，不据此接受真实 Portal 授权或完整兼容入口。
 原生接入现新增内部 `WithInput` 组合和带类型的 `InputProvider`/`InputOwner`：只替换输入初始化边界，client 与截图构造、原生 init、取帧、转换及关闭仍使用同一个 NativeFactory/Backend。输入 owner 自持真实资源，可长于临时 provider；inactive 从现存 owner 执行，保留原截图再输入的顺序。`HostConnection` 分别保留 init 的 true/false/错误、原生失败和最终 close 观察，宿主初始化返回错误仍可检查已保留的截图对象。默认 NativeFactory 仍只提供 None；带宿主接入不改写原配置。非负 fd 的源入口继续要求显式 unsafe 独占 offer，权限仅在该次构造栈内；宿主构造失败时未消费 fd 的一般所有权仍需单独验证。
 
+该适配首轮 Linux 原生测试编译因 Portal 关联类型误写为 Handle 而失败；修正为 Helper 后已进入原生执行，但 Clippy 拒绝通用 manager 比 Backend/Converter/Attempt 更宽的可见范围及未使用的 HostedFactory 重导出。现将 manager 限于 Linux 内部、从实际使用处引用组合别名，保持原类型和行为，不放宽 warnings。完整修正后的原生门禁仍待验证，旧编译/Clippy 失败分别保留。
+
 新的显式 PipeWire `--manager-host`/Rust 精确测试计划各执行二十个真实 private-daemon/supplied-fd 生命周期，宿主 init true/false/受控错误 97 分别七/七/六次；错误码 97 是夹具定义的宿主边界控制。输入动作与实际 DBus/desktop Portal 授权均不执行。Rust 经已迁移的 KWin 配置构造器交接一个真实 socket，helper 在原生连接前结束；source 侧为明确的受控 host offer，不能据此声称完整原 KWin C ABI 已通过。宿主 owner 另持真实 socketpair，要求捕获 fd 在其析构前已关闭，随后两个宿主 fd 仅各关闭一次。每个场景仍捕获三张真实 BGR，包括 init false/错误后的调用，保留 raw/BGR 至原生和宿主销毁之后；代码已编排，Linux 原生构建/运行待验证。
 
 `cargo xtask upstream-trace pipewire-host <外部 matrix> [--check-only]` 只复核实际记录，不取帧。v1 数据含 source/rust 的二十二列 cases、基线和每次关闭后的 task IDs、即时与持帧像素；独立核对宿主主错误/清理码、features 保留见证、helper 先结束且 offer 仍打开、native-before-host 关闭、资源数量及精确任务集合，逐字节验证 360 份已知 RGB/BGR 与持帧文件，并拒绝缺失/多余像素文件。原生结果到达前不能把生成器、portable 控制或空记录当作该入口验收。
+
+另新增独立的 pre-init 宿主构造失败控制与 `cargo xtask upstream-trace pipewire-host-offer <外部 matrix> [--check-only]` 实际记录校核，待原生验证。原 C++ manager/PipeWire 构造与销毁及同一 Rust 实现各执行二十次：从真实 socketpair 的宿主端 dup 一个独占 offer，先关闭原宿主 fd，再令输入构造边界返回受控错误 98，阻止进入原生 init。要求截图对象仍在、无输入 owner/features，未初始化截图拒绝并保留调用方输出；同一 SO_COOKIE 在 helper 关闭、构造错误和 manager/native 销毁后都不变，先记录未消费残留，再由夹具恰好关闭一次，并核对精确 task IDs/fd。每侧十九列记录由独立 xtask 逐项复算；不把夹具回收记为产品清理成功，不执行授权/DBus、原生 core/loop 或成功取帧，也不据此推广一般建连失败的 fd 消费保证。
 
 首个原生 Linux 配置批次在 meojson 准备阶段失败：PowerShell 函数的 Inputs 参数遮蔽调用方同名记录列表，使 Save 对字符串调用 Add；尚未编译或执行配置 oracle/捕获。该记录保留，参数现改为 InputDirectory，并以与原生调用方相同的 inputs 列表作用域复验；原生修复结果仍待新的 Actions，不将先前 Windows 的不同列表名称包装器当作该修复的原生验证。
 
