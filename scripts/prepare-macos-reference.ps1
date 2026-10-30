@@ -57,6 +57,27 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_macos_source_context
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
     Step macos-reference-linkage otool @('-L',$executable)
+    # A byte-identical scene host at another pathname isolates host identity
+    # from the observer's code/IO changes. Keep the original consumer intact.
+    $script:MacosDistinctSceneExecutable=Join-Path $build mfs_macos_scene_identity_control
+    [IO.File]::Copy($executable,$script:MacosDistinctSceneExecutable,$false)
+    $mode=[IO.File]::GetUnixFileMode($executable)
+    [IO.File]::SetUnixFileMode($script:MacosDistinctSceneExecutable,$mode)
+    $sceneMode=[IO.File]::GetUnixFileMode($script:MacosDistinctSceneExecutable)
+    $consumerHash=(Get-FileHash -LiteralPath $executable -Algorithm SHA256).Hash.ToLowerInvariant()
+    $sceneHash=(Get-FileHash -LiteralPath $script:MacosDistinctSceneExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
+    if($consumerHash -ne $sceneHash -or $mode -ne $sceneMode -or -not($mode -band [IO.UnixFileMode]::UserExecute)){
+        throw 'Distinct scene executable must retain the original bytes and executable mode'
+    }
+    $script:MacosSceneIdentity=[ordered]@{
+        layout_version=1;consumer_path=$executable;scene_path=$script:MacosDistinctSceneExecutable
+        consumer_sha256=$consumerHash;scene_sha256=$sceneHash
+        consumer_unix_mode=[int]$mode;scene_unix_mode=[int]$sceneMode
+    }
+    $sceneIdentity=Join-Path $refInputs scene-executable-identity.json
+    Json $sceneIdentity $script:MacosSceneIdentity;Save $sceneIdentity
+    $saved=Join-Path $refInputs mfs_macos_scene_identity_control
+    Copy-Item -LiteralPath $script:MacosDistinctSceneExecutable -Destination $saved;Save $saved
     $script:MacosObservedExecutable=Join-Path $build mfs_macos_observed_context
     $saved=Join-Path $refInputs mfs_macos_observed_context
     Copy-Item -LiteralPath $script:MacosObservedExecutable -Destination $saved;Save $saved
@@ -75,10 +96,12 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
     New-Item -ItemType Directory -Path $directory,$scene|Out-Null
     $server=$null;$serverOut=$null;$serverError=$null
     $hostPremise=$Name -eq 'rust-macos-display-host-premise'
-    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise')
+    $distinctHost=$Name -eq 'rust-macos-display-distinct-host'
+    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise','rust-macos-display-distinct-host')
     $originalFailure=$null
     try {
-        $info=[Diagnostics.ProcessStartInfo]::new($Executable)
+        $sceneExecutable=if($distinctHost){$script:MacosDistinctSceneExecutable}else{$Executable}
+        $info=[Diagnostics.ProcessStartInfo]::new($sceneExecutable)
         $info.ArgumentList.Add(($displayPatch ? 'display-scene' : 'scene'));$info.ArgumentList.Add($scene)
         $info.UseShellExecute=$false;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
         $server=[Diagnostics.Process]::Start($info)
@@ -92,6 +115,27 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $identity=Get-Content -LiteralPath $ready -Raw|ConvertFrom-Json
         if($identity.owner_pid -ne $server.Id -or $identity.width -ne 47 -or $identity.height -ne 31 -or $identity.colour -ne 'green' -or $identity.window_id -le 0){throw 'Unexpected owned native scene identity'}
         if($displayPatch -and $identity.display_patch -ne 1){throw 'Missing explicit first-display patch premise'}
+        if($distinctHost){
+            $binaryIdentity=[ordered]@{}
+            foreach($key in $script:MacosSceneIdentity.Keys){$binaryIdentity[$key]=$script:MacosSceneIdentity[$key]}
+            foreach($side in @('consumer','scene')){
+                $path=$binaryIdentity[$side+'_path']
+                if((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne $binaryIdentity[$side+'_sha256'] -or
+                    [int][IO.File]::GetUnixFileMode($path) -ne $binaryIdentity[$side+'_unix_mode']){throw 'Scene/consumer executable identity changed before capture'}
+            }
+            if($binaryIdentity.consumer_path -ne $Executable -or $binaryIdentity.scene_path -ne $info.FileName){throw 'Unexpected executable selection in distinct-host control'}
+            $binaries=Join-Path $directory scene-executables
+            New-Item -ItemType Directory -Path $binaries|Out-Null
+            foreach($side in @('consumer','scene')){
+                $saved=Join-Path $binaries $side
+                [IO.File]::Copy($binaryIdentity[$side+'_path'],$saved,$false)
+                if((Get-FileHash -LiteralPath $saved -Algorithm SHA256).Hash.ToLowerInvariant() -ne $binaryIdentity[$side+'_sha256']){throw 'Archived scene/consumer executable bytes changed'}
+                Save $saved
+            }
+            $binaryIdentity.scene_pid=$server.Id
+            $file=Join-Path $directory scene-executable-identity.json
+            Json $file $binaryIdentity;Save $file
+        }
         $env:MFS_P1_MACOS_WINDOW_ID=[string]$identity.window_id
         $env:MFS_P1_MACOS_SCENE_STOP=Join-Path $scene stop
         $env:MFS_P1_MACOS_SCENE_STOPPED=Join-Path $scene stopped.txt
@@ -126,7 +170,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $oracleRecord=Join-Path $directory source-oracle-identities.json
         Json $oracleRecord $oracleRecords;Save $oracleRecord
         foreach($file in $oracleFiles){Save $file.FullName}
-        if($displayPatch){
+        if($displayPatch -and -not $distinctHost){
             # A distinct executable/child directory instruments the real
             # semaphore calls. Its timing/logging is diagnostic only; it never
             # supplies or replaces the unchanged oracle's status or images.
@@ -170,7 +214,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         }
     }
     if($displayPatch){
-        $recordKind=if($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
+        $recordKind=if($distinctHost){'macos-display-distinct-host'}elseif($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
         try {Step "$recordKind-records" $ConfigureTool @('upstream-trace',$recordKind,$directory)}
         catch {if(-not $originalFailure){throw}}
         if($originalFailure){throw $originalFailure}

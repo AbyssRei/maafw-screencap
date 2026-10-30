@@ -8,6 +8,7 @@ use crate::{
     records,
 };
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fs, path::Path};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,10 +27,72 @@ struct OriginalStatus {
     expected_source_files: u32,
     recorded_source_files: u32,
 }
-pub fn run(args: &[String], host_premise: bool) -> Result<()> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Probe {
+    Queried,
+    HostPremise,
+    DistinctHost,
+}
+#[derive(Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SceneExecutable {
+    layout_version: u32,
+    consumer_path: String,
+    scene_path: String,
+    consumer_sha256: String,
+    scene_sha256: String,
+    consumer_unix_mode: u32,
+    scene_unix_mode: u32,
+    scene_pid: u32,
+}
+impl SceneExecutable {
+    fn validate(&self, owner_pid: u32, consumer: &[u8], scene: &[u8]) -> Result<()> {
+        let native_path = |path: &str| {
+            path.starts_with('/')
+                && !path.contains(['\\', '\0', '\n', '\r'])
+                && path
+                    .split('/')
+                    .skip(1)
+                    .all(|part| !matches!(part, "" | "." | ".."))
+        };
+        if self.layout_version != 1
+            || self.scene_pid == 0
+            || self.scene_pid != owner_pid
+            || !native_path(&self.consumer_path)
+            || !native_path(&self.scene_path)
+            || self.consumer_path == self.scene_path
+            || self.consumer_path.rsplit_once('/').map(|p| p.0)
+                != self.scene_path.rsplit_once('/').map(|p| p.0)
+            || self.consumer_sha256.len() != 64
+            || !self
+                .consumer_sha256
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+            || self.consumer_sha256 != self.scene_sha256
+            || self.consumer_sha256 != binary_hash(consumer)?
+            || self.scene_sha256 != binary_hash(scene)?
+            || self.consumer_unix_mode != self.scene_unix_mode
+            || self.consumer_unix_mode > 0o7777
+            || self.consumer_unix_mode & 0o100 == 0
+        {
+            return Err("distinct scene host requires the same binary bytes/mode, another absolute path and the actual owned PID".into());
+        }
+        Ok(())
+    }
+}
+fn binary_hash(bytes: &[u8]) -> Result<String> {
+    use std::fmt::Write;
+    let mut encoded = String::with_capacity(64);
+    for byte in Sha256::digest(bytes) {
+        write!(&mut encoded, "{byte:02x}")?;
+    }
+    Ok(encoded)
+}
+pub fn run(args: &[String], probe: Probe) -> Result<()> {
+    let host_premise = probe == Probe::HostPremise;
     let (path,check_only)=match args {
         [path]=>(path,false),[path,flag] if flag=="--check-only"=>(path,true),
-        _=>return Err("expected upstream-trace <macos-display-patch|macos-display-host-premise> <actual external directory> [--check-only]".into()),
+        _=>return Err("expected upstream-trace <macos-display-patch|macos-display-host-premise|macos-display-distinct-host> <actual external directory> [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -45,6 +108,15 @@ pub fn run(args: &[String], host_premise: bool) -> Result<()> {
         || scene.display_patch != 1
     {
         return Err("wrong owned display scene premise".into());
+    }
+    if probe == Probe::DistinctHost {
+        let identity: SceneExecutable =
+            serde_json::from_slice(&read("scene-executable-identity.json")?)?;
+        identity.validate(
+            scene.owner_pid,
+            &read("scene-executables/consumer")?,
+            &read("scene-executables/scene")?,
+        )?;
     }
     let original: OriginalStatus = serde_json::from_slice(&read("source-oracle-status.json")?)?;
     original_status(original, host_premise)?;
@@ -115,10 +187,16 @@ pub fn run(args: &[String], host_premise: bool) -> Result<()> {
         report["live_consumer_display_identity_observed"] = false.into();
         report["scope"] = "Separate fresh original consumer process without additional native geometry queries, followed by a separate Rust process. Both capture through their unchanged default first-display implementations. Host-owned single-display geometry is an expected premise only: the consumer's actual enumerated display identity was not independently observed. All six captures assert the owned green patch, complete Rust BGRA-to-BGR and eighteen immediate/held payloads; callback/lock/input lifetimes and scene shutdown are checked. This diagnostic does not accept or replace the separately recorded queried variant, prove initialization-history causality, or establish complete display/backend/P1 parity. Shared system-service state and ordering between fixture processes are not controlled.".into();
     }
-    let output = root.join(if host_premise {
-        "display-host-premise-validation.json"
-    } else {
-        "display-patch-validation.json"
+    if probe == Probe::DistinctHost {
+        report["distinct_scene_executable_path"] = true.into();
+        report["diagnostic_only"] = true.into();
+        report["paired_acceptance"] = false.into();
+        report["scope"] = "Uninstrumented original display-patch consumer plus independent Rust capture of an owned scene hosted by a byte-identical executable copied to another pathname. Native records require identical SHA256 and executable modes and the actual scene PID. Consumer geometry queries and the original capture/default/five-second wait remain unchanged. All six captures, eighteen immediate/held payloads, known green ROI, complete Rust conversion, native ownership and scene shutdown pass the same strict checks. The copied host and original consumer binary inputs are archived for independent byte verification. This is an executable-path diagnostic, not an acceptance or replacement of the separate same-path failures, proof of root cause, or full P1 acceptance; scheduling and system-service state remain uncontrolled.".into();
+    }
+    let output = root.join(match probe {
+        Probe::HostPremise => "display-host-premise-validation.json",
+        Probe::DistinctHost => "display-distinct-host-validation.json",
+        Probe::Queried => "display-patch-validation.json",
     });
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -130,6 +208,10 @@ pub fn run(args: &[String], host_premise: bool) -> Result<()> {
     if host_premise {
         println!(
             "macOS display_host_premise source_captures=3 rust_captures=3 payloads=18 consumer_geometry_queries=0 live_consumer_display_identity_observed=0 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
+    } else if probe == Probe::DistinctHost {
+        println!(
+            "macOS display_distinct_host source_captures=3 rust_captures=3 payloads=18 same_binary_sha256_verified=1 distinct_scene_executable_path=1 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
         );
     } else {
         println!(
@@ -224,6 +306,56 @@ fn traces(text: &str, g: &Geometry) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_substituted_scene_executables_paths_modes_and_owners() {
+        let bytes = b"owned executable input";
+        let good = SceneExecutable {
+            layout_version: 1,
+            consumer_path: "/native/build/consumer".into(),
+            scene_path: "/native/build/scene".into(),
+            consumer_sha256: binary_hash(bytes).unwrap(),
+            scene_sha256: binary_hash(bytes).unwrap(),
+            consumer_unix_mode: 0o755,
+            scene_unix_mode: 0o755,
+            scene_pid: 7,
+        };
+        good.validate(7, bytes, bytes).unwrap();
+        assert!(good.validate(7, bytes, b"changed executable").is_err());
+        for bad in [
+            SceneExecutable {
+                scene_path: good.consumer_path.clone(),
+                ..good.clone()
+            },
+            SceneExecutable {
+                scene_path: "native/build/scene".into(),
+                ..good.clone()
+            },
+            SceneExecutable {
+                scene_path: "/native/build/../scene".into(),
+                ..good.clone()
+            },
+            SceneExecutable {
+                scene_unix_mode: 0o644,
+                ..good.clone()
+            },
+            SceneExecutable {
+                consumer_unix_mode: 0o644,
+                scene_unix_mode: 0o644,
+                ..good.clone()
+            },
+            SceneExecutable {
+                scene_pid: 8,
+                ..good.clone()
+            },
+            SceneExecutable {
+                consumer_sha256: "0".repeat(64),
+                scene_sha256: "0".repeat(64),
+                ..good
+            },
+        ] {
+            assert!(bad.validate(7, bytes, bytes).is_err());
+        }
+    }
     #[test]
     fn rejects_missing_callbacks_unreleased_inputs_wrong_spans_and_cleanup_relabeling() {
         let g = macos_display_geometry::parse(

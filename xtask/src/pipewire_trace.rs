@@ -11,16 +11,16 @@ const RESOURCES: &str = "phase\telapsed_ns\tcalls\tfds\ttasks\trss_kib";
 const MIN_NS: u64 = 120_000_000_000;
 
 pub fn run(args: &[String]) -> Result<()> {
-    if args.first().is_some_and(|kind| {
-        matches!(
-            kind.as_str(),
-            "macos-display-patch" | "macos-display-host-premise"
-        )
-    }) {
-        return crate::macos_display_patch::run(
-            &args[1..],
-            args[0] == "macos-display-host-premise",
-        );
+    let display_probe = match args.first().map(String::as_str) {
+        Some("macos-display-patch") => Some(crate::macos_display_patch::Probe::Queried),
+        Some("macos-display-host-premise") => Some(crate::macos_display_patch::Probe::HostPremise),
+        Some("macos-display-distinct-host") => {
+            Some(crate::macos_display_patch::Probe::DistinctHost)
+        }
+        _ => None,
+    };
+    if let Some(probe) = display_probe {
+        return crate::macos_display_patch::run(&args[1..], probe);
     }
     if args.first().is_some_and(|kind| kind == "wlr-host-api") {
         return crate::wlr_host_api::run(&args[1..]);
