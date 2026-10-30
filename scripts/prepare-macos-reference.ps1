@@ -70,9 +70,10 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
     $scene=Join-Path $directory scene
     New-Item -ItemType Directory -Path $directory,$scene|Out-Null
     $server=$null;$serverOut=$null;$serverError=$null
+    $displayPatch=$Name -eq 'rust-macos-display-patch'
     try {
         $info=[Diagnostics.ProcessStartInfo]::new($Executable)
-        $info.ArgumentList.Add('scene');$info.ArgumentList.Add($scene)
+        $info.ArgumentList.Add(($displayPatch ? 'display-scene' : 'scene'));$info.ArgumentList.Add($scene)
         $info.UseShellExecute=$false;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
         $server=[Diagnostics.Process]::Start($info)
         $serverOut=$server.StandardOutput.ReadToEndAsync();$serverError=$server.StandardError.ReadToEndAsync()
@@ -84,16 +85,21 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         }
         $identity=Get-Content -LiteralPath $ready -Raw|ConvertFrom-Json
         if($identity.owner_pid -ne $server.Id -or $identity.width -ne 47 -or $identity.height -ne 31 -or $identity.colour -ne 'green' -or $identity.window_id -le 0){throw 'Unexpected owned native scene identity'}
+        if($displayPatch -and $identity.display_patch -ne 1){throw 'Missing explicit first-display patch premise'}
         $env:MFS_P1_MACOS_WINDOW_ID=[string]$identity.window_id
         $env:MFS_P1_MACOS_SCENE_STOP=Join-Path $scene stop
         $env:MFS_P1_MACOS_SCENE_STOPPED=Join-Path $scene stopped.txt
         $env:MFS_P1_MACOS_RUST_ARTIFACTS=$directory
         $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
-        $oracleMode=if($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
+        if($displayPatch){$env:MFS_P1_MACOS_DISPLAY_GEOMETRY=Join-Path $scene display-geometry.tsv}
+        $oracleMode=if($displayPatch){'display-patch'}elseif($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
         Step "$Name-original-oracle" $Executable @($oracleMode,$directory,[string]$identity.window_id)
-        $env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr
-        $oracleFiles=@(Get-ChildItem -LiteralPath $directory -File|Where-Object{$_.Name -eq 'external-window.bgr' -or $_.Name -match '^manager-cycle-[0-9]+-call-[0-9]+\.bgr$'})
-        $expectedOracles=if($Name -eq 'rust-macos-manager'){61}else{1}
+        if(-not $displayPatch){$env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr}
+        $oracleFiles=@(Get-ChildItem -LiteralPath $directory -File|Where-Object{
+            if($displayPatch){$_.Name -match '^display-(call|held)-[0-2]\.source\.bgr$' -or $_.Name -eq 'source-display-geometry.tsv'}
+            else{$_.Name -eq 'external-window.bgr' -or $_.Name -match '^manager-cycle-[0-9]+-call-[0-9]+\.bgr$'}
+        })
+        $expectedOracles=if($displayPatch){7}elseif($Name -eq 'rust-macos-manager'){61}else{1}
         if($oracleFiles.Count -ne $expectedOracles){throw 'Incomplete original oracle files before Rust execution'}
         $oracleRecords=@($oracleFiles|ForEach-Object{Artifact $_.FullName})
         $oracleRecord=Join-Path $directory source-oracle-identities.json
@@ -132,4 +138,5 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
             }
         }
     }
+    if($displayPatch){Step macos-display-patch-records $ConfigureTool @('upstream-trace','macos-display-patch',$directory)}
 }

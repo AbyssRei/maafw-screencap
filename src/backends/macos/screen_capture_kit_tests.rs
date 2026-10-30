@@ -1,6 +1,11 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+
+#[path = "../../../xtask/src/macos_display_geometry.rs"]
+mod display_geometry;
+#[path = "screen_capture_kit_display_tests.rs"]
+mod display_patch;
 use std::{
     env,
     ffi::{CStr, CString, c_void},

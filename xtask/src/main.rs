@@ -10,6 +10,8 @@ mod licenses;
 mod linux_compat;
 mod linux_config;
 mod macos;
+mod macos_display_geometry;
+mod macos_display_patch;
 mod manager_metadata;
 mod native;
 mod native_tools;
@@ -168,6 +170,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace pipewire-host <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace wlr-host-api <external matrix> [--check-only]\n\n\
+                      cargo xtask upstream-trace macos-display-patch <external directory> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
                       cargo xtask upstream-config linux-compat <original executable> <new external source directory>\n\
                       cargo xtask upstream-config linux-compat-records <external matrix> [--check-only]\n\n\
