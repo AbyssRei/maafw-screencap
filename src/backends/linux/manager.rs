@@ -1,6 +1,6 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Fixed Linux manager screenshot orchestration, restricted to Input=None.
+//! Fixed Linux manager screenshot orchestration with a host input boundary.
 //! Private U logic with selected native factories and legacy byte configuration.
 //! Full parity remains P1; this module defines no public SDK.
 #[path = "manager_config.rs"]
@@ -27,6 +27,10 @@ pub(crate) const NONE: u64 = 0;
 pub(crate) const WLR: u64 = 1;
 pub(crate) const EXT_IMAGE: u64 = 2;
 pub(crate) const PIPEWIRE: u64 = 4;
+const INPUT_WLR: u64 = 1;
+const INPUT_UINPUT: u64 = 2;
+const INPUT_LIBEI: u64 = 4;
+const INPUT_FEATURE_MASK: u64 = 1 | 2;
 
 /// Boundaries mirror original construction and virtual init calls. Concrete
 /// factories must retain the actual shared client in each constructed Wlr unit;
@@ -47,11 +51,18 @@ pub(crate) trait Factory {
         config: &Config,
         client: Option<&Self::Client>,
     ) -> Result<Self::Unit, Self::Error>;
-    fn create_none_input(&mut self) -> Result<Self::Input, Self::Error>;
+    /// Screenshot-relevant construction only. The host supplies the input owner;
+    /// this boundary defines no input actions or authorization implementation.
+    fn create_input(
+        &mut self,
+        config: &Config,
+        client: Option<&Self::Client>,
+    ) -> Result<Self::Input, Self::Error>;
     fn init_capture(&mut self, unit: &mut Self::Unit) -> Result<bool, Self::Error>;
-    fn init_none_input(&mut self, input: &mut Self::Input) -> Result<bool, Self::Error>;
+    fn init_input(&mut self, input: &mut Self::Input) -> Result<bool, Self::Error>;
+    fn input_features(input: &Self::Input) -> u64;
     fn inactive_capture(&mut self, unit: &mut Self::Unit);
-    fn inactive_none_input(&mut self, input: &mut Self::Input);
+    fn inactive_input(&mut self, input: &mut Self::Input);
 }
 
 pub(crate) struct Manager<F: Factory> {
@@ -77,10 +88,10 @@ impl<F: Factory> Manager<F> {
     pub fn get_info(&self) -> Result<Vec<u8>, ConfigError> {
         self.config.info()
     }
-    pub const fn get_features(&self) -> u64 {
-        // Unconnected managers and the only implemented input unit (None)
-        // expose no input features in the source.
-        0
+    pub fn get_features(&self) -> u64 {
+        // Original MaaDef feature bits, not SDK capabilities. A retained input
+        // owner contributes even when a later connect/init boundary failed.
+        self.input.as_ref().map_or(0, F::input_features) & INPUT_FEATURE_MASK
     }
     pub const fn connected(&self) -> bool {
         self.connected
@@ -89,12 +100,9 @@ impl<F: Factory> Manager<F> {
         self.connected = false;
         drop(self.capture.take());
         drop(self.input.take());
-        // Only Input=None is in this screenshot migration. Other input values
-        // remain queryable configuration; never silently perform input work.
-        if self.config.input_method != NONE {
-            return Ok(false);
-        }
-        if self.config.method == WLR && self.client.is_none() {
+        if (self.config.method == WLR || self.config.input_method == INPUT_WLR)
+            && self.client.is_none()
+        {
             self.client = Some(factory.create_client()?);
             if !factory.connect_client(self.client.as_mut().unwrap(), &self.config.wlr_socket)? {
                 // Original keeps the failed client. A later manager connect
@@ -114,11 +122,19 @@ impl<F: Factory> Manager<F> {
             _ => return Ok(false),
         }
         self.capture = Some(factory.create_capture(&self.config, self.client.as_ref())?);
-        self.input = Some(factory.create_none_input()?);
+        // Source creates capture BEFORE checking the input selector. A failed
+        // input construction/init retains the same callable capture owner.
+        if !matches!(
+            self.config.input_method,
+            NONE | INPUT_WLR | INPUT_UINPUT | INPUT_LIBEI
+        ) {
+            return Ok(false);
+        }
+        self.input = Some(factory.create_input(&self.config, self.client.as_ref())?);
         if !factory.init_capture(self.capture.as_mut().unwrap())? {
             return Ok(false);
         }
-        if !factory.init_none_input(self.input.as_mut().unwrap())? {
+        if !factory.init_input(self.input.as_mut().unwrap())? {
             return Ok(false);
         }
         self.connected = true;
@@ -141,7 +157,7 @@ impl<F: Factory> Manager<F> {
             factory.inactive_capture(unit);
         }
         if let Some(input) = &mut self.input {
-            factory.inactive_none_input(input);
+            factory.inactive_input(input);
         }
         true
     }

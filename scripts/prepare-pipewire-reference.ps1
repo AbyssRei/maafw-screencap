@@ -49,6 +49,8 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $manager -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-source.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-features.inc
+    Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-features.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-config.inc
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-config.inc) -Destination $saved;Save $saved
     Step linux-manager-model-linkage ldd @($manager)

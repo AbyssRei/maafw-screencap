@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Exact manager bodies with explicitly scripted backend/client boundaries and
 // real standard shared owners, original Config.h members and OpenCV output Mats.
-// Input=None only. No Linux daemon, compositor, config JSON or capture claim.
+// Input initialization/feature queries are scripted HOST boundaries, without
+// input actions. No Linux daemon, compositor, config JSON or capture claim.
 #include "MaaFramework/MaaDef.h"
 #include <opencv2/core.hpp>
 #include <cstdint>
@@ -17,7 +18,7 @@
 #include <vector>
 
 namespace {
-struct Plan { bool client_ok,init_ok,input_throws;int outcome; } plan{};
+struct Plan { bool client_ok,init_ok,input_throws;int outcome,input_init=0;uint64_t input_features=0; } plan{};
 std::vector<std::string> events;
 void event(const char* name) { events.emplace_back(name); }
 struct NullLog { template<class T> const NullLog& operator<<(const T&) const { return *this; } } log;
@@ -63,21 +64,33 @@ struct NoneScreencap : Unit { NoneScreencap():Unit(MaaLinuxScreencapMethod_None)
 struct WlrScreencap : Unit { explicit WlrScreencap(std::shared_ptr<WaylandClient> c):Unit(MaaLinuxScreencapMethod_Wlr,std::move(c)) {} };
 struct PipeWireScreencap : Unit { PipeWireScreencap(int,uint32_t):Unit(MaaLinuxScreencapMethod_PipeWire) {} };
 struct InputBase {
-    virtual ~InputBase()=default;
-    virtual bool init() { event("input.init");return true; }
+    uint64_t method;
+    std::shared_ptr<WaylandClient> client;
+    explicit InputBase(uint64_t value,std::shared_ptr<WaylandClient> owner={}) : method(value),client(std::move(owner)) {
+        if(plan.input_throws) { throw std::runtime_error("scripted input construction exception"); }
+        event("input.create");
+    }
+    virtual ~InputBase() { event("input.drop"); }
+    virtual bool init() {
+        event("input.init");
+        if(method==MaaLinuxInputMethod_None) { return true; }
+        if(plan.input_init==2) { throw std::runtime_error("host input init exception"); }
+        return plan.input_init==0;
+    }
+    virtual MaaControllerFeature get_features() const { return method==MaaLinuxInputMethod_None ? 0 : plan.input_features; }
     virtual void inactive() { event("input.inactive"); }
 };
 struct NoneInput : InputBase {
-    NoneInput() { if(plan.input_throws) { throw std::runtime_error("scripted input construction exception"); }event("input.create"); }
-    ~NoneInput() override { event("input.drop"); }
+    NoneInput() : InputBase(MaaLinuxInputMethod_None) {}
 };
-struct WlrInput : InputBase { explicit WlrInput(std::shared_ptr<WaylandClient>) { throw std::logic_error("input excluded"); } };
-struct UInput : InputBase { UInput(const std::filesystem::path&,int,int) { throw std::logic_error("input excluded"); } };
-struct EiInput : InputBase { explicit EiInput(const std::filesystem::path&) { throw std::logic_error("input excluded"); } };
+struct WlrInput : InputBase { explicit WlrInput(std::shared_ptr<WaylandClient> c) : InputBase(MaaLinuxInputMethod_Wlr,std::move(c)) {} };
+struct UInput : InputBase { UInput(const std::filesystem::path&,int,int) : InputBase(MaaLinuxInputMethod_UInput) {} };
+struct EiInput : InputBase { explicit EiInput(const std::filesystem::path&) : InputBase(MaaLinuxInputMethod_Libei) {} };
 struct LinuxControlUnitMgr {
     explicit LinuxControlUnitMgr(const LinuxControlUnitConfig&);
     ~LinuxControlUnitMgr();
     bool connect();bool connected() const;bool request_uuid(std::string&);
+    MaaControllerFeature get_features() const;
     bool screencap(cv::Mat&);bool inactive();
     bool create_screencap();bool create_input();bool create_wl_client();
     const LinuxControlUnitConfig config_;
@@ -87,6 +100,7 @@ struct LinuxControlUnitMgr {
     std::shared_ptr<WaylandClient> wl_client_=nullptr;
 };
 #include "linux-manager-source.inc"
+#include "linux-manager-features.inc"
 #undef LogError
 #undef LogFunc
 #undef VAR
@@ -105,15 +119,23 @@ std::string decode(const char* input) {
 }
 int main(int argc,char** argv) {
     try {
-        if(argc!=9) { throw std::logic_error("method fd node client_ok init_ok input_throws outcome path_hex"); }
+        if(argc!=9 && argc!=13) { throw std::logic_error("method fd node client_ok init_ok input_throws outcome path_hex [input_method input_init input_features input_path_hex]"); }
+        const bool host_mode=argc==13;
         LinuxControlUnitConfig config;
         config.screencap_method=std::stoull(argv[1]);config.pw_socket_fd=std::stoi(argv[2]);
         const auto node=std::stoull(argv[3]);if(node>UINT32_MAX) { throw std::logic_error("node overflow"); }
         config.pw_node_id=static_cast<uint32_t>(node);config.wlr_socket_path=decode(argv[8]);
         plan={std::stoi(argv[4])!=0,std::stoi(argv[5])!=0,std::stoi(argv[6])!=0,std::stoi(argv[7])};
+        if(host_mode) {
+            config.input_method=std::stoull(argv[9]);plan.input_init=std::stoi(argv[10]);
+            if(plan.input_init<0 || plan.input_init>2) { throw std::logic_error("invalid input init script"); }
+            plan.input_features=std::stoull(argv[11]);config.uinput_path=decode(argv[12]);config.eis_socket_path=config.uinput_path;
+            config.uinput_screen_width=17;config.uinput_screen_height=19;
+        }
         {
             LinuxControlUnitMgr manager(config);
             std::cout<<"initial="<<manager.connected()<<'\n';
+            if(host_mode) { std::cout<<"features_initial="<<manager.get_features()<<'\n'; }
             std::string uuid="unchanged";
             std::cout<<"uuid_success="<<manager.request_uuid(uuid)<<"\nuuid="<<bytes(uuid)<<'\n';
             cv::Mat output(1,1,CV_32SC1,cv::Scalar(99));
@@ -121,6 +143,7 @@ int main(int argc,char** argv) {
                 int connected=2,captured=2;
                 try { connected=manager.connect(); }catch(const std::runtime_error&) {}
                 std::cout<<"connect"<<attempt<<'='<<connected<<"\nconnected"<<attempt<<'='<<manager.connected()<<'\n';
+                if(host_mode) { std::cout<<"features"<<attempt<<'='<<manager.get_features()<<'\n'; }
                 try { captured=manager.screencap(output); }catch(const std::runtime_error&) {}
                 std::cout<<"capture"<<attempt<<'='<<captured<<"\noutput"<<attempt<<'='<<(output.empty()?0:output.at<int>(0,0))<<'\n';
                 std::cout<<"inactive"<<attempt<<'='<<manager.inactive()<<'\n';

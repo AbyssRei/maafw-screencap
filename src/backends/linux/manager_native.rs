@@ -79,6 +79,7 @@ pub(in crate::backends::linux) enum Error {
     BackendNotCompiled(u64),
     UnprovenFdOffer,
     InvalidPrivateOwner,
+    HostInputRequired(u64),
     #[cfg(feature = "linux-wlr")]
     Wayland(crate::platform::linux::wayland::Error),
 }
@@ -183,7 +184,16 @@ impl Factory for NativeFactory {
         let _ = client;
         Ok(Box::write(slot, Backend { unit, trace }))
     }
-    fn create_none_input(&mut self) -> Result<Arc<NoneInput>, Error> {
+    fn create_input(
+        &mut self,
+        config: &Config,
+        _: Option<&Client>,
+    ) -> Result<Arc<NoneInput>, Error> {
+        if config.input_method != NONE {
+            // This native factory still has no host input provider. Never
+            // replace the caller's retained metadata with Input=None.
+            return Err(Error::HostInputRequired(config.input_method));
+        }
         Arc::try_new(NoneInput).map_err(|_| Error::Allocation)
     }
     fn init_capture(&mut self, unit: &mut Self::Unit) -> Result<bool, Error> {
@@ -213,8 +223,11 @@ impl Factory for NativeFactory {
             }
         }
     }
-    fn init_none_input(&mut self, _: &mut Arc<NoneInput>) -> Result<bool, Error> {
+    fn init_input(&mut self, _: &mut Arc<NoneInput>) -> Result<bool, Error> {
         Ok(true)
+    }
+    fn input_features(_: &Arc<NoneInput>) -> u64 {
+        0
     }
     fn inactive_capture(&mut self, unit: &mut Self::Unit) {
         match &mut unit.unit {
@@ -227,7 +240,7 @@ impl Factory for NativeFactory {
             } => consumer.inactive(driver),
         }
     }
-    fn inactive_none_input(&mut self, _: &mut Arc<NoneInput>) {}
+    fn inactive_input(&mut self, _: &mut Arc<NoneInput>) {}
 }
 
 pub(in crate::backends::linux) trait Converter {
