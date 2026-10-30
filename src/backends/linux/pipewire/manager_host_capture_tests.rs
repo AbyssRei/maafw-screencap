@@ -42,7 +42,7 @@ struct Offer<'a> {
     calls: Vec<&'static str>,
 }
 impl Portal for Offer<'_> {
-    type Handle = u8;
+    type Helper = u8;
     type Error = std::io::Error;
     fn create(&mut self) -> Result<u8, Self::Error> {
         self.calls.push("create");
