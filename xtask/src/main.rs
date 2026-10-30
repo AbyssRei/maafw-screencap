@@ -25,6 +25,7 @@ mod review;
 mod windows_delegate;
 mod wlr;
 mod wlr_failures;
+mod wlr_host_api;
 mod wlr_protocol;
 mod wlr_registry;
 
@@ -162,6 +163,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace pipewire-host <external matrix> [--check-only]\n\n\
+                      cargo xtask upstream-trace wlr-host-api <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
                       cargo xtask upstream-config linux-compat <original executable> <new external source directory>\n\
                       cargo xtask upstream-config linux-compat-records <external matrix> [--check-only]\n\n\

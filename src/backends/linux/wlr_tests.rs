@@ -9,6 +9,9 @@ use std::{
     ptr::NonNull,
 };
 
+#[path = "wlr_host_tests.rs"]
+mod host;
+
 #[repr(C)]
 #[derive(Default)]
 struct View {

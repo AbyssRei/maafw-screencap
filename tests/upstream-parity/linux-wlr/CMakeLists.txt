@@ -57,6 +57,31 @@ target_link_libraries(mfs_wlr_source_context PRIVATE
 # The wrapper only observes calls made by the compiled source and forwards each
 # one immediately, unchanged, to the actual system libwayland entry point.
 target_link_options(mfs_wlr_source_context PRIVATE "LINKER:--wrap=wl_display_roundtrip")
+if(NOT DEFINED MFS_MEOJSON_INCLUDE OR NOT EXISTS "${MFS_MEOJSON_INCLUDE}/meojson/json.hpp")
+    message(FATAL_ERROR "Wlr ABI context requires the explicitly prepared latest formal meojson")
+endif()
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/linux-config-source.cmake")
+add_executable(mfs_wlr_native_context native-context.cpp
+    "${_mfs_root}/Compat/WlRootsControlUnitCompat.cpp"
+    "${_mfs_root}/Screencap/WlrScreencap.cpp"
+    "${_mfs_root}/Wayland/WaylandClient.cpp"
+    "${_mfs_root}/Wayland/WaylandHelper.cpp"
+    "${_mfs_root}/Base/MemfdBuffer.cpp"
+    "${_mfs_root}/Wayland/Protocol/wlr-screencopy-priv.c"
+    "${_mfs_root}/Wayland/Protocol/wlr-virtual-pointer-priv.c"
+    "${_mfs_root}/Wayland/Protocol/virtual-keyboard-priv.c")
+target_compile_definitions(mfs_wlr_native_context PRIVATE _GNU_SOURCE
+    MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-wlr-native")
+target_include_directories(mfs_wlr_native_context PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/abi-overlay" "${CMAKE_CURRENT_BINARY_DIR}/config-overlay"
+    "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
+    "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_MEOJSON_INCLUDE}"
+    "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
+# Do not include the config oracle's unrelated Wayland stub directory.
+target_link_libraries(mfs_wlr_native_context PRIVATE
+    PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/native-context-scope.txt"
+    "Whole fixed original Wlr compatibility cpp and unchanged complete public API/manager/config/base declarations with real original Wlr/Wayland capture sources. Only input construction/init is a controlled capture-only host: it retains the original shared client and five proxy slots (no seat in this fixture), owns an independent socketpair and excludes every input action/device. Original manager capture/UUID/metadata/inactive/features/destruction bodies are exact extractions. Native library identity, final weak client/proxy expiry, last-connected-client destructor order, actual pixels and exact resources are required. This is not original input initialization, live-client early close or full Wlr/P1 acceptance.\n")
 # Reuse the self-owned, header-checked conversion acceptance source. It includes
 # OpenCV only and introduces no PipeWire runtime or capture dependency.
 add_library(mfs_wlr_opencv SHARED ../linux-pipewire/conversion-adapter.cpp)
