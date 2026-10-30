@@ -23,6 +23,8 @@ struct Pattern {
     uintptr_t paint_dc = 0;
     uintptr_t paint_bitmap = 0;
     bool alternative = false;
+    bool inside_marker = false;
+    bool marker_alternative = false;
     int64_t geometry_messages = 0;
     std::array<int64_t, 5> last_position {};
     POINT geometry_max_track {};
@@ -62,6 +64,14 @@ void draw(HWND hwnd, HDC dc, Pattern& pattern) noexcept
         const int filled = FillRect(dc, &regions[i], brush);
         const BOOL deleted = DeleteObject(brush);
         if (!filled || !deleted) { pattern.failed = true; return; }
+    }
+    if (pattern.inside_marker) {
+        RECT marker { 0, 0, 16, 16 };
+        HBRUSH brush = CreateSolidBrush(pattern.marker_alternative ? 0x001a2b3c : 0x004e5f60);
+        if (!brush) { pattern.failed = true; return; }
+        const int filled = FillRect(dc, &marker, brush);
+        const BOOL deleted = DeleteObject(brush);
+        if (!filled || !deleted) { pattern.failed = true; }
     }
 }
 
@@ -179,6 +189,27 @@ int32_t mfs_print_parity_geometry(void* context, const int64_t* input, size_t co
         pattern.geometry_max_track.x, pattern.geometry_max_track.y };
     std::copy_n(values, 31, output);
     return pattern.failed ? 1 : 0;
+}
+
+int32_t mfs_print_parity_inside_marker(void* context, uint32_t phase)
+{
+    if (!context || phase > 1) { return 1; }
+    auto& fixture = *static_cast<Fixture*>(context);
+    RECT client {};
+    if (!fixture.main || fixture.child || fixture.popup
+        || GetCurrentThreadId() != GetWindowThreadProcessId(fixture.main, nullptr)
+        || !GetClientRect(fixture.main, &client) || client.right < 16 || client.bottom < 16) { return 1; }
+    const bool first = !fixture.main_pattern.inside_marker;
+    fixture.main_pattern.inside_marker = true;
+    fixture.main_pattern.marker_alternative = phase != 0;
+    // The normal WM_PAINT path also redraws this exact marker after exposure.
+    // Timer updates are fixture presentation, never screenshot retries.
+    const RECT marker { 0, 0, 16, 16 };
+    // Resizing may preserve old client pixels. Establish the entire controlled
+    // scene once before capture, then invalidate only the changing marker.
+    if (!RedrawWindow(fixture.main, first ? nullptr : &marker, nullptr, RDW_INVALIDATE | RDW_UPDATENOW)
+        || !GdiFlush() || FAILED(DwmFlush())) { return 1; }
+    return fixture.main_pattern.failed ? 1 : 0;
 }
 
 #if defined(MFS_UPSTREAM_PRINT_CPP)

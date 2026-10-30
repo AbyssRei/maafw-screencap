@@ -150,6 +150,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected the complete native ScreenDC geometry/capture matrix, not zero tests or a partial filter'
             }
         }
+        if ($Name -eq 'desktop-dup-source-window-fullscreen' -and $exitCode -eq 77) {
+            $status='missing_environment';throw 'Fullscreen DesktopDupWindow needs a visible native taskbar/work-area distinction'
+        }
+        if ($Name -eq 'desktop-dup-source-window-fullscreen' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDupWindow fullscreen cases=1 captures=1 known_target_with_marker=1 work_area_crop=0 geometry_adjustments=0 retained_after_close=1 passed')) {
+            throw 'Expected actual exact-popup original capture with known in-target marker and no geometry adjustment'
+        }
         if ($Name -in @('desktop-dup-source-default-output','desktop-dup-rust-default-output')) {
             $observed = Get-Content -LiteralPath $logPath -Raw
             $sourceMissing = $Name -eq 'desktop-dup-source-default-output' -and $exitCode -eq 77
@@ -184,7 +191,11 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact native FramePool case did not execute one test'
             }
         }
-        if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
+        if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary|fullscreen)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
+        if ($Name -eq 'desktop-dup-rust-fullscreen' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('native DesktopDupWindow fullscreen cases=1 captures=2 known_target_with_marker=1 work_area_crop=0 geometry_adjustments=0 retained_after_close=2 image_owners_released=1 passed')) {
+            throw 'Expected two actual Rust exact-popup captures and retained owner release'
+        }
         if ($Name -in @('manager-source-scripts','manager-gdi-lifecycles') -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact manager test did not execute one test' }
@@ -706,7 +717,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_desktop_dup_reference.exe) -Destination $desktopProgram
         Save-Input $desktopProgram
         $desktopEvidence = Join-Path $artifacts desktop-dup-source
-        foreach ($modeName in @('desktop','window','default-output')) {
+        foreach ($modeName in @('desktop','window','default-output','window-fullscreen')) {
             $modeDirectory = Join-Path $desktopEvidence $modeName
             New-Item -ItemType Directory -Path $modeDirectory -Force | Out-Null
             try { Step "desktop-dup-source-$modeName" $desktopProgram @($modeName,$modeDirectory) }
@@ -810,6 +821,8 @@ try {
         $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
         $desktopDefaultCase = 'backends::windows::desktop_dup::tests::selects_adapter_zero_output_zero_for_null_hwnd_and_retains_cpu_pixels'
         $desktopConversionCase = 'backends::windows::desktop_dup::tests::releases_acquired_frame_before_external_conversion_and_conversion_exception'
+        $desktopFullscreenCase = 'backends::windows::desktop_dup::tests::fullscreen::captures_exact_popup_without_work_area_crop_and_keeps_owners_after_close'
+        $caseSelection += @('--skip', $desktopFullscreenCase)
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         if ($ManagerParity) {
@@ -849,6 +862,9 @@ try {
         }
         if ($DesktopDupParity) {
             $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence
+            New-Item -ItemType Directory -Path (Join-Path $desktopEvidence 'window-fullscreen/rust') | Out-Null
+            Step 'desktop-dup-rust-fullscreen' cargo ($parityArguments + @('--',$desktopFullscreenCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Step 'desktop-dup-fullscreen-records' $ConfigureTool @('upstream-trace','desktop-fullscreen',(Join-Path $desktopEvidence 'window-fullscreen'))
             Step 'desktop-dup-rust-lifecycles' cargo ($parityArguments + @('--',$desktopCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Step 'desktop-dup-rust-default-output' cargo ($parityArguments + @('--',$desktopDefaultCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Step 'desktop-dup-rust-conversion-boundary' cargo ($parityArguments + @('--',$desktopConversionCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))

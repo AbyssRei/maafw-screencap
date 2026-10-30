@@ -41,6 +41,10 @@ MFS_PARITY_EXPORT int32_t mfs_print_thread_restore_control(void* owner, uint32_t
 // Desktop Duplication fixture: a separate, nonoverlapping marker on the same
 // output presents alternating colors every 50ms. Target pixels stay unchanged.
 MFS_PARITY_EXPORT int32_t mfs_desktop_fixture_updates(void* owner);
+// Explicit full-target fixture: redraw an in-client 16x16 known marker every
+// 50ms using the same retained UI owner/timer. update_info HWND is the target,
+// close kills its timer before destroying that target exactly once.
+MFS_PARITY_EXPORT int32_t mfs_desktop_fixture_inside_updates(void* owner);
 // Marker HWND, presentation count, error count (snapshotted on the UI owner).
 MFS_PARITY_EXPORT int32_t mfs_desktop_fixture_update_info(void* owner, uint64_t* output, size_t capacity);
 #ifdef __cplusplus

@@ -14,7 +14,7 @@
 
 namespace {
 constexpr UINT command_message = WM_APP + 0x71;
-enum class Command { none, stats, close, activate, prepare, restore_control, updates, update_info, scene, geometry };
+enum class Command { none, stats, close, activate, prepare, restore_control, updates, inside_updates, update_info, scene, geometry };
 struct Owner {
     std::thread worker;
     std::mutex mutex;
@@ -36,6 +36,7 @@ struct Owner {
     HWND anchor = nullptr;
     HWND marker = nullptr;
     bool marker_timer = false;
+    bool marker_inside = false;
     uint64_t marker_ticks = 0;
     uint64_t marker_errors = 0;
     std::array<uint64_t, 3> update_info {};
@@ -54,7 +55,7 @@ int32_t close_native(Owner& owner)
     if (owner.marker) {
         if (owner.marker_timer && !KillTimer(owner.marker, 1)) { status = 1; }
         owner.marker_timer = false;
-        if (DestroyWindow(owner.marker)) { owner.marker = nullptr; }
+        if (owner.marker_inside || DestroyWindow(owner.marker)) { owner.marker = nullptr; }
         else { status = 1; }
     }
     const auto fixture_status = mfs_print_parity_close(&owner.fixture.owner);
@@ -69,14 +70,19 @@ int32_t close_native(Owner& owner)
 void marker_frame(Owner& owner) noexcept
 {
     bool failed = false;
-    HDC dc = GetDC(owner.marker);
-    HBRUSH brush = CreateSolidBrush((owner.marker_ticks & 1u) ? 0x001a2b3c : 0x004e5f60);
-    RECT rectangle {};
-    if (!dc || !brush || !GetClientRect(owner.marker, &rectangle)) { failed = true; }
-    else if (!FillRect(dc, &rectangle, brush)) { failed = true; }
-    if (brush && !DeleteObject(brush)) { failed = true; }
-    if (dc && ReleaseDC(owner.marker, dc) != 1) { failed = true; }
-    if (!GdiFlush() || FAILED(DwmFlush())) { failed = true; }
+    if (owner.marker_inside) {
+        failed = mfs_print_parity_inside_marker(owner.fixture.owner, static_cast<uint32_t>(owner.marker_ticks & 1u)) != 0;
+    }
+    else {
+        HDC dc = GetDC(owner.marker);
+        HBRUSH brush = CreateSolidBrush((owner.marker_ticks & 1u) ? 0x001a2b3c : 0x004e5f60);
+        RECT rectangle {};
+        if (!dc || !brush || !GetClientRect(owner.marker, &rectangle)) { failed = true; }
+        else if (!FillRect(dc, &rectangle, brush)) { failed = true; }
+        if (brush && !DeleteObject(brush)) { failed = true; }
+        if (dc && ReleaseDC(owner.marker, dc) != 1) { failed = true; }
+        if (!GdiFlush() || FAILED(DwmFlush())) { failed = true; }
+    }
     if (owner.marker_ticks != std::numeric_limits<uint64_t>::max()) { ++owner.marker_ticks; }
     else { failed = true; }
     if (failed && owner.marker_errors != std::numeric_limits<uint64_t>::max()) { ++owner.marker_errors; }
@@ -186,6 +192,18 @@ void run(Owner& owner, Arguments arguments) noexcept
                             if (!RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN)
                                 || !GdiFlush() || FAILED(DwmFlush())) { result = 2; }
                         }
+                    }
+                }
+                else if (command == Command::inside_updates) {
+                    const HWND target = static_cast<HWND>(owner.fixture.hwnd);
+                    RECT client {};
+                    if (owner.marker || !GetClientRect(target, &client) || client.right < 16 || client.bottom < 16) { result = 1; }
+                    else {
+                        owner.marker_inside = true;
+                        owner.marker = target;
+                        owner.marker_timer = SetTimer(target, 1, 50, nullptr) != 0;
+                        result = owner.marker_timer ? 0 : 1;
+                        if (result == 0) { marker_frame(owner); }
                     }
                 }
                 else if (command == Command::updates) {
@@ -376,6 +394,12 @@ int32_t mfs_desktop_fixture_updates(void* context)
 {
     if (!context) { return 1; }
     try { return request(*static_cast<Owner*>(context), Command::updates); }
+    catch (...) { return 3; }
+}
+int32_t mfs_desktop_fixture_inside_updates(void* context)
+{
+    if (!context) { return 1; }
+    try { return request(*static_cast<Owner*>(context), Command::inside_updates); }
     catch (...) { return 3; }
 }
 int32_t mfs_desktop_fixture_update_info(void* context, uint64_t* output, size_t capacity)

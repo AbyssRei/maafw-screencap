@@ -59,6 +59,9 @@ MFS_PARITY_EXPORT int32_t mfs_print_parity_close(void** owner);
 // additionally returns whether this fixture disabled transitions before show;
 // capacity >=13 adds whether its owned root requested the topmost scene flag.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_stats(void* owner, uint64_t* output, size_t capacity);
+// UI-owner-only 16x16 top-left known marker, phase 0/1; real WM_PAINT and DWM
+// presentation. Independent from the original nonoverlapping desktop marker.
+MFS_PARITY_EXPORT int32_t mfs_print_parity_inside_marker(void* owner, uint32_t phase);
 // The nine layout slots are unchanged; capacity >=10 adds the transitions flag,
 // and capacity >=11 adds the independent topmost-scene flag.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_layout(uint64_t* output, size_t capacity);

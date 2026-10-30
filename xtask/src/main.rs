@@ -5,6 +5,7 @@ mod batch;
 mod configuration;
 mod custom_capture;
 mod dependencies;
+mod desktop_fullscreen;
 mod frame_pool_alpha;
 mod licenses;
 mod linux_compat;
@@ -172,6 +173,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-geometry <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace desktop-fullscreen <external window-fullscreen directory> [--check-only]\n\
                       cargo xtask upstream-trace pipewire-host <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace wlr-host-api <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-patch <external directory> [--check-only]\n\n\

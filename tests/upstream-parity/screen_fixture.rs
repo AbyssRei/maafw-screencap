@@ -104,7 +104,7 @@ impl Adapter {
     }
 }
 impl Fixture {
-    #[cfg(feature = "windows-screen-dc")]
+    #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
     pub fn geometry(&self, input: [i64; 6]) -> Result<[i64; 31], Box<dyn Error>> {
         type Geometry =
             unsafe extern "C" fn(*mut c_void, *const i64, usize, *mut i64, usize) -> i32;
@@ -135,6 +135,18 @@ impl Fixture {
         let code = unsafe { start(self.span.owner) };
         if code != 0 {
             return Err(format!("desktop update fixture failed: {code}").into());
+        }
+        Ok(())
+    }
+    #[cfg(feature = "windows-desktop-dup-window")]
+    pub fn start_inside_desktop_updates(&mut self) -> Result<(), Box<dyn Error>> {
+        type Start = unsafe extern "C" fn(*mut c_void) -> i32;
+        // SAFETY: Exact print-thread.h owner command. The UI owner retains the
+        // timer/context until close kills it, destroys the target and joins.
+        let start: Start = unsafe { self.module.symbol(c"mfs_desktop_fixture_inside_updates")? };
+        let code = unsafe { start(self.span.owner) };
+        if code != 0 {
+            return Err(format!("in-target desktop update fixture failed: {code}").into());
         }
         Ok(())
     }
