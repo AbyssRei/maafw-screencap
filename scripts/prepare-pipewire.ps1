@@ -177,8 +177,14 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected the full original/Rust compatibility constructor and host-order comparison, not a zero-test run'
             }
         }
-        if($Name -eq 'linux-config-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 8 passed; 0 failed; 1 ignored;') {
-            throw 'Expected eight manager controls, with the explicit original-source model still ignored on this default filter'
+        if($Name -eq 'linux-manager-host-input-model') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('Linux manager host boundary cases=2304 source_body_comparisons=2304 two_connects=4608 retained_capture_and_features=1 input_actions=0 native_capture=0 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'Expected one actual 2304-case original/Rust host construction/init/features/capture forwarding comparison'
+            }
+        }
+        if($Name -eq 'linux-config-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 10 passed; 0 failed; 2 ignored;') {
+            throw 'Expected ten manager controls; the two explicit source models remain ignored on this default filter'
         }
         if($Name -eq 'manager-macos-metadata') {
             $observed=Get-Content -LiteralPath $log -Raw
@@ -188,8 +194,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             & $ConfigureTool upstream-metadata macos (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS macos) >> $log 2>&1
             if($LASTEXITCODE -ne 0){throw 'Metadata source/Rust artifact validation failed'}
         }
-        if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;') {
-            throw 'Expected the two native None/unimplemented-method and unsafe-FD boundary controls'
+        if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;') {
+            throw 'Expected native None/unimplemented, missing host input provider and unsafe-FD boundary controls'
         }
         if($Name -in @('original-pipewire-manager-daemon','original-pipewire-manager-fd','rust-pipewire-manager-daemon','rust-pipewire-manager-fd')) {
             $observed=Get-Content -LiteralPath $log -Raw
@@ -504,6 +510,10 @@ try {
             Step linux-manager-source-model timeout @('--signal=TERM','--kill-after=5s','180s',$managerTest,'backends::linux::manager::tests::matches_fixed_source_manager_reconnect_forwarding_and_uuid','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
         if($managerTest){
+            try {
+                $env:MFS_P1_LINUX_HOST_INPUT_MODEL_ARTIFACTS=Join-Path $referenceArtifacts manager-host-input-model
+                Step linux-manager-host-input-model timeout @('--signal=TERM','--kill-after=5s','180s',$managerTest,'backends::linux::manager::tests::host_boundary::matches_original_host_input_order_failures_features_and_retained_capture','--exact','--ignored','--test-threads=1','--nocapture')
+            } catch { $failed=$true; Write-Host $_.Exception.Message }
             try { Step manager-macos-metadata timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::macos::manager::tests::metadata_matches_original_signed_selectors_and_window_identity','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
             try { Step linux-config-rust-parity timeout @('--signal=TERM','--kill-after=5s','90s',$managerTest,'backends::linux::manager::configuration::tests::matches_original_configuration_creation_uuid_and_metadata_bytes','--exact','--ignored','--test-threads=1','--nocapture') }

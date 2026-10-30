@@ -23,6 +23,30 @@ impl Converter for Never {
     }
 }
 #[test]
+fn missing_host_input_provider_is_explicit_and_retains_the_created_none_capture() {
+    for input_method in [2, 4] {
+        let mut manager = super::super::NativeManager::new(Config {
+            input_method,
+            ..Config::default()
+        });
+        assert!(
+            matches!(manager.connect_native(), Err(Error::HostInputRequired(value)) if value == input_method)
+        );
+        assert!(!manager.connected());
+        assert!(manager.capture.is_some());
+        assert!(manager.input.is_none());
+        assert_eq!(manager.get_features(), 0);
+        let mut output = 99;
+        assert!(
+            !manager
+                .capture_native(&mut output, &mut Never)
+                .result
+                .unwrap()
+        );
+        assert_eq!(output, 99);
+    }
+}
+#[test]
 fn none_and_unimplemented_native_methods_do_not_enter_capture_adapters() {
     for method in [NONE, super::super::EXT_IMAGE, u64::MAX] {
         let mut manager = super::super::NativeManager::new(Config {
