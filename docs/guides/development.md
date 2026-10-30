@@ -42,6 +42,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
+macOS 新增显式原生样本入口 `upstream-trace macos-sample-matrix`，随 `upstream-context macos` 编排，原生结果尚待验证。验收桥接以 `CVPixelBufferCreate` 请求行对齐，读取实际步长与可读跨度，初始化目标像素和全部填充，再创建真实 ready `CMSampleBuffer`；四种奇数宽度各运行二十轮，分别调用独立编译的未改写原 `image_from_sample_buffer` 和 Rust `with_sample`。每轮保存原生输入、实际覆写后的输入、双方转换与原格式输出；原生引用关闭后，二百四十个 CPU owner 留到另一个已 join 的线程读取和释放。校核器复算六百四十份像素文件、布局、填充、原生 owner/写锁与 Rust 读锁记录。本机仅能验证工具代码；原生 fixture 引用释放不等于证明系统分配器立即回收。该用例不请求截图权限、不初始化 AppKit，也不代替桌面取帧、完整格式/错误矩阵或 P1 验收。
+
 Linux 旧 Wlr/KWin 兼容构造路径已开始私有 Rust 迁移，保留输入配置值及截图 path/fd/node 的原始转发；它没有实现输入控制或 Portal 授权。显式构造对照编译完整原 `WlRootsControlUnitCompat.cpp`、`KWinControlUnitCompat.cpp`，消费真实 C++ 原接口、配置和 manager 查询函数，覆盖 120 组参数、空指针/空字符串/NUL、原始字节、MaaBool、整数边界和 host 调用顺序。Portal 调用是明确的脚本边界：原 Open 失败保留的六个 helper 残留先记录，再由夹具回收，不称为产品清理成功。`upstream-config linux-compat` 生成原记录，`upstream-config linux-compat-records` 复核 Rust UUID、元数据和事件；Windows 本机 120 组完整原函数/Rust 对照已通过（38 组构造成功、六组 Open 失败残留），独立校核也拒绝双侧相同的错误元数据；随后 Linux 原生 PipeWire 113 项组件检查全部通过，其中完整 120 组兼容构造记录已下载并独立复算。此项不连接输入或截图后端，不据此接受真实 Portal fd 所有权或完整兼容入口截图转发；原生接入仍须沿保留这些配置的同一捕获工厂完成，不能静默改成 Input=None。
 
 Wlr 另新增真实协议失败入口，随 `upstream-context wlr` 原生运行；当前 Actions 结果待验证。源码与 Rust 各执行 20 次独立连接，每次依次收到 Buffer 前的 Failed、Ready、实际覆写同一 SHM 后的 Failed、再次 Ready，以及等待时服务端主动断开该 client。它检查失败时保留调用方输出、失败路径不调用 Rust 转换器、相同布局复用同一 `wl_buffer`、断连后原 connected 标志不自动清除、独立成功图像持有到全部原生资源关闭，以及 fd/任务退出。源调用方在后续成功写入前显式分离 Mat，避免把原版可写输出别名误称为独立帧；这项宿主操作不是后端修复。`cargo xtask upstream-protocol wlr-failures <外部目录> [--check-only]` 校核实际请求、120 份 SHM 输入及双方即时/持帧等共 440 份像素文件。刻意断连后的 Rust 原生清理错误与主要失败分开记录，fd/任务数量回落不证明所有协议销毁请求成功。该已声明的负向场景不重试失败断言；任意断连时点、活跃快照下显式 client close、完整故障矩阵及 P1 仍未验收。
