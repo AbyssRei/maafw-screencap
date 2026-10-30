@@ -4,7 +4,7 @@
 
 ## 方法边界
 
-工作名 `GdiVirtualDesktop` 表示独立的运行时截图方式，只匹配[全虚拟桌面目标](../contracts/lifecycle.md#全虚拟桌面目标)。窗口 GDI、ScreenDC 及其 U/P 默认选型保持原行为。后端编译能力仍按 Windows/GDI 原生依赖门控；单独的运行时方法不要求额外 crate 或一组 U/P/E feature。
+工作名 `GdiVirtualDesktop` 表示独立的运行时截图方式，只匹配[全虚拟桌面目标](../contracts/lifecycle.md#全虚拟桌面目标)。窗口 GDI、ScreenDC 及其 F 默认选型保持原行为。后端编译能力仍按 Windows/GDI 原生依赖门控；单独的运行时方法不要求额外 crate 或一组 F/E feature。
 
 捕获从当前可访问桌面的屏幕 DC 读取可见画面，不调用窗口激活、置顶、伪最小化、移动、缩放或样式 helper。固定方法不隐式降级到主屏、窗口或其他截图方式；来源或画面条件不满足时返回明确失败。
 
@@ -19,7 +19,7 @@
 5. 检查 BitBlt 与 GdiFlush 等同步结果，在原生有效期内取得独立 CPU 存储，按 [Frame 契约](../contracts/frame.md#全虚拟桌面帧)处理空隙、填充和未使用字节。DIB 复用或销毁不能改变已交付像素；发布 BackendSample 后不再为包装 Frame 默认完整复制一次。
 6. Session 复验来源、布局、期限和取消状态，成功后发布同次像素与元数据。原生调用失败、布局变化或操作已终结时拒绝结果，并保留主要及清理错误。
 
-步骤中的布局、资源、样本和最终发布状态分别遵守[架构职责](architecture.md)，后端不反向控制 Session 或缓存。可共享底层资源封装，但不维护两份窗口 GDI 或改写冻结的 U/P 快照。
+步骤中的布局、资源、样本和最终发布状态分别遵守[架构职责](architecture.md)，后端不反向控制 Session 或缓存。可共享底层资源封装，但不维护两份窗口 GDI 或改写冻结的 F 快照。
 
 `SM_*VIRTUALSCREEN` 描述虚拟桌面范围，但不能将系统指标、显示器枚举与不同 DPI 上下文的数值混用。微软说明 GetSystemMetrics 不适用于 per-monitor DPI aware 调用线程；具体布局查询组合和物理像素证据须在 P3 原型中验证，不将四个系统指标直接当作混合 DPI 支持已成立的证明。
 

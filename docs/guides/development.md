@@ -2,6 +2,19 @@
 
 日期：2026-10-30。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
 
+## 修正 fork 来源的实施交接
+
+2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：以修正 fork 的确切提交作为完整提取来源 F，PR #1587 的修复进入 P1；P2 改为来源冻结与完整提取验收，不再重复打旧补丁。当前代码、命令及下文既有 U/未打补丁来源结果仍保持实际历史含义，文档调整不表示实现或 F 原生验收完成。
+
+主会话实施顺序：
+
+1. 修正 `AbyssRei/MaaFramework` 的 `fix/ensure-window-on-screen-rcmonitor`：普通窗口按 rcWork 校正，仅 WS_POPUP 客户区屏幕矩形精确等于 rcMonitor 时豁免，删除外窗口 ±8px 条件；保留失败、调整优先级和 flags，并验证[计划 §14.3](../plans/maafw-screencap-extraction-plan.md#143-三阶段验收与-pr-专项矩阵)的边界及实际裁剪。
+2. 锁定真实 fork commit/tree 与相对原始祖先的全部差异。`xtask/src/reference.rs` 当前仍写死旧 HEAD 和两个提交，需按显式来源修订支持新 F 及旧记录验证；不能覆盖旧 `patches/pr-1587/` 文件或仅替换常量。新版基线/补丁/运行记录按计划 §3.1、§6.2 随实际 schema 建立。
+3. 同步 `src/platform/windows/geometry.rs`、窗口 API/脚本、独立 C++ helper 及受影响 ScreenDC、DesktopDupWindow、manager/factory 调用链，保留转换、等待和清理时点。用修正版参考重新验证受影响场景；无变化的其他平台历史证据按来源及范围核验后引用，不能重命名为新版通过。
+4. 按用户提出的本地历史重写，将修复及必要来源/测试调整放入 P1 相关提取提交或紧邻提交；当前 helper 首次迁移提交为 `e8e6dbf7358dffea569222134ce8a2e6223130b6`，作为定位线索，不能只改其源码而漏掉后继测试/来源依赖。先检查 refs/worktrees 并外置保全 bundle、未提交/未跟踪工作和旧新映射，再验证最终整树；不得覆盖同时进行的 macOS 或其他工作。此安排不包含强制推送授权。
+
+P1 尚未完整验收；P2 来源冻结和 P3 SDK/原生现代化门禁不因该修订提前通过。原 FramePool 包装已知颜色失败、WGC 卸载异常及其他历史失败继续独立保留。本节说明待实施职责，不新增或宣称可执行的 F 命令。
+
 ## 当前仓库与本机命令
 
 Custom 的私有迁移入口为 `upstream-parity custom`，首批正式编排限 Windows x64/VS2026，不要求可见桌面。核心 `custom-capture` feature 只编入通用回调算法，无原生运行依赖；原生验收显式编译固定原 manager 的构造、connect、connected、screencap、inactive 函数体、完整原 callback table 和原 raw setter，并使用真实 MaaUtils ImageBuffer/vtable 与 OpenCV core/imgproc/imgcodecs。局部本机对照已运行 96 个案例/192 次源码与 Rust 截图调用，覆盖缺失 table/回调、0/1/2/255 返回值、三种实际头文件定义的 8-bit 类型、成功空图、失败保留旧输出、raw setter 克隆、修改借用表和 C++ 异常后独立调用；36 个 Mat head 保持到 context/input 销毁后，最终 head/context/adapter scope 配平。独立 `upstream-custom` 逐字节复算全部 192 份输出及原生 ABI/资源记录。首个正式在线批次的 22 项原生检查全部通过，但命令最后因归档验证器漏识别新组件前缀失败，原日志保留。补齐前缀和既有 scope/parent/phase 测试后，`cargo xtask reference verify-run runs/<run-id>/manifest.json` 已只读校核该批次完整输入；它不重新截图、不登记或改写状态，不能把原命令失败变为通过。修正后的 876cfbb Actions 入口已通过 18 项离线原生检查，下载后的 192 份实际输出、ABI 与 owner 记录亦独立校核通过；完整 manager 虚表/create-destroy ABI、UUID/info/features、encoded/resize/全部类型、其他平台与 P1 尚未验收。OpenCV 5 的类型常量由实际编译头读取，不使用旧主版本的位打包假设。

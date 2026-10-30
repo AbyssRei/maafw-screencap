@@ -17,7 +17,7 @@
 | PipeWire 目标选择 | pw_stream_connect 的 target_id 直接传 node_id | 改为 PW_ID_ANY + PW_KEY_TARGET_OBJECT，优先使用已解析目标的 object.serial，节点名称仅在身份无歧义时采用；新 provider 描述保留来源证明范围。旧 node ID 输入如需兼容，在同一已授权 remote 中即时解析并验证 serial，不把可复用 ID 当持久身份，不连任意节点或 daemon 替代目标 |
 | PipeWire 等待 | pw_thread_loop_timed_wait 的整数秒相对等待 | 产品等待改用 pw_thread_loop_get_time / pw_thread_loop_timed_wait_full，按原生时钟构造绝对期限，并从同一 Operation 剩余预算推导；保留锁/谓词纪律，覆盖伪唤醒、错误及取消。原函数仍有效，迁移动机是预算精度和语义 |
 | Wayland 输出捕获 | zwlr_screencopy_manager_v1 / Wlr | 接入 ext-image-copy-capture-v1 及其输出 image capture source 协议，作为明确的 ExtImage 方法；首期只承诺通过验收的输出来源，不自动加入窗口捕获。按服务端广播、客户端支持和所需能力绑定；保留 Wlr 作为已迁移的独立兼容方法，不冒充 ExtImage 成功，不在固定方法中隐式切换 |
-| Linux 上游兼容导出 | MaaKWinControlUnit / MaaWlRootsControlUnit 转接入口 | 新产品只提供自身 Rust/C ABI/C++/Python 契约，不再导出旧 Maa 接口或引入其输入控制；保留 U/P 对截图构造、授权输入接管和退出职责的覆盖 |
+| Linux 上游兼容导出 | MaaKWinControlUnit / MaaWlRootsControlUnit 转接入口 | 新产品只提供自身 Rust/C ABI/C++/Python 契约，不再导出旧 Maa 接口或引入其输入控制；保留 F 对截图构造、授权输入接管和退出职责的覆盖 |
 
 独立 GDI 全虚拟桌面方式从首次产品实现即采用 [ADR 0001 的 DIB 路径](gdi-virtual-desktop.md)，不先新增一条 GetBitmapBits 实现再迁移。DIB、布局初始化和独立 Frame 保证继续以[像素与内存契约](../contracts/frame.md)为准。
 新建或复用的 DIB 在每次取图前初始化所有可能未被本次原生写入覆盖的字节；PrintWindow 等无法证明完整覆盖时清零整个画布，不能把未初始化内存或上次残留当作本次像素。CPU 初始化/读取与 GDI 写入按同步契约排序，覆盖部分绘制及复用后失败的夹具；清零本身不证明取得了目标内容，仍须验证原生结果及受控图样。
@@ -36,9 +36,9 @@ FramePool 新工厂不赋予原生对象任意线程可用性。迁移遵循[执
 
 ## 实施顺序与兼容边界
 
-P0/P1 记录旧入口及实际调用职责；P2 只应用固定 PR。P3 沿同一实现逐项迁移 DIB、DXGI、FramePool、PipeWire 并新增 ExtImage；各项可独立对照，不混入源码格式整理或未经解释的像素/等待变化。P4 验证新鲜度、预算、恢复和选法，P5 验证声明、符号、打包及真实消费。
+P0/P1 记录旧入口及实际调用职责，P1 按 ADR 0003 同步修正 fork 的窗口修复；P2 只冻结来源并汇总验收。P3 沿同一实现逐项迁移 DIB、DXGI、FramePool、PipeWire 并新增 ExtImage；各项可独立对照，不混入源码格式整理或未经解释的像素/等待变化。P4 验证新鲜度、预算、恢复和选法，P5 验证声明、符号、打包及真实消费。
 
-明确弃用的内部用法在对应产品路径放行前移除；仍有效的接口按清单迁移。新接口缺失时报告缺少的能力；若支持范围确需兼容原生调用，实施前记录环境、选择条件、语义与独立验收，不因“兼容性更好”自动保留隐藏回退。U/P 快照外置，不用语义 feature 或复制 legacy/product 实现保留旧行为。
+明确弃用的内部用法在对应产品路径放行前移除；仍有效的接口按清单迁移。新接口缺失时报告缺少的能力；若支持范围确需兼容原生调用，实施前记录环境、选择条件、语义与独立验收，不因“兼容性更好”自动保留隐藏回退。F 快照外置，不用语义 feature 或复制 legacy/product 实现保留旧行为。
 
 以下不因本次清单而强制替换：GetDC、BitBlt、PrintWindow、仍有用途的 GetDIBits、D3D11 和系统 Wayland/PipeWire 基础 API；macOS 的 SCShareableContent、SCScreenshotManager sample-buffer 及 CoreVideo 路径。macOS 26 的 captureScreenshot 等新增能力按实际需求另行决定，不能仅为接口更新抬高最低 OS。
 
