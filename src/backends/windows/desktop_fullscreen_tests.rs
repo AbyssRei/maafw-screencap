@@ -1,11 +1,12 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Actual F exact-popup capture with an in-target update, without an outside
-//! marker that would overlap a fullscreen target. This is one geometry case.
+//! Actual F exact-popup and post-correction ordinary capture with an in-target
+//! update, without an outside marker that would overlap the target.
 use crate::backends::windows::{
     desktop_dup_window::DesktopDupWindowCapture,
     parity_adapter::{Adapter, Image},
 };
+use crate::platform::windows::{geometry, window_api::SystemWindow};
 use std::{error::Error, fs::File, io::Write, path::Path};
 
 fn known(bytes: &[u8], width: usize, height: usize, stride: usize) -> bool {
@@ -61,10 +62,20 @@ fn snapshot(file: &mut File, row: [i64; 31]) -> std::io::Result<()> {
 #[ignore = "explicit F fullscreen DesktopDupWindow capture, original source and serial visible desktop"]
 fn captures_exact_popup_without_work_area_crop_and_keeps_owners_after_close()
 -> Result<(), Box<dyn Error>> {
+    capture_case(false)
+}
+#[test]
+#[ignore = "explicit F ordinary-work-area DesktopDupWindow capture and serial visible desktop"]
+fn captures_ordinary_client_after_work_area_correction_and_keeps_owners_after_close()
+-> Result<(), Box<dyn Error>> {
+    capture_case(true)
+}
+fn capture_case(workarea: bool) -> Result<(), Box<dyn Error>> {
+    let kind = if workarea { "workarea" } else { "fullscreen" };
     let source_root = std::path::PathBuf::from(
         std::env::var_os("MFS_DESKTOP_DUP_REFERENCE_ROOT").ok_or("source records required")?,
     )
-    .join("window-fullscreen");
+    .join(format!("window-{kind}"));
     if !source_root.is_absolute() {
         return Err("absolute fullscreen source records required".into());
     }
@@ -105,9 +116,9 @@ fn captures_exact_popup_without_work_area_crop_and_keeps_owners_after_close()
         &source_geometry[3..7],
         "same native monitor premise"
     );
-    let setup = fixture.geometry([
+    let mut setup = fixture.geometry([
         1,
-        0x9000_0000,
+        if workarea { 0x10cf_0000 } else { 0x9000_0000 },
         initial[0],
         initial[1],
         initial[2] - initial[0],
@@ -116,13 +127,42 @@ fn captures_exact_popup_without_work_area_crop_and_keeps_owners_after_close()
     assert_eq!(setup[16..18], setup[..2]);
     assert_eq!(
         (setup[14], setup[15]),
-        (i64::try_from(width)?, i64::try_from(height)?)
+        (initial[2] - initial[0], initial[3] - initial[1])
     );
     let mut snapshots = File::options()
         .create_new(true)
         .write(true)
         .open(root.join("snapshots.tsv"))?;
     snapshot(&mut snapshots, setup)?;
+    if workarea {
+        let before = setup;
+        geometry::ensure_on_screen(&SystemWindow, fixture.hwnd())
+            .map_err(|e| format!("ordinary Rust geometry helper: {e:?}"))?;
+        // Wait only for the native asynchronous geometry completion, before
+        // any capture begins. No capture/pixel assertion is retried.
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(3);
+        loop {
+            setup = fixture.geometry([0; 6])?;
+            if setup[16..18] == initial[4..6]
+                && setup[14..16] == [initial[6] - initial[4], initial[7] - initial[5]]
+            {
+                break;
+            }
+            if std::time::Instant::now() >= until {
+                snapshot(&mut snapshots, setup)?;
+                return Err("ordinary Rust helper geometry did not complete before capture".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1));
+        }
+        assert_eq!(setup[20], before[20] + 1);
+        assert_eq!(setup[18] & 0x8000_0000, 0);
+        snapshot(&mut snapshots, setup)?;
+        fixture.geometry([2, 0, 0, 0, 0, 0])?;
+    }
+    assert_eq!(
+        setup[14..16],
+        [i64::try_from(width)?, i64::try_from(height)?]
+    );
     fixture.start_inside_desktop_updates()?;
     let mut retained: Vec<Image> = Vec::new();
     {
@@ -131,7 +171,7 @@ fn captures_exact_popup_without_work_area_crop_and_keeps_owners_after_close()
             let mut converter = adapter.converter(0);
             let attempt = capture.capture(&mut converter);
             println!(
-                "fullscreen DesktopDupWindow call={call} evidence={:?}",
+                "{kind} DesktopDupWindow call={call} evidence={:?}",
                 attempt.evidence
             );
             assert!(attempt.coordination.as_ref().unwrap().geometry.is_ok());
@@ -196,10 +236,21 @@ fn captures_exact_popup_without_work_area_crop_and_keeps_owners_after_close()
     }
     drop(retained);
     assert_eq!(adapter.image_owners()?, image_baseline);
-    save(&root,"result.txt",b"cases=1\ncaptures=2\nretained_after_close=2\nknown_pixels=1\ngeometry_adjustments=0\nimage_owners_released=1\n")?;
-    println!(
-        "native DesktopDupWindow fullscreen cases=1 captures=2 known_target_with_marker=1 work_area_crop=0 geometry_adjustments=0 retained_after_close=2 image_owners_released=1 passed"
-    );
+    let result = if workarea {
+        b"cases=1\ncaptures=2\nretained_after_close=2\nknown_pixels=1\nhelper_adjustments=1\ncapture_adjustments=0\nimage_owners_released=1\n".as_slice()
+    } else {
+        b"cases=1\ncaptures=2\nretained_after_close=2\nknown_pixels=1\ngeometry_adjustments=0\nimage_owners_released=1\n".as_slice()
+    };
+    save(&root, "result.txt", result)?;
+    if workarea {
+        println!(
+            "native DesktopDupWindow workarea cases=1 captures=2 known_target_with_marker=1 helper_adjustments=1 capture_adjustments=0 retained_after_close=2 image_owners_released=1 passed"
+        );
+    } else {
+        println!(
+            "native DesktopDupWindow fullscreen cases=1 captures=2 known_target_with_marker=1 work_area_crop=0 geometry_adjustments=0 retained_after_close=2 image_owners_released=1 passed"
+        );
+    }
     Ok(())
 }
 
