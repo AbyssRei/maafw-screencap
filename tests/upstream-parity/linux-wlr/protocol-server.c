@@ -27,12 +27,16 @@ struct server {
     int error;
     bool stopped;
     bool registry;
+    bool failures;
     struct registry_output outputs[22];
     unsigned output_globals, output_removed, output_binds, output_destroys;
     FILE* registry_rows;
+    FILE* failure_rows;
+    unsigned failed_frames, disconnected_clients;
+    uint32_t failure_buffers[20];
 };
-struct manager { struct server* server; unsigned next; };
-struct frame { struct server* server; struct mfs_protocol_case input; bool copied; };
+struct manager { struct server* server; unsigned next, cycle; };
+struct frame { struct server* server; struct mfs_protocol_case input; bool copied; unsigned cycle, phase; };
 static bool registry_advance(struct server* s, unsigned phase, unsigned round);
 static void failure(struct server* s, const char* message)
 {
@@ -63,15 +67,26 @@ static void copy(struct wl_client* client, struct wl_resource* resource, struct 
         return;
     }
     f->copied = true;
+    if (f->server->failures) {
+        const uint32_t buffer_id = wl_resource_get_id(buffer);
+        if (f->cycle >= 20) { failure(f->server,"invalid failure frame cycle"); return; }
+        if (f->phase == 1) { f->server->failure_buffers[f->cycle] = buffer_id; }
+        if (!buffer_id || f->server->failure_buffers[f->cycle] != buffer_id) { failure(f->server,"failure path replaced unchanged SHM buffer"); return; }
+        if (fprintf(f->server->failure_rows,"%u\t%u\t%u\t%u\t%u\n",f->cycle,f->phase,
+            wl_resource_get_id(resource),buffer_id,f->phase == 2 ? 0u : 1u) < 0
+            || fflush(f->server->failure_rows) != 0) { failure(f->server,"save failure copy request"); return; }
+    }
     // The real libwayland-server SHM helper owns the mapped received FD.
     // Access ends before Ready; no pointer/reference escapes this callback.
     wl_shm_buffer_begin_access(shm);
     uint8_t* bytes = wl_shm_buffer_get_data(shm);
     mfs_protocol_fill(f->input,bytes);
-    if (f->server->registry || f->server->copies < 24) {
+    if (f->server->failures || f->server->registry || f->server->copies < 24) {
         char name[4096];
-        int length = snprintf(name,sizeof name,"%s/case-%u.shm",f->server->directory,
-            f->server->registry ? f->server->copies : f->input.index);
+        int length = f->server->failures
+            ? snprintf(name,sizeof name,"%s/case-%u-%u.shm",f->server->directory,f->cycle,f->phase)
+            : snprintf(name,sizeof name,"%s/case-%u.shm",f->server->directory,
+                f->server->registry ? f->server->copies : f->input.index);
         FILE* file = length > 0 && (size_t)length < sizeof name ? fopen(name,"wb") : NULL;
         const size_t size = 5 * f->input.stride;
         bool saved = file && fwrite(bytes,1,size,file) == size;
@@ -80,6 +95,11 @@ static void copy(struct wl_client* client, struct wl_resource* resource, struct 
     }
     wl_shm_buffer_end_access(shm);
     ++f->server->copies;
+    if (f->server->failures && f->phase == 2) {
+        ++f->server->failed_frames;
+        zwlr_screencopy_frame_v1_send_failed(resource);
+        return;
+    }
     zwlr_screencopy_frame_v1_send_flags(resource,f->input.inverted);
     zwlr_screencopy_frame_v1_send_ready(resource,0,2000 + f->input.index,1000 + f->input.index);
 }
@@ -91,9 +111,24 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
 {
     struct manager* m = wl_resource_get_user_data(resource);
     struct server* s = m->server;
-    if (m->next >= (s->registry ? 80u : 24u) || overlay_cursor != 0 || !output) { failure(s,"unexpected capture request"); return; }
+    if (m->next >= (s->failures ? 5u : s->registry ? 80u : 24u) || overlay_cursor != 0 || !output) { failure(s,"unexpected capture request"); return; }
     const unsigned position = m->next++;
     unsigned input = position;
+    if (s->failures) {
+        if (m->cycle >= 20) { failure(s,"too many failure clients"); return; }
+        if (position == 0 || position == 4) {
+            if (fprintf(s->failure_rows,"%u\t%u\t%u\t0\t%u\n",m->cycle,position,id,position == 4 ? 2u : 0u) < 0
+                || fflush(s->failure_rows) != 0) { failure(s,"save failure request"); return; }
+        }
+        if (position == 4) {
+            // Deliberate EOF while the real client waits for this request. Do
+            // not dereference m/resource after destroying their native owner.
+            ++s->disconnected_clients;
+            wl_client_destroy(client);
+            return;
+        }
+        input = position < 2 ? 0 : 4;
+    }
     if (s->registry) {
         struct registry_output* selected = wl_resource_get_user_data(output);
         const unsigned round = position / 4, phase = position % 4;
@@ -110,11 +145,18 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
     if (!f) { wl_client_post_no_memory(client); failure(m->server,"frame allocation"); return; }
     f->server = m->server;
     f->input = mfs_protocol_case(input);
+    f->cycle = m->cycle; f->phase = position;
+    if (s->failures) { f->input.format = WL_SHM_FORMAT_XRGB8888; }
     struct wl_resource* frame = wl_resource_create(client,&zwlr_screencopy_frame_v1_interface,
         wl_resource_get_version(resource),id);
     if (!frame) { free(f); wl_client_post_no_memory(client); failure(m->server,"frame resource"); return; }
     ++m->server->frames_created;
     wl_resource_set_implementation(frame,&frame_requests,f,frame_destroyed);
+    if (s->failures && position == 0) {
+        ++s->failed_frames;
+        zwlr_screencopy_frame_v1_send_failed(frame);
+        return;
+    }
     zwlr_screencopy_frame_v1_send_buffer(frame,f->input.format,7,5,f->input.stride);
     if (wl_resource_get_version(frame) >= 3) { zwlr_screencopy_frame_v1_send_buffer_done(frame); }
     if (s->registry) { (void)registry_advance(s,position % 4,position / 4); }
@@ -141,6 +183,7 @@ static void bind_manager(struct wl_client* client, void* data, uint32_t version,
     struct manager* m = calloc(1,sizeof *m);
     if (!m) { wl_client_post_no_memory(client); failure(s,"manager allocation"); return; }
     m->server = s;
+    m->cycle = s->managers_created;
     struct wl_resource* resource = wl_resource_create(client,&zwlr_screencopy_manager_v1_interface,version,id);
     if (!resource) { free(m); wl_client_post_no_memory(client); failure(s,"manager resource"); return; }
     ++s->managers_created;
@@ -236,7 +279,7 @@ static int stop(int signal, void* data)
 }
 int main(int argc, char** argv)
 {
-    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0)
+    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0 && strcmp(argv[4],"--failures") != 0)
         || strlen(argv[1]) != 1 || argv[1][0] < '1' || argv[1][0] > '3') { return 64; }
     Dl_info owner;
     char actual[PATH_MAX],expected[PATH_MAX];
@@ -246,7 +289,9 @@ int main(int argc, char** argv)
         return 1;
     }
     printf("native protocol server library=%s\n",actual);
-    struct server s = {.directory = argv[2], .version = (unsigned)(argv[1][0] - '0'), .registry = argc == 5};
+    struct server s = {.directory = argv[2], .version = (unsigned)(argv[1][0] - '0'),
+        .registry = argc == 5 && strcmp(argv[4],"--registry") == 0,
+        .failures = argc == 5 && strcmp(argv[4],"--failures") == 0};
     s.display = wl_display_create();
     if (!s.display) { return 1; }
     struct wl_event_loop* loop = wl_display_get_event_loop(s.display);
@@ -256,6 +301,12 @@ int main(int argc, char** argv)
         || wl_display_init_shm(s.display) != 0) { s.error = 1; goto cleanup; }
     for (uint32_t kind = 2; kind < 6; ++kind) {
         if (!wl_display_add_shm_format(s.display,mfs_protocol_case(kind * 4).format)) { s.error = 1; goto cleanup; }
+    }
+    if (s.failures) {
+        char name[4096];
+        int length = snprintf(name,sizeof name,"%s/failure-requests.tsv",s.directory);
+        s.failure_rows = length > 0 && (size_t)length < sizeof name ? fopen(name,"wx") : NULL;
+        if (!s.failure_rows) { s.error = 1; goto cleanup; }
     }
     if (s.registry) {
         char name[4096];
@@ -267,7 +318,8 @@ int main(int argc, char** argv)
         || !wl_global_create(s.display,&zwp_virtual_keyboard_manager_v1_interface,1,&s,bind_keyboard)
         || !wl_global_create(s.display,&zwlr_screencopy_manager_v1_interface,(int)s.version,&s,bind_manager)
         || wl_display_add_socket(s.display,"mfs-p1-protocol") != 0) { s.error = 1; goto cleanup; }
-    if (s.registry) { printf("registry ready rounds=20 captures=80 initial_outputs=2 compositor=0\n"); }
+    if (s.failures) { printf("failures ready cycles=20 operations=100 scripted_failed=40 disconnects=20 compositor=0\n"); }
+    else if (s.registry) { printf("registry ready rounds=20 captures=80 initial_outputs=2 compositor=0\n"); }
     else { printf("protocol ready version=%u formats=6 cases=24 native_shm=1 compositor=0\n",s.version); }
     fflush(stdout);
     wl_display_run(s.display);
@@ -277,9 +329,17 @@ cleanup:
     if (interrupt) { wl_event_source_remove(interrupt); }
     wl_display_destroy(s.display);
     if (s.registry_rows && fclose(s.registry_rows) != 0) { s.error = 1; }
-    const unsigned managers = s.registry ? 1 : 40, frames = s.registry ? 80 : 960;
+    if (s.failure_rows && fclose(s.failure_rows) != 0) { s.error = 1; }
+    const unsigned managers = s.failures ? 20 : s.registry ? 1 : 40;
+    const unsigned frames = s.failures || s.registry ? 80 : 960, copies = s.failures ? 60 : frames;
     if (!s.stopped || s.error || s.managers_created != managers || s.managers_destroyed != managers
-        || s.frames_created != frames || s.frames_destroyed != frames || s.copies != frames) { s.error = 1; }
+        || s.frames_created != frames || s.frames_destroyed != frames || s.copies != copies) { s.error = 1; }
+    if (s.failures) {
+        if (s.failed_frames != 40 || s.disconnected_clients != 20) { s.error = 1; }
+        printf("failures stopped clients=%u/%u frames=%u/%u copies=%u failed=%u disconnected=%u graceful=%d error=%d\n",
+            s.managers_created,s.managers_destroyed,s.frames_created,s.frames_destroyed,s.copies,
+            s.failed_frames,s.disconnected_clients,s.stopped,s.error);
+    }
     if (s.registry) {
         if (s.output_globals != 22 || s.output_removed != 21 || s.output_binds != 22 || s.output_destroys != 22) { s.error = 1; }
         printf("registry stopped rounds=20 globals=%u removed=%u outputs=%u/%u frames=%u/%u copies=%u graceful=%d error=%d\n",
