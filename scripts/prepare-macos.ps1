@@ -89,7 +89,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             & $ConfigureTool upstream-metadata macos (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS macos) >> $log 2>&1
             if($LASTEXITCODE -ne 0){$status='failed';throw 'Metadata source/Rust artifact validation failed'}
         }
-        if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|layout|dimensions|manager|manager-scripts)$'){
+        if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 $status='failed';throw 'Expected exactly one actual Rust macOS test, not a zero-test or ignored run'
             }
@@ -101,11 +101,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 'rust-macos-display-patch' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
                 'rust-macos-display-host-premise' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
                 'rust-macos-display-distinct-host' {'native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed'}
+                'rust-macos-sample-matrix' {'native macOS sample_matrix cases=4 cycles=20 samples=80 source_images=80 rust_raw=80 rust_bgr=80 retained_cpu=240 native_overwrite=80 native_refs_closed=80 cross_thread_cpu_release=1 capture_permission_requested=0 passed'}
                 'rust-macos-manager' {'native Rust macOS manager cycles=20 captures=60 retained_bgr=60 missing_output_preserved=1 fixture_reclaimed_refs=61 input_none=1 passed'}
                 default {$null}
             }
             if($summary -and -not $observed.Contains($summary)){$status='failed';throw 'Expected the complete native Rust macOS ownership/capture summary'}
-            if($summary -and -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1')){
+            if($summary -and $Name -ne 'rust-macos-sample-matrix' -and -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1')){
                 $status='failed';throw 'Expected the explicit original-equivalent main-thread AppKit host and joined libtest worker'
             }
             if($Name -eq 'rust-macos-manager-scripts' -and -not $observed.Contains('original Rust macOS manager scripts=320 exact_bodies=1 output_and_unit_events=1 input_none=1 passed')){
@@ -167,6 +168,17 @@ try {
         try { Step original-macos-display $executable @('display',$display) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $features='prototype-macos,macos-manager'
+        $samples=Join-Path $referenceArtifacts native-sample-matrix
+        New-Item -ItemType Directory -Path $samples|Out-Null
+        $env:MFS_P1_MACOS_SAMPLE_ARTIFACTS=$samples
+        $previousHost=$env:MFS_P1_MACOS_MAIN_THREAD_HOST
+        Remove-Item Env:MFS_P1_MACOS_MAIN_THREAD_HOST -ErrorAction SilentlyContinue
+        try {
+            try {Step rust-macos-sample-matrix cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::sample_matrix::preserves_padded_native_samples_and_cpu_images_after_overwrite_and_native_release','--','--exact','--ignored','--test-threads=1','--nocapture')}
+            catch {$failed=$true;Write-Host $_.Exception.Message}
+        }finally{$env:MFS_P1_MACOS_MAIN_THREAD_HOST=$previousHost}
+        try {Step macos-sample-matrix-records $ConfigureTool @('upstream-trace','macos-sample-matrix',$samples)}
+        catch {$failed=$true;Write-Host $_.Exception.Message}
         try { Step rust-macos-layout cargo @('test','--release','--locked','--lib','--features',$features,'platform::macos::pixel_buffer::tests::rejects_overflowing_or_unreadable_bgra_layouts','--','--exact','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-macos-dimensions cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::rejects_unrepresentable_source_config_dimensions','--','--exact','--test-threads=1','--nocapture') }
