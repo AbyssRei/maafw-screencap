@@ -93,10 +93,10 @@ void display_patch(const std::filesystem::path& directory,const char* argument) 
         for(unsigned call=0;call<3;++call) {
             require(display_geometry_text(display_geometry(static_cast<uint32_t>(wid)))==identity,"source target geometry changed before capture");
             auto image=capture(source);require(image.has_value(),"original display-patch capture returned nullopt");
-            display_pixels(*image,g);save(*image,directory/("display-call-"+std::to_string(call)+".source.bgr"));held.push_back(std::move(*image));
+            save(*image,directory/("display-call-"+std::to_string(call)+".source.bgr"));display_pixels(*image,g);held.push_back(std::move(*image));
         }
     }
     require(display_geometry_text(display_geometry(static_cast<uint32_t>(wid)))==identity,"source target geometry changed after capture");
-    for(size_t call=0;call<held.size();++call) {display_pixels(held[call],g);save(held[call],directory/("display-held-"+std::to_string(call)+".source.bgr"));}
+    for(size_t call=0;call<held.size();++call) {save(held[call],directory/("display-held-"+std::to_string(call)+".source.bgr"));display_pixels(held[call],g);}
     std::cout<<"original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed\n";
 }
