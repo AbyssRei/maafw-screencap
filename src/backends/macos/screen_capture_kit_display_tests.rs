@@ -25,13 +25,59 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
         let capture = Capture::new(0);
         for call in 0..3 {
             let trace = trace();
-            let image = capture
-                .invoke(
-                    converter(&adapter, &trace, &samples, false, Duration::ZERO),
-                    trace.clone(),
-                )
-                .unwrap()
-                .unwrap();
+            let sample_start = samples.lock().unwrap().len();
+            let started = Instant::now();
+            let result = capture.invoke(
+                converter(&adapter, &trace, &samples, false, Duration::ZERO),
+                trace.clone(),
+            );
+            let status = match &result {
+                Ok(Some(_)) => 1,
+                Ok(None) => 0,
+                Err(_) => 2,
+            };
+            // Persist return/failure BEFORE unwrap/drain. A late callback must
+            // not erase the actual caller's None/error/timeout observation.
+            std::fs::write(directory.join(format!("display-call-{call}.rust-status.txt")),format!(
+                "result={status}\nelapsed_ns={}\ntimed_out={}\ncontent_calls={}\nsample_calls={}\ncompleted={}\nsource_failure={}\nnative_error={}\nfault={}\nwait_result={}\nerror_debug={:?}\n",
+                started.elapsed().as_nanos(),u8::from(trace.timed_out.load(Ordering::Acquire)),trace.content_calls.load(Ordering::Acquire),trace.sample_calls.load(Ordering::Acquire),trace.completed.load(Ordering::Acquire),trace.source_failure.load(Ordering::Acquire),trace.native_error.load(Ordering::Acquire),trace.fault.load(Ordering::Acquire),trace.wait_result.load(Ordering::Acquire),result.as_ref().err())).unwrap();
+            if status != 1 {
+                // Observe THIS failed call's late owners without another
+                // capture or a longer source wait. Its original Result remains
+                // failed even if a native callback subsequently completes.
+                let until = Instant::now() + Duration::from_secs(15);
+                while Instant::now() < until
+                    && (trace.request_released.load(Ordering::Acquire) != 1
+                        || trace.sample_calls.load(Ordering::Acquire) != 0
+                            && trace.block_inputs_released.load(Ordering::Acquire) != 1)
+                {
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                if trace.request_released.load(Ordering::Acquire) == 1 {
+                    trace.reclaim_source_semaphore_for_fixture();
+                }
+                let (total, new_samples, late_sample) = {
+                    let samples = samples.lock().unwrap();
+                    (
+                        samples.len(),
+                        samples.len().checked_sub(sample_start).unwrap(),
+                        samples.get(sample_start).cloned(),
+                    )
+                };
+                std::fs::write(directory.join(format!("display-call-{call}.rust-late.txt")),format!(
+                    "original_result={status}\nlate_completed={late}\ncontent_calls={content}\nsample_calls={callbacks}\ncompleted={completed}\nrequest_released={request}\nblock_inputs_released={inputs}\nsemaphore_block_released={semaphore}\nfixture_reclaimed={reclaimed}\nsource_failure={failure}\nnative_error={native}\nfault={fault}\nlocks={locks}\nunlocks={unlocks}\nretained_samples_total={total}\ncopied_samples_this_call={new_samples}\nsample_width={width}\nsample_height={height}\nsample_native_stride={stride}\n",
+                    late=u8::from(trace.late_completed.load(Ordering::Acquire)),content=trace.content_calls.load(Ordering::Acquire),callbacks=trace.sample_calls.load(Ordering::Acquire),completed=trace.completed.load(Ordering::Acquire),request=trace.request_released.load(Ordering::Acquire),inputs=trace.block_inputs_released.load(Ordering::Acquire),semaphore=trace.semaphore_block_owner_released.load(Ordering::Acquire),reclaimed=trace.fixture_semaphore_reclaimed.load(Ordering::Acquire),failure=trace.source_failure.load(Ordering::Acquire),native=trace.native_error.load(Ordering::Acquire),fault=trace.fault.load(Ordering::Acquire),locks=trace.pixels.locks.load(Ordering::Acquire),unlocks=trace.pixels.unlocks.load(Ordering::Acquire),width=late_sample.as_ref().map_or(0,|s|s.width),height=late_sample.as_ref().map_or(0,|s|s.height),stride=late_sample.as_ref().map_or(0,|s|s.native_stride))).unwrap();
+                // Never label a prior successful call's retained sample as a
+                // late result of this failed call. Release the mutex before IO.
+                if let Some(sample) = late_sample {
+                    std::fs::write(
+                        directory.join(format!("display-call-{call}.rust-late.raw")),
+                        sample.pixels(),
+                    )
+                    .unwrap();
+                }
+            }
+            let image = result.unwrap().unwrap();
             drained(&trace, true);
             trace.reclaim_source_semaphore_for_fixture();
             let guard = samples.lock().unwrap();

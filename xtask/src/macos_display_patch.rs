@@ -8,7 +8,7 @@ use crate::{
     records,
 };
 use serde::Deserialize;
-use std::{fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Scene {
@@ -18,6 +18,13 @@ struct Scene {
     colour: String,
     owner_pid: u32,
     display_patch: u32,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OriginalStatus {
+    original_oracle_passed: bool,
+    expected_source_files: u32,
+    recorded_source_files: u32,
 }
 pub fn run(args: &[String]) -> Result<()> {
     let (path,check_only)=match args {
@@ -39,6 +46,8 @@ pub fn run(args: &[String]) -> Result<()> {
     {
         return Err("wrong owned display scene premise".into());
     }
+    let original: OriginalStatus = serde_json::from_slice(&read("source-oracle-status.json")?)?;
+    original_status(original)?;
     let geometry_bytes = read("scene/display-geometry.tsv")?;
     let g = macos_display_geometry::parse(std::str::from_utf8(&geometry_bytes)?)?;
     if g.window != scene.window_id || g.pid != scene.owner_pid {
@@ -54,6 +63,9 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     traces(std::str::from_utf8(&read("rust-display-trace.tsv")?)?, &g)?;
     for call in 0..3 {
+        returned(std::str::from_utf8(&read(&format!(
+            "display-call-{call}.rust-status.txt"
+        ))?)?)?;
         for side in ["source", "rust"] {
             let bgr = read(&format!("display-call-{call}.{side}.bgr"))?;
             g.pixels(&bgr, 3)?;
@@ -96,6 +108,51 @@ pub fn run(args: &[String]) -> Result<()> {
     println!(
         "macOS display_patch source_captures=3 rust_captures=3 payloads=18 actual_native_geometry=1 known_owned_patch=6 full_image_rust_conversion=3 retained_cpu_verified=1 full_desktop_known_pixels=0 full_P1_acceptance=0 passed"
     );
+    Ok(())
+}
+fn original_status(value: OriginalStatus) -> Result<()> {
+    if !value.original_oracle_passed
+        || value.expected_source_files != 7
+        || value.recorded_source_files != 7
+    {
+        return Err("original display oracle failed/incomplete; independent Rust observations cannot accept this pair".into());
+    }
+    Ok(())
+}
+fn returned(text: &str) -> Result<()> {
+    let mut fields = BTreeMap::new();
+    for line in text.lines() {
+        let (key, value) = line
+            .split_once('=')
+            .ok_or("invalid native display return snapshot")?;
+        if fields.insert(key, value).is_some() {
+            return Err("duplicate native display return field".into());
+        }
+    }
+    let expected = BTreeMap::from([
+        ("result", "1"),
+        ("timed_out", "0"),
+        ("content_calls", "1"),
+        ("sample_calls", "1"),
+        ("completed", "1"),
+        ("source_failure", "0"),
+        ("native_error", "0"),
+        ("fault", "0"),
+        ("wait_result", "0"),
+        ("error_debug", "None"),
+    ]);
+    let elapsed = fields
+        .remove("elapsed_ns")
+        .ok_or("missing native display elapsed time")?;
+    if elapsed.is_empty()
+        || !elapsed.bytes().all(|b| b.is_ascii_digit())
+        || elapsed.parse::<u64>()? == 0
+        || fields != expected
+    {
+        return Err(
+            "native display returned None/error/timeout or has incomplete callback evidence".into(),
+        );
+    }
     Ok(())
 }
 fn traces(text: &str, g: &Geometry) -> Result<()> {
@@ -142,6 +199,41 @@ mod tests {
             .map(|i| format!("{i}\t1\t1\t1\t1\t1\t1\t1\t1\t1228800\t1\t1\t0\t0\t2560\t640\t480\n"))
             .collect::<String>();
         traces(&rows, &g).unwrap();
+        assert!(
+            original_status(OriginalStatus {
+                original_oracle_passed: false,
+                expected_source_files: 7,
+                recorded_source_files: 1
+            })
+            .is_err()
+        );
+        assert!(
+            original_status(OriginalStatus {
+                original_oracle_passed: false,
+                expected_source_files: 7,
+                recorded_source_files: 7
+            })
+            .is_err()
+        );
+        assert!(
+            original_status(OriginalStatus {
+                original_oracle_passed: true,
+                expected_source_files: 7,
+                recorded_source_files: 1
+            })
+            .is_err()
+        );
+        original_status(OriginalStatus {
+            original_oracle_passed: true,
+            expected_source_files: 7,
+            recorded_source_files: 7,
+        })
+        .unwrap();
+        let returned_ok = "result=1\nelapsed_ns=7\ntimed_out=0\ncontent_calls=1\nsample_calls=1\ncompleted=1\nsource_failure=0\nnative_error=0\nfault=0\nwait_result=0\nerror_debug=None\n";
+        returned(returned_ok).unwrap();
+        assert!(returned(&returned_ok.replace("result=1", "result=0")).is_err());
+        assert!(returned(&returned_ok.replace("timed_out=0", "timed_out=1")).is_err());
+        assert!(returned(&(returned_ok.to_owned() + "result=1\n")).is_err());
         for bad in [
             rows.lines().take(2).collect::<Vec<_>>().join("\n"),
             rows.replacen("\t1\t1\t0\t0\t2560", "\t1\t0\t0\t0\t2560", 1),

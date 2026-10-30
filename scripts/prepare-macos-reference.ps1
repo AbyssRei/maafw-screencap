@@ -71,6 +71,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
     New-Item -ItemType Directory -Path $directory,$scene|Out-Null
     $server=$null;$serverOut=$null;$serverError=$null
     $displayPatch=$Name -eq 'rust-macos-display-patch'
+    $originalFailure=$null
     try {
         $info=[Diagnostics.ProcessStartInfo]::new($Executable)
         $info.ArgumentList.Add(($displayPatch ? 'display-scene' : 'scene'));$info.ArgumentList.Add($scene)
@@ -93,14 +94,24 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
         if($displayPatch){$env:MFS_P1_MACOS_DISPLAY_GEOMETRY=Join-Path $scene display-geometry.tsv}
         $oracleMode=if($displayPatch){'display-patch'}elseif($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
-        Step "$Name-original-oracle" $Executable @($oracleMode,$directory,[string]$identity.window_id)
+        try {Step "$Name-original-oracle" $Executable @($oracleMode,$directory,[string]$identity.window_id)}
+        catch {
+            if(-not $displayPatch){throw}
+            # Preserve the failed original check. An independent known-patch
+            # Rust observation cannot accept an absent original oracle.
+            $originalFailure=$_
+        }
         if(-not $displayPatch){$env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr}
         $oracleFiles=@(Get-ChildItem -LiteralPath $directory -File|Where-Object{
             if($displayPatch){$_.Name -match '^display-(call|held)-[0-2]\.source\.bgr$' -or $_.Name -eq 'source-display-geometry.tsv'}
             else{$_.Name -eq 'external-window.bgr' -or $_.Name -match '^manager-cycle-[0-9]+-call-[0-9]+\.bgr$'}
         })
         $expectedOracles=if($displayPatch){7}elseif($Name -eq 'rust-macos-manager'){61}else{1}
-        if($oracleFiles.Count -ne $expectedOracles){throw 'Incomplete original oracle files before Rust execution'}
+        if($displayPatch){Json (Join-Path $directory source-oracle-status.json) ([ordered]@{
+            original_oracle_passed=($null -eq $originalFailure)
+            expected_source_files=7;recorded_source_files=$oracleFiles.Count
+        })}
+        if($oracleFiles.Count -ne $expectedOracles -and -not $originalFailure){throw 'Incomplete original oracle files before Rust execution'}
         $oracleRecords=@($oracleFiles|ForEach-Object{Artifact $_.FullName})
         $oracleRecord=Join-Path $directory source-oracle-identities.json
         Json $oracleRecord $oracleRecords;Save $oracleRecord
@@ -138,5 +149,9 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
             }
         }
     }
-    if($displayPatch){Step macos-display-patch-records $ConfigureTool @('upstream-trace','macos-display-patch',$directory)}
+    if($displayPatch){
+        try {Step macos-display-patch-records $ConfigureTool @('upstream-trace','macos-display-patch',$directory)}
+        catch {if(-not $originalFailure){throw}}
+        if($originalFailure){throw $originalFailure}
+    }
 }
