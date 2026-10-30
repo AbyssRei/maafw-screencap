@@ -15,6 +15,7 @@ mod native;
 mod native_tools;
 mod pipewire;
 mod pipewire_host;
+mod pipewire_host_api;
 mod pipewire_host_offer;
 mod pipewire_trace;
 mod quality;

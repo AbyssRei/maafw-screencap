@@ -63,3 +63,5 @@ mfs_linux_manager_extract("bool LinuxControlUnitMgr::create_wl_client()" "int Li
 # their original declaration surface and include the preceding bodies alone.
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/linux-manager-features.inc" "// Exact fixed feature query; LF normalization only.\n")
 mfs_linux_manager_extract("MaaControllerFeature LinuxControlUnitMgr::get_features()" "bool LinuxControlUnitMgr::start_app(" "${CMAKE_CURRENT_BINARY_DIR}/linux-manager-features.inc")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/linux-manager-info.inc" "// Exact fixed metadata query; LF normalization only.\n")
+mfs_linux_manager_extract("json::object LinuxControlUnitMgr::get_info()" "bool LinuxControlUnitMgr::create_screencap()" "${CMAKE_CURRENT_BINARY_DIR}/linux-manager-info.inc")

@@ -197,7 +197,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;') {
             throw 'Expected native None/unimplemented, missing provider, plain and hosted unsafe-FD boundary controls'
         }
-        if($Name -in @('original-pipewire-manager-host','rust-pipewire-manager-host')) {
+        if($Name -in @('original-pipewire-manager-host','rust-pipewire-manager-host','rust-kwin-native-host')) {
             $observed=Get-Content -LiteralPath $log -Raw
             $expected=$Name.StartsWith('original-') ?
                 'original PipeWire host manager objects=20 init_true=7 init_false=7 init_error=6 captures=60 retained=60 helper_ended_before_connect=20 native_closed_before_host=20 host_fds_closed=40 input_actions=0 passed' :
@@ -213,6 +213,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             if(-not $observed.Contains($expected) -or ($Name.StartsWith('rust-') -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
                 throw 'Expected exact native pre-init host error, retained socket identity and separately labelled fixture reclaim'
             }
+        }
+        if($Name -eq 'original-kwin-native-host' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original KWin ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 helper_call_order=20 duplicated_socket_identity=20 input_actions=0 passed')) {
+            throw 'Expected exact original KWin C create/destroy, real public virtual handles and native host captures'
         }
         if($Name -in @('original-pipewire-manager-daemon','original-pipewire-manager-fd','rust-pipewire-manager-daemon','rust-pipewire-manager-fd')) {
             $observed=Get-Content -LiteralPath $log -Raw
@@ -670,6 +673,15 @@ try {
         try { Step rust-pipewire-manager-host timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::host_manager::retains_real_capture_after_host_init_false_or_error_and_closes_native_before_host_owner','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step pipewire-host-manager-records $ConfigureTool @('upstream-trace','pipewire-host',$hostMatrix) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        $apiMatrix=Join-Path $referenceArtifacts kwin-native-api-matrix
+        New-Item -ItemType Directory -Path $apiMatrix|Out-Null
+        $env:MFS_P1_PIPEWIRE_HOST_ARTIFACTS=Join-Path $apiMatrix rust
+        try { Step original-kwin-native-host timeout @('--signal=TERM','--kill-after=5s','180s',$env:MFS_P1_KWIN_NATIVE_SOURCE,'--kwin-native',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $apiMatrix source)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-kwin-native-host timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::host_manager::retains_real_capture_after_host_init_false_or_error_and_closes_native_before_host_owner','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step kwin-native-api-records $ConfigureTool @('upstream-trace','pipewire-host-api',$apiMatrix) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step original-pipewire-sustained timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--sustained-manager',$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts sustained)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }

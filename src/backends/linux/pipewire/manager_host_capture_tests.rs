@@ -15,6 +15,10 @@ use std::{cell::RefCell, rc::Rc};
 #[derive(Debug, Default)]
 struct Stats {
     helper_ended: u32,
+    helper_original_closed: u32,
+    helper_cookie_before: u64,
+    helper_cookie_after: u64,
+    helper_offer_fd: Option<i32>,
     created: u32,
     initialized: u32,
     inactive: u32,
@@ -31,7 +35,11 @@ struct Helper {
 }
 impl Drop for Helper {
     fn drop(&mut self) {
-        self.state.borrow_mut().helper_ended += 1;
+        let mut state = self.state.borrow_mut();
+        if let Some(fd) = state.helper_offer_fd {
+            state.helper_cookie_after = super::super::fd_fault::socket_cookie(fd);
+        }
+        state.helper_ended += 1;
     }
 }
 struct Offer<'a> {
@@ -55,19 +63,43 @@ impl Portal for Offer<'_> {
     }
     fn open(&mut self, _: u8) -> Result<u8, Self::Error> {
         self.calls.push("open");
-        self.helper.as_mut().unwrap().socket = Some(UnixStream::connect(self.socket)?);
+        let original = UnixStream::connect(self.socket)?;
+        let before = super::super::fd_fault::socket_cookie(original.as_raw_fd());
+        let offered = original.try_clone()?;
+        assert_eq!(
+            super::super::fd_fault::socket_cookie(offered.as_raw_fd()),
+            before
+        );
+        self.helper.as_mut().unwrap().socket = Some(offered);
+        let fd = original.into_raw_fd();
+        // SAFETY: End this unique helper socket descriptor ONCE; the offered
+        // duplicate independently retains the same real connection identity.
+        if unsafe { libc::close(fd) } != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        // SAFETY: Immediate observation before any diagnostic file can reuse it.
+        assert_eq!(unsafe { libc::fcntl(fd, libc::F_GETFD) }, -1);
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::EBADF)
+        );
+        let mut state = self.state.borrow_mut();
+        state.helper_original_closed += 1;
+        state.helper_cookie_before = before;
         Ok(1)
     }
     fn fd(&mut self, _: u8) -> Result<i32, Self::Error> {
         self.calls.push("fd");
-        Ok(self
+        let fd = self
             .helper
             .as_mut()
             .unwrap()
             .socket
             .take()
             .unwrap()
-            .into_raw_fd())
+            .into_raw_fd();
+        self.state.borrow_mut().helper_offer_fd = Some(fd);
+        Ok(fd)
     }
     fn node(&mut self, _: u8) -> Result<u32, Self::Error> {
         self.calls.push("node");
@@ -222,6 +254,7 @@ fn retains_real_capture_after_host_init_false_or_error_and_closes_native_before_
     let mut held = Vec::with_capacity(60);
     let mut identities = Vec::with_capacity(60);
     let mut records = String::new();
+    let mut api_records = String::new();
     let mut outcomes = [0_u32; 3];
     for cycle in 0..20 {
         let outcome = u8::try_from(cycle % 3).unwrap();
@@ -238,6 +271,11 @@ fn retains_real_capture_after_host_init_false_or_error_and_closes_native_before_
                 .unwrap()
                 .unwrap();
         assert_eq!(offer.calls, ["create", "open", "fd", "node", "destroy"]);
+        fs::write(
+            directory.join(format!("api-{cycle}.events")),
+            offer.calls.join(","),
+        )
+        .unwrap();
         assert!(offer.helper.is_none());
         drop(offer);
         assert_eq!(state.borrow().helper_ended, 1);
@@ -268,6 +306,8 @@ fn retains_real_capture_after_host_init_false_or_error_and_closes_native_before_
         let mut uuid = Vec::new();
         manager.request_uuid(&mut uuid).unwrap();
         assert_eq!(uuid, format!("{fd}_{node}_/capture-only-host").as_bytes());
+        fs::write(directory.join(format!("api-{cycle}.uuid")), &uuid).unwrap();
+        fs::write(directory.join(format!("api-{cycle}.info")), &metadata).unwrap();
         assert_eq!(manager.get_features(), 0);
         // SAFETY: One freshly detached real socket, no independent owner or
         // reuse. Host script owns distinct socketpair fds and cannot close it.
@@ -346,6 +386,15 @@ fn retains_real_capture_after_host_init_false_or_error_and_closes_native_before_
         writeln!(&mut records,"{cycle}\t{outcome}\t{result}\t{error_code}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{baseline_fds}\t{final_fds}\t{}\t1\t{}\t{}\t{}\t{features_after}\t{}\t{}",
             snapshot.created,snapshot.initialized,snapshot.inactive,snapshot.destroyed,snapshot.native_closed_before_input,snapshot.host_fds_closed,snapshot.errors,u8::from(socket_closed),baseline.len(),snapshot.capture_observation_error,snapshot.close_errors[0],snapshot.close_errors[1],snapshot.helper_ended,u8::from(offer_open)).unwrap();
         fs::write(directory.join("rust-cases.tsv"), &records).unwrap();
+        writeln!(
+            &mut api_records,
+            "{cycle}\t{fd}\t{node}\t0\t0\t{}\t{}\t{}\t5",
+            snapshot.helper_original_closed,
+            snapshot.helper_cookie_before,
+            snapshot.helper_cookie_after
+        )
+        .unwrap();
+        fs::write(directory.join("rust-api.tsv"), &api_records).unwrap();
         let closed_tasks = task_ids();
         fs::write(
             directory.join(format!("closed-{cycle}-task-ids.txt")),
@@ -373,6 +422,11 @@ fn retains_real_capture_after_host_init_false_or_error_and_closes_native_before_
         assert!(socket_closed);
         assert_eq!(snapshot.capture_observation_error, 0);
         assert_eq!(snapshot.close_errors, [0, 0]);
+        assert_eq!(snapshot.helper_original_closed, 1);
+        assert!(
+            snapshot.helper_cookie_before != 0
+                && snapshot.helper_cookie_before == snapshot.helper_cookie_after
+        );
         for (image, serial) in &held {
             assert_eq!(known_bgr(image), *serial);
         }
