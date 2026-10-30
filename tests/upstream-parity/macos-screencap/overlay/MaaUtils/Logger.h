@@ -8,4 +8,8 @@ struct NullLog {
 };
 inline constexpr NullLog sink;
 }
+#ifdef MFS_MAC_DISPATCH_OBSERVER
+#define LogError MfsMacObserve::errors
+#else
 #define LogError MfsMacLog::sink
+#endif

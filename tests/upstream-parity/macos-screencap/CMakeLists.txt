@@ -36,5 +36,16 @@ foreach(_framework AppKit ApplicationServices CoreFoundation CoreMedia CoreVideo
     find_library(_mfs_${_framework} NAMES ${_framework} REQUIRED)
     target_link_libraries(mfs_macos_source_context PRIVATE "${_mfs_${_framework}}")
 endforeach()
+# Instrumentation is a separate test executable, never the original oracle or
+# migrated backend. Keep the exact fixed source as a separate translation unit.
+add_executable(mfs_macos_observed_context source-context.mm
+    "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
+get_target_property(_mfs_source_includes mfs_macos_source_context INCLUDE_DIRECTORIES)
+get_target_property(_mfs_source_links mfs_macos_source_context LINK_LIBRARIES)
+target_include_directories(mfs_macos_observed_context PRIVATE ${_mfs_source_includes})
+target_link_libraries(mfs_macos_observed_context PRIVATE ${_mfs_source_links})
+target_compile_definitions(mfs_macos_observed_context PRIVATE MFS_MAC_DISPATCH_OBSERVER=1)
+target_compile_options(mfs_macos_observed_context PRIVATE -fno-objc-arc -fblocks -Wall -Wextra
+    -include "${CMAKE_CURRENT_SOURCE_DIR}/dispatch-observer.hpp")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "Complete fixed ScreenCaptureKitScreencap header/Objective-C++ source compiles unchanged with manual reference counting. Screenshot base declaration is extracted unchanged; private namespace/logging exclude unrelated input/framework code. AppKit fixture lives on process main thread, original synchronous calls execute on joined callers, and native callbacks retain original five-second wait/conversion/release points. Controlled-window interior pixels and retained Mat owners are checked; resource/late-callback/format/full-display/manager parity and complete Rust acceptance remain incomplete. The explicit private adapter serves the initial Rust migration and exact selected manager-body scripts. Original manager forwarding uses real unchanged SCK; Input=None is stubbed, full manager/API/metadata acceptance remains pending. OpenCV stays outside product/default builds.\n")

@@ -41,13 +41,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|manager)(-original-oracle)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
             throw "$Name exited with $code ($status); see $log"
         }
         $observed=Get-Content -LiteralPath $log -Raw
+        if($Name -match '^rust-macos-display-(patch|host-premise)-dispatch-observer$' -and
+            (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or -not $observed.Contains('event=wait_return slot=0'))){
+            $status='failed';throw 'Expected the separate diagnostic executable and a real native wait return, never a parity oracle'
+        }
         if($Name -eq 'custom-native-parity'){
             $status='failed';Assert-CustomNativeLog $observed;$status='passed'
         }
