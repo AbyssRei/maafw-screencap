@@ -26,6 +26,17 @@ MFS_PARITY_EXPORT int32_t mfs_print_parity_reference(void* hwnd, MfsParityImage*
 // Fixture UI owner only. Change its next draw's palette without drawing or
 // altering capture. Zero preserves the original default scene.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_scene(void* owner, uint32_t alternative);
+// Owned top-level fixture, UI thread only. Six i64 inputs: operation (0 query,
+// 1 set client geometry/style, 2 repaint), DWORD style, client x/y/width/height.
+// Thirty-one i64 outputs: monitor/work/outer/client RECTs (16), client origin
+// (2), style/exstyle (2), geometry WINDOWPOS message count, last x/y/cx/cy/flags,
+// window DPI, requested corner preference and its HRESULT, requested maximum
+// tracking width/height. Only messages
+// requesting movement or sizing are counted. Setup explicitly requests square
+// corners on this owned window, preserving full-client known-pixel assertions.
+// This is a fixture control, never a product geometry/capture replacement.
+MFS_PARITY_EXPORT int32_t mfs_print_parity_geometry(void* owner,
+    const int64_t* input, size_t count, int64_t* output, size_t capacity);
 // Image owners originate in this module; destination is exclusively borrowed.
 MFS_PARITY_EXPORT int32_t mfs_print_parity_overlay(void* destination, void* source,
     int32_t source_x, int32_t source_y, int32_t destination_x, int32_t destination_y,

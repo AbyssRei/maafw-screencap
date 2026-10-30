@@ -44,6 +44,7 @@ if($ManagerParity){$pending.Add('The optional outer Win32 capture delegate combi
 if ($PipeWireControl -and -not $GdiParity) { throw 'PipeWire control model requires the explicit host regression/test entry.' }
 $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
+$screenGeometryEvidence = ''
 $geometryEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
@@ -138,8 +139,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         if ($Name -eq 'screen-window-helper-original-parity' -and $exitCode -eq 0) {
             $observed = Get-Content -LiteralPath $logPath -Raw
             if ($observed -notmatch '(?m)^test result: ok\. 5 passed; 0 failed; 0 ignored;' -or
-                -not $observed.Contains('corrected fork geometry cases=55 source_and_rust=110 exact_client_exemption=1 work_area_preserved=1 offsets_have_no_slack=1 native_capture=0 passed')) {
-                throw 'Expected all five helper tests and fifty-five actual corrected-fork source/Rust cases'
+                -not $observed.Contains('corrected fork geometry cases=61 source_and_rust=122 exact_client_exemption=1 bounded_confirmation=1 work_area_preserved=1 offsets_have_no_slack=1 native_capture=0 passed')) {
+                throw 'Expected all five helper tests and sixty-one actual corrected-fork source/Rust cases'
+            }
+        }
+        if ($Name -eq 'screen-native-geometry-parity' -and $exitCode -eq 0) {
+            $observed = Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('native ScreenDC geometry cases=38 sides=76 captures=152 retained_after_close=152 pixels=known repeated_geometry=0 passed')) {
+                throw 'Expected the complete native ScreenDC geometry/capture matrix, not zero tests or a partial filter'
             }
         }
         if ($Name -in @('desktop-dup-source-default-output','desktop-dup-rust-default-output')) {
@@ -766,6 +774,9 @@ try {
             $screenEvidence = Join-Path $artifacts screen-evidence
             New-Item -ItemType Directory -Path $screenEvidence | Out-Null
             $env:MFS_SCREEN_EVIDENCE = $screenEvidence
+            $screenGeometryEvidence = Join-Path $artifacts screen-native-geometry
+            New-Item -ItemType Directory -Path $screenGeometryEvidence | Out-Null
+            $env:MFS_SCREEN_GEOMETRY_EVIDENCE = $screenGeometryEvidence
             $geometryEvidence = Join-Path $artifacts corrected-fork-geometry
             New-Item -ItemType Directory -Path $geometryEvidence | Out-Null
             $env:MFS_F_GEOMETRY_ARTIFACTS = $geometryEvidence
@@ -788,6 +799,10 @@ try {
         }
         $foregroundCase = 'backends::windows::print_window::tests::parity::pseudo_minimize::restores_original_attributes_after_real_foreground_reactivation'
         [string[]]$caseSelection = @($parityFilter, '--include-ignored', '--test-threads=1', '--nocapture')
+        $screenGeometryCase = 'backends::windows::screen_dc::tests::native_geometry::captures_corrected_native_clients_without_repeated_adjustment'
+        # This visible geometry matrix has its own process and complete-count
+        # guard; manager/FramePool shared feature sets must not run it implicitly.
+        $caseSelection += @('--skip', $screenGeometryCase)
         $frameCase = 'backends::windows::frame_pool::tests::captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners'
         $frameLifecycleCase = 'backends::windows::frame_pool::tests::retains_pixels_across_twenty_complete_framepool_lifecycles'
         $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
@@ -855,6 +870,10 @@ try {
             # environment result without obscuring other pixel/ownership checks.
             Step 'pseudo-foreground-parity' cargo ($parityArguments + @('--', $foregroundCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
         }
+        if ($ScreenDcParity) {
+            Step 'screen-native-geometry-parity' cargo ($parityArguments + @('--', $screenGeometryCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Step 'screen-native-geometry-records' $ConfigureTool @('upstream-trace', 'screen-geometry', $screenGeometryEvidence)
+        }
     }
     $licenses = Join-Path $artifacts licenses
     New-Item -ItemType Directory -Path $licenses -Force | Out-Null
@@ -888,6 +907,7 @@ catch {
     $checks.Add([ordered]@{ name = 'native-preparation'; status = 'failed'; log = (Artifact $failureLog) })
 }
 finally {
+    if($screenGeometryEvidence -and (Test-Path -LiteralPath $screenGeometryEvidence)) {Get-ChildItem -LiteralPath $screenGeometryEvidence -File|ForEach-Object {Save-Input $_.FullName}}
     if($geometryEvidence -and (Test-Path -LiteralPath $geometryEvidence)) {Get-ChildItem -LiteralPath $geometryEvidence -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateRuntimeEvidence -and (Test-Path -LiteralPath $delegateRuntimeEvidence)) {Get-ChildItem -LiteralPath $delegateRuntimeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}

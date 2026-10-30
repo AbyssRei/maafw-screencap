@@ -14,7 +14,7 @@
 
 namespace {
 constexpr UINT command_message = WM_APP + 0x71;
-enum class Command { none, stats, close, activate, prepare, restore_control, updates, update_info, scene };
+enum class Command { none, stats, close, activate, prepare, restore_control, updates, update_info, scene, geometry };
 struct Owner {
     std::thread worker;
     std::mutex mutex;
@@ -30,6 +30,8 @@ struct Owner {
     DWORD thread = 0;
     uint32_t parameter = 0;
     Command command = Command::none;
+    std::array<int64_t, 6> geometry_input {};
+    std::array<int64_t, 31> geometry_output {};
     MfsPrintFixture fixture {};
     HWND anchor = nullptr;
     HWND marker = nullptr;
@@ -139,6 +141,10 @@ void run(Owner& owner, Arguments arguments) noexcept
                 }
                 else if (command == Command::scene) {
                     result = mfs_print_parity_scene(owner.fixture.owner, parameter);
+                }
+                else if (command == Command::geometry) {
+                    result = mfs_print_parity_geometry(owner.fixture.owner, owner.geometry_input.data(),
+                        owner.geometry_input.size(), owner.geometry_output.data(), owner.geometry_output.size());
                 }
                 else if (command == Command::activate) {
                     SetActiveWindow(static_cast<HWND>(owner.fixture.hwnd));
@@ -341,6 +347,23 @@ int32_t mfs_print_thread_scene(void* context, uint32_t alternative)
 {
     if (!context || alternative > 1) { return 1; }
     try { return request(*static_cast<Owner*>(context), Command::scene, alternative); }
+    catch (...) { return 3; }
+}
+int32_t mfs_print_thread_geometry(void* context, const int64_t* input, size_t count,
+    int64_t* output, size_t capacity)
+{
+    if (!context || !input || count != 6 || !output || capacity != 31) { return 1; }
+    try {
+        auto& owner = *static_cast<Owner*>(context);
+        // Like the existing fixture controls, calls are serial on one test
+        // thread. request's publication mutex synchronizes the copied arrays.
+        std::copy_n(input, count, owner.geometry_input.begin());
+        const int32_t result = request(owner, Command::geometry);
+        if (result != 0) { return result; }
+        std::lock_guard lock(owner.mutex);
+        std::copy(owner.geometry_output.begin(), owner.geometry_output.end(), output);
+        return 0;
+    }
     catch (...) { return 3; }
 }
 int32_t mfs_print_thread_restore_control(void* context, uint32_t alpha, uint32_t repaint)

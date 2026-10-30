@@ -3,8 +3,15 @@
 #include "screen-parity.h"
 #include "gdi-probe-internal.hpp"
 #include "Screencap/ScreenDCScreencap.h"
+#include "Screencap/HwndUtils.hpp"
 #include <dwmapi.h>
 #include <algorithm>
+
+int32_t mfs_screen_parity_ensure_geometry(void* window)
+{
+    try { return MAA_CTRL_UNIT_NS::ensure_window_on_screen(static_cast<HWND>(window)) ? 0 : 1; }
+    catch (...) { return 2; }
+}
 
 int32_t mfs_screen_window_observation(void* raw_window, uint64_t* output, size_t capacity)
 {
