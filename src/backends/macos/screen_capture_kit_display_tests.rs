@@ -36,10 +36,6 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
             trace.reclaim_source_semaphore_for_fixture();
             let guard = samples.lock().unwrap();
             let raw = guard.last().unwrap();
-            assert_eq!((raw.width, raw.height), (geometry.width, geometry.height));
-            assert!(raw.native_stride >= geometry.width.checked_mul(4).unwrap());
-            geometry.pixels(raw.pixels(), 4).unwrap();
-            geometry.pixels(image.pixels(), 3).unwrap();
             std::fs::write(
                 directory.join(format!("display-call-{call}.rust.raw")),
                 raw.pixels(),
@@ -72,6 +68,12 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
             )
             .unwrap();
             traces.flush().unwrap();
+            // Persist actual payloads/evidence before asserting target pixels,
+            // so a native mismatch remains independently inspectable.
+            assert_eq!((raw.width, raw.height), (geometry.width, geometry.height));
+            assert!(raw.native_stride >= geometry.width.checked_mul(4).unwrap());
+            geometry.pixels(raw.pixels(), 4).unwrap();
+            geometry.pixels(image.pixels(), 3).unwrap();
             images.push(image);
         }
     }
@@ -80,8 +82,6 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
     assert_eq!(raw.len(), 3);
     std::thread::spawn(move || {
         for (call, (sample, image)) in raw.iter().zip(&images).enumerate() {
-            geometry.pixels(sample.pixels(), 4).unwrap();
-            geometry.pixels(image.pixels(), 3).unwrap();
             std::fs::write(
                 directory.join(format!("display-held-{call}.rust.raw")),
                 sample.pixels(),
@@ -92,6 +92,8 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
                 image.pixels(),
             )
             .unwrap();
+            geometry.pixels(sample.pixels(), 4).unwrap();
+            geometry.pixels(image.pixels(), 3).unwrap();
         }
     })
     .join()
