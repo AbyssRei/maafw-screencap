@@ -626,6 +626,8 @@ try {
         if($offline){$customArgs+=@('--offline','--config',$CargoConfig)}
         Step custom-native-parity cargo ($customArgs+@('backends::custom::native_tests::preserves_original_native_callbacks_pixels_empty_failure_and_owners','--','--exact','--ignored','--test-threads=1','--nocapture'))
         Step custom-native-records $ConfigureTool @('upstream-custom',$customEvidence)
+        Step custom-identity-parity cargo ($customArgs+@('backends::custom::native_tests::identity::preserves_uuid_bytes_features_failures_and_borrowed_callbacks','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-identity-records $ConfigureTool @('upstream-trace','custom-identity',(Join-Path $customEvidence identity))
         $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
         if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
         Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))

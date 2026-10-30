@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "bridge.h"
 #include "MaaUtils/Buffer/ImageBuffer.hpp"
+#include "MaaUtils/Buffer/StringBuffer.hpp"
 #include <atomic>
 #include <limits>
 #include <memory>
@@ -18,9 +19,11 @@ inline const Null sink;
 #define VAR_VOIDP(x) x
 namespace MfsCustomSource {
 using MAA_NS::ImageBuffer;
+using MAA_NS::StringBuffer;
 struct CustomControlUnitMgr {
     CustomControlUnitMgr(MaaCustomControllerCallbacks*,void*);
     bool connect();bool connected() const;bool inactive();bool screencap(cv::Mat&);
+    bool request_uuid(std::string&);MaaControllerFeature get_features() const;
     MaaCustomControllerCallbacks* controller_=nullptr;
     void* controller_arg_=nullptr;
 };
@@ -29,6 +32,16 @@ struct CustomControlUnitMgr {
 #include "custom-raw-source.inc"
 namespace {
 std::atomic<uint64_t> images=0,contexts=0,entered=0,exited=0;
+std::atomic<uint64_t> uuid_entered=0,uuid_exited=0,uuid_outputs=0;
+struct UuidOutput {
+    std::string value;
+    explicit UuidOutput(std::string text):value(std::move(text)){++uuid_outputs;}
+    ~UuidOutput(){--uuid_outputs;}
+};
+struct StringScope {
+    StringScope(){++uuid_entered;}
+    ~StringScope(){++uuid_exited;}
+};
 struct Image {
     cv::Mat value;
     explicit Image(cv::Mat v):value(std::move(v)) {++images;}
@@ -54,6 +67,22 @@ MaaBool native_fault(void*,MaaImageBuffer* buffer) {
     // contained. This is a fault control, never a successful/retried capture.
     buffer->set(cv::Mat(5,7,CV_8UC3,cv::Scalar(1,2,3)));
     throw std::runtime_error("controlled original custom callback exception");
+}
+MaaBool uuid_fault(void*,MaaStringBuffer* buffer) {
+    buffer->set("filled before controlled UUID exception");
+    throw std::runtime_error("controlled original UUID callback exception");
+}
+MaaControllerFeature features_fault(void*) {
+    throw std::runtime_error("controlled original features callback exception");
+}
+bool readable(const uint8_t* bytes,size_t length) {
+    return length<=static_cast<size_t>(PTRDIFF_MAX) && (bytes || !length);
+}
+std::string string_bytes(const uint8_t* bytes,size_t length) {
+    return length?std::string(reinterpret_cast<const char*>(bytes),length):std::string{};
+}
+MfsCustomStringView string_view(const std::string& text) {
+    return {reinterpret_cast<const uint8_t*>(text.data()),text.size()};
 }
 }
 size_t mfs_custom_abi(uint32_t index) noexcept {
@@ -145,5 +174,64 @@ int32_t mfs_custom_fault(void* context) noexcept {
     if(!context)return 1;static_cast<Context*>(context)->table.screencap=native_fault;return 0;
 }
 uint64_t mfs_custom_count(uint32_t kind) noexcept {
-    return kind==0?images.load():kind==1?contexts.load():kind==2?entered.load():kind==3?exited.load():UINT64_MAX;
+    return kind==0?images.load():kind==1?contexts.load():kind==2?entered.load():kind==3?exited.load():
+        kind==4?uuid_entered.load():kind==5?uuid_exited.load():kind==6?uuid_outputs.load():UINT64_MAX;
+}
+size_t mfs_custom_identity_abi(uint32_t index) noexcept {
+    static_assert(std::is_same_v<MaaControllerFeature,uint64_t>);
+    static_assert(MaaControllerFeature_None==0);
+    const size_t values[]={sizeof(MfsCustomStringView),alignof(MfsCustomStringView),
+        offsetof(MfsCustomStringView,data),offsetof(MfsCustomStringView,length),sizeof(MfsCustomUuid),
+        sizeof(MfsCustomFeatures),sizeof(MfsCustomStringScope),sizeof(MaaControllerFeature),
+        offsetof(MaaCustomControllerCallbacks,request_uuid),offsetof(MaaCustomControllerCallbacks,get_features)};
+    return index<std::size(values)?values[index]:SIZE_MAX;
+}
+int32_t mfs_custom_identity_configure(void* context,MfsCustomUuid uuid,MfsCustomFeatures features,void* arg) noexcept {
+    if(!context)return 1;auto& c=*static_cast<Context*>(context);
+    c.table.request_uuid=uuid;c.table.get_features=features;c.manager.controller_arg_=arg;return 0;
+}
+uint8_t mfs_custom_has_uuid(void* context) noexcept {
+    if(!context)return 0;const auto& c=*static_cast<Context*>(context);return c.has_table&&c.table.request_uuid;
+}
+int32_t mfs_custom_uuid_invoke(void* context,MaaStringBuffer* buffer,uint8_t* result) noexcept {
+    if(!context || !buffer || !result)return 1;*result=0;
+    return guarded([&]{auto& c=*static_cast<Context*>(context);
+        if(!c.has_table || !c.table.request_uuid)return -1;
+        *result=c.table.request_uuid(c.manager.controller_arg_,buffer);return 0;});
+}
+int32_t mfs_custom_features(void* context,uint8_t source,uint64_t* result) noexcept {
+    if(!context || !result || source>1)return 1;*result=0;
+    return guarded([&]{auto& c=*static_cast<Context*>(context);
+        if(source){*result=c.manager.get_features();return 0;}
+        if(!c.has_table || !c.table.get_features)return -1;
+        *result=c.table.get_features(c.manager.controller_arg_);return 0;});
+}
+int32_t mfs_custom_string_scope(MfsCustomStringScope action,void* argument) noexcept {
+    if(!action)return 1;
+    return guarded([&]{StringScope scope;MAA_NS::StringBuffer buffer;return action(argument,&buffer);});
+}
+int32_t mfs_custom_string_set(MaaStringBuffer* buffer,const uint8_t* bytes,size_t length) noexcept {
+    if(!buffer || !readable(bytes,length))return 1;
+    return guarded([&]{buffer->set(string_bytes(bytes,length));return 0;});
+}
+int32_t mfs_custom_string_view(MaaStringBuffer* buffer,MfsCustomStringView* output) noexcept {
+    if(!buffer || !output)return 1;*output={};
+    return guarded([&]{*output=string_view(buffer->get());return 0;});
+}
+int32_t mfs_custom_uuid_output(const uint8_t* bytes,size_t length,void** output) noexcept {
+    if(!output || !readable(bytes,length))return 1;*output=nullptr;
+    return guarded([&]{*output=new UuidOutput(string_bytes(bytes,length));return 0;});
+}
+void mfs_custom_uuid_release(void* output) noexcept {delete static_cast<UuidOutput*>(output);}
+int32_t mfs_custom_uuid_view(void* output,MfsCustomStringView* view) noexcept {
+    if(!output || !view)return 1;*view={};
+    return guarded([&]{*view=string_view(static_cast<UuidOutput*>(output)->value);return 0;});
+}
+int32_t mfs_custom_uuid_source(void* context,void* output,uint8_t* result) noexcept {
+    if(!context || !output || !result)return 1;*result=0;
+    return guarded([&]{*result=static_cast<Context*>(context)->manager.request_uuid(static_cast<UuidOutput*>(output)->value);return 0;});
+}
+int32_t mfs_custom_identity_fault(void* context,uint32_t operation) noexcept {
+    if(!context || operation>1)return 1;auto& c=*static_cast<Context*>(context);
+    if(operation==0)c.table.request_uuid=uuid_fault;else c.table.get_features=features_fault;return 0;
 }

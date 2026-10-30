@@ -68,7 +68,7 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     . (Join-Path $PSScriptRoot prepare-opencv-reference.ps1)
     $opencv=Prepare-OpenCvReference $customInputs ([ordered]@{
         backend='custom-capture';os=[Runtime.InteropServices.RuntimeInformation]::OSDescription
-        scope='Same selected original bodies/raw setter, real ImageBuffer/vtable and Rust callback implementation as Windows; no desktop or input actions. Full metadata/framework/P1 acceptance remains incomplete.'
+        scope='Same selected original screenshot/UUID/features bodies and raw setter, real ImageBuffer/StringBuffer/vtables and Rust callback implementation as Windows; no desktop or input actions. Full metadata/framework/P1 acceptance remains incomplete.'
     }) -ImageCodecs -StepPrefix custom-opencv
     $build=Join-Path $opencv.Native ((Split-Path -Leaf $RunRoot)+'-custom')
     $configure=@('-S',(Join-Path $productRoot tests/upstream-parity/custom-capture),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_MAAUTILS_ROOT=$source")
@@ -98,6 +98,8 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
         $env:MFS_CUSTOM_CAPTURE_ARTIFACTS=$evidence
         Step custom-native-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::preserves_original_native_callbacks_pixels_empty_failure_and_owners','--','--exact','--ignored','--test-threads=1','--nocapture')
         Step custom-native-records $ConfigureTool @('upstream-custom',$evidence)
+        Step custom-identity-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::identity::preserves_uuid_bytes_features_failures_and_borrowed_callbacks','--','--exact','--ignored','--test-threads=1','--nocapture')
+        Step custom-identity-records $ConfigureTool @('upstream-trace','custom-identity',(Join-Path $evidence identity))
         Step custom-native-clippy cargo @('clippy','--workspace','--all-targets','--locked','--no-default-features','--features','custom-capture','--','-D','warnings')
         Step custom-core-direct-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','custom-capture')
         Step custom-core-runtime-tree cargo @('tree','--locked','-p','maafw-screencap','--edges','normal','--no-default-features','--features','custom-capture')

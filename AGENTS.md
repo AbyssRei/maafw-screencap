@@ -12,6 +12,8 @@ The later Actions 41129758262 macOS job stopped before native capture because fo
 
 Read these authorities before changing the corresponding area. Current component status, safety adaptations, source-model boundaries and remaining native matrices are maintained in the development guide and external records; consult that area before treating a slice as complete.
 
+Private Custom UUID/features now reuse the same manager with real StringBuffer acceptance; scoped Windows archived-input probes pass, while the new online and other-platform gates remain pending. Wlr controlled host-construction failures have passed native execution, independent pixel/resource rechecks and complete source/archive verification. Neither establishes full manager/ABI or P1 acceptance; see the development guide for exact boundaries.
+
 | Authority | Responsibility |
 | --- | --- |
 | [Documentation index](docs/README.md) | Actual documents, their status, and maintenance rules |

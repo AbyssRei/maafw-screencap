@@ -4,6 +4,7 @@
 mod batch;
 mod configuration;
 mod custom_capture;
+mod custom_identity;
 mod dependencies;
 mod desktop_fullscreen;
 mod frame_pool_alpha;
@@ -163,6 +164,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-parity manager [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-parity custom [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-custom <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace custom-identity <external identity directory> [--check-only]\n\n\
                       cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\

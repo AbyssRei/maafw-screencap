@@ -31,6 +31,23 @@ pub(crate) trait Boundary: Sized {
     fn image(&self, buffer: &Self::Buffer) -> Result<Self::Image, Self::Error>;
 }
 
+pub(crate) type UuidCallback<B> =
+    fn(&B, &mut <B as IdentityBoundary>::UuidBuffer) -> Result<u8, <B as Boundary>::Error>;
+
+/// The original manager's byte-string identity and feature queries. Kept
+/// separate from image storage; neither operation invokes an input action.
+pub(crate) trait IdentityBoundary: Boundary {
+    type UuidBuffer;
+    type Uuid;
+    fn uuid_callback(&self) -> Option<UuidCallback<Self>>;
+    fn with_uuid_buffer<T>(
+        &self,
+        action: impl FnOnce(&mut Self::UuidBuffer) -> Result<T, Self::Error>,
+    ) -> Result<T, Self::Error>;
+    fn uuid(&self, buffer: &Self::UuidBuffer) -> Result<Self::Uuid, Self::Error>;
+    fn features(&self) -> Option<Result<u64, Self::Error>>;
+}
+
 pub(crate) struct Manager<'a, B> {
     boundary: Option<&'a B>,
 }
@@ -82,6 +99,30 @@ impl<'a, B: Boundary> Manager<'a, B> {
             *output = boundary.image(buffer)?;
             Ok(true)
         })
+    }
+}
+
+impl<B: IdentityBoundary> Manager<'_, B> {
+    pub fn request_uuid(&self, output: &mut B::Uuid) -> Result<bool, B::Error> {
+        let Some(boundary) = self.boundary else {
+            return Ok(false);
+        };
+        let Some(callback) = boundary.uuid_callback() else {
+            return Ok(false);
+        };
+        boundary.with_uuid_buffer(|buffer| {
+            if callback(boundary, buffer)? == 0 {
+                return Ok(false);
+            }
+            // Source copies the complete std::string before its stack buffer
+            // ends. A true empty UUID replaces output; false preserves it.
+            *output = boundary.uuid(buffer)?;
+            Ok(true)
+        })
+    }
+
+    pub fn get_features(&self) -> Result<u64, B::Error> {
+        self.boundary.and_then(B::features).unwrap_or(Ok(0))
     }
 }
 

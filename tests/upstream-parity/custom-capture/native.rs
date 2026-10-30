@@ -58,6 +58,19 @@ mod loader {
 struct OpaqueBuffer {
     _opaque: [u8; 0],
 }
+#[repr(C)]
+struct OpaqueString {
+    _opaque: [u8; 0],
+}
+type UuidFunction = unsafe extern "C" fn(*mut c_void, *mut OpaqueString) -> u8;
+type FeaturesFunction = unsafe extern "C" fn(*mut c_void) -> u64;
+type StringScopeFunction = unsafe extern "C" fn(*mut c_void, *mut OpaqueString) -> i32;
+#[repr(C)]
+#[derive(Default)]
+struct StringView {
+    data: *const u8,
+    length: usize,
+}
 type BoolCallback = unsafe extern "C" fn(*mut c_void) -> u8;
 type ShotCallback = unsafe extern "C" fn(*mut c_void, *mut OpaqueBuffer) -> u8;
 type ScopeCallback = unsafe extern "C" fn(*mut c_void, *mut OpaqueBuffer) -> i32;
@@ -99,6 +112,24 @@ struct Lib {
     source: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut u8) -> i32,
     fault: unsafe extern "C" fn(*mut c_void) -> i32,
     count: unsafe extern "C" fn(u32) -> u64,
+    identity_abi: unsafe extern "C" fn(u32) -> usize,
+    identity_configure: unsafe extern "C" fn(
+        *mut c_void,
+        Option<UuidFunction>,
+        Option<FeaturesFunction>,
+        *mut c_void,
+    ) -> i32,
+    has_uuid: unsafe extern "C" fn(*mut c_void) -> u8,
+    uuid_invoke: unsafe extern "C" fn(*mut c_void, *mut OpaqueString, *mut u8) -> i32,
+    features: unsafe extern "C" fn(*mut c_void, u8, *mut u64) -> i32,
+    string_scope: unsafe extern "C" fn(Option<StringScopeFunction>, *mut c_void) -> i32,
+    string_set: unsafe extern "C" fn(*mut OpaqueString, *const u8, usize) -> i32,
+    string_view: unsafe extern "C" fn(*mut OpaqueString, *mut StringView) -> i32,
+    uuid_output: unsafe extern "C" fn(*const u8, usize, *mut *mut c_void) -> i32,
+    uuid_release: unsafe extern "C" fn(*mut c_void),
+    uuid_view: unsafe extern "C" fn(*mut c_void, *mut StringView) -> i32,
+    uuid_source: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut u8) -> i32,
+    identity_fault: unsafe extern "C" fn(*mut c_void, u32) -> i32,
 }
 impl Lib {
     fn open() -> Self {
@@ -125,6 +156,19 @@ impl Lib {
                 source: module.symbol(c"mfs_custom_source"),
                 fault: module.symbol(c"mfs_custom_fault"),
                 count: module.symbol(c"mfs_custom_count"),
+                identity_abi: module.symbol(c"mfs_custom_identity_abi"),
+                identity_configure: module.symbol(c"mfs_custom_identity_configure"),
+                has_uuid: module.symbol(c"mfs_custom_has_uuid"),
+                uuid_invoke: module.symbol(c"mfs_custom_uuid_invoke"),
+                features: module.symbol(c"mfs_custom_features"),
+                string_scope: module.symbol(c"mfs_custom_string_scope"),
+                string_set: module.symbol(c"mfs_custom_string_set"),
+                string_view: module.symbol(c"mfs_custom_string_view"),
+                uuid_output: module.symbol(c"mfs_custom_uuid_output"),
+                uuid_release: module.symbol(c"mfs_custom_uuid_release"),
+                uuid_view: module.symbol(c"mfs_custom_uuid_view"),
+                uuid_source: module.symbol(c"mfs_custom_uuid_source"),
+                identity_fault: module.symbol(c"mfs_custom_identity_fault"),
                 _module: module,
             }
         }
@@ -143,6 +187,9 @@ impl Lib {
         }
     }
 }
+
+#[path = "identity.rs"]
+mod identity;
 struct Image<'a> {
     pointer: NonNull<c_void>,
     lib: &'a Lib,
