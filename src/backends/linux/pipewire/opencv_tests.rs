@@ -17,6 +17,8 @@ mod mapping;
 #[path = "dma_tests.rs"]
 mod dma;
 
+#[path = "manager_host_capture_tests.rs"]
+mod host_manager;
 #[path = "manager_capture_tests.rs"]
 mod manager_capture;
 

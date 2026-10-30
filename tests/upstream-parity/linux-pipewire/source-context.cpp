@@ -43,7 +43,9 @@
 #include <unistd.h>
 
 namespace MfsOriginalPipeWire {
+#define MFS_MANAGER_HOST_INPUT
 #include "../linux-manager/native-shim.h"
+#undef MFS_MANAGER_HOST_INPUT
 }
 
 namespace {
@@ -820,6 +822,7 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
 }
 #include "dma-fixtures.hpp"
 #include "manager-context.hpp"
+#include "manager-host-context.hpp"
 #include "sustained-context.hpp"
 void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
@@ -940,6 +943,14 @@ int main(int argc,char** argv) {
             const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
             require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid explicit manager node ID");
             manager_context(argv[2],node,argv[4],std::string_view(argv[1])=="--manager-fd");
+            return 0;
+        }
+        if(argc==5 && std::string_view(argv[1])=="--manager-host") {
+            uint32_t node=0;
+            const std::string_view id=argv[3];
+            const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
+            require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid host manager node ID");
+            manager_host_context(argv[2],node,argv[4]);
             return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--pods") {

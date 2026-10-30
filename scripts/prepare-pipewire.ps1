@@ -183,8 +183,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected one actual 2304-case original/Rust host construction/init/features/capture forwarding comparison'
             }
         }
-        if($Name -eq 'linux-config-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 10 passed; 0 failed; 2 ignored;') {
-            throw 'Expected ten manager controls; the two explicit source models remain ignored on this default filter'
+        if($Name -eq 'linux-config-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 11 passed; 0 failed; 2 ignored;') {
+            throw 'Expected eleven manager controls; the two explicit source models remain ignored on this default filter'
         }
         if($Name -eq 'manager-macos-metadata') {
             $observed=Get-Content -LiteralPath $log -Raw
@@ -194,8 +194,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             & $ConfigureTool upstream-metadata macos (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS macos) >> $log 2>&1
             if($LASTEXITCODE -ne 0){throw 'Metadata source/Rust artifact validation failed'}
         }
-        if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 3 passed; 0 failed; 0 ignored;') {
-            throw 'Expected native None/unimplemented, missing host input provider and unsafe-FD boundary controls'
+        if ($Name -eq 'rust-pipewire-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;') {
+            throw 'Expected native None/unimplemented, missing provider, plain and hosted unsafe-FD boundary controls'
+        }
+        if($Name -in @('original-pipewire-manager-host','rust-pipewire-manager-host')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $expected=$Name.StartsWith('original-') ?
+                'original PipeWire host manager objects=20 init_true=7 init_false=7 init_error=6 captures=60 retained=60 helper_ended_before_connect=20 native_closed_before_host=20 host_fds_closed=40 input_actions=0 passed' :
+                'native Rust PipeWire host manager objects=20 init_true=7 init_false=7 init_error=6 captures=60 retained_raw=60 retained_bgr=60 helper_ended_before_connect=20 native_closed_before_host=20 host_fds_closed=40 input_actions=0 passed'
+            if(-not $observed.Contains($expected) -or ($Name.StartsWith('rust-') -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
+                throw 'Expected real native host true/false/error capture, retained pixels and native-before-host close'
+            }
         }
         if($Name -in @('original-pipewire-manager-daemon','original-pipewire-manager-fd','rust-pipewire-manager-daemon','rust-pipewire-manager-fd')) {
             $observed=Get-Content -LiteralPath $log -Raw
@@ -636,6 +645,15 @@ try {
             try { Step ('rust-pipewire-manager-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire',('backends::linux::pipewire::native::tests::opencv::manager_capture::'+$probe[2]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
         }
+        $hostMatrix=Join-Path $referenceArtifacts manager-host-matrix
+        New-Item -ItemType Directory -Path $hostMatrix|Out-Null
+        $env:MFS_P1_PIPEWIRE_HOST_ARTIFACTS=Join-Path $hostMatrix rust
+        try { Step original-pipewire-manager-host timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--manager-host',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $hostMatrix source)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-manager-host timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::host_manager::retains_real_capture_after_host_init_false_or_error_and_closes_native_before_host_owner','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-host-manager-records $ConfigureTool @('upstream-trace','pipewire-host',$hostMatrix) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step original-pipewire-sustained timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--sustained-manager',$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts sustained)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-sustained timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::sustained::sustains_native_manager_for_two_minutes_with_bounded_retained_owners','--','--exact','--ignored','--test-threads=1','--nocapture') }
