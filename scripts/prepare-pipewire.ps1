@@ -500,7 +500,8 @@ try {
             $env:MFS_P1_RUST_TASK_OBSERVER_ARTIFACTS=Join-Path $referenceArtifacts rust-task-retirement-read
             Step rust-task-retirement-read-fixture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::task_observer::native_fixture::validates_joined_read_esrch_without_accepting_live_or_unobservable_paths','--','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
-        finally {if(Test-Path -LiteralPath $env:MFS_P1_RUST_TASK_OBSERVER_ARTIFACTS){Get-ChildItem -LiteralPath $env:MFS_P1_RUST_TASK_OBSERVER_ARTIFACTS -Recurse -File|ForEach-Object{Save $_.FullName}}}
+        # The enclosing finally archives all referenceArtifacts, including a
+        # partial causal fixture on failure. Do not register the same file twice.
         try { Step rust-task-observer-controls timeout @('--signal=TERM','--kill-after=5s','30s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::task_observer::tests::','--','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         $managerTest=$null
