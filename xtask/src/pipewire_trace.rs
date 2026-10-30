@@ -65,6 +65,12 @@ pub fn run(args: &[String]) -> Result<()> {
     if args.first().is_some_and(|kind| kind == "wlr-host-api") {
         return crate::wlr_host_api::run(&args[1..]);
     }
+    if args
+        .first()
+        .is_some_and(|kind| kind == "wlr-host-construction")
+    {
+        return crate::wlr_host_api::run_construction(&args[1..]);
+    }
     if args.first().is_some_and(|kind| kind == "pipewire-host-api") {
         return crate::pipewire_host_api::run(&args[1..]);
     }

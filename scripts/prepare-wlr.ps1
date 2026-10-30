@@ -89,6 +89,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             'original-wlr-fd-zero' {'original MemfdBuffer fd_zero=1 available=1 destructor_fd_retained=1 destructor_mapping_retained=1 fixture_reclaimed=1 product_cleanup_success=0 passed'}
             'original-wlr-manager' {'original Wlr manager cycles=20 captures=60 connects=40 retained=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
             'original-wlr-native-host' {'original Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 shared_last_client=20 final_client_snapshots_expired=20 input_actions=0 passed'}
+            'original-wlr-host-construction' {'original Wlr host_create_failure objects=20 constructor_errors=20 captures=60 retained=60 real_virtual_handles=20 clients_released=20 resources_balanced=1 input_actions=0 passed'}
             'original-wlr-nul-names' {'original Wlr nul_names cycles=20 captures=60 retained=60 same_full_name_noop=20 suffix_reconnect=20 leading_nul_rejected=20 empty_rejected=20 manager_full_uuid=20 resources_balanced=1 passed'}
             'original-wlr-path-names' {'original Wlr path_names matrix_cases=841 cycles=20 captures=20 retained=20 dot_reconnect=20 repeated_separator_noop=20 trailing_separator_rejected=20 explicit_recovery=20 resources_balanced=1 passed'}
             default {$null}
@@ -125,6 +126,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             'rust-wlr-reconnect' {'native Rust Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 same_missing_retry=20 subsequent_connect=20 captures=20 retained_raw=20 retained_bgr=20 resources_balanced=1 passed'}
             'rust-wlr-manager' {'native Rust Wlr manager cycles=20 captures=60 connects=40 retained_raw=60 retained_bgr=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
             'rust-wlr-native-host' {'native Rust Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained_raw=60 retained_bgr=60 legacy_constructors=20 shared_last_client=20 final_callback_owners_released=20 input_actions=0 passed'}
+            'rust-wlr-host-construction' {'native Rust Wlr host_create_failure objects=20 constructor_errors=20 captures=60 retained_raw=60 retained_bgr=60 final_callback_owners_released=20 resources_balanced=1 input_actions=0 passed'}
             'rust-wlr-nul-names' {'native Rust Wlr nul_names cycles=20 captures=60 retained_raw=60 retained_bgr=60 same_full_name_noop=20 suffix_reconnect=20 leading_nul_rejected=20 empty_rejected=20 json_manager_full_uuid=20 resources_balanced=1 passed'}
             'rust-wlr-path-names' {'native Rust Wlr path_names matrix_cases=841 cycles=20 captures=20 retained_raw=20 retained_bgr=20 dot_reconnect=20 repeated_separator_noop=20 trailing_separator_rejected=20 explicit_recovery=20 resources_balanced=1 passed'}
             default {$null}
@@ -387,6 +389,15 @@ try{
         try { Step rust-wlr-native-host timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::host::captures_after_host_init_outcomes_and_releases_shared_client_after_input','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step wlr-native-host-api-records $ConfigureTool @('upstream-trace','wlr-host-api',$hostMatrix) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        $constructionMatrix=Join-Path $referenceArtifacts wlr-host-construction-matrix
+        New-Item -ItemType Directory -Path $constructionMatrix|Out-Null
+        $env:MFS_P1_WLR_HOST_CONSTRUCTION_MATRIX=$constructionMatrix
+        try { Step original-wlr-host-construction timeout @('--signal=TERM','--kill-after=5s','90s',$env:MFS_P1_WLR_NATIVE_SOURCE,$socket,(Join-Path $constructionMatrix source),$library,'--host-create-failure') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-wlr-host-construction timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::host_construction::retains_the_native_capture_after_host_construction_error','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step wlr-host-construction-records $ConfigureTool @('upstream-trace','wlr-host-construction',$constructionMatrix) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         . (Join-Path $PSScriptRoot validate-wlr-protocol.ps1)
         try{Test-WlrProtocolMatrix $sourceExecutable $library $runtime $referenceArtifacts}

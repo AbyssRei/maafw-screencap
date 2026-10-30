@@ -11,6 +11,8 @@ use std::{
 
 #[path = "wlr_host_tests.rs"]
 mod host;
+#[path = "wlr_host_construction_tests.rs"]
+mod host_construction;
 
 #[repr(C)]
 #[derive(Default)]

@@ -20,8 +20,9 @@ public:
     explicit EiInput(const std::filesystem::path&) {throw std::logic_error("LibEi excluded");}
 };
 struct HostInitFailure : std::runtime_error {HostInitFailure() : std::runtime_error("controlled Wlr host init97") {}};
+struct HostCreateFailure : std::runtime_error {HostCreateFailure() : std::runtime_error("controlled Wlr host create98") {}};
 struct HostState {
-    unsigned outcome=0,created=0,initialized=0,inactive=0,destroyed=0;
+    unsigned outcome=0,attempts=0,created=0,initialized=0,inactive=0,destroyed=0;
     long create_refs=0,destroy_refs=0;
     unsigned connected=0,closed=0,errors=0;
     unsigned snapshot_mask=0;
@@ -44,14 +45,19 @@ public:
           pointer_(client_->get_virtual_pointer_manager()),keyboard_(client_->get_virtual_keyboard_manager()) {
         require(client_->connected(),"host received disconnected native client");
         require(shm_ && output_ && pointer_ && keyboard_,"host snapshot missing");
-        require(::socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,owned_.data())==0,"host socketpair failed");
         host.client=client_;host.snapshots={shm_,seat_,output_,pointer_,keyboard_};
         // Original construction permits an absent seat. This headless fixture
         // supplies no host seat/device; retain that empty slot unchanged.
         for(size_t index=0;index<host.snapshots.size();++index) {
             if(!host.snapshots[index].expired()) {host.snapshot_mask|=1U<<index;}
         }
-        host.create_refs=client_.use_count();++host.created;
+        host.create_refs=client_.use_count();++host.attempts;
+        // A named host-boundary failure, not native input/device or OOM
+        // simulation. C++ unwinds the copied client/proxy members; no owner or
+        // fixture socketpair has been returned/created at this point.
+        if(host.outcome==3) {throw HostCreateFailure();}
+        require(::socketpair(AF_UNIX,SOCK_STREAM|SOCK_CLOEXEC,0,owned_.data())==0,"host socketpair failed");
+        ++host.created;
     }
     ~WlrInput() override {
         host.destroy_refs=client_.use_count();

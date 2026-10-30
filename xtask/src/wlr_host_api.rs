@@ -109,6 +109,150 @@ pub fn run(args: &[String]) -> Result<()> {
     );
     Ok(())
 }
+pub fn run_construction(args: &[String]) -> Result<()> {
+    let (path, check_only) =
+        match args {
+            [path] => (path, false),
+            [path, flag] if flag == "--check-only" => (path, true),
+            _ => return Err(
+                "expected upstream-trace wlr-host-construction <external matrix> [--check-only]"
+                    .into(),
+            ),
+        };
+    let root = records::external_root(Path::new(path))?;
+    let mut artifacts = Vec::new();
+    let mut selected = None;
+    for side in ["source", "rust"] {
+        let directory = root.join(side);
+        let start = artifacts.len();
+        let mut read = |name: &str| -> Result<Vec<u8>> {
+            let path = directory.join(name);
+            artifacts.push(records::artifact(&root, &path)?);
+            Ok(fs::read(path)?)
+        };
+        let socket = String::from_utf8(read("socket-path.txt")?)?;
+        if !socket.starts_with('/')
+            || socket.contains(['\0', '\n', '\r'])
+            || socket.len() >= 108
+            || selected.as_ref().is_some_and(|value| value != &socket)
+        {
+            return Err("Wlr constructor-error private socket differs".into());
+        }
+        selected = Some(socket.clone());
+        let task_count = construction_cases(
+            std::str::from_utf8(&read(&format!("{side}-cases.tsv"))?)?,
+            side == "source",
+        )?;
+        let baseline = task_identities(std::str::from_utf8(&read("baseline-task-ids.txt")?)?)?;
+        if u64::try_from(baseline.len())? != task_count {
+            return Err("Wlr constructor-error baseline task identities differ".into());
+        }
+        let quoted = serde_json::to_string(&socket)?;
+        let metadata = format!(
+            r#"{{"eis_socket_path":"","input_method":1,"pw_node_id":0,"pw_socket_fd":-1,"screencap_method":1,"type":"linux","uinput_path":"/dev/uinput","uinput_screen_height":0,"uinput_screen_width":0,"use_win32_vk_code":true,"wlr_socket_path":{quoted}}}"#
+        );
+        for cycle in 0..20 {
+            if task_identities(std::str::from_utf8(&read(&format!(
+                "closed-{cycle}-task-ids.txt"
+            ))?)?)?
+                != baseline
+            {
+                return Err("Wlr constructor-error final task identities differ".into());
+            }
+            if read(&format!("api-{cycle}.uuid"))? != format!("{socket}_{socket}").as_bytes()
+                || read(&format!("api-{cycle}.info"))? != metadata.as_bytes()
+            {
+                return Err("Wlr constructor-error UUID/full metadata differs".into());
+            }
+            for call in 0..3 {
+                let stem = format!("host-{cycle}-call-{call}");
+                let bgr = read(&format!("{stem}.bgr"))?;
+                pixels(&bgr, 3, [2, 1, 0])?;
+                if read(&format!("held-{}.bgr", cycle * 3 + call))? != bgr {
+                    return Err("Wlr retained capture BGR changed after native teardown".into());
+                }
+                if side == "rust" {
+                    let raw = read(&format!("{stem}.raw"))?;
+                    let meta = read(&format!("{stem}.meta.txt"))?;
+                    let (channels, order) = layout(std::str::from_utf8(&meta)?)?;
+                    pixels(&raw, channels, order)?;
+                    if read(&format!("held-{}.raw", cycle * 3 + call))? != raw {
+                        return Err("Wlr retained raw owner changed after native teardown".into());
+                    }
+                }
+            }
+        }
+        if side == "rust" {
+            construction_ledgers(std::str::from_utf8(&read("rust-ledgers.tsv")?)?)?;
+        }
+        if fs::read_dir(&directory)?
+            .collect::<std::io::Result<Vec<_>>>()?
+            .len()
+            != artifacts.len() - start
+        {
+            return Err("Wlr constructor-error matrix has missing/extra files".into());
+        }
+    }
+    let report = serde_json::json!({"layout_version":1,"constructor_errors_per_side":20,"controlled_error_code":98,
+        "native_captures":120,"payloads":360,"metadata_uuid_sets":40,"source_partial_snapshot_expiries":20,"rust_final_callback_ledgers":20,"artifacts":artifacts,
+        "scope":"Original Wlr compatibility/manager virtual capture and the same migrated Rust manager/native factory remain callable after a controlled host input constructor failure. No input owner/init/action/device is created. Exact tasks, fd counts, manager/capture client ownership, source partial proxy expiry, Rust native callback teardown, full metadata, known64x48 pixels and CPU owners after shutdown are checked. This is not native input initialization, allocation-failure recovery, shared-client explicit close/reconnect, a complete native source/binary audit or full P1 acceptance."});
+    let path = root.join("wlr-host-construction-validation.json");
+    if check_only && path.exists() {
+        if records::read::<serde_json::Value>(&path)? != report {
+            return Err("Wlr constructor-error report differs from raw records".into());
+        }
+    } else if !check_only {
+        records::create_json(&path, &report)?;
+    }
+    println!(
+        "Wlr host_create_failure source_objects=20 Rust_objects=20 constructor_errors=40 captures=120 payloads=360 final_native_owners_released=40 actual_records_verified=1 input_actions=0 full_P1_acceptance=0 passed"
+    );
+    Ok(())
+}
+fn construction_cases(text: &str, source: bool) -> Result<u64> {
+    let rows = numbers(text)?;
+    if rows.len() != 20 {
+        return Err("incomplete Wlr constructor-error cases".into());
+    }
+    let mut baseline = None;
+    for (cycle, v) in rows.iter().enumerate() {
+        if v.len() != 20
+            || v[0] != u64::try_from(cycle)?
+            || v[1..14] != [98, 1, 0, 0, 0, 0, 3, 2, 1, 3, 0, 0, 1]
+            || v[14] < 3
+            || v[14] != v[15]
+            || v[16] == 0
+            || v[17] != 1
+            || v[18] != if source { 29 } else { 0 }
+            || v[19] != u64::from(source)
+            || baseline.is_some_and(|value| value != (v[14], v[16]))
+        {
+            return Err(
+                "Wlr constructor error lost capture/client state or native resources".into(),
+            );
+        }
+        baseline = Some((v[14], v[16]));
+    }
+    Ok(rows[0][16])
+}
+fn construction_ledgers(text: &str) -> Result<()> {
+    let rows = numbers(text)?;
+    if rows.len() != 20 {
+        return Err("incomplete Wlr constructor-error callback ledgers".into());
+    }
+    for (cycle, v) in rows.iter().enumerate() {
+        if v.len() != 10
+            || v[0] != u64::try_from(cycle)?
+            || v[1] == 0
+            || v[1] != v[2]
+            || v[1] != v[3]
+            || v[4..] != [3, 3, 0, 0, 0, 0]
+        {
+            return Err("Wlr constructor-error callback owners or cleanup differ".into());
+        }
+    }
+    Ok(())
+}
 fn numbers(text: &str) -> Result<Vec<Vec<u64>>> {
     text.lines()
         .map(|line| {
@@ -248,6 +392,39 @@ fn pixels(bytes: &[u8], channels: usize, order: [usize; 3]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_constructor_success_lost_capture_live_client_and_incomplete_cleanup() {
+        let source = (0..20)
+            .map(|c| format!("{c}\t98\t1\t0\t0\t0\t0\t3\t2\t1\t3\t0\t0\t1\t7\t7\t2\t1\t29\t1\n"))
+            .collect::<String>();
+        assert_eq!(construction_cases(&source, true).unwrap(), 2);
+        assert!(construction_cases(&source, false).is_err());
+        for (old, new) in [
+            ("\t98\t1\t0", "\t98\t1\t1"),
+            ("\t3\t2\t1", "\t3\t1\t1"),
+            ("\t1\t3\t0\t0\t1", "\t1\t0\t0\t0\t1"),
+            ("\t29\t1", "\t29\t0"),
+            ("\t7\t7", "\t7\t8"),
+        ] {
+            assert!(construction_cases(&source.replacen(old, new, 1), true).is_err());
+        }
+        assert!(
+            construction_cases(
+                &source.lines().take(19).collect::<Vec<_>>().join("\n"),
+                true
+            )
+            .is_err()
+        );
+        let ledgers = (0..20)
+            .map(|c| format!("{c}\t11\t11\t11\t3\t3\t0\t0\t0\t0\n"))
+            .collect::<String>();
+        construction_ledgers(&ledgers).unwrap();
+        assert!(construction_ledgers(&ledgers.replacen("\t11\t11\t11", "\t11\t11\t5", 1)).is_err());
+        assert!(construction_ledgers(&ledgers.replacen("\t3\t3\t0", "\t2\t2\t0", 1)).is_err());
+        assert!(
+            construction_ledgers(&ledgers.replacen("\t0\t0\t0\t0", "\t1\t0\t0\t0", 1)).is_err()
+        );
+    }
     #[test]
     fn rejects_wrong_destruction_order_early_ledgers_and_pseudo_success() {
         let valid = (0..20)

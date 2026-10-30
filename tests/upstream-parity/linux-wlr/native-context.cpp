@@ -56,7 +56,8 @@ MAA_CTRL_UNIT_NS_END
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4,"usage: native-context <private socket> <new artifact directory> <actual libwayland>");
+        const bool construction=argc==5 && std::string_view(argv[4])=="--host-create-failure";
+        require(argc==4 || construction,"usage: native-context <private socket> <new artifact directory> <actual libwayland> [--host-create-failure]");
         Dl_info owner{};
         require(dladdr(reinterpret_cast<void*>(&wl_display_roundtrip),&owner)!=0 && owner.dli_fname
             && std::filesystem::canonical(owner.dli_fname)==std::filesystem::canonical(argv[3]),"wrong native Wayland library");
@@ -69,8 +70,8 @@ int main(int argc,char** argv) {
         const auto baseline_fds=fds();const auto baseline_tasks=tasks();task_record(directory/"baseline-task-ids.txt",baseline_tasks);
         std::vector<cv::Mat> held;held.reserve(60);
         for(unsigned cycle=0;cycle<20;++cycle) {
-            MAA_CTRL_UNIT_NS::host={};auto& host=MAA_CTRL_UNIT_NS::host;host.outcome=cycle%3;
-            int result=2,code=0;uint64_t features=0;
+            MAA_CTRL_UNIT_NS::host={};auto& host=MAA_CTRL_UNIT_NS::host;host.outcome=construction?3:cycle%3;
+            int result=2,code=0;uint64_t features=0;long after_refs=0;unsigned captures=0;
             {
                 std::unique_ptr<MAA_CTRL_UNIT_NS::LinuxControlUnitAPI,decltype(&MaaWlRootsControlUnitDestroy)> unit(
                     MaaWlRootsControlUnitCreate(argv[1],255),MaaWlRootsControlUnitDestroy);
@@ -81,11 +82,20 @@ int main(int argc,char** argv) {
                 text(directory/("api-"+std::to_string(cycle)+".uuid"),uuid);text(directory/("api-"+std::to_string(cycle)+".info"),metadata);
                 cv::Mat output;require(!unit->connected() && unit->get_features()==0 && !unit->screencap(output) && output.empty(),"unconnected Wlr virtual state differs");
                 try {result=unit->connect()?1:0;}catch(const MAA_CTRL_UNIT_NS::HostInitFailure&) {code=97;}
-                require(result==(host.outcome==0?1:host.outcome==1?0:2) && code==(host.outcome==2?97:0)
-                    && unit->connected()==(host.outcome==0) && unit->get_features()==3,"Wlr host init/feature state differs");
+                catch(const MAA_CTRL_UNIT_NS::HostCreateFailure&) {code=98;}
+                if(construction) {
+                    require(result==2 && code==98 && !unit->connected() && unit->get_features()==0,"Wlr constructor failure state differs");
+                    const auto client=host.client.lock();require(bool(client),"partial capture lost its client");
+                    after_refs=client.use_count()-1;host.connected=client->connected();
+                    require(after_refs==2 && host.connected==1,"constructor error lost manager/capture client owners");
+                }else {
+                    require(result==(host.outcome==0?1:host.outcome==1?0:2) && code==(host.outcome==2?97:0)
+                        && unit->connected()==(host.outcome==0) && unit->get_features()==3,"Wlr host init/feature state differs");
+                }
                 for(unsigned call=0;call<3;++call) {
                     if(call==1) {require(unit->inactive(),"Wlr virtual inactive failed");}
                     require(unit->screencap(output),"Wlr virtual capture after host init failed");pixels(output);
+                    ++captures;
                     save(directory/("host-"+std::to_string(cycle)+"-call-"+std::to_string(call)+".bgr"),output);
                     held.push_back(std::move(output));for(const auto& image:held) {pixels(image);}
                 }
@@ -97,6 +107,17 @@ int main(int argc,char** argv) {
             task_record(directory/("closed-"+std::to_string(cycle)+"-task-ids.txt"),final_tasks);
             // Shared format: see xtask/wlr_host_api.rs. Scalar evidence is
             // written before assertions so a failed lifetime remains reviewable.
+            if(construction) {
+                cases<<cycle<<'\t'<<code<<'\t'<<host.attempts<<'\t'<<host.created<<'\t'<<host.initialized<<'\t'<<host.inactive<<'\t'<<host.destroyed
+                    <<'\t'<<host.create_refs<<'\t'<<after_refs<<'\t'<<host.connected<<'\t'<<captures<<'\t'<<features<<"\t0\t"<<expired
+                    <<'\t'<<baseline_fds<<'\t'<<final_fds<<'\t'<<baseline_tasks.size()<<'\t'<<(final_tasks==baseline_tasks)
+                    <<'\t'<<host.snapshot_mask<<'\t'<<snapshots<<'\n';cases.flush();
+                require(cases.good() && host.attempts==1 && host.created==0 && host.initialized==0 && host.inactive==0 && host.destroyed==0
+                    && host.create_refs==3 && after_refs==2 && host.connected==1 && host.closed==0 && host.errors==0 && captures==3
+                    && features==0 && expired && snapshots && host.snapshot_mask==29 && baseline_fds==final_fds && final_tasks==baseline_tasks,
+                    "Wlr constructor-error retained capture/resources differ");
+                continue;
+            }
             cases<<cycle<<'\t'<<host.outcome<<'\t'<<result<<'\t'<<code<<'\t'<<host.created<<'\t'<<host.initialized<<'\t'<<host.inactive<<'\t'<<host.destroyed
                 <<'\t'<<host.create_refs<<'\t'<<host.destroy_refs<<'\t'<<host.connected<<'\t'<<host.closed<<'\t'<<host.errors<<'\t'<<expired
                 <<'\t'<<baseline_fds<<'\t'<<final_fds<<'\t'<<baseline_tasks.size()<<'\t'<<(final_tasks==baseline_tasks)<<'\t'<<features<<"\t1\t1\t3\t1\t1\n";cases.flush();
@@ -106,7 +127,11 @@ int main(int argc,char** argv) {
                 && baseline_fds==final_fds && final_tasks==baseline_tasks,"Wlr shared input/client destruction differs");
         }
         for(size_t index=0;index<held.size();++index) {save(directory/("held-"+std::to_string(index)+".bgr"),held[index]);}
-        std::cout<<"original Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 shared_last_client=20 final_client_snapshots_expired=20 input_actions=0 passed\n";
+        if(construction) {
+            std::cout<<"original Wlr host_create_failure objects=20 constructor_errors=20 captures=60 retained=60 real_virtual_handles=20 clients_released=20 resources_balanced=1 input_actions=0 passed\n";
+        }else {
+            std::cout<<"original Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 shared_last_client=20 final_client_snapshots_expired=20 input_actions=0 passed\n";
+        }
         return 0;
     }catch(const std::exception& error) {std::cerr<<"Wlr native ABI failure: "<<error.what()<<'\n';return 1;}
 }
