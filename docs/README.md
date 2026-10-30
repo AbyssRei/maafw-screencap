@@ -39,7 +39,7 @@ Linux manager 的 Input=None 编排、两分钟 PipeWire 长流及 Wlr 受控转
 | [技术选型与决策](decisions/interactive-technology-selection.md) | R1–R8 的理由、约束及替代关系；选型已确认，原型/验收按条目记录 |
 | [ADR 0001：GDI 全虚拟桌面](decisions/0001-gdi-virtual-desktop-capture.md) | 纳入独立产品截图方式的范围与理由；P2 后 P3 实施，尚未实现或验收，不替代 R1–R8 |
 | [ADR 0002：原生接口现代化](decisions/0002-native-interface-modernization.md) | 旧兼容用法迁移及有效接口升级的范围与理由；P2 后实施，尚未实现或验收 |
-| [ADR 0003：修正 fork 提取来源](decisions/0003-corrected-fork-extraction-baseline.md) | 替代旧 U → P 实施顺序，修复进入 P1 提取，P2 冻结验收 F；来源准备、helper 同步与本地历史整理已完成，完整 F 验收仍待完成 |
+| [ADR 0003：修正 fork 提取来源](decisions/0003-corrected-fork-extraction-baseline.md) | 替代旧 U → P 实施顺序，修复进入 P1 提取，P2 冻结验收 F；来源准备、helper 同步与本地历史整理已实现；评审 v2 增加一次候选复核及根 CI，完整 F 验收仍待完成 |
 | [架构与项目结构](design/architecture.md) | 内部依赖、状态归属、样本交接和目标目录；方向已确认，具体 SDK 在 P3 定案 |
 | [GDI 全虚拟桌面设计](design/gdi-virtual-desktop.md) | 屏幕 DC、单次 BitBlt、DIB、布局与资源流程；产品扩展规划，尚未实现或验收 |
 | [原生接口现代化设计](design/native-interface-modernization.md) | DIB、DXGI、FramePool、PipeWire、ExtImage 迁移清单、能力与执行边界；已纳入实施，尚未实现或验收 |
