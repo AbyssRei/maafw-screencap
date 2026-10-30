@@ -13,6 +13,12 @@ const MIN_NS: u64 = 120_000_000_000;
 pub fn run(args: &[String]) -> Result<()> {
     if args
         .first()
+        .is_some_and(|kind| kind == "macos-capture-stages")
+    {
+        return crate::macos_capture_stages::run(&args[1..]);
+    }
+    if args
+        .first()
         .is_some_and(|kind| kind == "macos-display-observer-same-path")
     {
         return crate::macos_display_patch::run_observer_same_path(&args[1..]);

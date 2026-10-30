@@ -42,7 +42,7 @@ foreach(_framework AppKit ApplicationServices CoreFoundation CoreMedia CoreVideo
 endforeach()
 # Instrumentation is a separate test executable, never the original oracle or
 # migrated backend. Keep the exact fixed source as a separate translation unit.
-add_executable(mfs_macos_observed_context source-context.mm
+add_executable(mfs_macos_observed_context source-context.mm capture-observer.mm
     "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
 get_target_property(_mfs_source_includes mfs_macos_source_context INCLUDE_DIRECTORIES)
 get_target_property(_mfs_source_links mfs_macos_source_context LINK_LIBRARIES)

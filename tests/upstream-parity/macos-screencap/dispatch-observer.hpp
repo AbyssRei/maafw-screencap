@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 // Forced include for a SEPARATE diagnostic executable only. The fixed source
-// bytes, arguments, return values and five-second wait remain unchanged. IO
-// affects timing, so this instrumented process is never a parity oracle.
+// bytes, native semaphore arguments/results and five-second wait remain.
+// Callback wrapping and IO affect timing; this is never a parity oracle.
 #include <dispatch/dispatch.h>
 #include <array>
 #include <atomic>
@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <pthread.h>
+#include "capture-observer.hpp"
 namespace MfsMacObserve {
 struct Slot {
     std::atomic<dispatch_semaphore_t> semaphore{nullptr};

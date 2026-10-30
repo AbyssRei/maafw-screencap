@@ -299,9 +299,13 @@ function Run-ObservedMacosSamePathProbe([string]$Artifacts) {
             }
         }
     }
+    $stageFailure=$null
+    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory)}
+    catch {$stageFailure=$_}
     $recordFailure=$null
     try {Step macos-display-observer-same-path-records $ConfigureTool @('upstream-trace','macos-display-observer-same-path',$directory)}
     catch {$recordFailure=$_}
     if($consumerFailure){throw $consumerFailure}
     if($recordFailure){throw $recordFailure}
+    if($stageFailure){throw $stageFailure}
 }

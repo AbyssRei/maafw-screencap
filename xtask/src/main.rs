@@ -11,6 +11,7 @@ mod licenses;
 mod linux_compat;
 mod linux_config;
 mod macos;
+mod macos_capture_stages;
 mod macos_display_geometry;
 mod macos_display_patch;
 mod macos_sample_cases;
@@ -184,6 +185,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace macos-display-appkit-consumer <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-appkit-scene <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-observer-same-path <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace macos-capture-stages <external observer directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-sample-matrix <external directory> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
                       cargo xtask upstream-config linux-compat <original executable> <new external source directory>\n\
