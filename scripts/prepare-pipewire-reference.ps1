@@ -43,7 +43,7 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     $meojson=Prepare-MeoJsonReference $refInputs
     Step pipewire-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-pipewire),'-B',$refBuild,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$cvPackage","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_DRM_SOURCE=$drmSource","-DMFS_PIPEWIRE_VERSION=$($env:MFS_P0_PIPEWIRE_VERSION)","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)")
     Step pipewire-reference-build cmake @('--build',$refBuild,'--parallel','4')
-    Observe-LinuxConfigReference $refBuild $refInputs
+    Observe-LinuxConfigReference $refBuild $refInputs $FixedUpstream
     $manager=Join-Path $refBuild linux-manager/mfs_linux_manager_model
     $saved=Join-Path $refInputs mfs_linux_manager_model
     Copy-Item -LiteralPath $manager -Destination $saved;Save $saved

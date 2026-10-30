@@ -26,13 +26,17 @@ if(DEFINED MFS_MEOJSON_INCLUDE)
     endif()
     include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/linux-config-source.cmake")
     add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../manager-metadata" metadata)
-    add_executable(mfs_linux_config_model config-model.cpp)
-    target_compile_definitions(mfs_linux_config_model PRIVATE MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-config-oracle")
+    add_executable(mfs_linux_config_model config-model.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Compat/WlRootsControlUnitCompat.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp")
+    target_compile_definitions(mfs_linux_config_model PRIVATE MAA_CONTROL_UNIT_EXPORTS MAA_TOOLKIT_EXPORTS MAA_VERSION="mfs-p1-config-oracle")
     target_include_directories(mfs_linux_config_model PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/config-overlay"
         "${CMAKE_CURRENT_SOURCE_DIR}/config-overlay" "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_MEOJSON_INCLUDE}"
         "${MFS_UPSTREAM_ROOT}/include" ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(mfs_linux_config_model PRIVATE ${OpenCV_LIBS})
     if(MSVC)
-        target_compile_options(mfs_linux_config_model PRIVATE /utf-8 /EHsc)
+        # Original extern-C creation can throw into this C++ observer. Do not
+        # assume those functions are nothrow via /EHc.
+        target_compile_options(mfs_linux_config_model PRIVATE /utf-8 /EHs)
     endif()
 endif()
