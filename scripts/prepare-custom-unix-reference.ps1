@@ -72,7 +72,7 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     Copy-Item -LiteralPath (Join-Path $source LICENSE.md) -Destination $license
     Save $license
     . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
-    $customJson=Prepare-MeoJsonReference $customInputs
+    $customJson=Prepare-MeoJsonReference $customInputs -StepPrefix custom-meojson
     . (Join-Path $PSScriptRoot prepare-opencv-reference.ps1)
     $opencv=Prepare-OpenCvReference $customInputs ([ordered]@{
         backend='custom-capture';os=[Runtime.InteropServices.RuntimeInformation]::OSDescription

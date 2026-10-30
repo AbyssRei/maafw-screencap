@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Explicit acceptance dependency only; no capture runtime/build.rs dependency.
 # Caller owns Step/Save/Json/DepsRoot and an already-new external input folder.
-function Prepare-MeoJsonReference([string]$InputDirectory) {
+function Prepare-MeoJsonReference([string]$InputDirectory,[string]$StepPrefix='meojson') {
+    if($StepPrefix -notmatch '^[a-z][a-z0-9-]*$'){throw 'Invalid meojson step prefix'}
     $releasePath=Join-Path $InputDirectory meojson-latest-release.json
     # Query once: the archived response is also the actual resolution input.
     & gh api repos/MistEO/meojson/releases/latest | Set-Content -LiteralPath $releasePath -Encoding utf8
@@ -30,14 +31,14 @@ function Prepare-MeoJsonReference([string]$InputDirectory) {
     if($object.type -ne 'commit' -or $object.sha -notmatch '^[0-9a-f]{40}$'){throw 'meojson tag does not resolve to a commit'}
     $source=Join-Path $DepsRoot ('native-sources/meojson-'+$object.sha)
     if(-not(Test-Path -LiteralPath $source)){
-        Step meojson-clone git @('-c','core.autocrlf=false','clone','--depth=1','--branch',$release.tag_name,'https://github.com/MistEO/meojson.git',$source)
+        Step ($StepPrefix+'-clone') git @('-c','core.autocrlf=false','clone','--depth=1','--branch',$release.tag_name,'https://github.com/MistEO/meojson.git',$source)
     }
     $actual=(& git -C $source rev-parse HEAD|Out-String).Trim()
     if($LASTEXITCODE -ne 0 -or $actual -ne $object.sha){throw 'meojson cache differs from the current formal tag'}
     $dirty=& git -C $source status --porcelain --untracked-files=all
     if($LASTEXITCODE -ne 0 -or $dirty){throw 'meojson source cache was modified'}
     $archive=Join-Path $InputDirectory meojson-source.tar
-    Step meojson-source-archive git @('-C',$source,'archive','--format=tar','--output',$archive,$actual)
+    Step ($StepPrefix+'-source-archive') git @('-C',$source,'archive','--format=tar','--output',$archive,$actual)
     Save $archive
     $license=Join-Path $InputDirectory meojson-LICENSE
     Copy-Item -LiteralPath (Join-Path $source LICENSE) -Destination $license;Save $license
