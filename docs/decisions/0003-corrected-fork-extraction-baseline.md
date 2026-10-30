@@ -1,6 +1,6 @@
 # ADR 0003：以修正后的 fork 作为完整提取来源
 
-日期：2026-10-30。状态：用户已确认；文档已调整，fork 修复、确切提交锁定、Rust 同步及新版原生验收尚未完成。影响阶段：P1 来源与实现、P2 来源冻结与完整提取验收；P3–P6 编号与职责不变。
+日期：2026-10-30。状态：用户已确认；fork 修复已提交推送，F 来源准备与 Rust/C++ helper 同步已实现。完整调用链/原生验收及本地历史整理尚未完成。影响阶段：P1 来源与实现、P2 来源冻结与完整提取验收；P3–P6 编号与职责不变。
 
 本 ADR 替代[原计划](../plans/maafw-screencap-extraction-plan.md)中“先完成未修复 U，再于 P2 应用固定旧 PR 得到 P”的来源与实施顺序。它同时更新 R1–R8、[ADR 0001](0001-gdi-virtual-desktop-capture.md)及 [ADR 0002](0002-native-interface-modernization.md)中的阶段引用，不替代其语言、绑定、图像、扩展或发布决策，也不改写历史证据。
 
@@ -8,7 +8,7 @@
 
 [PR #1587 的成员评审](https://github.com/MaaXYZ/MaaFramework/pull/1587#issuecomment-6492173498)指出旧 head `f603a04633b0e43a8bbcb94ddef60fc349ad29a1` 的两个问题：全局 rcMonitor 校正会允许普通窗口客户区落入任务栏区域；外窗口四边 ±8px 容差会放过真实越界的客户区，使桌面复制裁剪失败。用户选择先修改 fork，再把等价修复同步到新项目的完整提取环节。
 
-完整提取基线改记为 **F**：来源是 `AbyssRei/MaaFramework` 的 `fix/ensure-window-on-screen-rcmonitor` 分支修正后锁定的确切 commit/tree，不是滚动分支名。原 MaaFramework `0fc6025c2fc224a171b57d89505e8d47acd2a8b1` 保留为来源祖先和范围比较依据；旧 PR 两条提交及其累计差异只作历史来源。新 head 尚未产生，不得填写猜测 SHA、把旧 head 当作修正版，或声称 F 已验收。
+完整提取基线改记为 **F**：来源是 `AbyssRei/MaaFramework` 的确切提交 `a434521e7f49cff97f92117add554038b523eef9`、tree `06b7e7f32b5b644e706c530945a12c03b7f1f4e7`，不是滚动分支名。原 MaaFramework `0fc6025c2fc224a171b57d89505e8d47acd2a8b1` 保留为来源祖先和范围比较依据；旧 PR 两条提交及其累计差异只作历史来源。新增第三条修复提交保留了前两条历史；相对祖先的累计差异仅含 HwndUtils.hpp 及三份独立 window_geometry 测试文件。来源已锁定不表示 F 已完整验收。
 
 P1 直接迁移修正 fork 的全部截图职责，修复进入 HwndUtils/窗口几何迁移及其实际调用链。P2 改为来源冻结、完整提取与专项回归的汇总验收，不再应用第二次 PR 补丁。P3 在验收后的 F 上建立产品 E；共享租约、严格 SDK 几何、原生接口现代化和其他产品扩展仍按原阶段实施。
 
