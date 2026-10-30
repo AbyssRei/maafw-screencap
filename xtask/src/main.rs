@@ -7,6 +7,7 @@ mod custom_capture;
 mod dependencies;
 mod frame_pool_alpha;
 mod licenses;
+mod linux_compat;
 mod linux_config;
 mod macos;
 mod manager_metadata;
@@ -158,6 +159,8 @@ fn run() -> Result<()> {
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
+                      cargo xtask upstream-config linux-compat <original executable> <new external source directory>\n\
+                      cargo xtask upstream-config linux-compat-records <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-metadata <win32|macos> <external directory> [--check-only]\n\n\
                       cargo xtask pipewire-prototype  # native Linux x64 only\n\n\
                       cargo xtask macos-prototype     # native macOS arm64 only\n\n\

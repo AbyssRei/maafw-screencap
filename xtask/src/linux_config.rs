@@ -18,6 +18,15 @@ struct Observation {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "linux-compat") {
+        return crate::linux_compat::observe(&args[1..]);
+    }
+    if args
+        .first()
+        .is_some_and(|kind| kind == "linux-compat-records")
+    {
+        return crate::linux_compat::verify(&args[1..]);
+    }
     let [kind, executable, path] = args else {
         return Err(
             "expected upstream-config linux <original executable> <new external directory>".into(),

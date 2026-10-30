@@ -45,6 +45,7 @@ std::string hex(std::string_view bytes) {
     return result;
 }
 }
+#include "compat-model.hpp"
 int main(int argc,char** argv) {
     try {
         static_assert(sizeof(MaaLinuxScreencapMethod)==8 && sizeof(MaaLinuxInputMethod)==8);
@@ -52,6 +53,7 @@ int main(int argc,char** argv) {
         static_assert(json::_packed_bytes::packed_bytes_trait_max::step==16,
             "Recharacterize the explicit source parser before changing its packed-byte trait");
         require(std::string_view(MaaLinuxControlUnitGetVersion())=="mfs-p1-config-oracle","original API version forwarding changed");
+        if(argc>1 && std::string_view(argv[1])=="--compat") { return compat_main(argc,argv); }
         require(argc==2 || argc==3,"usage: config-model --null | --file <raw JSON file>");
         std::string input;
         const char* offered=nullptr;

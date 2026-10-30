@@ -7,6 +7,8 @@
 mod configuration;
 pub(crate) use configuration::Config;
 pub(crate) use configuration::Error as ConfigError;
+#[path = "manager_compat.rs"]
+mod compat;
 
 #[cfg(all(
     target_os = "linux",

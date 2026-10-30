@@ -63,7 +63,7 @@ function Prepare-MeoJsonReference([string]$InputDirectory) {
 # The owning native batch builds the explicit target alongside its source
 # reference. Preserve exact copied declarations/extracted bodies and every case,
 # including partial records on a failed observation; never rerun a failed case.
-function Observe-LinuxConfigReference([string]$Build,[string]$InputDirectory) {
+function Observe-LinuxConfigReference([string]$Build,[string]$InputDirectory,[string]$FixedUpstream) {
     $managerBuild=Join-Path $Build linux-manager
     $executable=Join-Path $managerBuild mfs_linux_config_model
     $saved=Join-Path $InputDirectory mfs_linux_config_model
@@ -81,6 +81,18 @@ function Observe-LinuxConfigReference([string]$Build,[string]$InputDirectory) {
     finally { if(Test-Path -LiteralPath $observations){Get-ChildItem -LiteralPath $observations -Recurse -File|ForEach-Object{Save $_.FullName}} }
     $env:MFS_P1_LINUX_CONFIG_OBSERVATIONS=$observations
     $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS=Join-Path $InputDirectory configuration-rust
+    $compat=Join-Path $InputDirectory compat
+    New-Item -ItemType Directory -Path $compat|Out-Null
+    foreach($name in @('WlRootsControlUnitCompat.cpp','KWinControlUnitCompat.cpp')){
+        $source=Join-Path $FixedUpstream "source/MaaLinuxControlUnit/Compat/$name"
+        $destination=Join-Path $declarations $name
+        Copy-Item -LiteralPath $source -Destination $destination;Save $destination
+    }
+    try{Step linux-compat-source-corpus $ConfigureTool @('upstream-config','linux-compat',$executable,(Join-Path $compat source))}
+    finally{if(Test-Path -LiteralPath $compat){Get-ChildItem -LiteralPath $compat -Recurse -File|ForEach-Object{Save $_.FullName}}}
+    $env:MFS_P1_LINUX_COMPAT_OBSERVATIONS=Join-Path $compat source
+    $env:MFS_P1_LINUX_COMPAT_RUST_ARTIFACTS=Join-Path $compat rust
+    $env:MFS_P1_LINUX_COMPAT_MATRIX=$compat
     . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
     Save-ManagerMetadataReference (Join-Path $managerBuild metadata) $InputDirectory (Join-Path $RunRoot linux-x64/reference-u/artifacts/manager-metadata)
 }

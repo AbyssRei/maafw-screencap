@@ -162,6 +162,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected all original/Rust configuration acceptance, UUID and metadata comparisons in one actual test'
             }
         }
+        if($Name -eq 'linux-compat-rust-parity'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('Rust Linux compat cases=120 exact_uuid_metadata=1 portal_call_order=1 created=38 source_open_failure_residuals=6 native_authorization=0 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected the full original/Rust compatibility constructor and host-order comparison, not a zero-test run'
+            }
+        }
         if($Name -eq 'linux-config-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 8 passed; 0 failed; 1 ignored;') {
             throw 'Expected eight manager controls, with the explicit original-source model still ignored on this default filter'
         }
@@ -487,6 +493,11 @@ try {
             try { Step linux-config-rust-parity timeout @('--signal=TERM','--kill-after=5s','90s',$managerTest,'backends::linux::manager::configuration::tests::matches_original_configuration_creation_uuid_and_metadata_bytes','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
             finally {if(Test-Path -LiteralPath $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS){Get-ChildItem -LiteralPath $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS -Recurse -File|ForEach-Object{Save $_.FullName}}}
+            try{
+                Step linux-compat-rust-parity timeout @('--signal=TERM','--kill-after=5s','60s',$managerTest,'backends::linux::manager::compat::tests::matches_original_compatibility_arguments_metadata_and_portal_call_order','--exact','--ignored','--test-threads=1','--nocapture')
+                Step linux-compat-records $ConfigureTool @('upstream-config','linux-compat-records',$env:MFS_P1_LINUX_COMPAT_MATRIX)
+            }catch{$failed=$true;Write-Host $_.Exception.Message}
+            finally{if(Test-Path -LiteralPath $env:MFS_P1_LINUX_COMPAT_RUST_ARTIFACTS){Get-ChildItem -LiteralPath $env:MFS_P1_LINUX_COMPAT_RUST_ARTIFACTS -Recurse -File|ForEach-Object{Save $_.FullName}};if(Test-Path -LiteralPath (Join-Path $env:MFS_P1_LINUX_COMPAT_MATRIX compat-validation.json)){Save (Join-Path $env:MFS_P1_LINUX_COMPAT_MATRIX compat-validation.json)}}
             try { Step linux-config-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::tests::','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
             try { Step rust-pipewire-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::native::tests::','--test-threads=1','--nocapture') }
