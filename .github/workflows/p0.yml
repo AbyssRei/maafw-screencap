@@ -76,6 +76,10 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/manifest.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/native-result.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/*-info-*.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/reference-compile-commands.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/original-source-identities.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/source-context-scope.txt
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/scene-executable-identity.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-LICENSE
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/*.inc
