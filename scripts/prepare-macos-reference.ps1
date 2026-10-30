@@ -98,7 +98,8 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
     $hostPremise=$Name -eq 'rust-macos-display-host-premise'
     $distinctHost=$Name -eq 'rust-macos-display-distinct-host'
     $foundationConsumer=$Name -eq 'rust-macos-display-foundation-consumer'
-    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise','rust-macos-display-distinct-host','rust-macos-display-foundation-consumer')
+    $appkitConsumer=$Name -eq 'rust-macos-display-appkit-consumer'
+    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise','rust-macos-display-distinct-host','rust-macos-display-foundation-consumer','rust-macos-display-appkit-consumer')
     $originalFailure=$null
     try {
         $sceneExecutable=if($distinctHost){$script:MacosDistinctSceneExecutable}else{$Executable}
@@ -116,10 +117,10 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $identity=Get-Content -LiteralPath $ready -Raw|ConvertFrom-Json
         if($identity.owner_pid -ne $server.Id -or $identity.width -ne 47 -or $identity.height -ne 31 -or $identity.colour -ne 'green' -or $identity.window_id -le 0){throw 'Unexpected owned native scene identity'}
         if($displayPatch -and $identity.display_patch -ne 1){throw 'Missing explicit first-display patch premise'}
-        if($distinctHost -or $foundationConsumer){
+        if($distinctHost -or $foundationConsumer -or $appkitConsumer){
             $binaryIdentity=[ordered]@{}
             foreach($key in $script:MacosSceneIdentity.Keys){$binaryIdentity[$key]=$script:MacosSceneIdentity[$key]}
-            if($foundationConsumer){
+            if($foundationConsumer -or $appkitConsumer){
                 $binaryIdentity.scene_path=$Executable
                 $binaryIdentity.scene_sha256=$binaryIdentity.consumer_sha256
                 $binaryIdentity.scene_unix_mode=$binaryIdentity.consumer_unix_mode
@@ -150,7 +151,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         if($hostPremise){$env:MFS_P1_MACOS_HOST_GEOMETRY_PREMISE='1'}
         else{Remove-Item Env:MFS_P1_MACOS_HOST_GEOMETRY_PREMISE -ErrorAction SilentlyContinue}
         if($displayPatch){$env:MFS_P1_MACOS_DISPLAY_GEOMETRY=Join-Path $scene display-geometry.tsv}
-        $oracleMode=if($foundationConsumer){'display-patch-foundation-consumer'}elseif($hostPremise){'display-patch-host-premise'}elseif($displayPatch){'display-patch'}elseif($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
+        $oracleMode=if($appkitConsumer){'display-patch-appkit-consumer'}elseif($foundationConsumer){'display-patch-foundation-consumer'}elseif($hostPremise){'display-patch-host-premise'}elseif($displayPatch){'display-patch'}elseif($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
         $oracleArguments=@($oracleMode,$directory,[string]$identity.window_id)
         if($hostPremise){$oracleArguments+=$env:MFS_P1_MACOS_DISPLAY_GEOMETRY}
         try {Step "$Name-original-oracle" $Executable $oracleArguments}
@@ -176,7 +177,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $oracleRecord=Join-Path $directory source-oracle-identities.json
         Json $oracleRecord $oracleRecords;Save $oracleRecord
         foreach($file in $oracleFiles){Save $file.FullName}
-        if($displayPatch -and -not $distinctHost -and -not $foundationConsumer){
+        if($displayPatch -and -not $distinctHost -and -not $foundationConsumer -and -not $appkitConsumer){
             # A distinct executable/child directory instruments the real
             # semaphore calls. Its timing/logging is diagnostic only; it never
             # supplies or replaces the unchanged oracle's status or images.
@@ -220,7 +221,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         }
     }
     if($displayPatch){
-        $recordKind=if($foundationConsumer){'macos-display-foundation-consumer'}elseif($distinctHost){'macos-display-distinct-host'}elseif($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
+        $recordKind=if($appkitConsumer){'macos-display-appkit-consumer'}elseif($foundationConsumer){'macos-display-foundation-consumer'}elseif($distinctHost){'macos-display-distinct-host'}elseif($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
         try {Step "$recordKind-records" $ConfigureTool @('upstream-trace',$recordKind,$directory)}
         catch {if(-not $originalFailure){throw}}
         if($originalFailure){throw $originalFailure}

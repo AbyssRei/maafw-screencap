@@ -29,6 +29,9 @@ pub fn run(args: &[String]) -> Result<()> {
         Some("macos-display-foundation-consumer") => {
             Some(crate::macos_display_patch::Probe::FoundationConsumer)
         }
+        Some("macos-display-appkit-consumer") => {
+            Some(crate::macos_display_patch::Probe::AppkitConsumer)
+        }
         _ => None,
     };
     if let Some(probe) = display_probe {
