@@ -6,6 +6,8 @@ use super::*;
 mod display_geometry;
 #[path = "screen_capture_kit_display_tests.rs"]
 mod display_patch;
+#[path = "screen_capture_kit_sample_tests.rs"]
+mod sample_matrix;
 use std::{
     env,
     ffi::{CStr, CString, c_void},
@@ -103,6 +105,11 @@ impl Adapter {
             );
             std::process::exit(77);
         }
+        Self::open_cpu()
+    }
+    // The native CPU sample fixture does not request capture or permission.
+    // Existing actual capture probes keep the preflight above unchanged.
+    fn open_cpu() -> Arc<Self> {
         let module = Module::open();
         // SAFETY: conversion-adapter.h and acceptance-evidence.h are the ABI
         // authorities. Their exact sources compile into this selected image.
@@ -238,8 +245,8 @@ struct CpuMat {
     width: usize,
     height: usize,
 }
-// SAFETY: The exact native Image implementation owns only an independent CPU
-// Mat from synchronous cvtColor. No provider/CF/SC object, mapping, mutable alias
+// SAFETY: Both exact private Image/SourceImage implementations own only an
+// independent CPU Mat from synchronous cvtColor. No provider/CF/SC object, mapping, mutable alias
 // or borrowed input escapes. Exclusive ownership may transfer after conversion;
 // Mat/allocator release is observed on a second thread. Every owner retains the
 // code module through release. No Sync or arbitrary opaque native mobility.

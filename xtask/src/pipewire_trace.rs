@@ -11,6 +11,12 @@ const RESOURCES: &str = "phase\telapsed_ns\tcalls\tfds\ttasks\trss_kib";
 const MIN_NS: u64 = 120_000_000_000;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args
+        .first()
+        .is_some_and(|kind| kind == "macos-sample-matrix")
+    {
+        return crate::macos_sample_matrix::run(&args[1..]);
+    }
     let display_probe = match args.first().map(String::as_str) {
         Some("macos-display-patch") => Some(crate::macos_display_patch::Probe::Queried),
         Some("macos-display-host-premise") => Some(crate::macos_display_patch::Probe::HostPremise),
