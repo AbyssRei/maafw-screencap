@@ -25,6 +25,7 @@ struct Input {
     _client: Option<Rc<Owner>>,
     method: u64,
     features: u64,
+    init_outcome: u8,
 }
 #[derive(Default)]
 struct Script {
@@ -91,6 +92,7 @@ impl Factory for Script {
             } else {
                 self.input_features
             },
+            init_outcome: self.input_init,
         })
     }
     fn init_capture(&mut self, unit: &mut Unit) -> Result<bool, Self::Error> {
@@ -98,11 +100,26 @@ impl Factory for Script {
         Ok(unit.method != PIPEWIRE || !self.init_fails)
     }
     fn init_input(&mut self, input: &mut Input) -> Result<bool, Self::Error> {
-        self.events.borrow_mut().push("input.init");
-        match if input.method == NONE {
+        host::InputOwner::init(input)
+    }
+    fn input_features(input: &Input) -> u64 {
+        input.features
+    }
+    fn inactive_capture(unit: &mut Unit) {
+        unit._owner.events.borrow_mut().push("capture.inactive");
+    }
+    fn inactive_input(input: &mut Input) {
+        host::InputOwner::inactive(input);
+    }
+}
+impl host::InputOwner for Input {
+    type Error = &'static str;
+    fn init(&mut self) -> Result<bool, Self::Error> {
+        self.owner.events.borrow_mut().push("input.init");
+        match if self.method == NONE {
             0
         } else {
-            self.input_init
+            self.init_outcome
         } {
             0 => Ok(true),
             1 => Ok(false),
@@ -110,14 +127,79 @@ impl Factory for Script {
             _ => unreachable!(),
         }
     }
-    fn input_features(input: &Input) -> u64 {
-        input.features
+    fn inactive(&mut self) {
+        self.owner.events.borrow_mut().push("input.inactive");
     }
-    fn inactive_capture(&mut self, _: &mut Unit) {
-        self.events.borrow_mut().push("capture.inactive");
+    fn features(&self) -> u64 {
+        self.features
     }
-    fn inactive_input(&mut self, input: &mut Input) {
-        input.owner.events.borrow_mut().push("input.inactive");
+}
+impl host::InputProvider<Rc<Owner>, &'static str> for Script {
+    type Input = Input;
+    fn create(
+        &mut self,
+        config: &Config,
+        client: Option<&Rc<Owner>>,
+    ) -> Result<Input, &'static str> {
+        Factory::create_input(self, config, client)
+    }
+}
+
+#[test]
+fn composes_host_input_over_the_same_capture_factory_and_retains_owners_after_provider_drop() {
+    for outcome in 0..3 {
+        let capture = Script {
+            input_throws: true,
+            ..Script::default()
+        };
+        let events = capture.events.clone();
+        let provider = Script {
+            events: events.clone(),
+            input_init: outcome,
+            input_features: u64::MAX,
+            ..Script::default()
+        };
+        let mut factory = host::WithInput::new(capture, provider);
+        let mut manager = Manager::new(Config {
+            input_method: 2,
+            ..config(PIPEWIRE)
+        });
+        let result = manager.connect(&mut factory);
+        assert_eq!(
+            result,
+            match outcome {
+                0 => Ok(true),
+                1 => Ok(false),
+                _ => Err("host input init exception"),
+            }
+        );
+        drop(factory); // Neither input nor backend may borrow their factories.
+        assert_eq!(manager.get_features(), 3);
+        let mut output = 99;
+        assert!(
+            manager
+                .capture_with(&mut output, |_, output| {
+                    *output = 7;
+                    Ok::<_, ()>(true)
+                })
+                .unwrap()
+        );
+        assert_eq!(output, 7);
+        assert!(manager.inactive());
+        drop(manager);
+        assert_eq!(
+            *events.borrow(),
+            [
+                "capture.create",
+                "input.create",
+                "capture.init",
+                "input.init",
+                "capture.inactive",
+                "input.inactive",
+                "capture.drop",
+                "input.drop"
+            ]
+        );
     }
 }
 fn config(method: u64) -> Config {
@@ -132,7 +214,7 @@ fn config(method: u64) -> Config {
 
 #[test]
 fn parsed_creation_and_queries_do_not_connect_or_touch_the_callers_output() {
-    let mut script = Script::default();
+    let script = Script::default();
     let json =
         br#"{"screencap_method":4,"input_method":0,"pw_node_id":9,"wlr_socket_path":"a\u0000b"}"#;
     let mut manager = Manager::<Script>::from_config_json(Some(json)).unwrap();
@@ -158,7 +240,7 @@ fn parsed_creation_and_queries_do_not_connect_or_touch_the_callers_output() {
             .wlr_socket,
         b"a\0b"
     );
-    assert!(manager.inactive(&mut script));
+    assert!(manager.inactive());
     drop(manager);
     assert!(script.take().is_empty());
     assert!(Manager::<Script>::from_config_json(None).is_err());
@@ -266,7 +348,7 @@ fn failed_init_retains_forwarding_and_inactive_orders_both_selected_owners() {
             .unwrap()
     );
     assert_eq!(output, 7);
-    assert!(manager.inactive(&mut script));
+    assert!(manager.inactive());
     assert_eq!(script.take(), ["capture.inactive", "input.inactive"]);
 }
 #[test]
@@ -289,7 +371,7 @@ fn input_construction_error_keeps_the_capture_and_does_not_rewrite_backend_failu
             .unwrap()
     );
     assert_eq!(output, 7);
-    assert!(manager.inactive(&mut script));
+    assert!(manager.inactive());
     assert_eq!(script.take(), ["capture.inactive"]);
 }
 #[test]
@@ -465,7 +547,7 @@ fn matches_fixed_source_manager_reconnect_forwarding_and_uuid() {
                                 writeln!(
                                     &mut observed,
                                     "inactive{attempt}={}",
-                                    u8::from(manager.inactive(&mut script))
+                                    u8::from(manager.inactive())
                                 )
                                 .unwrap();
                             }

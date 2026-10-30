@@ -11,6 +11,9 @@ const RESOURCES: &str = "phase\telapsed_ns\tcalls\tfds\ttasks\trss_kib";
 const MIN_NS: u64 = 120_000_000_000;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "pipewire-host") {
+        return crate::pipewire_host::run(&args[1..]);
+    }
     let (mode, path, check_only) = match args {
         [kind, mode, path] if kind == "pipewire" => (mode, path, false),
         [kind, mode, path, flag] if kind == "pipewire" && flag == "--check-only" => {
@@ -182,7 +185,7 @@ fn summary(text: &str) -> Result<BTreeMap<&str, &str>> {
     }
     Ok(fields)
 }
-fn pixels(bytes: &[u8], marker: u64, bgr: bool) -> Result<()> {
+pub(super) fn pixels(bytes: &[u8], marker: u64, bgr: bool) -> Result<()> {
     if bytes.len() != 2016 {
         return Err("sustained image is not a complete 28x24 RGB/BGR target".into());
     }
@@ -231,7 +234,7 @@ fn percentile(values: &[u64], percent: u64) -> Result<u64> {
         )?)
         .ok_or("invalid percentile")?)
 }
-fn task_identities(text: &str) -> Result<Vec<u64>> {
+pub(super) fn task_identities(text: &str) -> Result<Vec<u64>> {
     let mut ids = text.lines().map(number).collect::<Result<Vec<_>>>()?;
     ids.sort_unstable();
     if ids.is_empty() || ids[0] == 0 || ids.windows(2).any(|pair| pair[0] == pair[1]) {

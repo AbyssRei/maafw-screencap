@@ -4,9 +4,9 @@
 use super::*;
 use crate::backends::linux::manager::{self, native as managed};
 
-struct Convert<'a> {
-    adapter: &'a Adapter,
-    raw: Vec<RawFrame>,
+pub(super) struct Convert<'a> {
+    pub(super) adapter: &'a Adapter,
+    pub(super) raw: Vec<RawFrame>,
 }
 impl<'a> managed::Converter for Convert<'a> {
     type Image = Option<Bgr<'a>>;
@@ -44,7 +44,7 @@ fn reconnects_daemon_manager_and_retains_native_cpu_images() {
 fn forwards_supplied_fd_manager_and_closes_consumed_socket() {
     run(true);
 }
-fn check_close(evidence: managed::Evidence, expected: u64) {
+pub(super) fn check_close(evidence: managed::Evidence, expected: u64) {
     let managed::Evidence::PipeWire(e) = evidence else {
         panic!("missing native PipeWire close evidence")
     };

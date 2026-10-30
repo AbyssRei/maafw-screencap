@@ -80,6 +80,10 @@ pub(in crate::backends::linux) enum Error {
     UnprovenFdOffer,
     InvalidPrivateOwner,
     HostInputRequired(u64),
+    HostInput {
+        operation: &'static str,
+        code: i64,
+    },
     #[cfg(feature = "linux-wlr")]
     Wayland(crate::platform::linux::wayland::Error),
 }
@@ -229,7 +233,7 @@ impl Factory for NativeFactory {
     fn input_features(_: &Arc<NoneInput>) -> u64 {
         0
     }
-    fn inactive_capture(&mut self, unit: &mut Self::Unit) {
+    fn inactive_capture(unit: &mut Self::Unit) {
         match &mut unit.unit {
             Unit::None => {}
             #[cfg(feature = "linux-wlr")]
@@ -240,7 +244,7 @@ impl Factory for NativeFactory {
             } => consumer.inactive(driver),
         }
     }
-    fn inactive_input(&mut self, _: &mut Arc<NoneInput>) {}
+    fn inactive_input(_: &mut Arc<NoneInput>) {}
 }
 
 pub(in crate::backends::linux) trait Converter {
@@ -332,8 +336,10 @@ impl super::NativeManager {
         })
     }
     pub fn inactive_native(&mut self) -> bool {
-        self.inactive(&mut NativeFactory::default())
+        self.inactive()
     }
+}
+impl<F: Factory<Unit = Box<Backend>>> super::Manager<F> {
     pub fn capture_native<C: Converter>(
         &mut self,
         output: &mut C::Image,
@@ -391,6 +397,10 @@ impl super::NativeManager {
         }
     }
 }
+
+#[path = "manager_native_host.rs"]
+mod host;
+pub(in crate::backends::linux) use host::{HostConnection, HostedFactory};
 
 #[cfg(test)]
 #[path = "manager_native_tests.rs"]

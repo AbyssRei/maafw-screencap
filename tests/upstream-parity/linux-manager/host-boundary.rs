@@ -53,7 +53,7 @@ fn retains_capture_and_feature_queries_after_host_input_failure_or_unknown_selec
                         .unwrap()
                 );
                 assert_eq!(output, 7);
-                assert!(manager.inactive(&mut script));
+                assert!(manager.inactive());
                 let mut expected = vec!["capture.inactive"];
                 if known && !input_throws {
                     expected.push("input.inactive");
@@ -231,7 +231,7 @@ fn matches_original_host_input_order_failures_features_and_retained_capture() {
                                             }
                                         })
                                         .map_or(2, u8::from);
-                                    writeln!(&mut observed, "capture{attempt}={captured}\noutput{attempt}={output}\ninactive{attempt}={}", u8::from(manager.inactive(&mut script))).unwrap();
+                                    writeln!(&mut observed, "capture{attempt}={captured}\noutput{attempt}={output}\ninactive{attempt}={}", u8::from(manager.inactive())).unwrap();
                                 }
                                 drop(manager);
                                 writeln!(&mut observed, "events={}", script.take().join(","))
