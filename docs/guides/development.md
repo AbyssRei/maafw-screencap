@@ -55,6 +55,8 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
+DesktopDupWindow 新增独立原版进程与 Rust 的 38 场景原生几何矩阵，由 `upstream-parity desktop-dup` 显式编排。本机原版与 Rust 各完成 76 次截图，包含四边 ±1/±7/±8/±9、精确全屏、带边框 popup、普通窗口、平移和过大窗口；`upstream-trace desktop-geometry <外部 window-geometry 目录> [--check-only]` 独立复核完整客户区、外框、WINDOWPOS、380 个快照、全幅已知图样和一致的 16×16 更新标记、152 份关闭后持帧文件及 Rust 图像 owner 归零。原版 ROI 实际保留整屏 BGR Mat 行距，文件按目标行导出；Rust 显式安全复制取得紧密目标行距，两种布局分别记录，不因导出文件紧密就声称原生 ROI 紧密。每侧先调用其真实 helper 并等待异步调整完成，截图期间不得重复调整；不改变原版预热、等待、整屏转换和裁剪时点。该结果限本机单输出、96 DPI、底部任务栏的调整完成后捕获，不代替首次调整仍在途的截图、多 DPI/任务栏/输出、完整故障矩阵或 P1。原生依赖明确重放归档 OpenCV/MaaUtils/Boost；新增 Actions 编排的原生结果待运行。
+
 ScreenDC 新增显式原生几何矩阵，由 `upstream-parity screen-dc` 在独立进程中编排；本机 38 个场景、双方 76 个原生窗口及 152 次实际截图已通过，380 份原生几何快照和全部 BGR 文件亦由 `cargo xtask upstream-trace screen-geometry <外部目录> [--check-only]` 独立复算。覆盖客户区四边 ±1/±7/±8/±9、精确全屏、客户区匹配但外框不同、普通窗口的工作区/任务栏范围、评审中的平移和过大窗口。每侧先直接调用其真实几何 helper，等待自有窗口的异步位置消息完成，再沿未修改的 ScreenDC 完整路径连续取两帧；断言完整客户区及外框、原生 WINDOWPOS 消息、全幅已知像素、重复捕获不再校正、GDI 清理及窗口关闭后的独立 CPU owner。它验证校正完成后的捕获，不代替首次异步校正尚在途时的截图行为或完整调用链。
 
 该自有窗口夹具在实际 UI owner 上设置及查询几何，复制请求后才投递，关闭时 join；不改变被测 helper、捕获或等待逻辑。首次带边框窗口有 38 个角部像素不符，原失败、原始文件、源码和 DLL 独立保留；另设 `DWMWCP_DONOTROUND` 后全幅断言通过，不忽略边缘像素。随后普通窗口受原生最大 tracking size 约束，未达到请求的客户区高度，夹具前提失败亦保留；现由自有 WindowProc 显式允许该次请求的最大尺寸，记录实际 tracking 尺寸及方角属性 HRESULT。当前批次使用单显示器、底部任务栏和 96 DPI；其他任务栏位置、自动隐藏、多显示器负原点、不同 DPI、最大化/最小化、DesktopDupWindow/manager 转发和 P1 完整验收仍待完成。原生依赖明确重放已归档 OpenCV/MaaUtils/Boost，不据此声称新一轮原生依赖在线验收。新增 CI 编排尚待运行。

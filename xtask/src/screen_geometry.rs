@@ -20,6 +20,12 @@ struct Report {
     scope: &'static str,
 }
 pub fn run(args: &[String]) -> Result<()> {
+    run_backend(args, false)
+}
+pub fn run_desktop(args: &[String]) -> Result<()> {
+    run_backend(args, true)
+}
+fn run_backend(args: &[String], desktop: bool) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
@@ -31,7 +37,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
     };
     let directory = records::external_root(Path::new(path))?;
-    let report = validate(&directory)?;
+    let report = validate(&directory, desktop)?;
     let path = directory.join("geometry-validation.json");
     if check_only && path.exists() {
         if records::read::<serde_json::Value>(&path)? != serde_json::to_value(&report)? {
@@ -40,9 +46,15 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check_only {
         records::create_json(&path, &report)?;
     }
-    println!(
-        "ScreenDC native geometry cases=38 sides=76 captures=152 snapshots=380 known_pixels=1 complete_positions=1 passed"
-    );
+    if desktop {
+        println!(
+            "DesktopDupWindow native geometry cases=38 sides=76 captures=152 snapshots=380 known_pixels=1 complete_positions=1 retained_files=152 native_roi_stride=1 image_owners_released=1 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "ScreenDC native geometry cases=38 sides=76 captures=152 snapshots=380 known_pixels=1 complete_positions=1 passed"
+        );
+    }
     Ok(())
 }
 fn number(value: &str) -> Result<i64> {
@@ -103,7 +115,11 @@ fn compare(before: &Snapshot, after: &Snapshot) -> Result<[i64; 4]> {
         desired[2] + (before[10] - client[2]),
         desired[3] + (before[11] - client[3]),
     ];
-    if screen(after)? != desired
+    if after[0..8] != before[0..8]
+        || after[12..14] != before[12..14]
+        || after[18..20] != before[18..20]
+        || after[26..31] != before[26..31]
+        || screen(after)? != desired
         || after[8..12] != outer
         || after[20]
             != before[20]
@@ -160,10 +176,40 @@ fn expected_cases(monitor: [i64; 4], work: [i64; 4]) -> Vec<(String, i64, [i64; 
     ]);
     cases
 }
-fn validate(root: &Path) -> Result<Report> {
-    let case_text = fs::read_to_string(root.join("cases.tsv"))?;
-    let snapshot_text = fs::read_to_string(root.join("snapshots.tsv"))?;
-    let resource_text = fs::read_to_string(root.join("resources.tsv"))?;
+fn validate(root: &Path, desktop: bool) -> Result<Report> {
+    let mut inputs = Vec::new();
+    let mut read = |name: &str| -> Result<String> {
+        inputs.push(records::artifact(root, &root.join(name))?);
+        let text = fs::read_to_string(root.join(name))?;
+        if !text.ends_with('\n') {
+            return Err("incomplete geometry record".into());
+        }
+        Ok(text)
+    };
+    let (case_text, snapshot_text, resource_text) = if desktop {
+        let cases = read("source-cases.tsv")?;
+        if read("rust-cases.tsv")? != cases {
+            return Err("source/Rust case definitions differ".into());
+        }
+        let snapshots = read("source-snapshots.tsv")? + &read("rust-snapshots.tsv")?;
+        let source = read("source-resources.tsv")?;
+        let rust = read("rust-resources.tsv")?;
+        if source.lines().count() != 38 || rust.lines().count() != 38 {
+            return Err("incomplete separate resource records".into());
+        }
+        let resources = source
+            .lines()
+            .zip(rust.lines())
+            .map(|(s, r)| format!("{s}\n{r}\n"))
+            .collect();
+        (cases, snapshots, resources)
+    } else {
+        (
+            read("cases.tsv")?,
+            read("snapshots.tsv")?,
+            read("resources.tsv")?,
+        )
+    };
     let cases = table(&case_text, 7)?;
     let rows = table(&snapshot_text, 34)?;
     let resources = table(&resource_text, 4)?;
@@ -200,10 +246,9 @@ fn validate(root: &Path) -> Result<Report> {
         .get(&(0, "source", "setup"))
         .ok_or("initial geometry snapshot missing")?;
     let definitions = expected_cases(first[0..4].try_into()?, first[4..8].try_into()?);
-    let mut inputs = ["cases.tsv", "snapshots.tsv", "resources.tsv"]
-        .into_iter()
-        .map(|name| records::artifact(root, &root.join(name)))
-        .collect::<Result<Vec<_>>>()?;
+    if desktop {
+        desktop_records(root, &snapshots, &mut inputs)?;
+    }
     for (index, definition) in cases.iter().enumerate() {
         let (name, style, rectangle) = &definitions[index];
         if usize::try_from(number(definition[0])?)? != index
@@ -294,9 +339,23 @@ fn validate(root: &Path) -> Result<Report> {
                 if bytes.len() != length {
                     return Err("actual BGR readable length differs".into());
                 }
+                let marker = if desktop {
+                    let marker = bytes.get(..3).ok_or("missing in-target marker")?;
+                    if marker != [0x1a, 0x2b, 0x3c] && marker != [0x4e, 0x5f, 0x60] {
+                        return Err("unknown native marker palette".into());
+                    }
+                    Some(marker)
+                } else {
+                    None
+                };
                 for (y, row) in bytes.chunks_exact(stride).enumerate() {
                     for (x, pixel) in row.as_chunks::<3>().0.iter().enumerate() {
-                        let expected: &[u8] = if x < width / 3 {
+                        let expected: &[u8] = if let Some(marker) = marker
+                            && x < 16
+                            && y < 16
+                        {
+                            marker
+                        } else if x < width / 3 {
                             &[0x1f, 0x53, 0xa7]
                         } else if y < height / 2 {
                             &[0xb9, 0x4d, 0x27]
@@ -315,6 +374,13 @@ fn validate(root: &Path) -> Result<Report> {
                         root,
                         &root.join(format!("{name}.{extension}")),
                     )?);
+                }
+                if desktop {
+                    let held = root.join(format!("{name}.held.bgr"));
+                    if fs::read(&held)? != bytes {
+                        return Err("held target differs after native/window close".into());
+                    }
+                    inputs.push(records::artifact(root, &held)?);
                 }
             }
         }
@@ -342,8 +408,98 @@ fn validate(root: &Path) -> Result<Report> {
         snapshots: 380,
         resource_rows: 76,
         inputs,
-        scope: "Native fixture geometry and independently checked recorded BGR pixels; test execution separately asserts CPU owners after close. Does not validate DesktopDupWindow, other taskbar/DPI/monitor environments, full call chains or P1 acceptance.",
+        scope: if desktop {
+            "Native DesktopDupWindow post-correction 38-case geometry, original source twice and Rust twice per case in separate executions, complete target/marker pixels, actual full-output source ROI stride versus packed exported/Rust rows, held bytes after native/window close and Rust image owner counts. Original default warmup/wait/full conversion/crop remain. Does not accept first-capture asynchronous correction races, all DPI/taskbar/output/resource faults, original mapped-view safety or full P1."
+        } else {
+            "Native fixture geometry and independently checked recorded BGR pixels; test execution separately asserts CPU owners after close. Does not validate DesktopDupWindow, other taskbar/DPI/monitor environments, full call chains or P1 acceptance."
+        },
     })
+}
+
+fn desktop_records(
+    root: &Path,
+    snapshots: &BTreeMap<(usize, &str, &str), Snapshot>,
+    inputs: &mut Vec<records::Artifact>,
+) -> Result<()> {
+    let mut read = |name: &str| -> Result<String> {
+        inputs.push(records::artifact(root, &root.join(name))?);
+        let text = fs::read_to_string(root.join(name))?;
+        if !text.ends_with('\n') {
+            return Err("incomplete desktop native record".into());
+        }
+        Ok(text)
+    };
+    for side in ["source", "rust"] {
+        let text = read(&format!("{side}-markers.tsv"))?;
+        let rows = table(&text, 5)?;
+        if rows.len() != 38 {
+            return Err("incomplete desktop marker records".into());
+        }
+        for (index, row) in rows.iter().enumerate() {
+            if usize::try_from(number(row[0])?)? != index
+                || row[1] != side
+                || row[2].parse::<u64>()? == 0
+                || row[3].parse::<u64>()? == 0
+                || number(row[4])? != 0
+            {
+                return Err("native marker identity/presentation/error differs".into());
+            }
+        }
+    }
+    let text = read("source-native-layouts.tsv")?;
+    let rows = table(&text, 7)?;
+    if rows.len() != 76 {
+        return Err("incomplete actual source ROI layouts".into());
+    }
+    for (ordinal, row) in rows.iter().enumerate() {
+        let index = ordinal / 2;
+        let values = row.iter().map(|v| number(v)).collect::<Result<Vec<_>>>()?;
+        let snapshot = snapshots
+            .get(&(index, "source", "corrected"))
+            .ok_or("source corrected snapshot missing")?;
+        let target = screen(snapshot)?;
+        let width = target[2] - target[0];
+        let height = target[3] - target[1];
+        let native_step = (snapshot[2] - snapshot[0])
+            .checked_mul(3)
+            .ok_or("native row overflow")?;
+        let packed = width.checked_mul(3).ok_or("packed row overflow")?;
+        let span = packed.checked_mul(height).ok_or("packed span overflow")?;
+        if values
+            != [
+                i64::try_from(index)?,
+                i64::try_from(ordinal % 2)?,
+                width,
+                height,
+                native_step,
+                packed,
+                span,
+            ]
+        {
+            return Err("actual original ROI step or packed file layout differs".into());
+        }
+    }
+    let text = read("rust-owners.tsv")?;
+    let rows = table(&text, 4)?;
+    if rows.len() != 38 {
+        return Err("incomplete target owner records".into());
+    }
+    for (index, row) in rows.iter().enumerate() {
+        let values = row.iter().map(|v| number(v)).collect::<Result<Vec<_>>>()?;
+        if values[0] != i64::try_from(index)?
+            || values[1] < 0
+            || values[2] != values[1].checked_add(2).ok_or("owner overflow")?
+            || values[3] != values[1]
+        {
+            return Err("independent target owner retention/release differs".into());
+        }
+    }
+    if read("rust-result.txt")?
+        != "cases=38\ncaptures=76\nretained_after_close=76\nknown_pixels=1\nrepeated_geometry=0\nimage_owners_released=1\n"
+    {
+        return Err("desktop geometry completion missing".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]

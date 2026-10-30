@@ -6,6 +6,10 @@ use super::*;
 #[path = "desktop_fullscreen_tests.rs"]
 mod fullscreen;
 
+#[cfg(all(feature = "prototype-windows", feature = "windows-desktop-dup-window"))]
+#[path = "desktop_geometry_tests.rs"]
+mod native_geometry;
+
 #[cfg(feature = "prototype-windows")]
 #[derive(Debug)]
 enum ProbeError {

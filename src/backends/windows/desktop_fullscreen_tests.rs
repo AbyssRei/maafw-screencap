@@ -9,7 +9,7 @@ use crate::backends::windows::{
 use crate::platform::windows::{geometry, window_api::SystemWindow};
 use std::{error::Error, fs::File, io::Write, path::Path};
 
-fn known(bytes: &[u8], width: usize, height: usize, stride: usize) -> bool {
+pub(super) fn known(bytes: &[u8], width: usize, height: usize, stride: usize) -> bool {
     let Some(row) = width.checked_mul(3) else {
         return false;
     };

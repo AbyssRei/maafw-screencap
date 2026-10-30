@@ -11,6 +11,9 @@ const RESOURCES: &str = "phase\telapsed_ns\tcalls\tfds\ttasks\trss_kib";
 const MIN_NS: u64 = 120_000_000_000;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "desktop-geometry") {
+        return crate::screen_geometry::run_desktop(&args[1..]);
+    }
     if args
         .first()
         .is_some_and(|kind| kind == "macos-capture-stages")

@@ -1,6 +1,6 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-// Unmodified U source in a separate process: its mapped-view lifetime is unsafe.
+// Pinned F source in a separate process: its mapped-view lifetime is unsafe.
 #include "Screencap/DesktopDupWindowScreencap.h"
 #include "Screencap/HwndUtils.hpp"
 #include "print-thread.h"
@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <climits>
 #include <stdexcept>
+#include <string>
+#include <vector>
 #include <opencv2/core.hpp>
 #include <wrl/client.h>
 #include <dwmapi.h>
@@ -47,6 +49,7 @@ bool known(const cv::Mat& image, bool inside = false)
     }
     return true;
 }
+#include "desktop-geometry.hpp"
 }
 int wmain(int argc, wchar_t** argv)
 {
@@ -56,8 +59,9 @@ int wmain(int argc, wchar_t** argv)
     const bool fullscreen=mode==L"window-fullscreen";
     const bool workarea=mode==L"window-workarea";
     const bool geometry_case=fullscreen || workarea;
-    if ((mode != L"desktop" && mode != L"window" && mode != L"default-output" && !geometry_case) || !output.is_absolute() || !std::filesystem::is_directory(output)) { return 1; }
+    if ((mode != L"desktop" && mode != L"window" && mode != L"default-output" && mode != L"window-geometry" && !geometry_case) || !output.is_absolute() || !std::filesystem::is_directory(output)) { return 1; }
     try {
+        if(mode==L"window-geometry"){return desktop_geometry_matrix(output);}
         Fixture fixture;
         const auto created = mfs_print_thread_fixture(96,64,0,0,0,0,MFS_RENDER_DISABLE_TRANSITIONS | MFS_RENDER_TOPMOST,&fixture.value);
         if (created != 0) { std::cout << "fixture_create=" << created << std::endl; return 2; }
