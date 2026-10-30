@@ -4,6 +4,7 @@
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 #[derive(Clone, Debug)]
 pub(crate) struct Geometry {
+    pub count: u32,
     pub width: usize,
     pub height: usize,
     pub window: u32,
@@ -81,6 +82,7 @@ pub(crate) fn parse(text: &str) -> Result<Geometry> {
         return Err("owned patch lies outside original first-display output".into());
     }
     Ok(Geometry {
+        count,
         width,
         height,
         window,

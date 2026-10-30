@@ -18,6 +18,7 @@
 #include <cmath>
 #include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <libproc.h>
 #include <limits>
 #include <mach/mach.h>
@@ -261,7 +262,7 @@ void external_window(const std::filesystem::path& directory,const char* argument
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==3 || argc==4,"usage: source-context <windows|display|scene|external-window> <artifact directory> [window ID]");
+        require(argc>=3 && argc<=5,"usage: source-context <mode> <artifact directory> [window ID] [host geometry snapshot]");
         require([NSThread isMainThread],"AppKit context requires the process main thread");
         if(!CGPreflightScreenCaptureAccess()) {
             std::cerr<<"missing_environment: Screen Recording authorization unavailable; no prompt requested\n";
@@ -282,6 +283,7 @@ int main(int argc,char** argv) {
             else if(mode=="scene") { scene(app,directory); }
             else if(mode=="display-scene") { display_patch_scene(app,directory); }
             else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
+            else if(mode=="display-patch-host-premise" && argc==5) { display_patch_host_premise(directory,argv[3],argv[4]); }
             else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
             else if(mode=="manager-external-window" && argc==4) { manager_external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }
