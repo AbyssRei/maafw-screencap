@@ -10,7 +10,7 @@
 
 1. fork 已修正并正常推送：普通窗口按 rcWork 校正，仅 WS_POPUP 客户区屏幕矩形精确等于 rcMonitor 时豁免，删除外窗口 ±8px 条件，保留失败、调整优先级和 flags。其独立程序的 52 个脚本及 3 个真实几何场景通过，首次屏幕像素见证失败仍保留；这不等于[计划 §14.3](../plans/maafw-screencap-extraction-plan.md#143-三阶段验收与-pr-专项矩阵)的完整截图验收。
 2. `cargo xtask reference prepare-fork --revision client-exact-a434521e --head a434521e7f49cff97f92117add554038b523eef9` 已准备真实 commit/tree、三条提交、75 份来源与精确四文件累计差异。旧 `reference prepare` 和固定常量继续校核历史 U/PR；新记录保存在独立 `baselines/f/`、修订级补丁目录，由索引的 `selected_baseline` 指向。新原生批次只消费该明确选择的 F，缺失时拒绝，不回退旧来源。`reference verify` 仍检查历史记录；来源准备本身不重新登记或改写旧结果。
-3. `geometry.rs` 与 WindowApi 脚本已同步，55 个客户区/任务栏/边界/失败案例及完整 C++/Rust 调用序列匹配，既有 helper 检查也通过；私有适配边界由六槽改为八槽以传递实际 rcWork/rcMonitor，并在调用前校核布局，旧适配器明确拒绝。受影响 ScreenDC、DesktopDupWindow、manager/factory 的完整新版捕获仍待验收；保留转换、等待和清理时点，无变化的其他平台旧证据须核对来源及范围后才能引用。
+3. `geometry.rs` 与 WindowApi 脚本已同步，55 个客户区/任务栏/边界/失败案例及完整 C++/Rust 调用序列匹配，既有 helper 检查也通过；私有适配边界由六槽改为八槽以传递实际 rcWork/rcMonitor，并在调用前校核布局，旧适配器明确拒绝。本机显式重放归档 OpenCV/MaaUtils/Boost 输入，从不可变 F 快照重建的适配器另通过 20 轮普通受控窗口 ScreenDC 对照，40 份实际 BGR 文件逐字节匹配已知图样，关闭后持帧断言通过；这不表示新的原生依赖在线验收或精确全屏等专项截图矩阵已通过。受影响 ScreenDC、DesktopDupWindow、manager/factory 的完整新版捕获仍待验收；保留转换、等待和清理时点，无变化的其他平台旧证据须核对来源及范围后才能引用。
 4. 按用户提出的本地历史重写，将修复及必要来源/测试调整放入 P1 相关提取提交或紧邻提交；当前 helper 首次迁移提交为 `e8e6dbf7358dffea569222134ce8a2e6223130b6`，作为定位线索，不能只改其源码而漏掉后继测试/来源依赖。先检查 refs/worktrees 并外置保全 bundle、未提交/未跟踪工作和旧新映射，再验证最终整树；不得覆盖同时进行的 macOS 或其他工作。此安排不包含强制推送授权。
 
 P1 尚未完整验收；P2 来源冻结和 P3 SDK/原生现代化门禁不因该修订提前通过。原 FramePool 包装已知颜色失败、WGC 卸载异常及其他历史失败继续独立保留。本节说明待实施职责，不新增或宣称可执行的 F 命令。
