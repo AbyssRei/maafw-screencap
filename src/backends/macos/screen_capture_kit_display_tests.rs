@@ -7,13 +7,24 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
     use std::io::Write;
     let directory = directory();
     let bytes = std::fs::read(env::var_os("MFS_P1_MACOS_DISPLAY_GEOMETRY").unwrap()).unwrap();
+    let host_premise = env::var("MFS_P1_MACOS_HOST_GEOMETRY_PREMISE").as_deref() == Ok("1");
+    let source_geometry = if host_premise {
+        assert_eq!(std::fs::read(directory.join("source-geometry-provenance.txt")).unwrap(),
+            b"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n");
+        "source-expected-geometry.tsv"
+    } else {
+        "source-display-geometry.tsv"
+    };
     assert_eq!(
         bytes,
-        std::fs::read(directory.join("source-display-geometry.tsv")).unwrap()
+        std::fs::read(directory.join(source_geometry)).unwrap()
     );
     let geometry = display_geometry::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
     assert_eq!(geometry.window, scene());
     assert!(geometry.pid > 0 && geometry.display > 0);
+    if host_premise {
+        assert_eq!(geometry.count, 1, "host expectation requires one display");
+    }
     std::fs::write(directory.join("rust-display-geometry.tsv"), &bytes).unwrap();
     let adapter = Adapter::open();
     adapter.warm();

@@ -26,10 +26,10 @@ struct OriginalStatus {
     expected_source_files: u32,
     recorded_source_files: u32,
 }
-pub fn run(args: &[String]) -> Result<()> {
+pub fn run(args: &[String], host_premise: bool) -> Result<()> {
     let (path,check_only)=match args {
         [path]=>(path,false),[path,flag] if flag=="--check-only"=>(path,true),
-        _=>return Err("expected upstream-trace macos-display-patch <actual external directory> [--check-only]".into()),
+        _=>return Err("expected upstream-trace <macos-display-patch|macos-display-host-premise> <actual external directory> [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -47,13 +47,19 @@ pub fn run(args: &[String]) -> Result<()> {
         return Err("wrong owned display scene premise".into());
     }
     let original: OriginalStatus = serde_json::from_slice(&read("source-oracle-status.json")?)?;
-    original_status(original)?;
+    original_status(original, host_premise)?;
     let geometry_bytes = read("scene/display-geometry.tsv")?;
     let g = macos_display_geometry::parse(std::str::from_utf8(&geometry_bytes)?)?;
     if g.window != scene.window_id || g.pid != scene.owner_pid {
         return Err("native first-display geometry substituted the owned window/process".into());
     }
-    for name in ["source-display-geometry.tsv", "rust-display-geometry.tsv"] {
+    let source_geometry = if host_premise {
+        host_geometry(&g, &read("source-geometry-provenance.txt")?)?;
+        "source-expected-geometry.tsv"
+    } else {
+        "source-display-geometry.tsv"
+    };
+    for name in [source_geometry, "rust-display-geometry.tsv"] {
         if read(name)? != geometry_bytes {
             return Err("source/Rust native first-display identities differ".into());
         }
@@ -93,11 +99,27 @@ pub fn run(args: &[String]) -> Result<()> {
             }
         }
     }
-    let report = serde_json::json!({"layout_version":1,"source_captures":3,"rust_captures":3,"payloads":18,
+    let mut report = serde_json::json!({"layout_version":1,"source_captures":3,"rust_captures":3,"payloads":18,
         "original_first_display_id":g.display,"owned_window_id":g.window,"owned_pid":g.pid,"width":g.width,"height":g.height,
         "known_owned_patch_region":g.region,"artifacts":artifacts,
         "scope":"Actual unchanged original first-enumerated-display capture and same migrated Rust path, original display width/height configuration preserved. Separate AppKit owner places a 47x31 opaque green window on that actual display using matching NSScreen identity. Native SCDisplay/SCWindow point frames, real pid/window IDs and unchanged source observations fix the interior pixel region. All six source/Rust captures assert the known green patch; complete Rust BGRA-to-BGR conversion and all eighteen immediate/held files are checked. Rust callback/lock/native-input owners end before explicit source semaphore fixture reclamation and acknowledged scene shutdown; CPU owners are read on a joined thread afterward. Other full-desktop pixels are not prescribed or compared across different capture times. Not zero/multiple-display, mixed-scale/Retina, complete format/resource/late-callback coverage or full macOS/P1 acceptance."});
-    let output = root.join("display-patch-validation.json");
+    if host_premise {
+        report
+            .as_object_mut()
+            .unwrap()
+            .remove("original_first_display_id");
+        report["expected_first_display_id"] = g.display.into();
+        report["diagnostic_only"] = true.into();
+        report["paired_acceptance"] = false.into();
+        report["consumer_geometry_queries"] = 0.into();
+        report["live_consumer_display_identity_observed"] = false.into();
+        report["scope"] = "Separate fresh original consumer process without additional native geometry queries, followed by a separate Rust process. Both capture through their unchanged default first-display implementations. Host-owned single-display geometry is an expected premise only: the consumer's actual enumerated display identity was not independently observed. All six captures assert the owned green patch, complete Rust BGRA-to-BGR and eighteen immediate/held payloads; callback/lock/input lifetimes and scene shutdown are checked. This diagnostic does not accept or replace the separately recorded queried variant, prove initialization-history causality, or establish complete display/backend/P1 parity. Shared system-service state and ordering between fixture processes are not controlled.".into();
+    }
+    let output = root.join(if host_premise {
+        "display-host-premise-validation.json"
+    } else {
+        "display-patch-validation.json"
+    });
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
             return Err("saved macOS display patch report differs from actual records".into());
@@ -105,15 +127,28 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "macOS display_patch source_captures=3 rust_captures=3 payloads=18 actual_native_geometry=1 known_owned_patch=6 full_image_rust_conversion=3 retained_cpu_verified=1 full_desktop_known_pixels=0 full_P1_acceptance=0 passed"
-    );
+    if host_premise {
+        println!(
+            "macOS display_host_premise source_captures=3 rust_captures=3 payloads=18 consumer_geometry_queries=0 live_consumer_display_identity_observed=0 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "macOS display_patch source_captures=3 rust_captures=3 payloads=18 actual_native_geometry=1 known_owned_patch=6 full_image_rust_conversion=3 retained_cpu_verified=1 full_desktop_known_pixels=0 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }
-fn original_status(value: OriginalStatus) -> Result<()> {
+fn host_geometry(g: &Geometry, provenance: &[u8]) -> Result<()> {
+    if g.count != 1 || provenance != b"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n" {
+        return Err("host expectation requires one display and explicit unobserved consumer identity".into());
+    }
+    Ok(())
+}
+fn original_status(value: OriginalStatus, host_premise: bool) -> Result<()> {
+    let expected = if host_premise { 8 } else { 7 };
     if !value.original_oracle_passed
-        || value.expected_source_files != 7
-        || value.recorded_source_files != 7
+        || value.expected_source_files != expected
+        || value.recorded_source_files != expected
     {
         return Err("original display oracle failed/incomplete; independent Rust observations cannot accept this pair".into());
     }
@@ -200,34 +235,46 @@ mod tests {
             .collect::<String>();
         traces(&rows, &g).unwrap();
         assert!(
-            original_status(OriginalStatus {
-                original_oracle_passed: false,
-                expected_source_files: 7,
-                recorded_source_files: 1
-            })
+            original_status(
+                OriginalStatus {
+                    original_oracle_passed: false,
+                    expected_source_files: 7,
+                    recorded_source_files: 1
+                },
+                false
+            )
             .is_err()
         );
         assert!(
-            original_status(OriginalStatus {
-                original_oracle_passed: false,
-                expected_source_files: 7,
-                recorded_source_files: 7
-            })
+            original_status(
+                OriginalStatus {
+                    original_oracle_passed: false,
+                    expected_source_files: 7,
+                    recorded_source_files: 7
+                },
+                false
+            )
             .is_err()
         );
         assert!(
-            original_status(OriginalStatus {
+            original_status(
+                OriginalStatus {
+                    original_oracle_passed: true,
+                    expected_source_files: 7,
+                    recorded_source_files: 1
+                },
+                false
+            )
+            .is_err()
+        );
+        original_status(
+            OriginalStatus {
                 original_oracle_passed: true,
                 expected_source_files: 7,
-                recorded_source_files: 1
-            })
-            .is_err()
-        );
-        original_status(OriginalStatus {
-            original_oracle_passed: true,
-            expected_source_files: 7,
-            recorded_source_files: 7,
-        })
+                recorded_source_files: 7,
+            },
+            false,
+        )
         .unwrap();
         let returned_ok = "result=1\nelapsed_ns=7\ntimed_out=0\ncontent_calls=1\nsample_calls=1\ncompleted=1\nsource_failure=0\nnative_error=0\nfault=0\nwait_result=0\nerror_debug=None\n";
         returned(returned_ok).unwrap();
@@ -242,5 +289,58 @@ mod tests {
         ] {
             assert!(traces(&bad, &g).is_err());
         }
+    }
+    #[test]
+    fn rejects_host_expectations_relabelled_as_observed_or_multiple_displays() {
+        let mut g = macos_display_geometry::parse(
+            "1\t17\t640\t480\t0\t0\t640\t480\t91\t7\t100\t100\t47\t31\t1\t2\n",
+        )
+        .unwrap();
+        let provenance = b"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n";
+        host_geometry(&g, provenance).unwrap();
+        assert!(
+            host_geometry(
+                &g,
+                &String::from_utf8_lossy(provenance)
+                    .replace("identity_observed=0", "identity_observed=1")
+                    .into_bytes()
+            )
+            .is_err()
+        );
+        g.count = 2;
+        assert!(host_geometry(&g, provenance).is_err());
+        assert!(
+            original_status(
+                OriginalStatus {
+                    original_oracle_passed: true,
+                    expected_source_files: 8,
+                    recorded_source_files: 8,
+                },
+                false
+            )
+            .is_err()
+        );
+        assert!(
+            original_status(
+                OriginalStatus {
+                    original_oracle_passed: true,
+                    expected_source_files: 7,
+                    recorded_source_files: 7,
+                },
+                true
+            )
+            .is_err()
+        );
+        assert!(
+            original_status(
+                OriginalStatus {
+                    original_oracle_passed: false,
+                    expected_source_files: 8,
+                    recorded_source_files: 8,
+                },
+                true
+            )
+            .is_err()
+        );
     }
 }

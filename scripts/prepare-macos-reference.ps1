@@ -70,7 +70,8 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
     $scene=Join-Path $directory scene
     New-Item -ItemType Directory -Path $directory,$scene|Out-Null
     $server=$null;$serverOut=$null;$serverError=$null
-    $displayPatch=$Name -eq 'rust-macos-display-patch'
+    $hostPremise=$Name -eq 'rust-macos-display-host-premise'
+    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise')
     $originalFailure=$null
     try {
         $info=[Diagnostics.ProcessStartInfo]::new($Executable)
@@ -92,9 +93,13 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $env:MFS_P1_MACOS_SCENE_STOPPED=Join-Path $scene stopped.txt
         $env:MFS_P1_MACOS_RUST_ARTIFACTS=$directory
         $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
+        if($hostPremise){$env:MFS_P1_MACOS_HOST_GEOMETRY_PREMISE='1'}
+        else{Remove-Item Env:MFS_P1_MACOS_HOST_GEOMETRY_PREMISE -ErrorAction SilentlyContinue}
         if($displayPatch){$env:MFS_P1_MACOS_DISPLAY_GEOMETRY=Join-Path $scene display-geometry.tsv}
-        $oracleMode=if($displayPatch){'display-patch'}elseif($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
-        try {Step "$Name-original-oracle" $Executable @($oracleMode,$directory,[string]$identity.window_id)}
+        $oracleMode=if($hostPremise){'display-patch-host-premise'}elseif($displayPatch){'display-patch'}elseif($Name -eq 'rust-macos-manager'){'manager-external-window'}else{'external-window'}
+        $oracleArguments=@($oracleMode,$directory,[string]$identity.window_id)
+        if($hostPremise){$oracleArguments+=$env:MFS_P1_MACOS_DISPLAY_GEOMETRY}
+        try {Step "$Name-original-oracle" $Executable $oracleArguments}
         catch {
             if(-not $displayPatch){throw}
             # Preserve the failed original check. An independent known-patch
@@ -103,13 +108,14 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         }
         if(-not $displayPatch){$env:MFS_P1_MACOS_EXTERNAL_ORACLE=Join-Path $directory external-window.bgr}
         $oracleFiles=@(Get-ChildItem -LiteralPath $directory -File|Where-Object{
-            if($displayPatch){$_.Name -match '^display-(call|held)-[0-2]\.source\.bgr$' -or $_.Name -eq 'source-display-geometry.tsv'}
+            if($hostPremise){$_.Name -match '^display-(call|held)-[0-2]\.source\.bgr$' -or $_.Name -in @('source-expected-geometry.tsv','source-geometry-provenance.txt')}
+            elseif($displayPatch){$_.Name -match '^display-(call|held)-[0-2]\.source\.bgr$' -or $_.Name -eq 'source-display-geometry.tsv'}
             else{$_.Name -eq 'external-window.bgr' -or $_.Name -match '^manager-cycle-[0-9]+-call-[0-9]+\.bgr$'}
         })
-        $expectedOracles=if($displayPatch){7}elseif($Name -eq 'rust-macos-manager'){61}else{1}
+        $expectedOracles=if($hostPremise){8}elseif($displayPatch){7}elseif($Name -eq 'rust-macos-manager'){61}else{1}
         if($displayPatch){Json (Join-Path $directory source-oracle-status.json) ([ordered]@{
             original_oracle_passed=($null -eq $originalFailure)
-            expected_source_files=7;recorded_source_files=$oracleFiles.Count
+            expected_source_files=$expectedOracles;recorded_source_files=$oracleFiles.Count
         })}
         if($oracleFiles.Count -ne $expectedOracles -and -not $originalFailure){throw 'Incomplete original oracle files before Rust execution'}
         $oracleRecords=@($oracleFiles|ForEach-Object{Artifact $_.FullName})
@@ -150,7 +156,8 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         }
     }
     if($displayPatch){
-        try {Step macos-display-patch-records $ConfigureTool @('upstream-trace','macos-display-patch',$directory)}
+        $recordKind=if($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
+        try {Step "$recordKind-records" $ConfigureTool @('upstream-trace',$recordKind,$directory)}
         catch {if(-not $originalFailure){throw}}
         if($originalFailure){throw $originalFailure}
     }
