@@ -45,5 +45,20 @@ target_compile_definitions(mfs_pipewire_dma_fixture PRIVATE _GNU_SOURCE)
 target_compile_options(mfs_pipewire_dma_fixture PRIVATE -Wall -Wextra -Werror)
 set_target_properties(mfs_pipewire_dma_fixture PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 target_link_libraries(mfs_pipewire_source_context PRIVATE mfs_pipewire_dma_fixture)
+if(DEFINED MFS_MEOJSON_INCLUDE)
+    add_executable(mfs_pipewire_kwin_native_context source-context.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp")
+    target_compile_definitions(mfs_pipewire_kwin_native_context PRIVATE _GNU_SOURCE
+        MFS_PW_KWIN_NATIVE_API MAA_CONTROL_UNIT_EXPORTS MAA_TOOLKIT_EXPORTS MAA_VERSION="mfs-p1-kwin-native")
+    target_include_directories(mfs_pipewire_kwin_native_context PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/kwin-overlay"
+        "${CMAKE_CURRENT_BINARY_DIR}/linux-manager/config-overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../linux-manager/config-overlay"
+        "${CMAKE_CURRENT_BINARY_DIR}/linux-manager" "${MFS_MEOJSON_INCLUDE}"
+        "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit"
+        "${MFS_DRM_INCLUDE}" ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mfs_pipewire_kwin_native_context PRIVATE PkgConfig::PIPEWIRE
+        Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS} mfs_pipewire_dma_fixture)
+endif()
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "Complete fixed PipeWireScreencap header/cpp compiled without source edits. Only the exact screenshot base declaration is extracted; input/ConfigBase/meojson are excluded. Common/Conf selects a private namespace and logging is suppressed in explicit overlay headers. Native PipeWire/SPA/DRM and OpenCV remain real. This source context is not Rust parity or full framework acceptance. The harness balances each source constructor's global pw_init after destruction; the original destructor itself does not call pw_deinit.\n")

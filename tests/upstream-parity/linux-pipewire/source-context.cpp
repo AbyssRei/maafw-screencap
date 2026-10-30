@@ -42,11 +42,15 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#if defined(MFS_PW_KWIN_NATIVE_API)
+#include "kwin-native-owner.hpp"
+#else
 namespace MfsOriginalPipeWire {
 #define MFS_MANAGER_HOST_INPUT
 #include "../linux-manager/native-shim.h"
 #undef MFS_MANAGER_HOST_INPUT
 }
+#endif
 
 namespace {
 using Source=MfsOriginalPipeWire::PipeWireScreencap;
@@ -823,7 +827,9 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
 #include "dma-fixtures.hpp"
 #include "manager-context.hpp"
 #include "manager-host-context.hpp"
+#if !defined(MFS_PW_KWIN_NATIVE_API)
 #include "manager-host-offer-context.hpp"
+#endif
 #include "sustained-context.hpp"
 void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
@@ -927,10 +933,20 @@ void reinitialization_context(const char* socket,uint32_t node,const std::filesy
     }
 }
 }
+#if defined(MFS_PW_KWIN_NATIVE_API)
+#include "kwin-native-host.hpp"
+#endif
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
         verify_runtime();
+#if defined(MFS_PW_KWIN_NATIVE_API)
+        require(argc==5 && std::string_view(argv[1])=="--kwin-native","usage: --kwin-native socket node artifacts");
+        uint32_t node=0;const std::string_view id=argv[3];
+        const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
+        require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid native KWin node");
+        manager_kwin_native_context(argv[2],node,argv[4]);return 0;
+#else
         if(argc==3 && std::string_view(argv[1])=="--manager-host-offer") {
             manager_host_offer_context(argv[2]);return 0;
         }
@@ -1114,6 +1130,7 @@ int main(int argc,char** argv) {
         save(held.back().image,artifacts/"last-after-shutdown.bgr");
         std::cout<<"original PipeWire source cycles=20 captures=60 retained=60 passed\n";
         return 0;
+#endif
     } catch(const std::exception& error) {
         std::cerr<<"source context failure: "<<error.what()<<'\n';
         return 1;

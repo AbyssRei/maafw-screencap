@@ -51,6 +51,8 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-source.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-features.inc
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-features.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-info.inc
+    Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-info.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-config.inc
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-config.inc) -Destination $saved;Save $saved
     Step linux-manager-model-linkage ldd @($manager)
@@ -65,6 +67,21 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $executable -Destination $saved
     Save $saved
     Step pipewire-reference-linkage ldd @($executable)
+    $kwin=Join-Path $refBuild mfs_pipewire_kwin_native_context
+    $saved=Join-Path $refInputs mfs_pipewire_kwin_native_context
+    Copy-Item -LiteralPath $kwin -Destination $saved;Save $saved
+    Step kwin-native-source-linkage ldd @($kwin)
+    $env:MFS_P1_KWIN_NATIVE_SOURCE=$kwin
+    $kwinDeclarations=Join-Path $refInputs kwin-native-abi-source
+    foreach($relative in @('source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp',
+        'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h','source/MaaLinuxControlUnit/Base/UnitBase.h',
+        'source/MaaLinuxControlUnit/Base/Config.h','include/MaaControlUnit/ControlUnitAPI.h',
+        'include/MaaControlUnit/KWinControlUnitAPI.h','include/MaaControlUnit/MaaControlUnitDef.h',
+        'include/MaaToolkit/Portal/MaaToolkitPortal.h')) {
+        $saved=Join-Path $kwinDeclarations $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $FixedUpstream $relative) -Destination $saved;Save $saved
+    }
     $adapter=Join-Path $refBuild libmfs_pipewire_opencv.so
     $saved=Join-Path $refInputs libmfs_pipewire_opencv.so
     Copy-Item -LiteralPath $adapter -Destination $saved
