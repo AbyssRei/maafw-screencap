@@ -96,6 +96,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'native-task-diagnostic-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native task diagnostic empty_stream_failure=1 empty_file=1 bytes_file=1 missing_file=1 real_output_failure=1 passed') {
             throw 'Expected empty/readable/missing task inputs and a real diagnostic write-error control'
         }
+        if($Name -eq 'rust-task-retirement-read-fixture') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('native Rust task observer exact_read_ESRCH=1 strict_read_rejected=1 known_joined_source=1 fresh_stat_and_directory_absent=1 real_live_path_refused=1 real_EMFILE_refused=1 fd_limit_restored=1 exact_fd_task_owners_closed=1 native_capture=0 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'Expected one isolated Rust procfs causal test: real held-stat ESRCH, live-path/EMFILE refusal and restored limits/owners'
+            }
+        }
+        if($Name -eq 'rust-task-observer-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;') {
+            throw 'Expected four strict Rust task read/parser/identity/absence controls'
+        }
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
         }
@@ -480,6 +489,13 @@ try {
         try { Step native-task-read-exit-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-read-exit-fixture',(Join-Path $referenceArtifacts task-read-exit)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step native-task-retirement-read-fixture timeout @('--signal=TERM','--kill-after=5s','30s',$sourceExecutable,'--task-retirement-read-fixture',(Join-Path $referenceArtifacts task-retirement-read)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try {
+            $env:MFS_P1_RUST_TASK_OBSERVER_ARTIFACTS=Join-Path $referenceArtifacts rust-task-retirement-read
+            Step rust-task-retirement-read-fixture timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::task_observer::native_fixture::validates_joined_read_esrch_without_accepting_live_or_unobservable_paths','--','--exact','--ignored','--test-threads=1','--nocapture')
+        } catch { $failed=$true; Write-Host $_.Exception.Message }
+        finally {if(Test-Path -LiteralPath $env:MFS_P1_RUST_TASK_OBSERVER_ARTIFACTS){Get-ChildItem -LiteralPath $env:MFS_P1_RUST_TASK_OBSERVER_ARTIFACTS -Recurse -File|ForEach-Object{Save $_.FullName}}}
+        try { Step rust-task-observer-controls timeout @('--signal=TERM','--kill-after=5s','30s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::task_observer::tests::','--','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         $managerTest=$null
         try {
