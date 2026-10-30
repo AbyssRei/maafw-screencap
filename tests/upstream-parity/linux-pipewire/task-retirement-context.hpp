@@ -132,16 +132,42 @@ void task_retirement_read_fixture(const std::filesystem::path& directory) {
             "unknown task or missing baseline identity accepted");
         input.clear();input.close();require(!input.fail(),"cannot close held retired-task stream");
         live.finish();require(live.joined,"live negative-control task did not join");
+        // The SECOND owned worker is now joined too. Select its fully absent
+        // procfs state for this causal fixture, just as for the first worker.
+        // This never waits for native capture cleanup or changes the 100ms
+        // production resource gate. Unexpected/open/close errors still fail.
+        const auto live_deadline=std::chrono::steady_clock::now()+std::chrono::seconds(2);
+        for(;;) {
+            const auto proof=probe_task_absence(live_before->id);
+            if(proved_task_absent(proof)) {break;}
+            require(proof.stat_opened && proof.close_error==0,"unexpected joined negative-control task probe error");
+            require(std::chrono::steady_clock::now()<live_deadline,"joined negative-control task did not retire");
+            std::this_thread::yield();
+        }
     }
-    require(count_entries("/proc/self/fd")==baseline_fds && task_ids()==baseline_tasks,
+    const auto final_fds=count_entries("/proc/self/fd");
+    const auto final_tasks=task_ids();
+    // Preserve the observed result BEFORE any diagnostic IO. Later samples
+    // cannot rescue a failed descriptor/task identity assertion.
+    {
+        std::ofstream state(directory/"final-resources.txt");
+        state<<"baseline_fds="<<baseline_fds<<"\nfinal_fds="<<final_fds<<"\nbaseline_tasks=";
+        for(const auto& id:baseline_tasks) {state<<id<<',';}
+        state<<"\nfinal_tasks=";for(const auto& id:final_tasks) {state<<id<<',';}state<<'\n';
+        state.close();require(state.good(),"cannot preserve causal fixture final resources");
+    }
+    if(final_fds!=baseline_fds || final_tasks!=baseline_tasks) {
+        task_snapshot(directory,"retirement-read-final-mismatch",final_tasks);
+    }
+    require(final_fds==baseline_fds && final_tasks==baseline_tasks,
         "retirement read fixture did not restore exact fd/task identities");
     std::ofstream saved(directory/"observations.txt");
     saved<<"native_held_stat_ESRCH=1\njoined_before_read=1\nknown_source_identity=1\n"
         <<"fresh_stat_errno="<<retired_probe.stat_error<<"\nfresh_directory_errno="<<retired_probe.directory_error
         <<"\nreal_live_path_refused=1\nreal_EMFILE="<<limited_probe.stat_error
-        <<"\nsynthetic_metadata_negatives="<<synthetic_negatives<<"\nfd_limit_restored=1\nresources_balanced=1\n";
+        <<"\nsynthetic_metadata_negatives="<<synthetic_negatives<<"\nfd_limit_restored=1\nboth_joined_controls_absent=1\nresources_balanced=1\n";
     saved.close();require(saved.good(),"cannot save retirement read fixture observations");
     std::cout<<"native task retirement-read exact_ESRCH=1 joined_before_read=1 fresh_stat_and_directory_absent=1"
         <<" real_live_path_refused=1 real_EMFILE_refused=1 synthetic_metadata_negatives="<<synthetic_negatives
-        <<" fd_limit_restored=1 resources_balanced=1 passed\n";
+        <<" fd_limit_restored=1 both_joined_controls_absent=1 resources_balanced=1 passed\n";
 }
