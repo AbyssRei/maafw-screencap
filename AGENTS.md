@@ -6,6 +6,8 @@ P0 has passed the plan section 16 preparation gate for its recorded inputs. P1 i
 
 Original FramePool minimized-wrapper known-color failures and the earlier WGC DLL-unload access violation remain recorded failures. Matching legacy bytes, successful prototypes and diagnostic negative classifications do not turn failed capture assertions into passes. Preserve earlier failed records separately from later results.
 
+The user requested a historical local-failure reaudit. A confirmed environment-premise failure must be removed from unresolved implementation defects, with its effective attribution corrected and recoverable raw evidence stored externally. Do not turn the failed execution into a pass or infer its cause from later source revisions. The confirmed display-off ScreenDC trial has been reclassified after unchanged pre-fix source/adapter/toolchain replay; other failures retain their own evidence and status. Detailed scope is maintained in the development guide.
+
 Read these authorities before changing the corresponding area. Current component status, safety adaptations, source-model boundaries and remaining native matrices are maintained in the development guide and external records; consult that area before treating a slice as complete.
 
 | Authority | Responsibility |
