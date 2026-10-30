@@ -133,8 +133,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected the complete native Rust shared-client/reconnect test and retained raw/BGR images'
             }
         }
-        if($Name -eq 'rust-wlr-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
-            throw 'Expected one actual native None/unimplemented-manager control'
+        if($Name -eq 'rust-wlr-manager-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 2 passed; 0 failed; 0 ignored;'){
+            throw 'Expected native None/unimplemented and missing host input provider controls'
         }
         $status='passed'
     }finally{$checks.Add([ordered]@{name=$Name;status=$status;log=(Artifact $log)});Write-Host "${Name}: $status"}
