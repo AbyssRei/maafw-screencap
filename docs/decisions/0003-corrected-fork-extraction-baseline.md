@@ -31,4 +31,4 @@ P1 直接迁移修正 fork 的全部截图职责，修复进入 HwndUtils/窗口
 
 改 refs 前检查两个仓库的本地/远端分支、tags 和 worktrees，在同级参考目录保存并验证 Git bundle 或可恢复 ref、未提交/未跟踪工作及旧新提交映射；完成后校核最终整树与预期文件，保留旧 SHA 对应的 CI 证据。本地重写不包含强制推送、远端删除或仓库重建授权。
 
-本次侧会话只修改计划和相关说明，不修改 fork/Rust/xtask 实现、不重写 refs、不提交或推送；主会话接手实现、确切来源锁定、验证及历史整理。完整门禁见[计划 §14.3](../plans/maafw-screencap-extraction-plan.md#143-三阶段验收与-pr-专项矩阵)和[§16](../plans/maafw-screencap-extraction-plan.md#16-实施阶段与退出条件)。
+最初的来源决策侧会话仅调整文档；随后按用户追加授权，侧会话完成 fork 修复、独立回归、正常推送及 PR 更新，没有改写历史或强推。主会话负责新项目的来源工具、Rust 同步、验证及本地历史整理。完整门禁见[计划 §14.3](../plans/maafw-screencap-extraction-plan.md#143-三阶段验收与-pr-专项矩阵)和[§16](../plans/maafw-screencap-extraction-plan.md#16-实施阶段与退出条件)。
