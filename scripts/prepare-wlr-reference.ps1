@@ -11,15 +11,21 @@ function Prepare-WlrReference([string]$FixedUpstream) {
         scope='Fixed original Wlr/WaylandClient/MemfdBuffer screenshot context; private namespace/logging and external random-name provider.'
     })
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
+    . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
+    $meojson=Prepare-MeoJsonReference $refInputs
     Step wlr-protocol-scanner wayland-scanner @('--version')
-    Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)","-DMFS_WLROOTS_PROTOCOL_ROOT=$(Join-Path $wlr.source protocol)")
+    Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)","-DMFS_WLROOTS_PROTOCOL_ROOT=$(Join-Path $wlr.source protocol)","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)")
     Step wlr-reference-build cmake @('--build',$build,'--parallel','4')
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-source.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-features.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-features.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-info.inc
+    Copy-Item -LiteralPath (Join-Path $build linux-manager-info.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-config.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-config.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs native-context-scope.txt
+    Copy-Item -LiteralPath (Join-Path $build native-context-scope.txt) -Destination $saved;Save $saved
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $build $item[0]) -Destination $saved;Save $saved
@@ -33,6 +39,22 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_wlr_source_context
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
     Step wlr-reference-linkage ldd @($executable)
+    $native=Join-Path $build mfs_wlr_native_context
+    $saved=Join-Path $refInputs mfs_wlr_native_context
+    Copy-Item -LiteralPath $native -Destination $saved;Save $saved
+    Step wlr-native-source-linkage ldd @($native)
+    $env:MFS_P1_WLR_NATIVE_SOURCE=$native
+    $declarations=Join-Path $refInputs wlr-native-abi-source
+    foreach($relative in @('source/MaaLinuxControlUnit/Compat/WlRootsControlUnitCompat.cpp',
+        'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h','source/MaaLinuxControlUnit/Base/UnitBase.h',
+        'source/MaaLinuxControlUnit/Base/Config.h','source/MaaLinuxControlUnit/Wayland/WaylandClient.h',
+        'source/MaaLinuxControlUnit/Input/WlrInput.h','source/MaaLinuxControlUnit/Input/WlrInput.cpp',
+        'include/MaaControlUnit/ControlUnitAPI.h','include/MaaControlUnit/WlRootsControlUnitAPI.h',
+        'include/MaaControlUnit/MaaControlUnitDef.h')) {
+        $saved=Join-Path $declarations $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $FixedUpstream $relative) -Destination $saved;Save $saved
+    }
     $adapter=Join-Path $build libmfs_wlr_opencv.so
     $saved=Join-Path $refInputs libmfs_wlr_opencv.so
     Copy-Item -LiteralPath $adapter -Destination $saved;Save $saved
