@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 use crate::backends::linux::pipewire::{Consumer, Conversion, Converter};
+use crate::backends::task_observer::{Task, live_tasks, only_retiring_tasks, task_ids};
 use std::{
     env,
     ffi::CStr,
@@ -49,81 +50,6 @@ impl Drop for BalanceInit {
 }
 fn count(path: &str) -> usize {
     fs::read_dir(path).unwrap().count()
-}
-fn task_ids() -> Vec<std::ffi::OsString> {
-    let mut tasks: Vec<_> = fs::read_dir("/proc/self/task")
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
-    tasks.sort();
-    tasks
-}
-#[derive(Debug)]
-struct Task {
-    id: std::ffi::OsString,
-    name: String,
-    started: u64,
-    flags: u64,
-    address_space: u64,
-    resident_pages: i64,
-}
-fn task(id: &std::ffi::OsStr) -> Option<Task> {
-    let text = match fs::read_to_string(Path::new("/proc/self/task").join(id).join("stat")) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
-        Err(error) => panic!("cannot inspect task {id:?}: {error}"),
-    };
-    // proc stat fields 9/22/23/24, after the final ')' of field 2. The
-    // comm field itself can contain whitespace/parentheses; split it first.
-    let fields: Vec<_> = text
-        .rsplit_once(')')
-        .unwrap()
-        .1
-        .split_whitespace()
-        .collect();
-    Some(Task {
-        id: id.to_owned(),
-        name: text
-            .split_once('(')
-            .unwrap()
-            .1
-            .rsplit_once(')')
-            .unwrap()
-            .0
-            .to_owned(),
-        started: fields[19].parse().unwrap(),
-        flags: fields[6].parse().unwrap(),
-        address_space: fields[20].parse().unwrap(),
-        resident_pages: fields[21].parse().unwrap(),
-    })
-}
-fn live_tasks() -> Vec<Task> {
-    task_ids().iter().filter_map(|id| task(id)).collect()
-}
-fn only_retiring_tasks(
-    actual: &[std::ffi::OsString],
-    baseline: &[std::ffi::OsString],
-    live: &[Task],
-) -> bool {
-    baseline.iter().all(|id| actual.contains(id))
-        && actual.iter().filter(|id| !baseline.contains(id)).all(|id| {
-            let Some(before) = live.iter().find(|before| before.id == *id) else {
-                return false; // Never forgive an unknown task or substituted TID.
-            };
-            if before.name != "MaaScreencap" || before.flags & 0x4 != 0 || before.address_space == 0
-            {
-                return false;
-            }
-            task(id).is_none_or(|after| {
-                // PF_EXITING is kernel state, not a public capture capability.
-                // No userspace address space may survive close. A still-live
-                // worker is a failure, even if it might stop during a later wait.
-                after.started == before.started
-                    && after.flags & 0x4 != 0
-                    && after.address_space == 0
-                    && after.resident_pages == 0
-            })
-        })
 }
 fn task_snapshot(directory: &Path, label: &str, tasks: &[std::ffi::OsString]) {
     let mut output = format!("tasks observed={} ids={tasks:?}\n", tasks.len());

@@ -17,6 +17,9 @@ mod macos;
 #[cfg(test)]
 #[path = "../../tests/upstream-parity/manager-metadata/compare.rs"]
 mod manager_metadata;
+#[cfg(test)]
+#[path = "../../tests/common/proc_tasks.rs"]
+mod task_observer;
 #[cfg(all(
     target_os = "windows",
     any(
