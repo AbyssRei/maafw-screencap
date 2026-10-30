@@ -6,6 +6,8 @@
 
 日期：2026-10-30。P0 准备阶段已验收，P1 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；macOS 主线程 ScreenCaptureKit 原型已通过 20 次受控窗口取帧、独立持帧、完成块释放与晚到结果原生验证；Wlr 真实 headless/Pixman compositor 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；结果按平台记录，P0 已通过计划第 16 节的准备与最小原生可行性门禁；完整 F 行为对照仍由 P1 完成。默认 binary 仍为 Hello World；内部 library 开始窗口 GDI 与 PrintWindow 迁移及显式局部对照，完整 F、公共 SDK 和绑定尚未完成。实际命令及原型边界见[开发指南](guides/development.md)。
 
+后续 Actions 41129758262 的 macOS job 在原生取帧前记录正式 Xcode 27.2/27B52 缺失，runner 的 27.2 路径仍是 RC/27B48；完整归档、登记输入及产品快照已核对。这是该批环境缺失，较早的原生通过与失败各保留原范围；详见[开发指南](guides/development.md#本次连续三轮无输入复测)。
+
 ## 阅读顺序与权威来源
 
 可选外层 Win32 截图委托已有私有 Rust 状态迁移和 274 个原函数体模型对照；另有真实 DLL/Boost/原接口虚表的 GDI-only 原生消费切片，本机通过 80 轮共享加载生命周期、40 个真实 Rust manager/GDI 对象和 160 张卸载后持帧。实际记录另复算像素、模块与释放证据；输入保持 None，六工厂/完整框架及 P1 尚未验收，新增原生 CI 路径仍待运行。详见[开发指南](guides/development.md#当前-p1-迁移与对照)。

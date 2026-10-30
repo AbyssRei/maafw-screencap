@@ -23,6 +23,8 @@
 
 同源功能代码的原生 [Actions 41100061053](https://github.com/AbyssRei/maafw-screencap/actions/runs/41100061053) 已结束，提交为 `afda7b8c567260c8b8ab747d10a656408a9d9d65`：Linux 成功，Windows 与 macOS 失败。两份官方组件 ZIP 的 SHA-256 已核对；下载后的 ScreenDC 与 DesktopDupWindow 各 38 场景、152 次取帧、380 份快照，以及 DesktopDupWindow 全屏与工作区记录均通过独立 `--check-only` 复算。官方完整 Windows 工程归档也已核对外层 SHA-256，逐项验证同一 F 的 76 份 Git blob、七个组件登记的 7295 份不同输入/日志，以及每份完整产品快照的 382 个 Git 文件；七份原生 CMake 来源路径均指向该固定 F，不能据此接受未覆盖场景。macOS 组件 100 项检查中 88 项通过、12 项失败；同路径阶段记录又观察到三次内容查询均有回调，一次样本提交在该记录时段内未观察到回调，独立阶段分析通过不等于原取帧通过。这些远端结果不计入本机补测。
 
+后续 [Actions 41129758262](https://github.com/AbyssRei/maafw-screencap/actions/runs/41129758262) 的 macOS job 已在取帧前停止：Apple 正式 Xcode 更新到 `27.2 (27B52)`，实际 runner 的三个 `27.2` 路径均为 `27B48` RC，未安装正式 build。P0/P1 两个入口均明确记录 `missing_environment`，各只有发布查询通过、工具链选择及准备缺环境三项结果，没有新增捕获通过或失败。官方 ZIP、job 发布的完整 tar 摘要、两份工程记录各 393/395 个登记输入与日志，以及两份完整产品快照各 383 个 Git 文件均已独立核对；归档批次锁文件单独保留。已冻结确切版本的 GitHub 镜像清单，与实际安装观察一致。这不撤销较早 Xcode 27.1 批次的原生结果，也不把上一个 macOS 批次的十二项失败转记到新批次；正式 build 可用后仍须重新完成对应原生验证。
+
 ## 修正 fork 来源的实施交接
 
 2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：以修正 fork 的确切提交作为完整提取来源 F，PR #1587 的修复进入 P1；P2 改为来源冻结与完整提取验收，不再重复打旧补丁。当前 F 锁定至评审后继 `4140ac9674a9fde174212c895c8c37ff3acf1ef8`；早期 a434521e/ee2569a5 及各自证据独立保留。7dc130bb 修正全屏候选复核、精确断言和 CI，3fa6dc4f 隔离 CI 配置以保持上游可合并；4140ac96 前置测试 Logger include，修复根工程构建的头文件边界，生产 helper 字节不变。来源准备与 Rust/C++ helper 同步已实现；下文既有 U/未打补丁来源结果保持实际历史含义，不重命名为 F。完整新版原生/调用链验收仍未完成。
