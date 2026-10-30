@@ -1,6 +1,6 @@
 # 文档导航与维护约定
 
-2026-10-30 用户已确认[ADR 0003：修正 fork 提取来源](decisions/0003-corrected-fork-extraction-baseline.md)：P1 直接提取包含修正 PR #1587 语义的固定 fork，基线记为 F；P2 保留编号，改为来源冻结与完整提取验收，不再重复打补丁。fork 修复、确切 head、Rust/来源工具同步和新版原生验收尚未完成。下列既有 U/旧来源切片保留原始证据含义，不因计划调整成为 F 已验收。
+2026-10-30 用户已确认[ADR 0003：修正 fork 提取来源](decisions/0003-corrected-fork-extraction-baseline.md)：P1 直接提取包含修正 PR #1587 语义的固定 fork，基线记为 F；P2 保留编号，改为来源冻结与完整提取验收，不再重复打补丁。fork 修复、确切来源准备与 Rust/C++ helper 同步已实现，正式几何/屏幕像素专项已通过；完整新版原生调用链验收与本地历史整理仍待完成。下列既有 U/旧来源切片保留原始证据含义，不因计划调整成为 F 已验收。
 
 日期：2026-10-30。P0 准备阶段已验收，P1 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；macOS 主线程 ScreenCaptureKit 原型已通过 20 次受控窗口取帧、独立持帧、完成块释放与晚到结果原生验证；Wlr 真实 headless/Pixman compositor 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；结果按平台记录，P0 已通过计划第 16 节的准备与最小原生可行性门禁；完整 F 行为对照仍由 P1 完成。默认 binary 仍为 Hello World；内部 library 开始窗口 GDI 与 PrintWindow 迁移及显式局部对照，完整 F、公共 SDK 和绑定尚未完成。实际命令及原型边界见[开发指南](guides/development.md)。
 
