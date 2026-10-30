@@ -161,6 +161,8 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/native-result.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/linux-x64-wlr/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/linux-x64/reference-u/artifacts/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/inputs/source-reference/wlr-native-abi-source/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-wlr-context-linux-*/inputs/source-reference/linux-manager-info.inc
           if-no-files-found: warn
       - name: Validate Windows GDI and PrintWindow migration and native interop
         if: runner.os == 'Windows'
