@@ -823,6 +823,7 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
 #include "dma-fixtures.hpp"
 #include "manager-context.hpp"
 #include "manager-host-context.hpp"
+#include "manager-host-offer-context.hpp"
 #include "sustained-context.hpp"
 void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
@@ -930,6 +931,9 @@ int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
         verify_runtime();
+        if(argc==3 && std::string_view(argv[1])=="--manager-host-offer") {
+            manager_host_offer_context(argv[2]);return 0;
+        }
         if(argc==4 && std::string_view(argv[1])=="--sustained-manager") {
             uint32_t node=0;
             const std::string_view id=argv[2];
