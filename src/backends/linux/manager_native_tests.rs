@@ -1,6 +1,42 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+#[cfg(feature = "linux-pipewire")]
+#[test]
+fn safe_hosted_connect_refuses_an_unproven_descriptor_before_host_creation() {
+    use super::super::host::{InputOwner, InputProvider};
+    struct NeverHost;
+    struct NeverInput;
+    impl InputOwner for NeverInput {
+        type Error = Error;
+        fn init(&mut self) -> Result<bool, Error> {
+            panic!("unproven fd reached host init")
+        }
+        fn inactive(&mut self) {
+            panic!("unproven fd created host owner")
+        }
+        fn features(&self) -> u64 {
+            panic!("unproven fd created host owner")
+        }
+    }
+    impl<C> InputProvider<C, Error> for NeverHost {
+        type Input = NeverInput;
+        fn create(&mut self, _: &Config, _: Option<&C>) -> Result<NeverInput, Error> {
+            panic!("unproven fd reached host creation")
+        }
+    }
+    let mut manager = super::super::Manager::<HostedFactory<NeverHost>>::new(Config {
+        method: PIPEWIRE,
+        input_method: 2,
+        pipewire_fd: 0,
+        ..Config::default()
+    });
+    let connection: HostConnection = manager.connect_host_native(NeverHost);
+    assert!(matches!(connection.result, Err(Error::UnprovenFdOffer)));
+    assert!(connection.failure.is_none() && connection.close.is_none());
+    assert!(matches!(connection.evidence, Evidence::None));
+    assert!(!manager.connected() && manager.capture.is_none() && manager.input.is_none());
+}
 struct Never;
 impl Converter for Never {
     type Image = u8;

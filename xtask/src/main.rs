@@ -14,6 +14,7 @@ mod manager_metadata;
 mod native;
 mod native_tools;
 mod pipewire;
+mod pipewire_host;
 mod pipewire_trace;
 mod quality;
 mod records;
@@ -157,7 +158,8 @@ fn run() -> Result<()> {
                       cargo xtask upstream-context wlr  # original source and recursive roundtrip on native Linux x64\n\n\
                       cargo xtask upstream-context macos  # original ScreenCaptureKit on native macOS arm64\n\n\
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
-                      cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace pipewire-host <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-config linux <original executable> <new external directory>\n\n\
                       cargo xtask upstream-config linux-compat <original executable> <new external source directory>\n\
                       cargo xtask upstream-config linux-compat-records <external matrix> [--check-only]\n\n\

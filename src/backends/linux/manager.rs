@@ -8,7 +8,9 @@ mod configuration;
 pub(crate) use configuration::Config;
 pub(crate) use configuration::Error as ConfigError;
 #[path = "manager_compat.rs"]
-mod compat;
+pub(super) mod compat;
+#[path = "manager_host.rs"]
+pub(super) mod host;
 
 #[cfg(all(
     target_os = "linux",
@@ -61,8 +63,8 @@ pub(crate) trait Factory {
     fn init_capture(&mut self, unit: &mut Self::Unit) -> Result<bool, Self::Error>;
     fn init_input(&mut self, input: &mut Self::Input) -> Result<bool, Self::Error>;
     fn input_features(input: &Self::Input) -> u64;
-    fn inactive_capture(&mut self, unit: &mut Self::Unit);
-    fn inactive_input(&mut self, input: &mut Self::Input);
+    fn inactive_capture(unit: &mut Self::Unit);
+    fn inactive_input(input: &mut Self::Input);
 }
 
 pub(crate) struct Manager<F: Factory> {
@@ -152,12 +154,12 @@ impl<F: Factory> Manager<F> {
         // roll back a backend's output writes when that backend returns false.
         capture(unit, output)
     }
-    pub fn inactive(&mut self, factory: &mut F) -> bool {
+    pub fn inactive(&mut self) -> bool {
         if let Some(unit) = &mut self.capture {
-            factory.inactive_capture(unit);
+            F::inactive_capture(unit);
         }
         if let Some(input) = &mut self.input {
-            factory.inactive_input(input);
+            F::inactive_input(input);
         }
         true
     }
