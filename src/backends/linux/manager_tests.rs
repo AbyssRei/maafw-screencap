@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 use std::{cell::RefCell, rc::Rc};
+#[path = "../../../tests/upstream-parity/linux-manager/host-boundary.rs"]
+mod host_boundary;
 
 type Events = Rc<RefCell<Vec<&'static str>>>;
 struct Owner {
@@ -18,12 +20,20 @@ struct Unit {
     _client: Option<Rc<Owner>>,
     method: u64,
 }
+struct Input {
+    owner: Owner,
+    _client: Option<Rc<Owner>>,
+    method: u64,
+    features: u64,
+}
 #[derive(Default)]
 struct Script {
     events: Events,
     client_fails: bool,
     init_fails: bool,
     input_throws: bool,
+    input_init: u8,
+    input_features: u64,
 }
 impl Script {
     fn owner(&self, event: &'static str, drop_event: &'static str) -> Owner {
@@ -40,7 +50,7 @@ impl Script {
 impl Factory for Script {
     type Client = Rc<Owner>;
     type Unit = Unit;
-    type Input = Owner;
+    type Input = Input;
     type Error = &'static str;
     fn create_client(&mut self) -> Result<Rc<Owner>, Self::Error> {
         Ok(Rc::new(self.owner("client.create", "client.drop")))
@@ -54,32 +64,60 @@ impl Factory for Script {
         config: &Config,
         client: Option<&Rc<Owner>>,
     ) -> Result<Unit, Self::Error> {
-        assert_eq!(client.is_some(), config.method == WLR);
+        assert_eq!(
+            client.is_some(),
+            config.method == WLR || config.input_method == 1
+        );
         Ok(Unit {
             _owner: self.owner("capture.create", "capture.drop"),
-            _client: client.cloned(),
+            _client: (config.method == WLR).then(|| client.unwrap().clone()),
             method: config.method,
         })
     }
-    fn create_none_input(&mut self) -> Result<Owner, Self::Error> {
+    fn create_input(
+        &mut self,
+        config: &Config,
+        client: Option<&Rc<Owner>>,
+    ) -> Result<Input, Self::Error> {
         if self.input_throws {
             return Err("input allocation");
         }
-        Ok(self.owner("input.create", "input.drop"))
+        Ok(Input {
+            owner: self.owner("input.create", "input.drop"),
+            _client: (config.input_method == 1).then(|| client.unwrap().clone()),
+            method: config.input_method,
+            features: if config.input_method == NONE {
+                0
+            } else {
+                self.input_features
+            },
+        })
     }
     fn init_capture(&mut self, unit: &mut Unit) -> Result<bool, Self::Error> {
         self.events.borrow_mut().push("capture.init");
         Ok(unit.method != PIPEWIRE || !self.init_fails)
     }
-    fn init_none_input(&mut self, _: &mut Owner) -> Result<bool, Self::Error> {
+    fn init_input(&mut self, input: &mut Input) -> Result<bool, Self::Error> {
         self.events.borrow_mut().push("input.init");
-        Ok(true) // Real NoneInput inherits the original true init.
+        match if input.method == NONE {
+            0
+        } else {
+            self.input_init
+        } {
+            0 => Ok(true),
+            1 => Ok(false),
+            2 => Err("host input init exception"),
+            _ => unreachable!(),
+        }
+    }
+    fn input_features(input: &Input) -> u64 {
+        input.features
     }
     fn inactive_capture(&mut self, _: &mut Unit) {
         self.events.borrow_mut().push("capture.inactive");
     }
-    fn inactive_none_input(&mut self, _: &mut Owner) {
-        self.events.borrow_mut().push("input.inactive");
+    fn inactive_input(&mut self, input: &mut Input) {
+        input.owner.events.borrow_mut().push("input.inactive");
     }
 }
 fn config(method: u64) -> Config {
@@ -128,7 +166,7 @@ fn parsed_creation_and_queries_do_not_connect_or_touch_the_callers_output() {
 }
 
 #[test]
-fn retained_input_metadata_does_not_enable_out_of_scope_input_control() {
+fn retained_input_metadata_uses_only_the_explicit_host_initialization_boundary() {
     let mut script = Script::default();
     let mut manager = Manager::<Script>::from_config_json(Some(
         br#"{"screencap_method":1,"input_method":2,"uinput_path":"custom"}"#,
@@ -137,9 +175,21 @@ fn retained_input_metadata_does_not_enable_out_of_scope_input_control() {
     let mut uuid = Vec::new();
     manager.request_uuid(&mut uuid).unwrap();
     assert_eq!(uuid, b"_custom");
-    assert!(!manager.connect(&mut script).unwrap());
-    assert!(!manager.connected());
-    assert!(script.take().is_empty());
+    assert!(manager.connect(&mut script).unwrap());
+    assert!(manager.connected());
+    assert_eq!(
+        script.take(),
+        [
+            "client.create",
+            "client.connect",
+            "capture.create",
+            "input.create",
+            "capture.init",
+            "input.init"
+        ]
+    );
+    assert_eq!(manager.config.input_method, 2);
+    assert_eq!(manager.config.uinput_path.as_ref(), b"custom");
 }
 
 #[test]

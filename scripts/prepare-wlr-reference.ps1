@@ -16,6 +16,8 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     Step wlr-reference-build cmake @('--build',$build,'--parallel','4')
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-source.inc) -Destination $saved;Save $saved
+    $saved=Join-Path $refInputs linux-manager-features.inc
+    Copy-Item -LiteralPath (Join-Path $build linux-manager-features.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-config.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-config.inc) -Destination $saved;Save $saved
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
