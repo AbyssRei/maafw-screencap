@@ -100,3 +100,48 @@ void display_patch(const std::filesystem::path& directory,const char* argument) 
     for(size_t call=0;call<held.size();++call) {save(held[call],directory/("display-held-"+std::to_string(call)+".source.bgr"));display_pixels(held[call],g);}
     std::cout<<"original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed\n";
 }
+// A separate diagnostic process deliberately performs no consumer-side native
+// geometry queries. The scene host's snapshot is an EXPECTATION, not evidence
+// of which display this consumer actually enumerated. Limit it to one display;
+// preserve the original queried case and its failures in their own directory.
+void display_patch_host_premise(const std::filesystem::path& directory,const char* argument,const char* snapshot) {
+    const auto wid=std::stoull(argument);require(wid>0 && wid<=UINT32_MAX,"display patch window ID narrowing");
+    std::ifstream input(snapshot,std::ios::binary);require(input.good(),"cannot read host display expectation");
+    const std::string text((std::istreambuf_iterator<char>(input)),std::istreambuf_iterator<char>());
+    require(!input.bad() && !text.empty() && text.back()=='\n' && text.find('\n')==text.size()-1,"expected one host geometry row");
+    std::istringstream row(text.substr(0,text.size()-1));std::vector<std::string> fields;std::string field;
+    while(std::getline(row,field,'\t')) {fields.push_back(field);}
+    require(fields.size()==16,"host display expectation column count differs");
+    const auto integer=[&](size_t index) {
+        const auto& value=fields[index];require(!value.empty() && (value.size()==1 || value[0]!='0')
+            && std::all_of(value.begin(),value.end(),[](char c){return c>='0' && c<='9';}),"invalid host geometry integer");
+        return std::stoull(value);
+    };
+    const auto point=[&](size_t index) {
+        size_t consumed=0;const auto value=std::stod(fields[index],&consumed);
+        require(consumed==fields[index].size() && std::isfinite(value) && std::abs(value)<=1e9,"invalid host geometry point");return value;
+    };
+    DisplayGeometry g;g.count=integer(0);g.id=integer(1);g.window=integer(8);g.pid=integer(9);
+    const auto w=integer(2),h=integer(3);
+    require(g.count==1 && g.id>0 && g.id<=UINT32_MAX && g.window==wid && g.pid>0 && g.pid<=INT_MAX
+        && w>0 && w<=INT_MAX && h>0 && h<=INT_MAX && integer(14)==1 && integer(15)==2,
+        "host display expectation requires one display and the owned visible scene");
+    g.width=static_cast<int>(w);g.height=static_cast<int>(h);g.visible=true;
+    g.display=CGRectMake(point(4),point(5),point(6),point(7));g.bounds=CGRectMake(point(10),point(11),point(12),point(13));
+    (void)display_region(g);
+    std::ofstream metadata(directory/"source-expected-geometry.tsv",std::ios::binary);metadata<<text;
+    metadata.close();require(metadata.good(),"cannot save host display expectation");
+    std::ofstream provenance(directory/"source-geometry-provenance.txt",std::ios::binary);
+    provenance<<"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n";
+    provenance.close();require(provenance.good(),"cannot save host geometry provenance");
+    std::vector<cv::Mat> held;held.reserve(3);
+    {
+        MfsOriginalMac::ScreenCaptureKitScreencap source(0);
+        for(unsigned call=0;call<3;++call) {
+            auto image=capture(source);require(image.has_value(),"original host-premise display capture returned nullopt");
+            save(*image,directory/("display-call-"+std::to_string(call)+".source.bgr"));display_pixels(*image,g);held.push_back(std::move(*image));
+        }
+    }
+    for(size_t call=0;call<held.size();++call) {save(held[call],directory/("display-held-"+std::to_string(call)+".source.bgr"));display_pixels(held[call],g);}
+    std::cout<<"original macOS display_host_premise captures=3 retained=3 consumer_geometry_queries=0 live_consumer_display_identity_observed=0 single_display_premise=1 known_owned_patch=3 diagnostic_only=1 passed\n";
+}
