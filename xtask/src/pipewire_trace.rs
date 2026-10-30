@@ -11,6 +11,12 @@ const RESOURCES: &str = "phase\telapsed_ns\tcalls\tfds\ttasks\trss_kib";
 const MIN_NS: u64 = 120_000_000_000;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args
+        .first()
+        .is_some_and(|kind| kind == "macos-display-patch")
+    {
+        return crate::macos_display_patch::run(&args[1..]);
+    }
     if args.first().is_some_and(|kind| kind == "wlr-host-api") {
         return crate::wlr_host_api::run(&args[1..]);
     }

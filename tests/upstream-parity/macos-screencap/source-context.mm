@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #import <AppKit/AppKit.h>
 #import <ApplicationServices/ApplicationServices.h>
+#import <ScreenCaptureKit/ScreenCaptureKit.h>
 #include "Screencap/ScreenCaptureKitScreencap.h"
 #include <opencv2/core.hpp>
 #include "resource-observation.h"
@@ -14,13 +15,17 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <libproc.h>
 #include <limits>
 #include <mach/mach.h>
+#include <memory>
 #include <optional>
 #include <pthread.h>
 #include <stdexcept>
+#include <sstream>
 #include <string>
 #include <sys/proc_info.h>
 #include <thread>
@@ -220,6 +225,7 @@ void display(const std::filesystem::path& directory) {
     require(held.type()==CV_8UC3 && held.data!=nullptr,"first-display owner did not survive source destruction");
     std::cout<<"original macOS display captures=1 retained=1 known_pixels=not_asserted passed\n";
 }
+#include "display-context.hpp"
 void scene(NSApplication* app,const std::filesystem::path& directory) {
     {
     Window window(app,0);
@@ -274,6 +280,8 @@ int main(int argc,char** argv) {
             if(mode=="windows") { windows(app,directory); }
             else if(mode=="display") { display(directory); }
             else if(mode=="scene") { scene(app,directory); }
+            else if(mode=="display-scene") { display_patch_scene(app,directory); }
+            else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
             else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
             else if(mode=="manager-external-window" && argc==4) { manager_external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }
