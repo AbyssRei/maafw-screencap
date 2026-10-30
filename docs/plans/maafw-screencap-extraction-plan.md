@@ -6,7 +6,7 @@
 
 ## 1. 项目定位与目标
 
-**maafw-screencap** 是首选使用 **Rust** 实现的独立桌面截图库，以修正后的 MaaFramework fork 的确切提交为来源，在完整提取环节同步修复，再建设独立 SDK 和扩展能力。2026-10-30 用户确认的[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)替代旧 U → P 顺序；新版来源基线记为 F，修正 fork 的 head、Rust 同步及原生验收尚未完成。
+**maafw-screencap** 是首选使用 **Rust** 实现的独立桌面截图库，以修正后的 MaaFramework fork 的确切提交为来源，在完整提取环节同步修复，再建设独立 SDK 和扩展能力。2026-10-30 用户确认的[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)替代旧 U → P 顺序；新版来源基线记为 F，fork 修复、确切来源准备及 Rust/C++ helper 同步已实现，完整新版调用链和原生验收尚未完成。
 核心协调、状态、策略、帧管理和后端流程使用 Rust；对外动态链接边界采用 C ABI。
 平台接入优先采用维护活跃的 Rust 原生绑定；必要的 C、C++、Objective-C/Objective-C++ 代码仅承担原生 API、协议宏或验收适配的窄桥接职责。
 
@@ -77,7 +77,7 @@ Node.js、Zig、Go、Java、C# 按实际消费者需求逐项加入；异步流�
 | 项目 | 来源基线或实际构建记录 |
 | --- | --- |
 | 原始 MaaFramework 祖先 | `0fc6025c2fc224a171b57d89505e8d47acd2a8b1`；历史 U 的来源及新版 fork 的范围比较依据 |
-| 当前提取来源 F | `AbyssRei/MaaFramework` 的 `fix/ensure-window-on-screen-rcmonitor` 分支修正后锁定的确切 commit/tree；尚待实现和锁定，分支名不能替代固定身份 |
+| 当前提取来源 F | `AbyssRei/MaaFramework` 的 `a434521e7f49cff97f92117add554038b523eef9`，tree `06b7e7f32b5b644e706c530945a12c03b7f1f4e7`；分支名不能替代固定身份，来源准备不等于完整 F 验收 |
 | PR #1587 | F 包含成员评审后的修复；旧 `54b116aa89f70e5ae156c05120cabaddca7702a8` / `f603a04633b0e43a8bbcb94ddef60fc349ad29a1` 仅作历史来源，不能当作修正版或在 P2 重复应用 |
 | MaaUtils | 参考程序需要时采用最新正式版；与固定上游调用不兼容的构建适配单独验证并记录 |
 | OpenCV | 参考程序、F 验收 binding/适配器及调用端适配验收采用最新正式版；记录实际解析版本、来源、模块与构建选项，最终基础核心不依赖且首版产品包不附带其二进制 |
@@ -127,7 +127,7 @@ P5 按实际源码/二进制组成及动态/静态链接方式核验 LGPL 分发
 
 2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：采用修正后的 fork 作为提取来源，替代 2026-10-26 固定旧 head 的计划。[成员 MistEO 的评审](https://github.com/MaaXYZ/MaaFramework/pull/1587#issuecomment-6492173498)指出全局 rcMonitor 和 ±8px 外窗口判据的回归。旧两条提交及累计差异保留为历史，不再是计划中的最终修复。
 
-fork 修复和新 head 尚未完成。先实现并验证修复，再固定实际 commit/tree、累计差异和来源文件哈希；不得跟随滚动分支，也不得仅因 PR 状态改变自动换源。除明确修复及其测试外，需核对相对原始祖先的全部差异，不顺便更新无关 upstream 源码。
+fork 已新增并推送修复提交 `a434521e7f49cff97f92117add554038b523eef9`。来源工具以独立修订归档其实际 commit/tree、三条提交、累计差异和来源文件哈希；累计差异精确限定为 HwndUtils.hpp 与三份 window_geometry 测试文件。不得跟随滚动分支，也不得仅因 PR 状态改变自动换源，不顺便更新无关 upstream 源码。fork 的脚本及真实几何探针通过，但首次屏幕像素见证失败继续保留；完整截图调用链仍须新版验收。
 
 变更集中在 `source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp` 的 `ensure_window_on_screen`：
 
