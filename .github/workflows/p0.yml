@@ -50,7 +50,7 @@ jobs:
         run: |
           cargo xtask reference prepare
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          cargo xtask reference prepare-fork --revision client-confirmed-3fa6dc4f --head 3fa6dc4f61a1f159dfeed371dfa784d939e90bb9
+          cargo xtask reference prepare-fork --revision client-confirmed-4140ac96 --head 4140ac9674a9fde174212c895c8c37ff3acf1ef8
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Verify Windows SDK servicing cache identity
         shell: pwsh

@@ -77,7 +77,7 @@ Node.js、Zig、Go、Java、C# 按实际消费者需求逐项加入；异步流�
 | 项目 | 来源基线或实际构建记录 |
 | --- | --- |
 | 原始 MaaFramework 祖先 | `0fc6025c2fc224a171b57d89505e8d47acd2a8b1`；历史 U 的来源及新版 fork 的范围比较依据 |
-| 当前提取来源 F | `AbyssRei/MaaFramework` 的 `3fa6dc4f61a1f159dfeed371dfa784d939e90bb9`，tree `5555b9fba77108d3dab322561ce5a574cd89d34d`；包含全屏候选的一次有界复核、精确回归及根 CI 接入；分支名不能替代固定身份，来源准备不等于完整 F 验收 |
+| 当前提取来源 F | `AbyssRei/MaaFramework` 的 `4140ac9674a9fde174212c895c8c37ff3acf1ef8`，tree `96aa4a72d3a7fd25e94e7f6ca3d66961d050d859`；包含全屏候选的一次有界复核、精确回归及根 CI 接入；分支名不能替代固定身份，来源准备不等于完整 F 验收 |
 | PR #1587 | F 包含成员评审后的修复；旧 `54b116aa89f70e5ae156c05120cabaddca7702a8` / `f603a04633b0e43a8bbcb94ddef60fc349ad29a1` 仅作历史来源，不能当作修正版或在 P2 重复应用 |
 | MaaUtils | 参考程序需要时采用最新正式版；与固定上游调用不兼容的构建适配单独验证并记录 |
 | OpenCV | 参考程序、F 验收 binding/适配器及调用端适配验收采用最新正式版；记录实际解析版本、来源、模块与构建选项，最终基础核心不依赖且首版产品包不附带其二进制 |
@@ -127,7 +127,7 @@ P5 按实际源码/二进制组成及动态/静态链接方式核验 LGPL 分发
 
 2026-10-30 用户确认[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)：采用修正后的 fork 作为提取来源，替代 2026-10-26 固定旧 head 的计划。[成员 MistEO 的评审](https://github.com/MaaXYZ/MaaFramework/pull/1587#issuecomment-6492173498)指出全局 rcMonitor 和 ±8px 外窗口判据的回归。旧两条提交及累计差异保留为历史，不再是计划中的最终修复。
 
-fork 当前 head 为 `3fa6dc4f61a1f159dfeed371dfa784d939e90bb9`。在 a434521e 的精确客户区修复和 ee2569a5 的正式像素测试之后，7dc130bb 加入一次全屏候选复核、精确位置/尺寸断言与根工程 CI，3fa6dc4f 调整 CI 配置位置以避免与上游无关更新冲突。当前 F 独立归档六条提交、实际 commit/tree 和精确六文件累计差异：HwndUtils.hpp、三份 window_geometry 测试、根 CMakeLists.txt 与 test.yml。旧 F 及其结果保持原身份；来源策略分别验证 v1 四文件与 v2 六文件，不覆盖旧清单。不得跟随滚动分支或顺便更新无关 upstream 源码。本机正式 CTest 2/2、58 个脚本与 3 个真实 Win32 几何/屏幕像素场景通过，61 组 C++/Rust helper 对照通过；首次屏幕像素失败继续保留。完整截图调用链仍须新版验收，CI 状态按确切 head 单独记录。
+fork 当前 head 为 `4140ac9674a9fde174212c895c8c37ff3acf1ef8`。在 a434521e 的精确客户区修复和 ee2569a5 的正式像素测试之后，7dc130bb 加入一次全屏候选复核、精确位置/尺寸断言与根工程 CI，3fa6dc4f 调整 CI 配置位置以避免与上游无关更新冲突。4140ac96 仅前置几何测试 logging include，修复父目录正式 MaaUtils 头抢先进入测试的根 CI 编译失败，生产 helper 与 3fa6dc4f 相同。当前 F 独立归档七条提交、实际 commit/tree 和精确六文件累计差异：HwndUtils.hpp、三份 window_geometry 测试、根 CMakeLists.txt 与 test.yml。旧 F 及其结果保持原身份；来源策略分别验证 v1 四文件与 v2 六文件，不覆盖旧清单。不得跟随滚动分支或顺便更新无关 upstream 源码。本机正式 CTest 2/2、58 个脚本与 3 个真实 Win32 几何/屏幕像素场景通过，61 组 C++/Rust helper 对照通过；首次屏幕像素失败继续保留。完整截图调用链仍须新版验收，CI 状态按确切 head 单独记录。
 
 变更集中在 `source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp` 的 `ensure_window_on_screen`：
 

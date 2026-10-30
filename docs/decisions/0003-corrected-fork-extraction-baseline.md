@@ -8,7 +8,9 @@
 
 [PR #1587 的成员评审](https://github.com/MaaXYZ/MaaFramework/pull/1587#issuecomment-6492173498)指出旧 head `f603a04633b0e43a8bbcb94ddef60fc349ad29a1` 的两个问题：全局 rcMonitor 校正会允许普通窗口客户区落入任务栏区域；外窗口四边 ±8px 容差会放过真实越界的客户区，使桌面复制裁剪失败。用户选择先修改 fork，再把等价修复同步到新项目的完整提取环节。
 
-完整提取基线改记为 **F**：当前来源是 `AbyssRei/MaaFramework` 的确切提交 `3fa6dc4f61a1f159dfeed371dfa784d939e90bb9`、tree `5555b9fba77108d3dab322561ce5a574cd89d34d`，HwndUtils.hpp blob 为 `bf220216b4eb7487a1301ff6f14b343ba0fc6b9b`。原 MaaFramework `0fc6025c2fc224a171b57d89505e8d47acd2a8b1` 保留为来源祖先及范围比较依据。a434521e、ee2569a5、7dc130bb 及各自证据独立保留；新版累计六条提交、六文件范围，增加候选全屏复核、精确断言和根 CI 接入。当前 v2 策略与历史 v1 四文件策略分别验证，不能重标旧来源。本机正式 CTest 2/2 通过，含 58 个脚本和 3 个真实 Win32 几何/屏幕像素场景；61 组 C++/Rust helper 对照通过。旧像素失败仍保留，来源锁定及专项通过不表示完整 F 已验收。
+完整提取基线改记为 **F**：当前来源是 `AbyssRei/MaaFramework` 的确切提交 `4140ac9674a9fde174212c895c8c37ff3acf1ef8`、tree `96aa4a72d3a7fd25e94e7f6ca3d66961d050d859`，HwndUtils.hpp blob 为 `bf220216b4eb7487a1301ff6f14b343ba0fc6b9b`。原 MaaFramework `0fc6025c2fc224a171b57d89505e8d47acd2a8b1` 保留为来源祖先及范围比较依据。a434521e、ee2569a5、7dc130bb、3fa6dc4f 及各自证据独立保留；新版累计七条提交、六文件范围，增加候选全屏复核、精确断言和根 CI 接入。当前 v2 策略与历史 v1 四文件策略分别验证，不能重标旧来源。本机正式 CTest 2/2 通过，含 58 个脚本和 3 个真实 Win32 几何/屏幕像素场景；61 组 C++/Rust helper 对照通过。旧像素失败仍保留，来源锁定及专项通过不表示完整 F 已验收。
+
+3fa6dc4f 的根工程 CI 在像素断言前编译失败：父目录的 MaaUtils include 排在测试 Logger 替身之前，使隔离的几何测试误读正式 Logger 依赖。4140ac96 仅在该测试 CMake 中用 BEFORE 明确前置 logging；生产 helper blob 仍为 bf220216，v2 策略范围不变，不增加 Boost 运行依赖。旧 CI 编译失败及 3fa 来源记录独立保留；4140ac96 的上游 test/build 已成功，Windows 根工程几何 CTest 2/2 亦实际执行；该 head 有独立记录，未继承旧绿色状态。
 
 P1 直接迁移修正 fork 的全部截图职责，修复进入 HwndUtils/窗口几何迁移及其实际调用链。P2 改为来源冻结、完整提取与专项回归的汇总验收，不再应用第二次 PR 补丁。P3 在验收后的 F 上建立产品 E；共享租约、严格 SDK 几何、原生接口现代化和其他产品扩展仍按原阶段实施。
 
