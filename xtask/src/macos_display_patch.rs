@@ -33,6 +33,7 @@ pub(crate) enum Probe {
     HostPremise,
     DistinctHost,
     FoundationConsumer,
+    AppkitConsumer,
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -102,7 +103,7 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     let host_premise = probe == Probe::HostPremise;
     let (path,check_only)=match args {
         [path]=>(path,false),[path,flag] if flag=="--check-only"=>(path,true),
-        _=>return Err("expected upstream-trace <macos-display-patch|macos-display-host-premise|macos-display-distinct-host> <actual external directory> [--check-only]".into()),
+        _=>return Err("expected upstream-trace macos-display-<patch|host-premise|distinct-host|foundation-consumer|appkit-consumer> <actual external directory> [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -119,7 +120,10 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     {
         return Err("wrong owned display scene premise".into());
     }
-    if matches!(probe, Probe::DistinctHost | Probe::FoundationConsumer) {
+    if matches!(
+        probe,
+        Probe::DistinctHost | Probe::FoundationConsumer | Probe::AppkitConsumer
+    ) {
         let identity: SceneExecutable =
             serde_json::from_slice(&read("scene-executable-identity.json")?)?;
         let consumer = read("scene-executables/consumer")?;
@@ -133,6 +137,11 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     if probe == Probe::FoundationConsumer {
         foundation_state(&read("foundation-consumer-state.txt")?)?;
     }
+    let appkit_loop = if probe == Probe::AppkitConsumer {
+        Some(appkit_state(&read("appkit-consumer-state.txt")?)?)
+    } else {
+        None
+    };
     let original: OriginalStatus = serde_json::from_slice(&read("source-oracle-status.json")?)?;
     original_status(original, host_premise)?;
     let geometry_bytes = read("scene/display-geometry.tsv")?;
@@ -215,11 +224,20 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         report["paired_acceptance"] = false.into();
         report["scope"] = "Same-path, byte-identical source consumer and AppKit scene executable; only the source consumer fixture skips NSApplication initialization and pumps its Foundation default run loop. The source capture class, native geometry queries, default first display and original five-second wait are unchanged and uninstrumented. Records require NSApp nil before/after, successful original captures, exact scene PID/path/binary/mode, all six known-patch captures, eighteen payloads, full Rust conversion and owner checks. Rust retains its existing separate AppKit test host. This is a consumer-host control, not acceptance or replacement of same-path AppKit failures, proof of a system mechanism, or complete P1 acceptance.".into();
     }
+    if let Some([polls, events, updates]) = appkit_loop {
+        report["source_appkit_event_loop"] =
+            serde_json::json!({"polls":polls,"events":events,"updates":updates});
+        report["same_scene_executable_path"] = true.into();
+        report["diagnostic_only"] = true.into();
+        report["paired_acceptance"] = false.into();
+        report["scope"] = "Same-path, byte-identical original consumer and scene executable. Only the consumer fixture enables main-thread AppKit updateWindows, nextEventMatchingMask with a bounded deadline, and sendEvent for dequeued events; its previous Foundation-loop cases remain separate. The source class, geometry queries, default first display and original five-second wait remain unchanged and uninstrumented. Post-capture state requires initialized NSApplication, main thread, actual polls and matching updates; an empty event queue is recorded without claiming event dispatch. All six known-patch captures, eighteen payloads, full Rust conversion, binary/mode/PID and owner checks remain mandatory. This event-processing control is not NSApplication.run, proof of root cause, replacement of old failures or complete P1 acceptance.".into();
+    }
     let output = root.join(match probe {
         Probe::HostPremise => "display-host-premise-validation.json",
         Probe::DistinctHost => "display-distinct-host-validation.json",
         Probe::Queried => "display-patch-validation.json",
         Probe::FoundationConsumer => "display-foundation-consumer-validation.json",
+        Probe::AppkitConsumer => "display-appkit-consumer-validation.json",
     });
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -231,6 +249,10 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     if host_premise {
         println!(
             "macOS display_host_premise source_captures=3 rust_captures=3 payloads=18 consumer_geometry_queries=0 live_consumer_display_identity_observed=0 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
+    } else if probe == Probe::AppkitConsumer {
+        println!(
+            "macOS display_appkit_consumer source_captures=3 rust_captures=3 payloads=18 main_thread_appkit_polling=1 same_binary_and_path_verified=1 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
         );
     } else if probe == Probe::FoundationConsumer {
         println!(
@@ -252,6 +274,47 @@ fn foundation_state(bytes: &[u8]) -> Result<()> {
         return Err("Foundation consumer initialized NSApplication, changed premise or failed its original capture".into());
     }
     Ok(())
+}
+fn appkit_state(bytes: &[u8]) -> Result<[u64; 3]> {
+    let text = std::str::from_utf8(bytes)?;
+    if !text.ends_with('\n') || text.contains('\r') {
+        return Err("AppKit consumer state must have complete LF records".into());
+    }
+    let mut fields = BTreeMap::new();
+    for line in text.lines() {
+        let (key, value) = line
+            .split_once('=')
+            .ok_or("invalid AppKit consumer state")?;
+        if fields.insert(key, value).is_some() {
+            return Err("duplicate AppKit consumer state".into());
+        }
+    }
+    let mut counts = [0; 3];
+    for (index, key) in ["polls", "events", "updates"].into_iter().enumerate() {
+        let value = fields.remove(key).ok_or("missing AppKit loop count")?;
+        if value.is_empty()
+            || (value.len() > 1 && value.starts_with('0'))
+            || !value.bytes().all(|b| b.is_ascii_digit())
+        {
+            return Err("invalid AppKit loop count".into());
+        }
+        counts[index] = value.parse::<u64>()?;
+    }
+    if fields
+        != BTreeMap::from([
+            ("nsapplication_initialized", "1"),
+            ("nsapp_present_before", "1"),
+            ("nsapp_present_after", "1"),
+            ("main_thread", "1"),
+            ("source_capture_passed", "1"),
+        ])
+        || counts[0] == 0
+        || counts[1] > counts[0]
+        || counts[2] != counts[0]
+    {
+        return Err("AppKit control failed capture, host premise or event processing".into());
+    }
+    Ok(counts)
 }
 fn host_geometry(g: &Geometry, provenance: &[u8]) -> Result<()> {
     if g.count != 1 || provenance != b"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n" {
@@ -339,6 +402,34 @@ fn traces(text: &str, g: &Geometry) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_failed_capture_missing_polling_and_inconsistent_appkit_host_records() {
+        let good = "nsapplication_initialized=1\nnsapp_present_before=1\nnsapp_present_after=1\nmain_thread=1\npolls=7\nevents=0\nupdates=7\nsource_capture_passed=1\n";
+        assert_eq!(appkit_state(good.as_bytes()).unwrap(), [7, 0, 7]);
+        assert_eq!(
+            appkit_state(good.replace("events=0", "events=3").as_bytes()).unwrap(),
+            [7, 3, 7]
+        );
+        for bad in [
+            good.replace("source_capture_passed=1", "source_capture_passed=0"),
+            good.replace("main_thread=1", "main_thread=0"),
+            good.replace("nsapp_present_after=1", "nsapp_present_after=0"),
+            good.replace("nsapp_present_before=1", "nsapp_present_before=0"),
+            good.replace("nsapplication_initialized=1", "nsapplication_initialized=0"),
+            good.replace("polls=7", "polls=0"),
+            good.replace("events=0", "events=8"),
+            good.replace("updates=7", "updates=6"),
+            good.replace("polls=7", "polls=07"),
+            good.replace("polls=7", "polls=18446744073709551616"),
+            good.replace("polls=7", "polls=+7"),
+            good.replace("polls=7\n", ""),
+            good.to_owned() + "polls=7\n",
+            good.to_owned() + "unknown=1\n",
+            good.trim_end().to_owned(),
+        ] {
+            assert!(appkit_state(bad.as_bytes()).is_err(), "accepted {bad}");
+        }
+    }
     #[test]
     fn rejects_substituted_scene_executables_paths_modes_and_owners() {
         let bytes = b"owned executable input";

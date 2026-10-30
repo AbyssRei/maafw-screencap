@@ -126,6 +126,32 @@ void display_patch_foundation_consumer(const std::filesystem::path& directory,co
     require(NSApp==nil,"Foundation consumer premise changed during native capture");
     std::cout<<"original macOS foundation_consumer nsapplication_initialized=0 nsapp_nil_before=1 nsapp_nil_after=1 captures=3 passed\n";
 }
+// The same source and queries with an explicit AppKit event loop on main.
+// Counters/state are recorded after capture, including on a primary failure.
+// This is not NSApplication.run or evidence that every host duty is covered.
+void display_patch_appkit_consumer(const std::filesystem::path& directory,const char* argument) {
+    require(appkit_consumer && NSApp!=nil && [NSThread isMainThread],"AppKit consumer premise missing before capture");
+    const auto record=[&](bool passed) {
+        std::ofstream state(directory/"appkit-consumer-state.txt",std::ios::binary);
+        state<<"nsapplication_initialized=1\nnsapp_present_before=1\nnsapp_present_after="<<(NSApp!=nil)
+             <<"\nmain_thread="<<[NSThread isMainThread]<<"\npolls="<<appkit_polls
+             <<"\nevents="<<appkit_events<<"\nupdates="<<appkit_updates
+             <<"\nsource_capture_passed="<<passed<<'\n';state.close();
+        require(state.good(),"cannot record AppKit consumer premise");
+    };
+    try { display_patch(directory,argument); }
+    catch(...) {
+        const auto primary=std::current_exception();
+        try {record(false);} catch(const std::exception& error) {
+            std::cerr<<"AppKit consumer state recording also failed: "<<error.what()<<'\n';
+        }
+        std::rethrow_exception(primary);
+    }
+    record(true);
+    require(NSApp!=nil && appkit_polls>0 && appkit_polls==appkit_updates && appkit_events<=appkit_polls,
+        "AppKit consumer event loop premise changed");
+    std::cout<<"original macOS appkit_consumer main_thread=1 event_polling=1 captures=3 passed\n";
+}
 // A separate diagnostic process deliberately performs no consumer-side native
 // geometry queries. The scene host's snapshot is an EXPECTATION, not evidence
 // of which display this consumer actually enumerated. Limit it to one display;

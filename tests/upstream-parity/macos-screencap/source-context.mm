@@ -40,8 +40,22 @@ using Clock=std::chrono::steady_clock;
 void require(bool condition,const char* message) {
     if(!condition) { throw std::runtime_error(message); }
 }
+// Only the explicit AppKit consumer control changes event delivery. Existing
+// Foundation-loop modes remain available with their original failed records.
+bool appkit_consumer=false;
+uint64_t appkit_polls=0,appkit_events=0,appkit_updates=0;
 void pump() {
     @autoreleasepool {
+        if(appkit_consumer) {
+            require([NSThread isMainThread] && NSApp!=nil,"AppKit event control requires its initialized main-thread host");
+            [NSApp updateWindows];++appkit_updates;
+            NSEvent* event=[NSApp nextEventMatchingMask:NSEventMaskAny
+                untilDate:[NSDate dateWithTimeIntervalSinceNow:0.005]
+                inMode:NSDefaultRunLoopMode dequeue:YES];
+            ++appkit_polls;
+            if(event) { [NSApp sendEvent:event];++appkit_events; }
+            return;
+        }
         [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
             beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
     }
@@ -270,6 +284,7 @@ int main(int argc,char** argv) {
         }
         @autoreleasepool {
             const std::string mode=argv[1];
+            appkit_consumer=mode=="display-patch-appkit-consumer";
             const bool foundation_consumer=mode=="display-patch-foundation-consumer";
             NSApplication* app=nil;
             if(foundation_consumer) {
@@ -295,6 +310,7 @@ int main(int argc,char** argv) {
             else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
             else if(mode=="display-patch-host-premise" && argc==5) { display_patch_host_premise(directory,argv[3],argv[4]); }
             else if(foundation_consumer && argc==4) { display_patch_foundation_consumer(directory,argv[3]); }
+            else if(appkit_consumer && argc==4) { display_patch_appkit_consumer(directory,argv[3]); }
             else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
             else if(mode=="manager-external-window" && argc==4) { manager_external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }
