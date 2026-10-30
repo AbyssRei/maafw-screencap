@@ -42,6 +42,16 @@ impl IdentityBoundary for Native<'_> {
         owned.extend_from_slice(bytes);
         Ok(owned)
     }
+    fn publish_uuid(
+        &self,
+        output: &mut Vec<u8>,
+        uuid: Vec<u8>,
+        buffer: &UuidBuffer,
+    ) -> Result<(), i32> {
+        self.publish_cpp_uuid(buffer)?;
+        *output = uuid;
+        Ok(())
+    }
     fn with_uuid_buffer<T>(
         &self,
         action: impl FnOnce(&mut UuidBuffer) -> Result<T, i32>,

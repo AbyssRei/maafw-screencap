@@ -10,7 +10,8 @@ mod corpus;
 type InfoFunction = unsafe extern "C" fn(*mut c_void, *mut OpaqueString) -> u8;
 pub(super) struct Api {
     abi: unsafe extern "C" fn(u32) -> usize,
-    configure: unsafe extern "C" fn(*mut c_void, Option<InfoFunction>, *mut c_void) -> i32,
+    pub(super) configure:
+        unsafe extern "C" fn(*mut c_void, Option<InfoFunction>, *mut c_void) -> i32,
     has: unsafe extern "C" fn(*mut c_void) -> u8,
     invoke: unsafe extern "C" fn(*mut c_void, *mut OpaqueString, *mut u8) -> i32,
     empty: unsafe extern "C" fn(*mut *mut c_void) -> i32,
@@ -20,7 +21,7 @@ pub(super) struct Api {
     release: unsafe extern "C" fn(*mut c_void),
     serialize: unsafe extern "C" fn(*mut c_void, *mut *mut c_void) -> i32,
     fault: unsafe extern "C" fn(*mut c_void) -> i32,
-    count: unsafe extern "C" fn(u32) -> u64,
+    pub(super) count: unsafe extern "C" fn(u32) -> u64,
 }
 impl Api {
     pub(super) fn open(module: &loader::Module) -> Self {
@@ -72,8 +73,8 @@ fn status(code: i32) -> Result<(), i32> {
     if code == 0 { Ok(()) } else { Err(code) }
 }
 pub(super) struct Info<'a> {
-    pointer: NonNull<c_void>,
-    lib: &'a Lib,
+    pub(super) pointer: NonNull<c_void>,
+    pub(super) lib: &'a Lib,
 }
 impl Drop for Info<'_> {
     fn drop(&mut self) {
@@ -83,7 +84,7 @@ impl Drop for Info<'_> {
     }
 }
 impl Info<'_> {
-    fn bytes(&self) -> Result<Vec<u8>, i32> {
+    pub(super) fn bytes(&self) -> Result<Vec<u8>, i32> {
         let mut pointer = std::ptr::null_mut();
         // SAFETY: Native object is borrowed immutably; serialization produces
         // a separate actual std::string owner, not a view into mutable scratch.
@@ -118,7 +119,7 @@ impl Drop for Serialized<'_> {
         unsafe { (self.lib.uuid_release)(self.pointer.as_ptr()) }
     }
 }
-struct Objects<'a>(&'a Lib);
+pub(super) struct Objects<'a>(pub(super) &'a Lib);
 impl<'a> InfoObjects for Objects<'a> {
     type Buffer = UuidBuffer;
     type Info = Info<'a>;

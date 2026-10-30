@@ -6,6 +6,7 @@ mod configuration;
 mod custom_capture;
 mod custom_identity;
 mod custom_metadata;
+mod custom_native_api;
 mod dependencies;
 mod desktop_fullscreen;
 mod frame_pool_alpha;
@@ -167,6 +168,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-custom <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace custom-identity <external identity directory> [--check-only]\n\n\
                       cargo xtask upstream-trace custom-metadata <external metadata directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace custom-native-api <external native-api directory> [--check-only]\n\n\
                       cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\

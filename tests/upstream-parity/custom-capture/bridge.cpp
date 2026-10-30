@@ -38,6 +38,7 @@ namespace {
 std::atomic<uint64_t> images=0,contexts=0,entered=0,exited=0;
 std::atomic<uint64_t> uuid_entered=0,uuid_exited=0,uuid_outputs=0;
 thread_local uint32_t active_string_scopes=0;
+thread_local uint32_t active_image_scopes=0;
 std::atomic<uint64_t> info_counts[5]{}; // live, empty, parse attempts, parsed objects, type sets
 struct Info {
     json::object value;
@@ -66,8 +67,8 @@ struct Context {
     ~Context() {--contexts;}
 };
 struct Scope {
-    Scope(){++entered;}
-    ~Scope(){++exited;}
+    Scope(){++entered;++active_image_scopes;}
+    ~Scope(){--active_image_scopes;++exited;}
 };
 template<class F> int32_t guarded(F&& f) noexcept {
     try {return f();}catch(const cv::Exception&){return 2;}
@@ -294,3 +295,4 @@ int32_t mfs_custom_info_fault(void* context) noexcept {
 uint64_t mfs_custom_info_count(uint32_t index) noexcept {
     return index<std::size(info_counts)?info_counts[index].load():UINT64_MAX;
 }
+#include "native-unit.inc"

@@ -29,6 +29,16 @@ pub(crate) trait Boundary: Sized {
         action: impl FnOnce(&mut Self::Buffer) -> Result<T, Self::Error>,
     ) -> Result<T, Self::Error>;
     fn image(&self, buffer: &Self::Buffer) -> Result<Self::Image, Self::Error>;
+    // The explicit native value adapter can assign an actual borrowed C++
+    // caller destination here. It must finish before the temporary buffer ends.
+    fn publish_image(
+        &self,
+        output: &mut Self::Image,
+        image: Self::Image,
+    ) -> Result<(), Self::Error> {
+        *output = image;
+        Ok(())
+    }
 }
 
 pub(crate) type UuidCallback<B> =
@@ -45,6 +55,15 @@ pub(crate) trait IdentityBoundary: Boundary {
         action: impl FnOnce(&mut Self::UuidBuffer) -> Result<T, Self::Error>,
     ) -> Result<T, Self::Error>;
     fn uuid(&self, buffer: &Self::UuidBuffer) -> Result<Self::Uuid, Self::Error>;
+    fn publish_uuid(
+        &self,
+        output: &mut Self::Uuid,
+        uuid: Self::Uuid,
+        _buffer: &Self::UuidBuffer,
+    ) -> Result<(), Self::Error> {
+        *output = uuid;
+        Ok(())
+    }
     fn features(&self) -> Option<Result<u64, Self::Error>>;
 }
 
@@ -91,6 +110,12 @@ pub(crate) struct Manager<'a, B> {
 #[path = "../../tests/upstream-parity/custom-capture/native.rs"]
 mod native_tests;
 impl<'a, B: Boundary> Manager<'a, B> {
+    // Original public create rejects a null callback table before allocating
+    // its manager. Individual optional callbacks may still all be absent.
+    pub fn create(boundary: Option<&'a B>) -> Option<Self> {
+        boundary.map(|boundary| Self::new(Some(boundary)))
+    }
+
     pub fn new(boundary: Option<&'a B>) -> Self {
         Self { boundary }
     }
@@ -123,7 +148,7 @@ impl<'a, B: Boundary> Manager<'a, B> {
             // Source accepts true+empty too and has no connected-state gate.
             // Extract before releasing the temporary buffer, and replace the
             // caller only after the new real image owner has been obtained.
-            *output = boundary.image(buffer)?;
+            boundary.publish_image(output, boundary.image(buffer)?)?;
             Ok(true)
         })
     }
@@ -143,7 +168,7 @@ impl<B: IdentityBoundary> Manager<'_, B> {
             }
             // Source copies the complete std::string before its stack buffer
             // ends. A true empty UUID replaces output; false preserves it.
-            *output = boundary.uuid(buffer)?;
+            boundary.publish_uuid(output, boundary.uuid(buffer)?, buffer)?;
             Ok(true)
         })
     }

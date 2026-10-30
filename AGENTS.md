@@ -14,6 +14,8 @@ Read these authorities before changing the corresponding area. Current component
 
 Private Custom UUID/features and get_info reuse the same manager. Scoped Windows archived-input probes pass; Linux UUID/features execution and downloaded byte rechecks also pass. Metadata retains actual StringBuffer/meojson semantics in the explicit adapter, with parse/object acquisition inside the buffer scope and type replacement after it; new metadata online/other-platform gates remain pending. Local formal preparation currently lacks the new VS2026 stable build. Wlr controlled host-construction failures passed native execution and complete source/archive verification. These do not establish full manager/ABI or P1 acceptance; see the development guide for exact boundaries.
 
+Custom capture-side public C create/destroy and real C++ virtual consumers now exercise the same Rust manager. Actual caller Mat/UUID assignment must occur before native temporary buffers end; opaque native heads and extra UUID representation copies are disclosed. Input/app/shell slots in the test class are uninvoked interface stubs, not migrated product actions. Scoped Windows archived-input evidence passes; all-platform, general failures/reentrancy and framework forwarding remain pending. Nested dependency preparation uses distinct step prefixes so recorded logs stay immutable; a Linux command that lost its original meojson log remains failed despite passing actual metadata bytes.
+
 | Authority | Responsibility |
 | --- | --- |
 | [Documentation index](docs/README.md) | Actual documents, their status, and maintenance rules |

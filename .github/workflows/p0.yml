@@ -86,6 +86,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/*LICENSE*
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/source-scope.txt
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/custom-reference/native-api-source/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/macos-arm64/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/macos-arm64/reference-u/artifacts/**
           if-no-files-found: warn
@@ -144,6 +145,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/*LICENSE*
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/source-scope.txt
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/custom-reference/native-api-source/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64-pipewire/logs/*.log
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/reference-u/artifacts/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/linux-x64/rust-shm/artifacts/**
@@ -254,6 +256,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/*-info-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/meojson-*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/meojson-LICENSE
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/custom-native-api-source/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/custom-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/custom-source-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.inc

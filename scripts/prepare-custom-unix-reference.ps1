@@ -16,6 +16,12 @@ function Assert-CustomMetadataLog([string]$Text) {
         throw 'Custom metadata entry did not execute the complete native parser/callback/owner matrix'
     }
 }
+function Assert-CustomApiLog([string]$Text) {
+    if($Text -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+       -not $Text.Contains('Custom native API lifecycles=20 source_rust_virtual_queries=1308 actual_create_destroy=1 public_bases=15 rust_drop_callbacks=20 scoped_caller_publications=112 retained_pixel_pairs=20 input_actions=0 passed')){
+        throw 'Custom actual public API consumer did not execute its complete lifecycle/publication matrix'
+    }
+}
 function Test-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     $log=Join-Path $logsRoot custom-reference.log
     $status='failed'
@@ -88,6 +94,9 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
         Copy-Item -LiteralPath (Join-Path $build $name) -Destination $saved
         Save $saved
     }
+    $apiSources=Join-Path $customInputs native-api-source
+    Copy-Item -LiteralPath (Join-Path $build native-api-source) -Destination $apiSources -Recurse
+    Get-ChildItem -LiteralPath $apiSources -File -Recurse|ForEach-Object{Save $_.FullName}
     $libraryName=if($IsMacOS){'libmfs_custom_capture.dylib'}else{'libmfs_custom_capture.so'}
     $library=Join-Path $customInputs $libraryName
     Copy-Item -LiteralPath (Join-Path $build $libraryName) -Destination $library
@@ -110,6 +119,8 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
         Step custom-identity-records $ConfigureTool @('upstream-trace','custom-identity',(Join-Path $evidence identity))
         Step custom-metadata-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::metadata::preserves_metadata_parser_bytes_scope_order_defaults_and_exceptions','--','--exact','--ignored','--test-threads=1','--nocapture')
         Step custom-metadata-records $ConfigureTool @('upstream-trace','custom-metadata',(Join-Path $evidence metadata))
+        Step custom-api-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::native_api::consumes_original_creation_virtual_capture_and_destruction_with_rust_manager','--','--exact','--ignored','--test-threads=1','--nocapture')
+        Step custom-api-records $ConfigureTool @('upstream-trace','custom-native-api',(Join-Path $evidence native-api))
         Step custom-native-clippy cargo @('clippy','--workspace','--all-targets','--locked','--no-default-features','--features','custom-capture','--','-D','warnings')
         Step custom-core-direct-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','custom-capture')
         Step custom-core-runtime-tree cargo @('tree','--locked','-p','maafw-screencap','--edges','normal','--no-default-features','--features','custom-capture')

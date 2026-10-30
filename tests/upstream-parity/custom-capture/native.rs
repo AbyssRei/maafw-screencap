@@ -87,6 +87,7 @@ struct View {
     references: i32,
 }
 struct Lib {
+    unit: native_api::Api,
     metadata: metadata::Api,
     _module: loader::Module,
     abi: unsafe extern "C" fn(u32) -> usize,
@@ -141,6 +142,7 @@ impl Lib {
         // optional callback pointers have C's null/function representation.
         unsafe {
             Self {
+                unit: native_api::Api::open(&module),
                 metadata: metadata::Api::open(&module),
                 abi: module.symbol(c"mfs_custom_abi"),
                 create: module.symbol(c"mfs_custom_create"),
@@ -194,6 +196,8 @@ impl Lib {
 mod identity;
 #[path = "metadata.rs"]
 mod metadata;
+#[path = "native-api.rs"]
+mod native_api;
 struct Image<'a> {
     pointer: NonNull<c_void>,
     lib: &'a Lib,
@@ -232,6 +236,7 @@ struct Buffer(NonNull<OpaqueBuffer>);
 struct Native<'a> {
     context: NonNull<c_void>,
     lib: &'a Lib,
+    unit_destination: Cell<(u32, *mut c_void)>,
     _channel: PhantomData<Rc<()>>,
 }
 impl<'a> Native<'a> {
@@ -242,6 +247,7 @@ impl<'a> Native<'a> {
         Self {
             context: NonNull::new(out).unwrap(),
             lib,
+            unit_destination: Cell::new((0, std::ptr::null_mut())),
             _channel: PhantomData,
         }
     }
@@ -312,6 +318,11 @@ impl<'a> Boundary for Native<'a> {
             pointer: NonNull::new(output).ok_or(1)?,
             lib: self.lib,
         })
+    }
+    fn publish_image(&self, output: &mut Image<'a>, mut image: Image<'a>) -> Result<(), i32> {
+        self.publish_cpp_image(&mut image)?;
+        *output = image;
+        Ok(())
     }
     fn with_buffer<T>(&self, action: impl FnOnce(&mut Buffer) -> Result<T, i32>) -> Result<T, i32> {
         struct Call<F, T> {

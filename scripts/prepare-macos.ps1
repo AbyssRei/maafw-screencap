@@ -61,6 +61,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'custom-metadata-parity'){
             $status='failed';Assert-CustomMetadataLog $observed;$status='passed'
         }
+        if($Name -eq 'custom-api-parity'){
+            $status='failed';Assert-CustomApiLog $observed;$status='passed'
+        }
         if($Name -eq 'custom-native-parity'){
             $status='failed';Assert-CustomNativeLog $observed;$status='passed'
         }
