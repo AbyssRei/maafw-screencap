@@ -1,6 +1,8 @@
 # 文档导航与维护约定
 
-日期：2026-10-30。P0 准备阶段已验收，P1 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；macOS 主线程 ScreenCaptureKit 原型已通过 20 次受控窗口取帧、独立持帧、完成块释放与晚到结果原生验证；Wlr 真实 headless/Pixman compositor 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；结果按平台记录，P0 已通过计划第 16 节的准备与最小原生可行性门禁；完整 U 行为对照仍由 P1 完成。默认 binary 仍为 Hello World；内部 library 开始窗口 GDI 与 PrintWindow 迁移及显式局部对照，完整 U、公共 SDK 和绑定尚未完成。实际命令及原型边界见[开发指南](guides/development.md)。
+2026-10-30 用户已确认[ADR 0003：修正 fork 提取来源](decisions/0003-corrected-fork-extraction-baseline.md)：P1 直接提取包含修正 PR #1587 语义的固定 fork，基线记为 F；P2 保留编号，改为来源冻结与完整提取验收，不再重复打补丁。fork 修复、确切 head、Rust/来源工具同步和新版原生验收尚未完成。下列既有 U/旧来源切片保留原始证据含义，不因计划调整成为 F 已验收。
+
+日期：2026-10-30。P0 准备阶段已验收，P1 实施中：独立 xtask、外部来源校验、分配原型、显式 Windows GDI、COM apartment、D3D/DXGI/WinRT 读回及受控窗口 FramePool 捕获/事件原型已实现，Actions 原生矩阵已定义；Linux PipeWire 自有 C 源夹具的 20 次流生命周期、取帧、独立持帧和完整退出已通过原生 Actions，早期 SPA 夹具退出失败证据保留外置；macOS 主线程 ScreenCaptureKit 原型已通过 20 次受控窗口取帧、独立持帧、完成块释放与晚到结果原生验证；Wlr 真实 headless/Pixman compositor 与 system libwayland 原型已通过 20 次取帧/SHM/fd 生命周期、队列隔离及正常退出的原生 Actions 验证；Desktop Duplication 的 20 次硬件采集/释放原型已通过本机及原生 Actions 验证；结果按平台记录，P0 已通过计划第 16 节的准备与最小原生可行性门禁；完整 F 行为对照仍由 P1 完成。默认 binary 仍为 Hello World；内部 library 开始窗口 GDI 与 PrintWindow 迁移及显式局部对照，完整 F、公共 SDK 和绑定尚未完成。实际命令及原型边界见[开发指南](guides/development.md)。
 
 ## 阅读顺序与权威来源
 
@@ -33,10 +35,11 @@ Linux manager 的 Input=None 编排、两分钟 PipeWire 长流及 Wlr 受控转
 
 | 文档 | 职责及当前状态 |
 | --- | --- |
-| [实施计划](plans/maafw-screencap-extraction-plan.md) | 项目范围、U/P/E 顺序、依赖政策、参考资料布局、后端要求、验收与发布门禁；计划已确认，实施待完成 |
+| [实施计划](plans/maafw-screencap-extraction-plan.md) | 项目范围、P1 提取 F / P2 冻结验收 / 产品 E 顺序、依赖政策、参考布局、后端与发布门禁；修订已确认，实施待完成 |
 | [技术选型与决策](decisions/interactive-technology-selection.md) | R1–R8 的理由、约束及替代关系；选型已确认，原型/验收按条目记录 |
 | [ADR 0001：GDI 全虚拟桌面](decisions/0001-gdi-virtual-desktop-capture.md) | 纳入独立产品截图方式的范围与理由；P2 后 P3 实施，尚未实现或验收，不替代 R1–R8 |
 | [ADR 0002：原生接口现代化](decisions/0002-native-interface-modernization.md) | 旧兼容用法迁移及有效接口升级的范围与理由；P2 后实施，尚未实现或验收 |
+| [ADR 0003：修正 fork 提取来源](decisions/0003-corrected-fork-extraction-baseline.md) | 替代旧 U → P 实施顺序，修复进入 P1 提取，P2 冻结验收 F；来源锁定、实现及历史整理待主会话执行 |
 | [架构与项目结构](design/architecture.md) | 内部依赖、状态归属、样本交接和目标目录；方向已确认，具体 SDK 在 P3 定案 |
 | [GDI 全虚拟桌面设计](design/gdi-virtual-desktop.md) | 屏幕 DC、单次 BitBlt、DIB、布局与资源流程；产品扩展规划，尚未实现或验收 |
 | [原生接口现代化设计](design/native-interface-modernization.md) | DIB、DXGI、FramePool、PipeWire、ExtImage 迁移清单、能力与执行边界；已纳入实施，尚未实现或验收 |

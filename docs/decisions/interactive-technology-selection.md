@@ -2,9 +2,11 @@
 
 日期：2026-10-28。依据：[抽取计划](../plans/maafw-screencap-extraction-plan.md)。
 
+2026-10-30 阶段修订：[ADR 0003](0003-corrected-fork-extraction-baseline.md)将完整提取来源改为修正 fork 的固定基线 F，PR 修复随 P1 同步，P2 改为来源冻结与完整提取验收。该修订替代旧 U → P 顺序及本文相应阶段引用，R1–R8 标识和技术选型保留；历史原型/运行证据不改名为 F，新版来源及原生验收仍待完成。
+
 本记录是项目自身的技术选型与决策说明，归档于仓库 `docs/`。本机环境、绝对路径及消费者检查明细另存于同级参考目录的 `local/observations/local-environment-and-consumer-observations-2026-10-27.md`；来源审计、补丁、映射和对照材料按基线/运行批次外置。已确认的技术路线仍需完成所属阶段的原型和验收；选型确认不表示平台支持或验收已经通过。
 
-本轮首版前置技术选型状态：已完成，启动 P0 所需的用户决策已齐备；已覆盖 P0/P1 主技术路线、实际消费者、Python 分阶段路线及首版/后续分发政策。工程结构按用户对单库的倾向和平台隔离要求落实；后续架构与文档评审的优化已按 R8 收口；其余路线按各轮明确答复确认。已同步产品抽取计划、AGENTS.md 和 nightly 工具链配置；具体 SDK 接口、参数和打包细节按产品计划第 17.1 节在对应阶段细化。P0 准备与最小原生可行性门禁已通过本机及三平台验证，并完成外部汇总退出审阅；P1 完整上游迁移已开始，当前先实现窗口 GDI、PrintWindow 与显式局部对照入口，尚未形成完整 U。实际命令与已验证范围见[开发指南](../guides/development.md)。
+本轮首版前置技术选型状态：已完成，启动 P0 所需的用户决策已齐备；已覆盖 P0/P1 主技术路线、实际消费者、Python 分阶段路线及首版/后续分发政策。工程结构按用户对单库的倾向和平台隔离要求落实；后续架构与文档评审的优化已按 R8 收口；其余路线按各轮明确答复确认。已同步产品抽取计划、AGENTS.md 和 nightly 工具链配置；具体 SDK 接口、参数和打包细节按产品计划第 17.1 节在对应阶段细化。P0 准备与最小原生可行性门禁已通过本机及三平台验证，并完成外部汇总退出审阅；P1 完整上游迁移已开始，当前先实现窗口 GDI、PrintWindow 与显式局部对照入口，尚未形成完整 F。实际命令与已验证范围见[开发指南](../guides/development.md)。
 
 | 项目 | 收口结论 |
 | --- | --- |
@@ -13,7 +15,7 @@
 | Windows | windows-rs 专用 crate + windows-bindgen 私有投影；`x86_64-pc-windows-msvc` |
 | Linux | pipewire + wayland-client 高层绑定，显式启用 wayland-backend client_system |
 | macOS | objc2 框架绑定直接接入，按需使用 block2/dispatch2 |
-| U/P 适配 | C++ + OpenCV，通过必要的私有窄 C 边界接入 |
+| F 适配 | C++ + OpenCV，通过必要的私有窄 C 边界接入 |
 | 原生构建 | CMake 按平台选生成器；首版 Windows 仅实现已安装 VS2026 + MSBuild，VS2022/MSVC-Ninja 后续扩展 |
 | OpenCV 准备 | 最新正式版源码构建为默认，核验模块与优化配置并按身份/配置缓存 |
 | 验收环境 | GitHub 托管 runner 优先，先探测真实桌面、权限、GPU/原生取帧与回调退出能力 |
@@ -24,8 +26,8 @@
 
 ## 已确认需求与后续实施决策
 
-后续独立决策使用四位编号维护：[ADR 0001：GDI 全虚拟桌面](0001-gdi-virtual-desktop-capture.md)已纳入产品扩展规划，P2 后在 P3 实施，不替代 R1–R8，也不扩大 U/P 迁移范围。
-[ADR 0002：原生接口现代化](0002-native-interface-modernization.md)将旧兼容用法迁移及新接口接入纳入 P3，策略/消费随 P4/P5 验收；详细清单与能力边界独立维护，不提前改动 U/P。
+后续独立决策使用四位编号维护：[ADR 0001：GDI 全虚拟桌面](0001-gdi-virtual-desktop-capture.md)已纳入产品扩展规划，P2 后在 P3 实施，不替代 R1–R8，也不扩大 F 迁移范围。
+[ADR 0002：原生接口现代化](0002-native-interface-modernization.md)将旧兼容用法迁移及新接口接入纳入 P3，策略/消费随 P4/P5 验收；详细清单与能力边界独立维护，不提前改动 F。
 
 | 项目 | 当前状态 | 处理时机 |
 | --- | --- | --- |
@@ -43,10 +45,10 @@
 
 ## 沿用的计划约束
 
-- 顺序为 P0/P1 完整迁移 → P2 应用固定 PR #1587 → P3–P6 SDK 与扩展。
+- 顺序为 P0 准备 → P1 完整提取修正 fork F（含修复）→ P2 来源冻结与完整提取验收 → P3–P6 SDK 与扩展。
 - Rust 为主体；默认最新 nightly 工具链，实验分配 API 集中在必要内部封装，不维护额外 stable 实现；相关 API 稳定并通过迁移验收后转回 stable。最终公共动态边界为 C ABI。
 - 首批平台为 Windows x64、Linux x64、macOS arm64；本地只验证本机平台，其他平台由原生 Actions runner 验证，不使用 WSL 完成 Linux 验收。
-- 最终基础核心和基础绑定无强制 OpenCV 依赖；U/P 使用显式启用的验收适配兑现上游转换和输出行为。
+- 最终基础核心和基础绑定无强制 OpenCV 依赖；F 使用显式启用的验收适配兑现上游转换和输出行为。
 - 项目自身的技术选型和架构决策说明存入 `docs/`；参考资料、补丁、映射、来源/许可核验、实际构建与对照报告外置。本记录不固定未来依赖版本。
 
 ## R1-01 工程拆分与平台隔离
@@ -65,7 +67,7 @@
 
 “不包含其他平台代码”指其他平台后端不会进入本次产品编译和链接；共享逻辑正常编译。源码分发仍保留各平台源文件。Cargo 可为所有平台解析依赖并记录到同次 lockfile，这与实际编译/链接范围不同。
 
-P0 验收：在三个原生平台分别验证模块、运行依赖、原生探测和链接隔离；验证同平台后端缺依赖时的 AUTO/ON/OFF 行为。独立依赖准备、原型族配置和 build.rs 目标/feature/原生证据复验已通过本机 Windows 与三平台 Actions：包含 OFF 构建、feature 不匹配拒绝、指定 SDK/pkg-config 缺失时 AUTO/ON、正常 ON 编译及捕获源不可构建时的准备独立性。平台结果不代替全部 P0 门禁；最新工具链的后续验证及命令范围见[开发指南](../guides/development.md#已实现的-p0-工具)。
+P0 验收：在三个原生平台分别验证模块、运行依赖、原生探测和链接隔离；验证同平台后端缺依赖时的 AUTO/ON/OFF 行为。独立依赖准备、原型族配置和 build.rs 目标/feature/原生证据复验已通过本机 Windows 与三平台 Actions：包含 OFF 构建、feature 不匹配拒绝、指定 SDK/pkg-config 缺失时 AUTO/ON、正常 ON 编译及捕获源不可构建时的准备独立性。平台结果不代替全部 P0 门禁；最新工具链的后续验证及命令范围见[开发指南](../guides/development.md#当前仓库与本机命令)。
 
 依据：
 
@@ -76,7 +78,7 @@ P0 验收：在三个原生平台分别验证模块、运行依赖、原生探�
 
 ## R1-02 Windows 原生绑定
 
-状态：用户已确认 A；P0 私有 Win32 sys 及 COM/WinRT rich 投影的最小原生门禁已通过本机和 Actions；完整 U 行为对照仍由 P1 完成。
+状态：用户已确认 A；P0 私有 Win32 sys 及 COM/WinRT rich 投影的最小原生门禁已通过本机和 Actions；完整 F 行为对照仍由 P1 完成。
 
 采用 Microsoft windows-rs 生态的专用 crate，以及由 `windows-bindgen` 生成的项目私有绑定。按实际需要使用核心 COM/WinRT 类型，生成未覆盖的 Win32、D3D11、DXGI、WinRT 等声明；维护生成输入，生成输出放入 `OUT_DIR`，安全封装独立维护。具体专用 crate 集合和生成参数由 P0 覆盖验证确定。
 
@@ -88,9 +90,9 @@ P0 验收：原生取帧、GUID/HRESULT、调用约定、COM apartment、引用�
 
 依据：[Microsoft windows-rs 官方说明](https://github.com/microsoft/windows-rs)。
 
-## R1-03 U/P OpenCV 验收适配器
+## R1-03 F OpenCV 验收适配器
 
-状态：用户已确认 A；P0 最小 C++/OpenCV 适配、FFI/持帧/退出与独立未打补丁 GDI 参考捕获已通过原生验证，完整 U/P 对照留在 P1/P2。
+状态：用户已确认 A；P0 最小 C++/OpenCV 适配、FFI/持帧/退出与独立未打补丁 GDI 参考捕获已通过原生验证，完整 F 对照留在 P1/P2。
 
 主要使用 C++ + OpenCV，沿上游 `cv::Mat`、`core`/`imgproc` 操作、参数和顺序建立对照。C++ 转换适配只参与显式启用的验收路径，捕获流程仍由 Rust 实现。
 
@@ -102,9 +104,9 @@ P0/P1 验收：独立原始输出与转换结果、stride/方向/ROI/颜色、�
 
 ## R2-01 Linux 原生绑定
 
-状态：用户已确认 A；P0 PipeWire/Wlr 最小原生取帧、独立持帧、退出和配置隔离已验证，完整 U/P 对照留在 P1/P2。
+状态：用户已确认 A；P0 PipeWire/Wlr 最小原生取帧、独立持帧、退出和配置隔离已验证，完整 F 对照留在 P1/P2。
 
-优先采用 `pipewire` 和 `wayland-client` 高层绑定，并显式启用 `wayland-backend` 的 `client_system`，使 U/P 沿用系统 libwayland。必要语义未覆盖时局部使用 `pipewire-sys`、`wayland-sys` 或最小 C shim；不默认改用纯 Rust 协议实现。
+优先采用 `pipewire` 和 `wayland-client` 高层绑定，并显式启用 `wayland-backend` 的 `client_system`，使 F 沿用系统 libwayland。必要语义未覆盖时局部使用 `pipewire-sys`、`wayland-sys` 或最小 C shim；不默认改用纯 Rust 协议实现。
 
 Rust 管理捕获流程、缓冲和停止逻辑。保持 PipeWire thread-loop 锁与回调纪律；关联对象操作在所需锁内进行，停止 loop 时不持该锁。Wayland 保持事件队列、代理对象、fd 所有权和 read/cancel-read 配平；宏、内联及可变参数缺口才引入窄桥接。
 
@@ -122,7 +124,7 @@ P0/P1 验收：PipeWire 取帧、锁/通知/停止、buffer 归还和初始化�
 
 ## R2-02 macOS 原生绑定
 
-状态：用户已确认 A；P0 主线程原型已通过原生受控窗口捕获、CPU 持帧及完成/晚到回调释放验证，完整平台与 U/P 对照仍待验收。
+状态：用户已确认 A；P0 主线程原型已通过原生受控窗口捕获、CPU 持帧及完成/晚到回调释放验证，完整平台与 F 对照仍待验收。
 
 通过 `objc2` 和 `objc2-screen-capture-kit` 及所需 CoreMedia/CoreVideo/CoreFoundation/AppKit 等框架绑定直接接入；按需使用 `block2`、`dispatch2`。仅为已证明的绑定或原生互操作缺口增加最小 Objective-C 桥接，确需 Objective-C++ 时单独说明。
 
@@ -178,7 +180,7 @@ P0/P1 验收：内容查询和截图完成回调、像素锁/解锁、独立持�
 
 ## R3-02 原生验收环境
 
-状态：用户已确认 C；GitHub 托管 runner 的 P0 能力探测及三平台最小原生取帧/所有权/退出已通过，完整 U 与物理多显示器等未覆盖环境仍按阶段补齐。
+状态：用户已确认 C；GitHub 托管 runner 的 P0 能力探测及三平台最小原生取帧/所有权/退出已通过，完整 F 与物理多显示器等未覆盖环境仍按阶段补齐。
 
 先探测托管 runner 的原生桌面、权限和 GPU 能力，再明确缺失场景及所需补充环境。当前没有已确认可用的自托管机器；补充环境的具体方式尚未选择。
 
@@ -216,11 +218,11 @@ VS 产品线、生成器与实际 MSVC 工具集分别探测和记录，不以 V
 
 Rust 产品仍以 Cargo 为构建入口，xtask 编排独立参考/验收任务，小型原生桥接由 build.rs 集成；P0 已实现实际参考/验收 C++ 工程与准备入口，不创建无对应工程的空入口或 presets。
 
-## R4-03 U/P OpenCV 获取
+## R4-03 F OpenCV 获取
 
-状态：用户已确认 A；P0 最新正式 OpenCV 源码准备、选定模块/优化构建和最小适配已通过，完整 U/P 对照留在 P1/P2。
+状态：用户已确认 A；P0 最新正式 OpenCV 源码准备、选定模块/优化构建和最小适配已通过，完整 F 对照留在 P1/P2。
 
-默认采用最新正式版 OpenCV 源码构建，明确所需模块及传递依赖，核验实际操作的 CPU baseline/dispatch、SIMD 和适用 HAL/第三方优化；按解析身份、编译器、运行库和模块/优化配置复用缓存。同次 U/P 参考与 Rust 侧验收适配采用一致的实际依赖集合。
+默认采用最新正式版 OpenCV 源码构建，明确所需模块及传递依赖，核验实际操作的 CPU baseline/dispatch、SIMD 和适用 HAL/第三方优化；按解析身份、编译器、运行库和模块/优化配置复用缓存。同次 F 参考与 Rust 侧验收适配采用一致的实际依赖集合。
 
 源码构建属于显式对照/验收准备，不进入产品基础构建，不将 OpenCV 二进制或验收适配器作为首版共享转换运行库分发。
 
@@ -283,13 +285,13 @@ Rust 产品仍以 Cargo 为构建入口，xtask 编排独立参考/验收任务�
 
 ## R7 参考资料布局调整
 
-保留产品、deps 和 reference 三个同级目录，详细布局见[抽取计划第 6.2 节](../plans/maafw-screencap-extraction-plan.md)。本次调整的是资料归档边界，U → P → E 阶段与首版选型沿用既有安排。
+保留产品、deps 和 reference 三个同级目录，详细布局见[抽取计划第 6.2 节](../plans/maafw-screencap-extraction-plan.md)。R7 维护资料归档边界；实施顺序按 ADR 0003 改为 P1 提取 F、P2 冻结并验收 F、随后演进 E，首版技术选型不变。
 
 - deps 统一保存 Cargo、下载及原生依赖的可清理缓存；该次解析文件和需保留的离线重建输入进入 reference 的 `runs/<run-id>/inputs/`，不再设置职责重叠的根 `dependencies/`。
-- U/P 按 `baselines/{u,p}/<baseline-id>/` 保存独立参考程序、来源/映射清单与 `audits/`；P 引用确切父 U 和累计补丁，已归档基线变更使用新 ID。
-- `patches/pr-1587/` 保存累计补丁及其独立来源清单；根 `manifest.json` 只索引基线、补丁与运行批次。
-- 构建工作、变体产物、日志和对照报告按 `runs/<run-id>/<platform-config>/` 归档，分别标识参考/Rust U/P/E，保持同批次依赖和输入关系，避免不同平台/重跑结果覆盖。
-- 本机信息与消费者路径使用 `local/`。现有环境/消费者观察报告归入 `local/observations/`，不与实际 U/P/E 验收报告混放；项目通用技术选型说明继续存于仓库 docs。
+- F 按 `baselines/f/<baseline-id>/` 保存独立参考程序、来源/映射清单与 `audits/`，引用确切原始祖先和修正 fork；历史 `baselines/{u,p}/` 及父子关系保持原样，归档变化使用新 ID。
+- 新修订按 `patches/pr-1587/<revision-id>/` 保存累计差异及其独立来源清单，旧根级补丁文件不覆盖；根 `manifest.json` 只索引基线、补丁与运行批次。真实格式与验证代码随 xtask 实现建立。
+- 构建工作、变体产物、日志和对照报告按 `runs/<run-id>/<platform-config>/` 归档，分别标识参考/Rust F/E，保持同批次依赖和输入关系，避免不同平台/重跑结果覆盖。
+- 本机信息与消费者路径使用 `local/`。现有环境/消费者观察报告归入 `local/observations/`，不与实际 F/E 验收报告混放；项目通用技术选型说明继续存于仓库 docs。
 
 基线/运行清单中的实际版本和快照只服务该次追溯及重建，不成为未来依赖锁定。已验收基线与发布记录保留必要快照和产物，离线重建所需材料独立于可清理缓存；其余目录按 P0 任务实际需要建立，不预建空清单或把目录约定当作验收结果。
 
@@ -297,12 +299,12 @@ Rust 产品仍以 Cargo 为构建入口，xtask 编排独立参考/验收任务�
 
 状态：用户已要求落实本轮全部架构/项目结构和 docs 分层建议；文档组织已落实，产品实现仍受 P0 → P1 → P2 → P3 门禁约束。
 
-保留单一捕获 crate + xtask、既有三平台绑定、nightly、U/P OpenCV 对照、Python 分阶段路线和首版分发政策。优化集中在明确依赖与所有权，而非提前引入 SDK 实现或拆分多核心 crate。
+保留单一捕获 crate + xtask、既有三平台绑定、nightly、F OpenCV 对照、Python 分阶段路线和首版分发政策。优化集中在明确依赖与所有权，而非提前引入 SDK 实现或拆分多核心 crate。
 
 | 决策 | 理由与权威说明 |
 | --- | --- |
 | 基础模型、会话编排、策略、内部后端和平台资源单向协作 | 减少原 core/state/policy 交叉职责；Windows 协调保持平台私有，见[架构设计](../design/architecture.md) |
-| 后端私有原生租约 → 独立 CPU 样本 → 不可变 Frame | 明确释放点、跨线程边界和复制次数；发布优先转移既有存储，U/P 不移动原转换调用点 |
+| 后端私有原生租约 → 独立 CPU 样本 → 不可变 Frame | 明确释放点、跨线程边界和复制次数；发布优先转移既有存储，F 不移动原转换调用点 |
 | 逐后端记录执行/销毁和等待关系 | 串行使用不等于可跨线程迁移，注销也不自动表示回调已排空；见[执行模型](../design/execution-model.md) |
 | xtask 准备不依赖捕获 crate，build.rs 消费明确配置 | 避免准备任务启动循环，保持直接 Cargo 消费；feature 只增加能力，见[开发指南](../guides/development.md) |
 | c_api 区分对外 ABI，原生 FFI 靠近后端 | 将系统调用与公共导出分开；公共头继续作为声明/常量/符号同源生成或核验的权威输入，见[C ABI 设计](../contracts/c-abi.md) |

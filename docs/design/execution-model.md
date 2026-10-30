@@ -2,7 +2,7 @@
 
 日期：2026-10-27。状态：设计约束已确认，产品实现与验收待完成；具体公共 SDK 类型、签名、状态编码与生成工具仍在 P2 验收后的 P3 定案。
 
-阶段边界和验收门禁以[实施计划](../plans/maafw-screencap-extraction-plan.md)为准。本文未标明文件的“第 N 节”均指该计划的对应章节；计划保留原章节号并链接详细规则。U/P 继续保持固定上游行为，本文产品设计不提前进入 P0/P1/P2。
+阶段边界和验收门禁以[实施计划](../plans/maafw-screencap-extraction-plan.md)为准。本文未标明文件的“第 N 节”均指该计划的对应章节；计划保留原章节号并链接详细规则。F 按[ADR 0003](../decisions/0003-corrected-fork-extraction-baseline.md)采用修正 fork 的固定行为；修复进入 P1，P2 冻结并验收，本文产品设计不提前进入 P0/P1/P2。
 
 ## 执行与宿主约束
 
