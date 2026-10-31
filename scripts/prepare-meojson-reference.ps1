@@ -38,7 +38,7 @@ function Prepare-MeoJsonReference([string]$InputDirectory,[string]$StepPrefix='m
     $dirty=& git -C $source status --porcelain --untracked-files=all
     if($LASTEXITCODE -ne 0 -or $dirty){throw 'meojson source cache was modified'}
     $archive=Join-Path $InputDirectory meojson-source.tar
-    Step ($StepPrefix+'-source-archive') git @('-C',$source,'archive','--format=tar','--output',$archive,$actual)
+    Step ($StepPrefix+'-source-archive') git @('-C',$source,'-c','core.autocrlf=false','archive','--format=tar','--output',$archive,$actual)
     Save $archive
     $license=Join-Path $InputDirectory meojson-LICENSE
     Copy-Item -LiteralPath (Join-Path $source LICENSE) -Destination $license;Save $license
@@ -61,7 +61,7 @@ function Prepare-MeoJsonReference([string]$InputDirectory,[string]$StepPrefix='m
     return [ordered]@{Include=$prefix;Version=$release.tag_name;Commit=$actual}
 }
 
-function Restore-MeoJsonReference([string]$Archive,[string]$Identity,[string]$Destination) {
+function Restore-MeoJsonReference([string]$Archive,[string]$Identity,[string]$Destination,[string]$RecordPath='') {
     # Caller verified archived input digests. Reconstruct headers exclusively
     # from that batch, then validate every staged byte; never query online here.
     New-Item -ItemType Directory -Path $Destination|Out-Null
@@ -70,12 +70,31 @@ function Restore-MeoJsonReference([string]$Archive,[string]$Identity,[string]$De
     New-Item -ItemType Directory -Path $prefix|Out-Null
     Copy-Item -LiteralPath (Join-Path $Destination include) -Destination (Join-Path $prefix meojson) -Recurse
     $identityValue=Get-Content -LiteralPath $Identity -Raw|ConvertFrom-Json
+    $restored=[Collections.Generic.List[object]]::new()
     foreach($header in $identityValue.headers) {
         if([IO.Path]::IsPathRooted($header.path) -or $header.path -match '(^|[/\\])\.\.([/\\]|$)'){throw 'Invalid archived meojson header path'}
         $path=Join-Path (Join-Path $prefix meojson) $header.path
-        if((Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -ne $header.sha256){throw 'Archived meojson header changed'}
+        $before=(Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()
+        $transform='unchanged'
+        if($before -ne $header.sha256){
+            # Older Windows archives inherited core.autocrlf=true even though
+            # the consumed include cache was created with LF. Restore only a
+            # byte sequence whose exact recorded prepared hash is confirmed.
+            $bytes=[IO.File]::ReadAllBytes($path)
+            $canonical=[Text.Encoding]::UTF8.GetBytes([Text.Encoding]::UTF8.GetString($bytes).Replace("`r`n","`n"))
+            $canonicalHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($canonical)).ToLowerInvariant()
+            if($canonicalHash -ne $header.sha256){throw 'Archived meojson header changed beyond its recorded newline form'}
+            [IO.File]::WriteAllBytes($path,$canonical)
+            $transform='CRLF_to_LF_exact_recorded_hash'
+        }
+        if((Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant() -ne $header.sha256){throw 'Restored meojson header differs from the recorded bytes'}
+        $restored.Add([ordered]@{path=$header.path;archive_sha256=$before;prepared_sha256=$header.sha256;transform=$transform})
     }
     if(@(Get-ChildItem (Join-Path $prefix meojson) -File -Recurse).Count -ne @($identityValue.headers).Count){throw 'Archived meojson header inventory differs'}
+    if($RecordPath){
+        $stream=[IO.File]::Open($RecordPath,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write)
+        try{$stream.Write([Text.Encoding]::UTF8.GetBytes((([ordered]@{version=$identityValue.version;commit=$identityValue.commit;headers=$restored})|ConvertTo-Json -Depth 8)+"`n"))}finally{$stream.Dispose()}
+    }
     return [ordered]@{Include=$prefix;Version=$identityValue.version;Commit=$identityValue.commit}
 }
 

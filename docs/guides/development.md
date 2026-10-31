@@ -54,6 +54,8 @@ P1 尚未完整验收；P2 来源冻结和 P3 SDK/原生现代化门禁不因该
 
 ## 当前仓库与本机命令
 
+离线 meojson 恢复已补齐确切字节校验：一份 Windows 正式归档的 19 个头文件受 Git `core.autocrlf=true` 影响保存为 CRLF，而实际消费记录为 LF。逐项与 Git blob、原消费文件及归档比较后，确认仅 CRLF→LF 即能恢复全部登记哈希；恢复器仅在该转换结果精确匹配已登记 SHA-256 时写入，其他差异仍拒绝。新的源归档显式固定 `core.autocrlf=false`，可另存逐头文件恢复记录。旧归档、原始失败及恢复前字节保持不变；19 份旧归档和 19 份规范归档的实际恢复、错误摘要拒绝均已验证，这不是新的截图验收。
+
 Custom 现沿同一私有 manager 增加原 `request_uuid` 与 `get_features` 迁移，不执行输入动作，也不建立公共 provider ABI。Windows 显式归档重建已验证原函数体及真实 MaaUtils StringBuffer：64 组原版/Rust 用例保留空、ASCII、NUL/非 UTF-8、长字节串和完整 64 位能力值，另观察借用回调表增删、缺失 manager、真实 C++ 异常及之后的独立查询。132 份完整 UUID 输出、20 次 Rust 原生栈缓冲作用域和 64 对持有结果已由 `upstream-trace custom-identity` 独立复算；Rust CPU 字节在模块卸载后另在线程读取。原 96 组截图/192 份像素回归仍通过。首个探针与 MaaUtils 归档有一份 header 不同，来源关联失败保留；后续显式重建从已验证归档新解出全部 50 份 header。首个新在线批次因运行时文档改变触发 source-stability 失败，固定整树后的 Rust 批次十二项检查通过，但当时 VS2026 稳定版已更新至 18.11.3，已安装的 18.11.2 因此在原生构建前记录缺环境；SDK 10.0.28000.2957 已就绪。Actions 41135367620 的 Linux UUID/features 用例已通过，下载后的 132 份实际输出亦独立复算通过；新 macOS 入口仍缺正式 Xcode 27.2/27B52。
 
 Custom 的 `get_info` 现也迁移至同一私有 Rust manager。Rust 保留默认对象创建、当前借用回调、非零返回值、缺失/false 默认、独立对象获取及最后覆盖 `type=custom` 的顺序；显式验收适配器使用真实 StringBuffer 和 meojson parser/object，不给核心添加 JSON/OpenCV 依赖。原版接受尾随注释、NUL 后终止、非 UTF-8 字符串及 `1e1000`，拒绝重复字段；默认 serde 诊断曾在九类输入上不匹配，原记录保留，未用它替换源解析语义。Windows 归档依赖重建通过 37 类载荷、592 组源码/Rust 对照及 1,193 份实际输出字节复算，覆盖 null/table/回调变化、真实 C++ 异常与之后的独立查询。152 次原生 StringBuffer 作用域、113 次 parse、597 次 type 替换和全部实际对象释放均核对；解析/对象复制位于临时 buffer 内，type 替换位于其释放后，反向调用会被适配器拒绝。592 对原生对象在 callback/context 销毁后继续读取，独立 CPU 字节另在模块卸载后跨线程读取。opaque 对象 head 的额外记账分配显式保留；它不是原生对象移动/并发契约。新 `upstream-trace custom-metadata <外部 metadata 目录> [--check-only]` 按原始字节验证 JSON，不经另一解析器损失数字/编码信息。最新本机/Linux 在线局部门禁见下文；framework/loader、通用故障/重入、编码/resize/全部类型及 P1 继续未完成，原生捕获接口的新入口见下文。
