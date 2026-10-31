@@ -455,7 +455,9 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 初版同一 run 的完整官方 Linux ZIP/tar 随后核对全部十九份清单、82,123 个登记路径、十八份普通 444 文件 Git 快照、一份不可构建控制、76 个 F blob 和实际 CMake 来源。全部 43,093 个 PipeWire native 路径及原始内外清单与轻量包匹配，补齐 87 项输入；原版 BGR 持帧断言和不完整 checker 仍失败，来源核对不将其改为通过。
 
-修正版确切 `206755edd8efa4bfaa023d2b957c917bbfc08e69` 的 [Actions 41248794571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41248794571) PipeWire 组件通过全部 195 项检查；比初版多一项缓存未命中的 `source-drm-clone`，没有删除原检查。七格式原版/Rust 各完成 140 生命周期、420 次捕获；独立下载复核 43,088 个可用登记路径、2,534 份实际即时/持帧字节、28 份 oracle 和 21 份表。原版 BGR 实际记录四十对缓存别名及二十次早期持帧被覆盖；Rust 既有所有权适配保留不变 raw/BGR。轻量包仍缺 87 项完整来源输入。同一 run 的另一个 PipeWire P0 命令在显式配置阶段失败、尚未运行其取帧；macOS 实际日志仍为正式 Xcode 27.2/27B52 缺失。组件通过不代替这些独立失败或整个 Linux job/P1 验收。
+修正版确切 `206755edd8efa4bfaa023d2b957c917bbfc08e69` 的 [Actions 41248794571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41248794571) PipeWire 组件通过全部 195 项检查；比初版多一项缓存未命中的 `source-drm-clone`，没有删除原检查。七格式原版/Rust 各完成 140 生命周期、420 次捕获；独立下载复核 43,088 个可用登记路径、2,534 份实际即时/持帧字节、28 份 oracle 和 21 份表。原版 BGR 实际记录四十对缓存别名及二十次早期持帧被覆盖；Rust 既有所有权适配保留不变 raw/BGR。轻量包当时缺少的 87 项完整来源输入已由下述完整归档补齐。同一 run 的另一个 PipeWire P0 命令在显式配置阶段失败、尚未运行其取帧；macOS 实际日志仍为正式 Xcode 27.2/27B52 缺失。组件通过不代替这些独立失败或整个 Linux job/P1 验收。
+
+修正版同一 run 的完整官方 Linux ZIP/tar 已核对八份实际运行清单、63,289 个登记路径、八份普通 444 文件 Git 快照、76 个 F blob 和实际 CMake 来源。全部 43,175 个 PipeWire native 路径及原始内外清单与轻量包逐字节匹配，补齐全部 87 项来源输入。另两份 Rust 准备批次的最新版本检查分别因查询 `target-lexicon`、`pipewire-sys` 的 crates.io 请求发生 curl 28／10 秒连接超时而失败；P0 PipeWire、该批 Wlr 与最后配置检查继续拒绝未通过准备的输入，未执行对应捕获或配置控制场景。缺少的配置控制不记为通过，两个超时失败保留；独立准备且通过的七格式 P1 组件也不接受整个 Linux job 或 P1。
 
 确切 `8f75fef1cad09d386a39f9debbf3f59e497d51d4` 的 [Actions 41243712698](https://github.com/AbyssRei/maafw-screencap/actions/runs/41243712698) FramePool 组件为 61/67 项通过。原四项 pseudo 颜色失败保留，Rust Size 另在第 16 周期恢复时记录 marker `[31,83,167]`，尚未保存恢复图和对应完整行，随后严格 checker 拒绝缺失 Size 调用；不能据 marker 推断完整图像或根因。Size 失败后八项独立 factory/调用环境/生命周期/参考捕获检查仍执行并通过，失败状态和整批失败均保留。下载后五项其他 FramePool 数据校验通过，Size 仍严格失败；2,540 个轻量登记路径核对，缺少的 88 项输入随后由完整归档全部补齐。
 
