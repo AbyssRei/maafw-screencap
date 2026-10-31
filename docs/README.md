@@ -93,7 +93,7 @@ Linux manager 的 Input=None 编排、两分钟 PipeWire 长流及 Wlr 受控转
 | [C ABI 与回调契约](contracts/c-abi.md) | ABI 演进、声明生成、provider、回调和语言边界；P3 定案，P5 消费验收 |
 | [开发与验证指南](guides/development.md) | 当前可执行命令，以及准备/构建/测试任务的实施要求；明确区分已存在和计划入口 |
 
-真实 MemFd 流的 NULL-data 受控入口已在确切 10d73c 的 Linux 组件 164 项中通过；240 份像素、40 行介入及 60 次 Rust map/unmap 已独立复核，完整来源输入仍待补。既有 kernel DMA 实际流结果保持独立。确切 c407c0f 的 Windows Map 矩阵已通过原生执行及 360 份像素独立复核；完整工程包现已补齐轻量包的 87 个输入，核对 23 份清单及 42,192 个登记路径。FramePool 仍有四个原版 pseudo 断言失败，完整 P1 未通过；范围见[开发指南](guides/development.md#当前仓库与本机命令)。
+真实 MemFd 流受控入口在确切 10d73c 的 Linux 164 项中通过；完整工程包核对 19 份清单、79,300 个登记路径并补齐其 86 个输入。确切 983 的 Size/manager 原生矩阵与 400 份像素已独立复核；完整 Windows 包核对 23 份清单、43,171 个路径，补齐 174 个输入。纯 Markdown push 只运行轻量文档检查的行为也已由实际任务核对。四个原版 pseudo 断言仍失败，P1 未通过；详见[本轮原生复核](guides/development.md#本轮原生与-ci-复核)。
 
 ## 分层与变更规则
 

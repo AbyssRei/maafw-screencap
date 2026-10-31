@@ -1,6 +1,16 @@
 # 开发、构建与验证
 
-日期：2026-10-30。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，首先迁移窗口 GDI 与显式局部对照。下节列出已可运行的工具与原型；完整上游对照、SDK 和产品桌面验收仍随 P1–P5 实施。
+日期：2026-11-01。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，已有多个后端、helper 和管理器的私有切片及显式局部对照。完整来源、平台和调用链验收仍未完成；SDK 与产品能力保持各自阶段边界。
+
+## 本轮原生与 CI 复核
+
+确切 `10d73c92fa2953c157373ef252ab28725b14ad5b` 的 [Actions 41240527770](https://github.com/AbyssRei/maafw-screencap/actions/runs/41240527770) PipeWire 164 项检查通过。MemFd 真实流受控 NULL-data 的 40 行记录、240 份原始/持帧像素及 Rust 60 次 map/unmap 已独立复核，既有真实 kernel DMA 回归通过。完整 Linux 工程 ZIP/tar 随后核对全部 19 份清单、79,300 个登记路径、18 份普通 436 文件 Git 快照、一份不可构建控制快照、76 个 F blob 和实际 CMake 来源；全部 40,422 个 PipeWire 原生路径与轻量 native-result 原始字节匹配，补齐其 86 个输入缺口。原版复制/映射次数仍为 unknown，未接受自然 NULL、GPU/Portal、任意故障或完整 P1。
+
+确切 `983da16b7fcc5ba53849c564216b414d8ea38b47` 的 [Actions 41236808686](https://github.com/AbyssRei/maafw-screencap/actions/runs/41236808686) Size 四项及 manager Size 拒绝两项检查通过。独立复核全部 400 份像素及 808 个矩阵文件：Size 共 120 次调用、388 次实际查询、36 次拒绝、40 次恢复和 84 张持帧；manager 共 20 生命周期、40 次 FramePool 拒绝、60 次 GDI 捕获和 20 张持帧。完整 Windows ZIP/tar 核对全部 23 份清单、43,171 个登记路径、22 份普通 430 文件快照、一份不可构建控制快照及 76 个 F blob；FramePool 2,789 和 manager 3,020 个原生路径合并去重为 5,805 个，全部匹配，补齐 174 个输入缺口。该批七组件仍为 302/306 通过，四个原版 pseudo 断言保持失败。manager 证明组合原函数体模型、独立原版 Size 矩阵和真实 Rust native factories，不是完整原生原版 manager 同场执行。
+
+文档工作流的源码/CI 提交与纯 Markdown push 触发范围已用官方任务记录核对：495d884、8f75fef 同时创建文档和原生工作流；只有三个 Markdown 文件变化的 44baa21 只创建成功的 [文档任务 41244200477](https://github.com/AbyssRei/maafw-screencap/actions/runs/41244200477)。所有 PR 和手动原生调度仍保留完整矩阵，未新增 PR/手动原生执行的验收声明。文档检查不构成捕获验收。[独立编排控制](../../tests/prototypes/framepool-independent.ps1) 的三个 mock 子步骤在本机及三种 runner 上验证失败保留、后续执行和参数不变，没有执行捕获；真实新编排效果仍待后续记录。
+
+早期 d8c 的官方 PipeWire release 查询 HTTP 500，以及 627 的原版 zero-client 标记缺失失败均单独保留。后者停止在 45 行之后，未运行后续 Map/Size；不将其当作 Size 结果，也不由后续通过倒推失败原因。完整来源核对不扩展各批运行证明范围，P1 仍未完成。
 
 ## 本次连续三轮无输入复测
 
