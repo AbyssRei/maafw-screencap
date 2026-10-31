@@ -35,6 +35,8 @@ An additional batch now replays fifteen original initial/formal FramePool native
 
 Explicit imgcodecs preparation now resolves and archives current formal libpng/zlib, runs real encode/decode, and verifies the exact OpenCV codec libraries. Scoped Windows development probes and all six Custom native/data regressions pass with these libraries. The earlier Linux PNG-fixture failure remains failed; new Linux/native formal acceptance is pending. Offline replay requires the new codec inputs, and recorded meojson headers are restored only to their exact prepared hash. These remain acceptance dependencies outside the capture core; details and limits are in the development guide.
 
+The subsequent exact-b9e9f42 Linux PipeWire component on Actions 41184885199 passes all 154 checks, including the real PNG/Custom image path. Downloaded official ZIP integrity, 40,043 actual registered paths and six Custom data verifiers pass independently. Its lightweight package omits 487 source/dependency inputs or supplies placeholders, so complete source audit remains pending; this also does not accept the newer raw matrix, other components or P1. Keep the older failed PNG execution unchanged.
+
 Keep each detailed rule in its authority; this file summarizes constraints and links to them. User authorization and preferences from the current task still apply; do not invent another approval requirement for work already authorized.
 
 ## Phase Order and Scope
