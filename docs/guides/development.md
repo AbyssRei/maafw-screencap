@@ -152,6 +152,10 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
+Wlr 新增显式 `early-close-prefix` 原版寿命边界探针，随 `upstream-context wlr` 编排；实现和 portable 校核已通过，本机不执行 Linux 原生测试，原生编译/运行待新的 Actions 验证。原 WaylandClient/WlrScreencap 函数不改写，链接观察器在真实 disconnect 请求处记录 connected、已清空的全局字段、三个代理快照引用数和原生 fd。二十轮各含无 capture、冷 capture、已分配缓冲 capture、活跃旧快照下重连四种场景，共 80 个关闭前缀；夹具仅对仍有旧代理的 60 次断开延后实际 native disconnect，待旧 capture 析构后再恰好执行一次，无 capture 对照立即转发。40 次关闭状态下的原截图须拒绝并保持调用方输出；20 次重连只在旧快照释放后由新 source 取图，不调用旧代理/新 client display 的组合。正常模式继续立即转发 disconnect。
+
+`cargo xtask upstream-trace wlr-early-close-prefix <外部目录> [--check-only]` 独立核对完整 80 行、准确引用/状态/fd、80 份实际 task IDs，以及 60 张即时和 60 张持帧 BGR；拒绝缺行、额外文件、引用/资源不符或错误像素。夹具延后断开是明确的干预，不能用其配平结果证明原版在活跃代理下立即断开的清理有效，也不构成 Rust 早关/重连迁移或 P1 完成。现有 Rust `Client` 独占 connect/close 限制继续保留，后续安全适配仍须据实际原生结果决定。初次校核器编译因记录辅助函数名称不符而失败，日志保留；更正后 68 项 xtask 测试、格式、严格 Clippy 及 PowerShell 语法检查通过。
+
 DesktopDupWindow 新增独立原版进程与 Rust 的 38 场景原生几何矩阵，由 `upstream-parity desktop-dup` 显式编排。本机原版与 Rust 各完成 76 次截图，包含四边 ±1/±7/±8/±9、精确全屏、带边框 popup、普通窗口、平移和过大窗口；`upstream-trace desktop-geometry <外部 window-geometry 目录> [--check-only]` 独立复核完整客户区、外框、WINDOWPOS、380 个快照、全幅已知图样和一致的 16×16 更新标记、152 份关闭后持帧文件及 Rust 图像 owner 归零。原版 ROI 实际保留整屏 BGR Mat 行距，文件按目标行导出；Rust 显式安全复制取得紧密目标行距，两种布局分别记录，不因导出文件紧密就声称原生 ROI 紧密。每侧先调用其真实 helper 并等待异步调整完成，截图期间不得重复调整；不改变原版预热、等待、整屏转换和裁剪时点。该结果限本机单输出、96 DPI、底部任务栏的调整完成后捕获，不代替首次调整仍在途的截图、多 DPI/任务栏/输出、完整故障矩阵或 P1。原生依赖明确重放归档 OpenCV/MaaUtils/Boost；新增 Actions 编排的原生结果待运行。
 
 ScreenDC 新增显式原生几何矩阵，由 `upstream-parity screen-dc` 在独立进程中编排；本机 38 个场景、双方 76 个原生窗口及 152 次实际截图已通过，380 份原生几何快照和全部 BGR 文件亦由 `cargo xtask upstream-trace screen-geometry <外部目录> [--check-only]` 独立复算。覆盖客户区四边 ±1/±7/±8/±9、精确全屏、客户区匹配但外框不同、普通窗口的工作区/任务栏范围、评审中的平移和过大窗口。每侧先直接调用其真实几何 helper，等待自有窗口的异步位置消息完成，再沿未修改的 ScreenDC 完整路径连续取两帧；断言完整客户区及外框、原生 WINDOWPOS 消息、全幅已知像素、重复捕获不再校正、GDI 清理及窗口关闭后的独立 CPU owner。它验证校正完成后的捕获，不代替首次异步校正尚在途时的截图行为或完整调用链。

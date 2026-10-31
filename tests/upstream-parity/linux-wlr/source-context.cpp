@@ -22,9 +22,12 @@
 #include <sys/random.h>
 #include <sys/mman.h>
 #include <thread>
+#include <utility>
 #include <unistd.h>
 #include <vector>
 #include "protocol-pattern.h"
+
+extern "C" void __real_wl_display_disconnect(wl_display*);
 
 namespace MfsOriginalWlr {
 #define MFS_MANAGER_WLR
@@ -71,6 +74,7 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
 #include "protocol-context.hpp"
 #include "registry-context.hpp"
 #include "failure-context.hpp"
+#include "early-close-context.hpp"
 void shared_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
     const auto baseline_fds=count("/proc/self/fd");
     const auto baseline_tasks=tasks();
@@ -247,16 +251,27 @@ namespace MfsOriginalWlr {
 #include "uuid-context.inc"
 }
 
+extern "C" void __wrap_wl_display_disconnect(wl_display* display) noexcept {
+    // Normal modes forward immediately. Only the explicitly named prefix
+    // probe defers an unsafe disconnect until retained proxy owners end.
+    if(close_observer) {close_observer->observe(display);}
+    else {__real_wl_display_disconnect(display);}
+}
+
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
-        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|fd-zero|manager|nul-names|path-names|registry|failures|protocol-1|protocol-2|protocol-3]");
+        require(argc==4 || argc==5,"usage: source-context <private socket> <artifact dir> <libwayland path> [shared|reconnect|early-close-prefix|fd-zero|manager|nul-names|path-names|registry|failures|protocol-1|protocol-2|protocol-3]");
         Dl_info owner{};
         // The linked wrapper has its own address; inspect the real target.
         require(dladdr(reinterpret_cast<void*>(&__real_wl_display_roundtrip),&owner)!=0 && owner.dli_fname,
             "cannot identify actual native roundtrip target");
         require(std::filesystem::canonical(owner.dli_fname)==std::filesystem::canonical(argv[3]),
             "original Wlr loaded a different libwayland-client");
+        Dl_info disconnect_owner{};
+        require(dladdr(reinterpret_cast<void*>(&__real_wl_display_disconnect),&disconnect_owner)!=0 && disconnect_owner.dli_fname
+            && std::filesystem::canonical(disconnect_owner.dli_fname)==std::filesystem::canonical(argv[3]),
+            "original Wlr disconnect uses a different libwayland-client");
         std::cout<<"native roundtrip owner="<<owner.dli_fname<<'\n';
         const std::filesystem::path directory=argv[2];
         std::filesystem::create_directories(directory);
@@ -268,6 +283,7 @@ int main(int argc,char** argv) {
             if(mode=="shared") { shared_client(argv[1],directory); }
             else if(mode=="manager") { manager_context(argv[1],directory); }
             else if(mode=="reconnect") { reconnect_client(argv[1],directory); }
+            else if(mode=="early-close-prefix") { early_close_context(argv[1],directory); }
             else if(mode=="fd-zero") { fd_zero(directory); }
             else if(mode=="nul-names") { nul_names(argv[1],directory); }
             else if(mode=="path-names") { path_names(argv[1],directory); }

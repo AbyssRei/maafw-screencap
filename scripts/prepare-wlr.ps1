@@ -86,6 +86,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
+            'original-wlr-early-close-prefix' {'original Wlr early_close cycles=20 cases=80 disconnect_prefixes=80 deferred_by_fixture=60 closed_capture_preserved=40 rebound=20 captures=60 retained=60 resources_balanced=1 passed'}
             'original-wlr-fd-zero' {'original MemfdBuffer fd_zero=1 available=1 destructor_fd_retained=1 destructor_mapping_retained=1 fixture_reclaimed=1 product_cleanup_success=0 passed'}
             'original-wlr-manager' {'original Wlr manager cycles=20 captures=60 connects=40 retained=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
             'original-wlr-native-host' {'original Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 shared_last_client=20 final_client_snapshots_expired=20 input_actions=0 passed'}
@@ -349,13 +350,15 @@ try{
     if($SourceReference){
         try { Step original-wlr-source-context timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$referenceArtifacts,$library) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
-        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('fd-zero','fd-zero'),@('manager','manager'),@('nul-names','nul-names'),@('path-names','path-names'))){
+        foreach($probe in @(@('shared-client','shared'),@('reconnect','reconnect'),@('early-close-prefix','early-close-prefix'),@('fd-zero','fd-zero'),@('manager','manager'),@('nul-names','nul-names'),@('path-names','path-names'))){
             $probeArtifacts=Join-Path $referenceArtifacts $probe[0]
             New-Item -ItemType Directory -Path $probeArtifacts|Out-Null
             try { Step ('original-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s',$sourceExecutable,$socket,$probeArtifacts,$library,$probe[1]) }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
         $env:MFS_P1_WLR_SOURCE_ARTIFACTS=$referenceArtifacts
+        try { Step wlr-early-close-prefix-records $ConfigureTool @('upstream-trace','wlr-early-close-prefix',(Join-Path $referenceArtifacts early-close-prefix)) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         $env:MFS_P1_WLR_RUST_ARTIFACTS=Join-Path $referenceArtifacts rust
         New-Item -ItemType Directory -Path $env:MFS_P1_WLR_RUST_ARTIFACTS -Force|Out-Null
         $managerOracles=@(Get-ChildItem (Join-Path $referenceArtifacts manager) -File -Filter '*.bgr'|ForEach-Object{[ordered]@{name=$_.Name;sha256=(Get-FileHash $_.FullName).Hash.ToLowerInvariant()}})

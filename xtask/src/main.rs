@@ -37,6 +37,7 @@ mod review;
 mod screen_geometry;
 mod windows_delegate;
 mod wlr;
+mod wlr_early_close;
 mod wlr_failures;
 mod wlr_host_api;
 mod wlr_protocol;

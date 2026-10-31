@@ -54,9 +54,10 @@ target_include_directories(mfs_wlr_source_context PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mfs_wlr_source_context PRIVATE
     PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
-# The wrapper only observes calls made by the compiled source and forwards each
-# one immediately, unchanged, to the actual system libwayland entry point.
-target_link_options(mfs_wlr_source_context PRIVATE "LINKER:--wrap=wl_display_roundtrip")
+# Roundtrips always forward immediately. Disconnects also forward immediately
+# except in the named early-close-prefix probe, where a fixture-owned display
+# remains alive until the old snapshot owners end. This intervention is recorded.
+target_link_options(mfs_wlr_source_context PRIVATE "LINKER:--wrap=wl_display_roundtrip" "LINKER:--wrap=wl_display_disconnect")
 if(NOT DEFINED MFS_MEOJSON_INCLUDE OR NOT EXISTS "${MFS_MEOJSON_INCLUDE}/meojson/json.hpp")
     message(FATAL_ERROR "Wlr ABI context requires the explicitly prepared latest formal meojson")
 endif()
@@ -91,3 +92,5 @@ target_link_options(mfs_wlr_opencv PRIVATE "LINKER:--exclude-libs,ALL")
 set_target_properties(mfs_wlr_opencv PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "Complete fixed WlrScreencap, WaylandClient, MemfdBuffer, WaylandHelper and original generated C protocol sources compile unchanged. Only the screenshot base is extracted. Private namespace/logging and a kernel-random external UUID name provider replace unrelated framework dependencies. Passive virtual keyboard/pointer managers are required by the original client; no input action runs. A forwarding linker wrapper records actual source roundtrip recursion. Native capture, buffers, C++ owners and OpenCV conversion remain real. This is original source context only, not a Rust backend, original UUID implementation or full Wlr/P1 acceptance.\n")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
+    "The separate early-close-prefix mode observes eighty original close/reconnect requests. Its linker wrapper defers sixty disconnects while capture-owned proxy snapshots survive, then calls the real native disconnect once after those owners end; twenty no-capture controls forward immediately. Forty closed-client captures preserve caller output, and twenty rebound clients are consumed only through fresh captures after the old snapshots end. Native descriptor/task closure and sixty retained known images are checked. This is an explicit fixture intervention to observe a source lifetime boundary safely, not original immediate-disconnect cleanup, stale-proxy capture validation or a completed Rust early-close migration. Other modes still forward disconnect immediately.\n")
