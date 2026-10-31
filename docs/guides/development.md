@@ -254,7 +254,11 @@ cargo xtask upstream-context macos # native macOS arm64 original Objective-C++ c
 
 原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积，真实零客户区原生矩阵仍待补齐。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
 
-Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像素，再在 UI owner 上销毁目标并完成 join；下一次捕获在窗口有效性检查立即失败，不继续轮询、转换或替换旧缓存。显式 session/pool 关闭通过，关闭后 CPU 图像仍有效。此项保留上游失败时的部分状态；完整原 C++ 目标销毁/故障全过程对照仍待完成。
+Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像素，再在 UI owner 上销毁目标并完成 join；下一次捕获在窗口有效性检查立即失败，不继续轮询、转换或替换旧缓存。显式 session/pool 关闭通过，关闭后 CPU 图像仍有效。此项保留上游失败时的部分状态；后续重复原源码对照见下一段，其他原生故障全过程仍待完成。
+
+2026-11-01 新增独立 `mfs_framepool_target_loss_reference`，直接编译固定 F 的原类；Rust 对照入口为 `target_loss::matches_original_repeated_target_loss_without_replaying_cached_pixels`，`MFS_FRAMEPOOL_TARGET_LOSS_ROOT` 指定外部 source/rust 矩阵。两侧各二十个 MTA 生命周期：一次真实取帧后在窗口 owner 上销毁并完成 join，同一失效 HWND 连续调用三次，必须拒绝返回缓存图像；原类实际析构，Rust 还检查失败时 pool/session/item 和 cache 不变、poll/复制/转换为零、显式关闭及最终 CPU/completion owner。所有首次图像保持至 native 捕获和调用方初始化结束后，再逐字节保存持帧。`cargo xtask upstream-trace framepool-target-loss <外部矩阵> [--check-only]` 核对 163 份实际文件、已知内部图样及 source/Rust/持帧的完整字节一致性；耗时只作观察，不作为延迟保证。正式 FramePool 编排显式构建原程序，分别运行 source、单项 Rust 和 records，最终轻量包收集该目录。
+
+这项矩阵在归档开发依赖下已完成有效连续三轮，共九次程序调用、120 次初始捕获、360 次销毁后拒绝和 120 张关闭后持帧。独立审阅核对 240 份完整 BGR、489 个登记 native 文件、500 个冻结输入、412 份产品源文件和 76 个固定 F blob；原始/低级鼠标键盘事件为零，系统输入时间/光标不变，最大采样间隔 78.70ms，监听已确认注销。完整不变副本复算通过，九组缺失持帧、边缘字节不符、黑图、布局、回放、owner 计数、调用线程替换、额外文件及拒绝次数破坏均被拒绝。没有声称新注册的四路监听获得了新的物理正向控制，也不改写旧程序结论。新原生 CI 尚待运行；原 C++ 私有字段未被插桩，完整 GPU 资源计数、其他宿主/故障/窗口身份重用和完整 P1 均未验收，捕获实现与等待语义未改。
 
 `frame_pool_pseudo.rs` 已迁移原 FramePool 伪最小化包装，复用同一个 helper，并在 inner 的 session/pool/device/cache 析构前完整销毁 helper，保留 stop/join/恢复的先后顺序；`windows-frame-pool` 无须启用 PrintWindow。独立原 executable 另有五个包装场景：普通可见，以及普通/layered 窗口的最小化后 stop/inactive。参考文件记录图像和四个时点的原生样式、alpha、iconic、前台及客户区尺寸。Rust 对照执行 20 次包装生命周期，比较图像字节、样式/透明度/最小化及尺寸、独立 image owner 和关闭后像素；前台位单独记录，最小化夹具要求目标不是前台，不将跨进程的前台权限当作等价保证。
 
@@ -578,7 +582,11 @@ Windows CI 另上传 `p1-windows-component-diagnostics`，包含当次 P1 compon
 
 ScreenDC 步骤结束后另立即上传 `p1-windows-screen-dc-diagnostics`，包括该组件的清单、原生结果、日志和全部参考程序 artifact，不等待后续 DesktopDup、Custom、manager 或 FramePool。异步调整首帧的 `screen-native-pending` 部分记录、布局与持帧文件同时加入最终 Windows 轻量包；缺少文件和未完成矩阵保持实际状态，上传本身不构成捕获验收。
 
-确切 bd79217 的 [Actions 41207497250](https://github.com/AbyssRei/maafw-screencap/actions/runs/41207497250) ScreenDC 组件为 30/32 项通过：首帧原生测试完成 40 组、80 次捕获和 80 张关闭后持帧，随后 records 步骤及外层 preparation 失败。独立 checker 误将 `ClientToScreen` 的屏幕原点纳入不变字段，同时又要求窗口真实移动；现保留客户区本地矩形、样式和配置不变，明确核对屏幕原点按相同 delta 平移，并用回归测试拒绝原点、尺寸、样式、消息与后续状态变化。71 项 xtask 测试、严格 Clippy 和格式检查通过，不据此接受原生矩阵。官方 ZIP 摘要、427 个可用登记路径、160 份完整首帧/最终/持帧 BGR 及既有 152 次几何捕获、380 份快照已独立核对；旧轻量包未包含 pending TSV/布局，完整 321 文件复算待补。还发现这两个原生 artifact 目录没有进入 `native-result` 输入登记，现由 finally 在成功或失败时均枚举登记；该修正尚待新批次确认。旧 CI 失败、缺失记录和本机前台环境失败保持原状态，该 CI 也没有本机输入观察器，不替代旧程序的有效连续复测结论。
+确切 bd79217 的 [Actions 41207497250](https://github.com/AbyssRei/maafw-screencap/actions/runs/41207497250) ScreenDC 组件为 30/32 项通过：首帧原生测试完成 40 组、80 次捕获和 80 张关闭后持帧，随后 records 步骤及外层 preparation 失败。独立 checker 误将 `ClientToScreen` 的屏幕原点纳入不变字段，同时又要求窗口真实移动；现保留客户区本地矩形、样式和配置不变，明确核对屏幕原点按相同 delta 平移，并用回归测试拒绝原点、尺寸、样式、消息与后续状态变化。71 项 xtask 测试、严格 Clippy 和格式检查通过，不据此接受原生矩阵。官方 ZIP 摘要、427 个可用登记路径、160 份完整首帧/最终/持帧 BGR 及既有 152 次几何捕获、380 份快照已独立核对；旧轻量包未包含 pending TSV/布局，不具备完整 321 文件复算条件。还发现这两个原生 artifact 目录没有进入 `native-result` 输入登记，现由 finally 在成功或失败时均枚举登记，后续确切批次验证见下段。旧 CI 失败、缺失记录和本机前台环境失败保持原状态，该 CI 也没有本机输入观察器，不替代旧程序的有效连续复测结论。
+
+随后 a3355f2 的 [Actions 41214537955](https://github.com/AbyssRei/maafw-screencap/actions/runs/41214537955) 即时诊断包包含全部首帧记录：404 行、321 个文件和 160 份完整 BGR。原生 test 通过，旧 checker 仍失败；独立复制并核对每份输入后，修正 checker 全部复算通过。四十组窗口均在取帧期间保持 queue gate 不变，直接释放后各收到一次真实调整，客户区屏幕原点实际向上移 48px，局部客户区/样式不变，最终几何不再变化；每组 GDI 前后均为十一。第一次下载在零字节处 EOF，失败单独保留，新目录中的官方 ZIP 完整摘要已核对。
+
+修正后的确切 `12216e8009e8d4dd8b6368cd05262c30e8bb8056` [Actions 41215370477](https://github.com/AbyssRei/maafw-screencap/actions/runs/41215370477) ScreenDC 组件再通过全部 32 项原生检查。官方 ZIP 摘要、867 个可用登记路径、完整首帧像素/几何和独立 checker 均核对通过；finally 已登记全部 322 份 pending 文件及 616 份 geometry 文件。453 个完整来源输入不在该轻量包中，完整来源审计仍待补。该受控原生结果不接受任意外部窗口竞争或 DesktopDupWindow，也不将缺前台的本机三轮改为通过；同一 run 的 PrintWindow 步骤另有失败，不能把 ScreenDC 组件通过当作整个 Windows job 或 P1 通过。
 
 `batch --prepare-only` 只更新 nightly、解析/核验最新 Cargo 依赖并归档锁文件、元数据和 vendor；不编译捕获 crate，不运行测试或离线消费，不能作为构建通过记录。
 
