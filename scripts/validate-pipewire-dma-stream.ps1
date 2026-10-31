@@ -2,21 +2,26 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Explicit child of prepare-pipewire.ps1's SourceReference batch. All native
 # versions, compiler, Cargo resolution and owned daemon come from that batch.
-function Invoke-PipeWireDmaStream([switch]$MemFd) {
-    $kind=if($MemFd){'memfd'}else{'dma'}
-    $dmaStreamRoot=Join-Path $referenceArtifacts "$kind-stream"
+# Ordinary seven-format, zero-offset MemFd and DMA streams share this route
+# setup/teardown; only the explicitly selected producer/consumer entry differs.
+function Invoke-PipeWireOwnedStream([switch]$MemFd,[string]$Format='') {
+    $kind=if($Format){"format-$Format"}elseif($MemFd){'memfd'}else{'dma'}
+    $dmaStreamRoot=if($Format){Join-Path $referenceArtifacts "format-stream/$Format"}else{Join-Path $referenceArtifacts "$kind-stream"}
     New-Item -ItemType Directory -Path $dmaStreamRoot | Out-Null
     # Compile independently of device availability. Missing kernel access must
     # not conceal whether the producer itself builds with selected real headers.
-    $program=Join-Path $native "mfs-p1-pipewire-$kind-source"
-    $dmaLibraryDirectory=Split-Path -Parent $env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY
-    Step "native-$kind-source-build" $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)","-I$(Join-Path $productRoot tests/upstream-parity/linux-pipewire)",(Join-Path $productRoot tests/fixtures/pipewire-dma-source.c),$env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY,"-Wl,-rpath,$dmaLibraryDirectory","-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$program)
-    $savedProgram=Join-Path $nativeArtifacts "mfs-p1-pipewire-$kind-source"
-    Copy-Item -LiteralPath $program -Destination $savedProgram
-    Save $savedProgram
+    $program=$fixtureBinary
+    if(-not $Format) {
+        $program=Join-Path $native "mfs-p1-pipewire-$kind-source"
+        $dmaLibraryDirectory=Split-Path -Parent $env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY
+        Step "native-$kind-source-build" $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)","-I$(Join-Path $productRoot tests/upstream-parity/linux-pipewire)",(Join-Path $productRoot tests/fixtures/pipewire-dma-source.c),$env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY,"-Wl,-rpath,$dmaLibraryDirectory","-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$program)
+        $savedProgram=Join-Path $nativeArtifacts "mfs-p1-pipewire-$kind-source"
+        Copy-Item -LiteralPath $program -Destination $savedProgram
+        Save $savedProgram
+    }
     $exporterFile=Join-Path $dmaDirectory exporter.txt
     $exporter=if($MemFd){'--memfd'}elseif(Test-Path -LiteralPath $exporterFile){(Get-Content -LiteralPath $exporterFile -Raw).Trim()}else{'0'}
-    if(-not $MemFd -and $exporter -notmatch '^[12]$'){
+    if(-not $MemFd -and -not $Format -and $exporter -notmatch '^[12]$'){
         $missing=Join-Path $logsRoot pipewire-dma-stream-environment.log
         'missing_environment: no verified kernel DMA exporter; no incoming DMA stream ran'|Set-Content -LiteralPath $missing -Encoding utf8
         $checks.Add([ordered]@{name='pipewire-dma-stream-environment';status='missing_environment';log=(Artifact $missing)})
@@ -42,7 +47,8 @@ function Invoke-PipeWireDmaStream([switch]$MemFd) {
         $start.UseShellExecute=$false
         $start.RedirectStandardOutput=$true
         $start.RedirectStandardError=$true
-        $start.ArgumentList.Add($exporter)
+        if($Format){$start.ArgumentList.Add('--format');$start.ArgumentList.Add($Format)}
+        else{$start.ArgumentList.Add($exporter)}
         $dmaProducer=[Diagnostics.Process]::Start($start)
         $dmaProducerOut=$dmaProducer.StandardOutput.ReadToEndAsync()
         $dmaProducerError=$dmaProducer.StandardError.ReadToEndAsync()
@@ -72,7 +78,10 @@ function Invoke-PipeWireDmaStream([switch]$MemFd) {
             if($dmaRouter.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Owned DMA route supervisor did not become ready'}
             Start-Sleep -Milliseconds 20
         }
-        if($MemFd) {
+        if($Format) {
+            . (Join-Path $PSScriptRoot validate-pipewire-format-stream.ps1)
+            Invoke-PipeWireFormatStream $dmaStreamRoot $Format
+        } elseif($MemFd) {
             . (Join-Path $PSScriptRoot validate-pipewire-memfd-stream.ps1)
             Invoke-PipeWireMemFdStream $dmaStreamRoot
         } else {

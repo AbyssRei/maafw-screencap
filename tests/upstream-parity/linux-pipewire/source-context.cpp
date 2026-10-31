@@ -826,6 +826,7 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
     std::cout<<"original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed\n";
 }
 #include "dma-fixtures.hpp"
+#include "format-stream.hpp"
 #include "manager-context.hpp"
 #include "manager-host-context.hpp"
 #if !defined(MFS_PW_KWIN_NATIVE_API)
@@ -1026,6 +1027,9 @@ int main(int argc,char** argv) {
         }
         const bool memfd_null=argc==5 && std::string_view(argv[1])=="--memfd-null";
         if(memfd_null) { ++argv; --argc; }
+        const bool format_mode=argc==6 && std::string_view(argv[1])=="--format-stream";
+        std::string format_name;
+        if(format_mode) { format_name=argv[2];argv+=2;argc-=2; }
         std::optional<MemFdControl> memfd_control;
         if(memfd_null) memfd_control.emplace();
         require(argc==4,"usage: source-context [--memfd-null] <private socket> <node ID> <artifact directory>");
@@ -1035,6 +1039,8 @@ int main(int argc,char** argv) {
         require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid explicit node ID");
         const std::filesystem::path artifacts=argv[3];
         std::filesystem::create_directories(artifacts);
+        std::optional<FormatStream> format_stream;
+        if(format_mode) format_stream.emplace(format_name,artifacts);
         // Initialize conversion-only runtime outside capture resource accounting.
         cv::Mat raw(HEIGHT,WIDTH,CV_8UC3,cv::Scalar(1,2,3)),converted;
         cv::cvtColor(raw,converted,cv::COLOR_RGB2BGR);
@@ -1069,7 +1075,7 @@ int main(int argc,char** argv) {
                 if(image.type()==CV_8UC3 && image.cols==WIDTH && image.rows==HEIGHT) {
                     save(image,artifacts/("cycle-"+std::to_string(cycle)+"-call-"+std::to_string(call)+".bgr"));
                 }
-                const uint32_t marker=known_pixels(image);
+                const uint32_t marker=format_stream ? format_stream->observe(image,cycle,call) : known_pixels(image);
                 const char* relation=previous==0 ? "first" : marker==previous ? "repeat" : marker>previous ? "advance" : "regress";
                 held.push_back({std::move(image),marker});
                 std::cout<<"source cycle="<<cycle<<" call="<<call<<" elapsed_us="<<elapsed
@@ -1083,6 +1089,8 @@ int main(int argc,char** argv) {
             source.reset();
             if(memfd_control) {
                 memfd_control->finish(cycle,artifacts);
+            }
+            if(memfd_control || format_stream) {
                 for(int call=0;call<3;++call)
                     save(held[static_cast<size_t>(cycle)*3+call].image,
                         artifacts/("cycle-"+std::to_string(cycle)+"-call-"+std::to_string(call)+"-held.bgr"));
@@ -1129,11 +1137,11 @@ int main(int argc,char** argv) {
                 }
             }
             require(fds==base_fds && settled,"source native resource count mismatch or unretired/unknown/live task");
-            for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"retained source sample identity changed"); }
+            for(const auto& image:held) { require((format_stream ? format_stream->phase(image.image) : known_pixels(image.image))==image.marker,"retained source sample identity changed"); }
         }
         std::exception_ptr cross_thread_error;
         std::thread reader([&] {
-            try { for(const auto& image:held) { require(known_pixels(image.image)==image.marker,"cross-thread source sample identity changed"); } }
+            try { for(const auto& image:held) { require((format_stream ? format_stream->phase(image.image) : known_pixels(image.image))==image.marker,"cross-thread source sample identity changed"); } }
             catch(...) { cross_thread_error=std::current_exception(); }
         });
         reader.join();
@@ -1143,6 +1151,7 @@ int main(int argc,char** argv) {
         std::cout<<"original PipeWire source cycles=20 captures=60 retained=60 passed\n";
         if(memfd_null)
             std::cout<<"original PipeWire MemFd NULL intervention cycles=20 captures=60 restored_all=1 retained=60 passed\n";
+        if(format_stream) format_stream->finish();
         return 0;
 #endif
     } catch(const std::exception& error) {

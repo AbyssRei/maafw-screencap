@@ -25,6 +25,9 @@ mod manager_capture;
 #[path = "sustained_tests.rs"]
 mod sustained;
 
+#[path = "format_stream_tests.rs"]
+mod format_stream;
+
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 struct View {

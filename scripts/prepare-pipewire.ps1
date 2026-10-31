@@ -98,6 +98,14 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected one real MemFd callback intervention test with sixty owning maps/unmaps and native pointer restoration'
             }
         }
+        if($Name -match '^(original|rust)-pipewire-format-(RGB|RGBA|RGBx|BGR|BGRA|BGRx|YUY2)$') {
+            $side=$Matches[1];$format=$Matches[2]
+            $observed=Get-Content -LiteralPath $log -Raw
+            $expected=if($side -eq 'original'){"original PipeWire format=$format cycles=20 captures=60 retained=60 phases=2 passed"}else{"native Rust PipeWire format=$format cycles=20 captures=60 retained_raw=60 retained_bgr=60 phases=2 passed"}
+            if(-not $observed.Contains($expected) -or ($side -eq 'rust' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
+                throw 'Expected complete real format stream captures, both fixture phases and retained owners'
+            }
+        }
         if ($Name -eq 'pipewire-fd-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_early_error result=null errno=\d+ input_fd_open=[01] observed') {
             throw 'Expected the real native early-error descriptor observation'
         }
@@ -721,7 +729,24 @@ try {
         StopOwned source $fixture $fixtureOut $fixtureError
         $fixture=$null
         . (Join-Path $PSScriptRoot validate-pipewire-dma-stream.ps1)
-        try { Invoke-PipeWireDmaStream -MemFd }
+        $formatTest=Capture-TestProgram rust-pipewire-format-stream-build
+        $savedFormatTest=Join-Path $nativeArtifacts mfs-p1-pipewire-format-stream-test
+        Copy-Item -LiteralPath $formatTest -Destination $savedFormatTest
+        Save $savedFormatTest
+        $formatTest=$savedFormatTest
+        foreach($format in @('RGB','RGBA','RGBx','BGR','BGRA','BGRx','YUY2')) {
+            try { Invoke-PipeWireOwnedStream -Format $format }
+            catch {
+                $failed=$true
+                $formatError=Join-Path $logsRoot "pipewire-format-$format-setup-error.log"
+                $_.Exception.ToString()|Set-Content -LiteralPath $formatError -Encoding utf8
+                $checks.Add([ordered]@{name="pipewire-format-$format-setup";status='failed';log=(Artifact $formatError)})
+                Write-Host $_.Exception.Message
+            }
+        }
+        try { Step pipewire-format-stream-records $ConfigureTool @('upstream-trace','pipewire-format-stream',(Join-Path $referenceArtifacts format-stream)) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Invoke-PipeWireOwnedStream -MemFd }
         catch {
             $failed=$true
             $memfdError=Join-Path $logsRoot pipewire-memfd-stream-error.log
@@ -729,7 +754,7 @@ try {
             $checks.Add([ordered]@{name='pipewire-memfd-stream-setup';status='failed';log=(Artifact $memfdError)})
             Write-Host $_.Exception.Message
         }
-        try { Invoke-PipeWireDmaStream }
+        try { Invoke-PipeWireOwnedStream }
         catch {
             $failed=$true
             $dmaStreamError=Join-Path $logsRoot pipewire-dma-stream-error.log

@@ -32,6 +32,7 @@ mod manager_size;
 mod native;
 mod native_tools;
 mod pipewire;
+mod pipewire_format_stream;
 mod pipewire_host;
 mod pipewire_host_api;
 mod pipewire_host_offer;

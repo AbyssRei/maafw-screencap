@@ -13,6 +13,12 @@ const MIN_NS: u64 = 120_000_000_000;
 pub fn run(args: &[String]) -> Result<()> {
     if args
         .first()
+        .is_some_and(|kind| kind == "pipewire-format-stream")
+    {
+        return crate::pipewire_format_stream::run(&args[1..]);
+    }
+    if args
+        .first()
         .is_some_and(|kind| kind == "pipewire-memfd-stream")
     {
         return crate::pipewire_memfd_stream::run(&args[1..]);
