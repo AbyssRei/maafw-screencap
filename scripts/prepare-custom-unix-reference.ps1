@@ -34,6 +34,12 @@ function Assert-CustomImagesLog([string]$Text) {
         throw 'Expected actual Custom encoded callbacks, cache/resize checks and retained native image owners'
     }
 }
+function Assert-CustomRawLog([string]$Text) {
+    if($Text -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+       -not $Text.Contains('Custom raw types=1664 cases=4992 source_rust_captures=9984 native_owners_retained=9984 rust_scopes=4992 exact_type_catalog=1 input_actions=0 passed')){
+        throw 'Expected every actual compiled raw type, both manager callbacks and retained native owners'
+    }
+}
 function Test-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     $log=Join-Path $logsRoot custom-reference.log
     $status='failed'
@@ -109,6 +115,9 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     $apiSources=Join-Path $customInputs native-api-source
     Copy-Item -LiteralPath (Join-Path $build native-api-source) -Destination $apiSources -Recurse
     Get-ChildItem -LiteralPath $apiSources -File -Recurse|ForEach-Object{Save $_.FullName}
+    $rawHeaders=Join-Path $customInputs raw-type-headers
+    Copy-Item -LiteralPath (Join-Path $build raw-type-headers) -Destination $rawHeaders -Recurse
+    Get-ChildItem -LiteralPath $rawHeaders -File -Recurse|ForEach-Object{Save $_.FullName}
     $libraryName=if($IsMacOS){'libmfs_custom_capture.dylib'}else{'libmfs_custom_capture.so'}
     $library=Join-Path $customInputs $libraryName
     Copy-Item -LiteralPath (Join-Path $build $libraryName) -Destination $library
@@ -137,6 +146,8 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
         Step custom-reentry-records $ConfigureTool @('upstream-trace','custom-reentry',(Join-Path $evidence reentry))
         Step custom-images-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::images::preserves_encoded_callback_cache_resize_failures_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture')
         Step custom-images-records $ConfigureTool @('upstream-trace','custom-images',(Join-Path $evidence images))
+        Step custom-raw-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::raw::preserves_every_compiled_raw_type_callback_bytes_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture')
+        Step custom-raw-records $ConfigureTool @('upstream-trace','custom-raw',(Join-Path $evidence raw))
         Step custom-native-clippy cargo @('clippy','--workspace','--all-targets','--locked','--no-default-features','--features','custom-capture','--','-D','warnings')
         Step custom-core-direct-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','custom-capture')
         Step custom-core-runtime-tree cargo @('tree','--locked','-p','maafw-screencap','--edges','normal','--no-default-features','--features','custom-capture')

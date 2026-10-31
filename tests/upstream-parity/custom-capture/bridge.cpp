@@ -36,6 +36,7 @@ struct CustomControlUnitMgr {
 #include "custom-raw-source.inc"
 namespace {
 std::atomic<uint64_t> images=0,contexts=0,entered=0,exited=0;
+std::atomic<uint64_t> raw_source_calls=0;
 std::atomic<uint64_t> uuid_entered=0,uuid_exited=0,uuid_outputs=0;
 struct Scope;
 thread_local Scope* current_image_scope=nullptr;
@@ -159,6 +160,16 @@ int32_t mfs_custom_scope(MfsCustomScope action,void* argument) noexcept {
     if(!action)return 1;
     return guarded([&]{Scope scope;MAA_NS::ImageBuffer buffer;return action(argument,&buffer);});
 }
+size_t mfs_custom_raw_catalog(uint32_t index) noexcept {
+    const size_t values[]={CV_DEPTH_CURR_MAX,CV_CN_MAX,CV_CN_SHIFT,CV_MAT_TYPE_MASK};
+    return index<std::size(values)?values[index]:SIZE_MAX;
+}
+int32_t mfs_custom_raw_type(uint32_t depth,uint32_t channels,int32_t* type,size_t* scalar,size_t* element) noexcept {
+    if(!type || !scalar || !element)return 1;*type=-1;*scalar=0;*element=0;
+    if(depth>=CV_DEPTH_CURR_MAX || channels==0 || channels>CV_CN_MAX)return 1;
+    const auto kind=CV_MAKETYPE(static_cast<int>(depth),static_cast<int>(channels));
+    *type=kind;*scalar=CV_ELEM_SIZE1(kind);*element=CV_ELEM_SIZE(kind);return 0;
+}
 int32_t mfs_custom_raw_set(MaaImageBuffer* buffer,void* data,size_t length,
     int32_t width,int32_t height,int32_t type,uint8_t* result) noexcept {
     if(!result)return 1;*result=0;
@@ -166,13 +177,16 @@ int32_t mfs_custom_raw_set(MaaImageBuffer* buffer,void* data,size_t length,
         // The private safe adapter validates its supplied readable span. The
         // original raw setter below remains unchanged and is really invoked.
         if(data && width>0 && height>0){
-            // Only these actual header-compiled 8-bit fixture inputs are
-            // admitted by this safety adapter, not a general legacy-type API.
-            if(type!=CV_8UC1 && type!=CV_8UC3 && type!=CV_8UC4)return 1;
+            // Validate the actual compiled type catalog before evaluating
+            // CV_ELEM_SIZE: reserved depths can otherwise shift past its table.
+            // This private adapter never turns these types into SDK formats.
+            if(type<0 || type>CV_MAT_TYPE_MASK || CV_MAT_DEPTH(type)>=CV_DEPTH_CURR_MAX)return 1;
             const size_t element=CV_ELEM_SIZE(type),w=static_cast<size_t>(width),h=static_cast<size_t>(height);
-            if(element==0 || w>SIZE_MAX/element || h>SIZE_MAX/(w*element) || w*element*h>length)return 1;
+            if(element==0 || w>SIZE_MAX/element || h>SIZE_MAX/(w*element))return 1;
+            const auto span=w*element*h;
+            if(span>static_cast<size_t>(PTRDIFF_MAX) || span>length)return 1;
         }
-        *result=MaaImageBufferSetRawData(buffer,data,width,height,type);return 0;});
+        ++raw_source_calls;*result=MaaImageBufferSetRawData(buffer,data,width,height,type);return 0;});
 }
 int32_t mfs_custom_image(void* buffer,void** output) noexcept {
     if(!output)return 1;*output=nullptr;
@@ -208,7 +222,7 @@ int32_t mfs_custom_fault(void* context) noexcept {
 }
 uint64_t mfs_custom_count(uint32_t kind) noexcept {
     return kind==0?images.load():kind==1?contexts.load():kind==2?entered.load():kind==3?exited.load():
-        kind==4?uuid_entered.load():kind==5?uuid_exited.load():kind==6?uuid_outputs.load():UINT64_MAX;
+        kind==4?uuid_entered.load():kind==5?uuid_exited.load():kind==6?uuid_outputs.load():kind==7?raw_source_calls.load():UINT64_MAX;
 }
 size_t mfs_custom_identity_abi(uint32_t index) noexcept {
     static_assert(std::is_same_v<MaaControllerFeature,uint64_t>);

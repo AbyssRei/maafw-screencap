@@ -33,6 +33,8 @@ MFS_CUSTOM_EXPORT int32_t mfs_custom_invoke(void* context,MaaImageBuffer* buffer
 MFS_CUSTOM_EXPORT int32_t mfs_custom_scope(MfsCustomScope action,void* argument) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_raw_set(MaaImageBuffer* buffer,void* data,size_t length,
     int32_t width,int32_t height,int32_t type,uint8_t* result) noexcept;
+MFS_CUSTOM_EXPORT size_t mfs_custom_raw_catalog(uint32_t index) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_raw_type(uint32_t depth,uint32_t channels,int32_t* type,size_t* scalar,size_t* element) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_image(void* buffer,void** output) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_seed(void** output) noexcept;
 MFS_CUSTOM_EXPORT void mfs_custom_release(void* image) noexcept;

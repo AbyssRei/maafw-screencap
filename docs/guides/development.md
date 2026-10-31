@@ -58,6 +58,10 @@ P1 尚未完整验收；P2 来源冻结和 P3 SDK/原生现代化门禁不因该
 
 ## 当前仓库与本机命令
 
+Custom 现另有实际原始像素类型矩阵：显式适配器根据编译头文件查询 13 种深度及 128 种通道，共 1,664 种规范类型，涵盖 16F/16BF、Bool 和扩展整数类型；这些值仅用于私有对照，不是公开 SDK 格式。原 `MaaImageBufferSetRawData` 函数体保持不变，安全验收桥先检查类型、保留深度和可读 span，再在同一原/Rust manager 回调位置调用真实 setter。Windows 归档依赖开发验证的 Debug、Release 各通过 4,992 组、9,984 次真实调用；0/1/255 返回值、输入覆盖后的 clone、false 输出保留、9,984 个 Mat 在 input/context 结束后持有和模块卸载后的独立 CPU 字节读取均核对，两个 profile 的 9,662,208 字节捕获和持帧流逐字节一致。
+
+六类短 span、保留深度、额外类型位及溢出几何输入均在调用原 setter 前被拒绝，原 helper 调用计数和已有输出不变；七组篡改记录被独立 `upstream-trace custom-raw <外部 raw 目录> [--check-only]` 拒绝。实际 OpenCV 类型头随原生批次归档，零测试/缺失完整计数不能通过入口校验；六项既有 Custom native/data 回归、workspace 测试和 Clippy 通过。首个 standalone 命令因父输出目录未创建在实际捕获前失败，记录保持失败，补齐外部目录后使用相同程序执行；新增的 span 拒绝矩阵另有后续独立执行。这仍是 Windows 开发对照，新的正式在线及其他平台运行待完成；不表示所有编码格式、类型标志组合、颜色转换或完整 Custom/P1 已验收，核心截图算法未变。
+
 PNG 参照依赖现由 `scripts/prepare-png-codec.ps1` 显式准备：在线批次每次查询正式 libpng/zlib，登记版本、确切 Git 来源、规范源归档与许可，构建静态库并运行六个已知 RGBA 像素的真实编解码探针；Windows 及 Unix 的 imgcodecs 准备使用相同依赖，并检查 OpenCV 确实选择这些库，禁止静默回落到其他 PNG/zlib。libpng 使用官方主页的当前公开版而非没有 Release 条目的 GitHub 镜像；本次为 libpng 1.6.59、zlib 1.3.2。离线批次必须包含登记的 release/page/resolution/source 输入；缓存复用仍进行在线更新检查。
 
 该准备路径已通过 Windows 开发验证：在线、缓存复用和离线重建均完成实际 PNG 编解码，OpenCV 保留 IPP/CPU 优化并选中确切库，实际 Custom 的 144 组编码/缩放、96 组原始回调以及身份、元数据、虚接口和重入回归均通过，输出另经独立校验。路径校验的首个 CRLF 错误、首个旧头文件恢复失败及诊断脚本的测试入口/负向夹具错误均保留记录。原 [Actions 41174221177](https://github.com/AbyssRei/maafw-screencap/actions/runs/41174221177) 的 Linux Custom 在 PNG 夹具创建时失败；原准备确实关闭了 PNG。新的 Linux 原生运行尚待验证，本机开发通过不覆盖该失败，也不替代新的正式工具链/全平台或 P1 验收。核心依赖树和截图算法未因这次准备修正而改变。

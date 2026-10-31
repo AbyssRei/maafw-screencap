@@ -200,6 +200,8 @@ mod images;
 mod metadata;
 #[path = "native-api.rs"]
 mod native_api;
+#[path = "raw.rs"]
+mod raw;
 struct Image<'a> {
     pointer: NonNull<c_void>,
     lib: &'a Lib,

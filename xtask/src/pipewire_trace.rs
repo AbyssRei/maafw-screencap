@@ -11,6 +11,9 @@ const RESOURCES: &str = "phase\telapsed_ns\tcalls\tfds\ttasks\trss_kib";
 const MIN_NS: u64 = 120_000_000_000;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "custom-raw") {
+        return crate::custom_raw::run(&args[1..]);
+    }
     if args.first().is_some_and(|kind| kind == "custom-images") {
         return crate::custom_images::run(&args[1..]);
     }

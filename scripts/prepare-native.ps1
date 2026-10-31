@@ -264,6 +264,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected actual Custom encoded callbacks, cache/resize checks and retained native image owners'
             }
         }
+        if($Name -eq 'custom-raw-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('Custom raw types=1664 cases=4992 source_rust_captures=9984 native_owners_retained=9984 rust_scopes=4992 exact_type_catalog=1 input_actions=0 passed')){
+                throw 'Expected every actual compiled raw type, both manager callbacks and retained native owners'
+            }
+        }
         if($Name -eq 'manager-delegate-parity' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -667,6 +674,9 @@ try {
         $apiSources=Join-Path $inputsRoot custom-native-api-source
         Copy-Item -LiteralPath (Join-Path $build custom-capture/native-api-source) -Destination $apiSources -Recurse
         Get-ChildItem -LiteralPath $apiSources -File -Recurse|ForEach-Object{Save-Input $_.FullName}
+        $rawHeaders=Join-Path $inputsRoot raw-type-headers
+        Copy-Item -LiteralPath (Join-Path $build custom-capture/raw-type-headers) -Destination $rawHeaders -Recurse
+        Get-ChildItem -LiteralPath $rawHeaders -File -Recurse|ForEach-Object{Save-Input $_.FullName}
         foreach($name in @('custom-source.inc','custom-raw-source.inc','source-scope.txt')) {
             $saved=Join-Path $inputsRoot ($name -eq 'source-scope.txt' ? 'custom-source-scope.txt' : $name)
             Copy-Item -LiteralPath (Join-Path $build "custom-capture/$name") -Destination $saved;Save-Input $saved
@@ -690,6 +700,8 @@ try {
         Step custom-reentry-records $ConfigureTool @('upstream-trace','custom-reentry',(Join-Path $customEvidence reentry))
         Step custom-images-parity cargo ($customArgs+@('backends::custom::native_tests::images::preserves_encoded_callback_cache_resize_failures_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture'))
         Step custom-images-records $ConfigureTool @('upstream-trace','custom-images',(Join-Path $customEvidence images))
+        Step custom-raw-parity cargo ($customArgs+@('backends::custom::native_tests::raw::preserves_every_compiled_raw_type_callback_bytes_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-raw-records $ConfigureTool @('upstream-trace','custom-raw',(Join-Path $customEvidence raw))
         $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
         if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
         Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))
