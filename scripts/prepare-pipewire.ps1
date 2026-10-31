@@ -714,8 +714,14 @@ try {
             $fdTest=Capture-TestProgram rust-pipewire-fd-retry-build
             Step rust-pipewire-supplied-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$fdTest,'backends::linux::pipewire::native::tests::reinit::retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
-        . (Join-Path $PSScriptRoot validate-pipewire-memfd-stream.ps1)
-        try { Invoke-PipeWireMemFdStream }
+        # End the ordinary shared-offset producer before separately allocated
+        # zero-offset MemFd and kernel DMA fixtures. Consumer behavior stays F.
+        StopOwned route-supervisor $routeSupervisor $routeOut $routeError
+        $routeSupervisor=$null
+        StopOwned source $fixture $fixtureOut $fixtureError
+        $fixture=$null
+        . (Join-Path $PSScriptRoot validate-pipewire-dma-stream.ps1)
+        try { Invoke-PipeWireDmaStream -MemFd }
         catch {
             $failed=$true
             $memfdError=Join-Path $logsRoot pipewire-memfd-stream-error.log
@@ -723,13 +729,6 @@ try {
             $checks.Add([ordered]@{name='pipewire-memfd-stream-setup';status='failed';log=(Artifact $memfdError)})
             Write-Host $_.Exception.Message
         }
-        # End the ordinary producer/route premise before starting a separate
-        # kernel DMA producer. Product stream flags and routing policy stay U.
-        StopOwned route-supervisor $routeSupervisor $routeOut $routeError
-        $routeSupervisor=$null
-        StopOwned source $fixture $fixtureOut $fixtureError
-        $fixture=$null
-        . (Join-Path $PSScriptRoot validate-pipewire-dma-stream.ps1)
         try { Invoke-PipeWireDmaStream }
         catch {
             $failed=$true

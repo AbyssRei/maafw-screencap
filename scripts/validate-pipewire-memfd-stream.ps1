@@ -1,12 +1,11 @@
 # Copyright (C) 2026 AbyssRei
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Explicit child of the SourceReference batch, with its live ordinary producer,
+# Explicit child of the SourceReference batch, with its owned zero-offset producer,
 # exact private route, native libraries, Cargo resolution and owned daemon.
-function Invoke-PipeWireMemFdStream {
-    $root=Join-Path $referenceArtifacts memfd-stream
-    New-Item -ItemType Directory -Path $root | Out-Null
+function Invoke-PipeWireMemFdStream([string]$Root) {
     Json (Join-Path $root scope.json) ([ordered]@{
         width=28;height=24;source_stride=96;cpu_stride=84
+        source='Separately allocated 4096-byte MemFd per buffer; offset zero, grow/shrink sealed, ordinary MAPPABLE transport. Producer pwrite completes before native queue.'
         intervention='Only the two isolated consumers preload the MemFd probe. Each real dequeued MemFd data pointer is temporarily hidden and restored before native queue; FD, chunk, layout, producer, MAP_BUFFERS, source code and native cleanup remain intact.'
         limits='Not a spontaneously NULL stream, DMA/GPU or Portal. Source copies/maps are unknown; Rust owns and counts maps. Source BGR and Rust RGB serials are independently verified.'
     })

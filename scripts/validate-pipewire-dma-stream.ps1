@@ -2,20 +2,21 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Explicit child of prepare-pipewire.ps1's SourceReference batch. All native
 # versions, compiler, Cargo resolution and owned daemon come from that batch.
-function Invoke-PipeWireDmaStream {
-    $dmaStreamRoot=Join-Path $referenceArtifacts dma-stream
+function Invoke-PipeWireDmaStream([switch]$MemFd) {
+    $kind=if($MemFd){'memfd'}else{'dma'}
+    $dmaStreamRoot=Join-Path $referenceArtifacts "$kind-stream"
     New-Item -ItemType Directory -Path $dmaStreamRoot | Out-Null
     # Compile independently of device availability. Missing kernel access must
     # not conceal whether the producer itself builds with selected real headers.
-    $program=Join-Path $native mfs-p1-pipewire-dma-source
+    $program=Join-Path $native "mfs-p1-pipewire-$kind-source"
     $dmaLibraryDirectory=Split-Path -Parent $env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY
-    Step native-dma-source-build $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)","-I$(Join-Path $productRoot tests/upstream-parity/linux-pipewire)",(Join-Path $productRoot tests/fixtures/pipewire-dma-source.c),$env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY,"-Wl,-rpath,$dmaLibraryDirectory","-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$program)
-    $savedProgram=Join-Path $nativeArtifacts mfs-p1-pipewire-dma-source
+    Step "native-$kind-source-build" $env:CC @('-std=c11','-D_GNU_SOURCE','-O2','-Wall','-Wextra','-Werror',"-I$(Join-Path $prefix include/pipewire-0.3)","-I$(Join-Path $prefix include/spa-0.2)","-I$(Join-Path $productRoot tests/upstream-parity/linux-pipewire)",(Join-Path $productRoot tests/fixtures/pipewire-dma-source.c),$env:MFS_P1_PIPEWIRE_DMA_FIXTURE_LIBRARY,"-Wl,-rpath,$dmaLibraryDirectory","-L$(Join-Path $prefix lib)",'-lpipewire-0.3','-pthread','-fuse-ld=lld','-o',$program)
+    $savedProgram=Join-Path $nativeArtifacts "mfs-p1-pipewire-$kind-source"
     Copy-Item -LiteralPath $program -Destination $savedProgram
     Save $savedProgram
     $exporterFile=Join-Path $dmaDirectory exporter.txt
-    $exporter=if(Test-Path -LiteralPath $exporterFile){(Get-Content -LiteralPath $exporterFile -Raw).Trim()}else{'0'}
-    if($exporter -notmatch '^[12]$'){
+    $exporter=if($MemFd){'--memfd'}elseif(Test-Path -LiteralPath $exporterFile){(Get-Content -LiteralPath $exporterFile -Raw).Trim()}else{'0'}
+    if(-not $MemFd -and $exporter -notmatch '^[12]$'){
         $missing=Join-Path $logsRoot pipewire-dma-stream-environment.log
         'missing_environment: no verified kernel DMA exporter; no incoming DMA stream ran'|Set-Content -LiteralPath $missing -Encoding utf8
         $checks.Add([ordered]@{name='pipewire-dma-stream-environment';status='missing_environment';log=(Artifact $missing)})
@@ -71,15 +72,20 @@ function Invoke-PipeWireDmaStream {
             if($dmaRouter.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Owned DMA route supervisor did not become ready'}
             Start-Sleep -Milliseconds 20
         }
-        Json (Join-Path $dmaStreamRoot geometry.json) ([ordered]@{width=28;height=24;source_stride=96;cpu_stride=84;exporter=[int]$exporter;source_format='RGB';source_output='BGR';rust_output='RGB';scope='Real CPU-written kernel DMA buffers without MAPPABLE; no GPU or Portal. Source/Rust capture different serials and each must match known pixels; source callback pointer itself is not instrumented.'})
-        try { Step original-pipewire-dma-stream timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $dmaStreamRoot source)) }
-        catch { $script:failed=$true; Write-Host $_.Exception.Message }
-        $env:MFS_P1_PIPEWIRE_DMA_STREAM_ARTIFACTS=Join-Path $dmaStreamRoot rust
-        try { Step rust-pipewire-dma-stream timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::captures_null_data_dma_stream_with_paired_sync_and_retained_cpu_samples','--','--exact','--ignored','--test-threads=1','--nocapture') }
-        catch { $script:failed=$true; Write-Host $_.Exception.Message }
+        if($MemFd) {
+            . (Join-Path $PSScriptRoot validate-pipewire-memfd-stream.ps1)
+            Invoke-PipeWireMemFdStream $dmaStreamRoot
+        } else {
+            Json (Join-Path $dmaStreamRoot geometry.json) ([ordered]@{width=28;height=24;source_stride=96;cpu_stride=84;exporter=[int]$exporter;source_format='RGB';source_output='BGR';rust_output='RGB';scope='Real CPU-written kernel DMA buffers without MAPPABLE; no GPU or Portal. Source/Rust capture different serials and each must match known pixels; source callback pointer itself is not instrumented.'})
+            try { Step original-pipewire-dma-stream timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $dmaStreamRoot source)) }
+            catch { $script:failed=$true; Write-Host $_.Exception.Message }
+            $env:MFS_P1_PIPEWIRE_DMA_STREAM_ARTIFACTS=Join-Path $dmaStreamRoot rust
+            try { Step rust-pipewire-dma-stream timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::captures_null_data_dma_stream_with_paired_sync_and_retained_cpu_samples','--','--exact','--ignored','--test-threads=1','--nocapture') }
+            catch { $script:failed=$true; Write-Host $_.Exception.Message }
+        }
     }finally{
-        StopOwned dma-route-supervisor $dmaRouter $dmaRouterOut $dmaRouterError
-        StopOwned dma-source $dmaProducer $dmaProducerOut $dmaProducerError
+        StopOwned "$kind-route-supervisor" $dmaRouter $dmaRouterOut $dmaRouterError
+        StopOwned "$kind-source" $dmaProducer $dmaProducerOut $dmaProducerError
         $env:MFS_P0_PIPEWIRE_NODE_ID=$oldNode
         Remove-Item Env:MFS_P1_PIPEWIRE_DMA_STREAM_ARTIFACTS -ErrorAction SilentlyContinue
     }

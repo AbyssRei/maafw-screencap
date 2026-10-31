@@ -1,16 +1,19 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-// Owned CPU-written kernel DMA-BUF producer. This is not a GPU/Portal fixture.
-// ALLOC_BUFFERS supplies real DMA descriptors without MAPPABLE; the consumer
-// retains its original MAP_BUFFERS flags and must map a NULL incoming pointer.
+// Owned CPU-written fd producer. This is not a GPU/Portal fixture.
+// Modes 1/2 export actual kernel DMA-BUF without MAPPABLE. --memfd allocates
+// separate zero-offset MemFd files with ordinary MAPPABLE consumer pointers;
+// only its separate consumer probe hides those real pointers during a lease.
 #include "dma-fixture.h"
 #include <errno.h>
 #include <inttypes.h>
 #include <signal.h>
+#include <fcntl.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include <pipewire/pipewire.h>
 #include <spa/param/video/format-utils.h>
 
@@ -36,28 +39,40 @@ static void add_buffer(void *data, struct pw_buffer *lease)
 {
     struct producer *p = data;
     struct spa_buffer *buffer = lease->buffer;
+    const uint32_t kind = p->exporter ? SPA_DATA_DmaBuf : SPA_DATA_MemFd;
     if (!buffer || buffer->n_datas != 1 || !buffer->datas ||
-        !buffer->datas[0].chunk || (buffer->datas[0].type & (1u << SPA_DATA_DmaBuf)) == 0) {
-        fail(p, "DMA allocation negotiation did not offer one DmaBuf plane");
+        !buffer->datas[0].chunk || (buffer->datas[0].type & (1u << kind)) == 0) {
+        fail(p, "FD allocation negotiation did not offer the selected single plane");
         return;
     }
     struct spa_data *plane = &buffer->datas[0];
     size_t slot = 0;
     while (slot < 16 && p->slots[slot].buffer) slot++;
     if (slot == 16) { fail(p, "DMA allocation exceeded negotiated capacity"); return; }
-    plane->type = SPA_DATA_DmaBuf;
-    plane->flags = SPA_DATA_FLAG_READWRITE; // deliberately no MAPPABLE
+    plane->type = kind;
+    // MemFd transport adds MAPPABLE for backwards compatibility in any case.
+    plane->flags = SPA_DATA_FLAG_READWRITE | (p->exporter ? 0 : SPA_DATA_FLAG_MAPPABLE);
     plane->data = NULL;
     plane->fd = -1;
     plane->mapoffset = 0;
     plane->maxsize = 4096;
-    const int fd = mfs_pw_dma_create(p->exporter, plane->maxsize);
-    if (fd < 0) { errno = -fd; fail(p, "kernel DMA allocation failed"); return; }
+    int fd;
+    if (p->exporter) fd = mfs_pw_dma_create(p->exporter, plane->maxsize);
+    else {
+        fd = memfd_create("mfs-owned-stream", MFD_CLOEXEC | MFD_ALLOW_SEALING);
+        if (fd >= 0 && (ftruncate(fd, plane->maxsize) < 0 ||
+            fcntl(fd, F_ADD_SEALS, F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL) < 0)) {
+            const int error = errno;
+            close(fd);
+            fd = -error;
+        } else if (fd < 0) fd = -errno;
+    }
+    if (fd < 0) { errno = -fd; fail(p, "owned FD allocation failed"); return; }
     plane->fd = fd;
     p->slots[slot].buffer = lease;
     p->slots[slot].fd = fd;
     p->allocated++;
-    printf("DMA add fd=%d type=%u flags=%u data_null=1 bytes=%u\n",
+    printf("FD add fd=%d type=%u flags=%u data_null=1 bytes=%u\n",
            fd, plane->type, plane->flags, plane->maxsize);
 }
 static void remove_buffer(void *data, struct pw_buffer *lease)
@@ -82,10 +97,12 @@ static void produce(void *data)
     p->dequeued++;
     struct spa_buffer *buffer = lease->buffer;
     struct spa_data *plane = buffer && buffer->n_datas == 1 && buffer->datas ? &buffer->datas[0] : NULL;
-    bool valid = plane && plane->chunk && plane->type == SPA_DATA_DmaBuf &&
+    const uint32_t kind = p->exporter ? SPA_DATA_DmaBuf : SPA_DATA_MemFd;
+    const uint32_t flags = SPA_DATA_FLAG_READWRITE | (p->exporter ? 0 : SPA_DATA_FLAG_MAPPABLE);
+    bool valid = plane && plane->chunk && plane->type == kind &&
         plane->fd >= 0 && plane->fd <= INT32_MAX && plane->data == NULL &&
         plane->mapoffset == 0 && plane->maxsize == 4096 &&
-        plane->flags == SPA_DATA_FLAG_READWRITE;
+        plane->flags == flags;
     if (valid) {
         static const unsigned char bars[7][3] = {
             {191,191,191}, {191,191,0}, {0,191,191}, {0,191,0},
@@ -102,9 +119,14 @@ static void produce(void *data)
         pixels[0] = (unsigned char)(marker >> 16);
         pixels[1] = (unsigned char)(marker >> 8);
         pixels[2] = (unsigned char)marker;
-        const int error = mfs_pw_dma_write((int32_t)plane->fd, pixels, sizeof(pixels));
-        // The synchronous WRITE START/copy/END all finish before queue_buffer.
-        if (error) { errno = error; valid = false; fail(p, "DMA producer WRITE access failed"); }
+        int error = 0;
+        if (p->exporter) error = mfs_pw_dma_write((int32_t)plane->fd, pixels, sizeof(pixels));
+        else {
+            const ssize_t written = pwrite((int)plane->fd, pixels, sizeof(pixels), 0);
+            if (written != (ssize_t)sizeof(pixels)) error = written < 0 ? errno : EIO;
+        }
+        // DMA WRITE START/copy/END, or MemFd pwrite, finishes before queue.
+        if (error) { errno = error; valid = false; fail(p, "FD producer write failed"); }
         else p->writes++;
         *plane->chunk = (struct spa_chunk){ .offset = 0, .size = FRAME_BYTES, .stride = STRIDE };
     }
@@ -150,7 +172,7 @@ static void format_changed(void *data, uint32_t id, const struct spa_pod *param)
         SPA_PARAM_BUFFERS_blocks, SPA_POD_Int(1),
         SPA_PARAM_BUFFERS_size, SPA_POD_Int(4096),
         SPA_PARAM_BUFFERS_stride, SPA_POD_Int(STRIDE),
-        SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << SPA_DATA_DmaBuf));
+        SPA_PARAM_BUFFERS_dataType, SPA_POD_CHOICE_FLAGS_Int(1 << (p->exporter ? SPA_DATA_DmaBuf : SPA_DATA_MemFd)));
     if (!buffers || pw_stream_update_params(p->stream, &buffers, 1) < 0)
         fail(p, "DMA producer buffer negotiation failed");
 }
@@ -164,8 +186,11 @@ static void stop(void *data, int signal)
 int main(int argc, char **argv)
 {
     struct producer p = {0};
-    if (argc != 2 || (strcmp(argv[1], "1") != 0 && strcmp(argv[1], "2") != 0)) return 1;
-    p.exporter = (uint32_t)(argv[1][0] - '0');
+    if (argc != 2) return 1;
+    if (strcmp(argv[1], "--memfd") == 0) p.exporter = 0;
+    else if (strcmp(argv[1], "1") == 0 || strcmp(argv[1], "2") == 0)
+        p.exporter = (uint32_t)(argv[1][0] - '0');
+    else return 1;
     argc = 1; argv[1] = NULL;
     setvbuf(stdout, NULL, _IOLBF, 0);
     pw_init(&argc, &argv);
@@ -222,8 +247,8 @@ cleanup:
     if (context) pw_context_destroy(context);
     pw_main_loop_destroy(p.loop);
     pw_deinit();
-    printf("owned DMA producer allocated=%" PRIu64 " removed=%" PRIu64
+    printf("owned %s producer allocated=%" PRIu64 " removed=%" PRIu64
            " dequeued=%" PRIu64 " queued=%" PRIu64 " writes=%" PRIu64 " error=%d\n",
-           p.allocated, p.removed, p.dequeued, p.queued, p.writes, p.error);
+           p.exporter ? "DMA" : "MemFd", p.allocated, p.removed, p.dequeued, p.queued, p.writes, p.error);
     return p.error;
 }
