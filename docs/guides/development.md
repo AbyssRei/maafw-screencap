@@ -68,6 +68,8 @@ Custom 现另有实际原始像素类型矩阵：显式适配器根据编译头�
 
 PNG 参照依赖现由 `scripts/prepare-png-codec.ps1` 显式准备：在线批次每次查询正式 libpng/zlib，登记版本、确切 Git 来源、规范源归档与许可，构建静态库并运行六个已知 RGBA 像素的真实编解码探针；Windows 及 Unix 的 imgcodecs 准备使用相同依赖，并检查 OpenCV 确实选择这些库，禁止静默回落到其他 PNG/zlib。libpng 使用官方主页的当前公开版而非没有 Release 条目的 GitHub 镜像；本次为 libpng 1.6.59、zlib 1.3.2。离线批次必须包含登记的 release/page/resolution/source 输入；缓存复用仍进行在线更新检查。
 
+同一 `2730b87` 完整 Linux 工程 tar 另已按全部 19 份运行清单核对 77,689 个不同登记输入/日志路径，18 份产品快照各严格匹配 402 个 Git 文件。独立配置夹具的一份快照按实际控制单独核对：400 个产品文件、两个故意写入 `compile_error!` 的入口和四份 consumer Cargo 缓存记录；原生准备确在捕获 crate 无法编译时独立执行成功。两份显式 ON 且依赖不可发现的子运行保持失败，父检查按预期非零退出验收，未改为捕获通过。首轮整包校验没有区分该受控快照而停止，其原脚本和日志保留；后续仅按已登记夹具和父检查验证这些确切差异，普通 Git 文件及所有原始摘要保持严格比较。Wlr 组件 131 项检查均通过，下载后实际虚接口、构造失败、协议、registry 与失败/断连五项记录校验通过；另复算普通、共享 client、重连、manager、NUL/path-name 和 FD-zero 场景的 280 张原版 BGR、300 张 Rust BGR 和 300 张 raw 图像，841 组原/Rust 路径比较一致，60 张 manager 原 oracle 未被覆盖。Wlr 的实际 CMake 根和同一 F 的 76 份源码 blob 也匹配。以上完整性与数据核对不扩大这些运行的覆盖范围，也不接受未知 live-snapshot close、FD-zero 部分失败、其他平台或完整 P1。
+
 该准备路径已通过 Windows 开发验证：在线、缓存复用和离线重建均完成实际 PNG 编解码，OpenCV 保留 IPP/CPU 优化并选中确切库，实际 Custom 的 144 组编码/缩放、96 组原始回调以及身份、元数据、虚接口和重入回归均通过，输出另经独立校验。路径校验的首个 CRLF 错误、首个旧头文件恢复失败及诊断脚本的测试入口/负向夹具错误均保留记录。原 [Actions 41174221177](https://github.com/AbyssRei/maafw-screencap/actions/runs/41174221177) 的 Linux Custom 在 PNG 夹具创建时失败；原准备确实关闭了 PNG。新的 Linux 原生运行尚待验证，本机开发通过不覆盖该失败，也不替代新的正式工具链/全平台或 P1 验收。核心依赖树和截图算法未因这次准备修正而改变。
 
 离线 meojson 恢复已补齐确切字节校验：一份 Windows 正式归档的 19 个头文件受 Git `core.autocrlf=true` 影响保存为 CRLF，而实际消费记录为 LF。逐项与 Git blob、原消费文件及归档比较后，确认仅 CRLF→LF 即能恢复全部登记哈希；恢复器仅在该转换结果精确匹配已登记 SHA-256 时写入，其他差异仍拒绝。新的源归档显式固定 `core.autocrlf=false`，可另存逐头文件恢复记录。旧归档、原始失败及恢复前字节保持不变；19 份旧归档和 19 份规范归档的实际恢复、错误摘要拒绝均已验证，这不是新的截图验收。
