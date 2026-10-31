@@ -31,6 +31,13 @@ implementation or SDK provider. Native source/license inputs accompany each
 external acceptance batch; default builds and the custom-only core have no
 OpenCV dependency. Full Custom and P1 acceptance remain outstanding.
 
+The explicit OpenCV imgcodecs acceptance build additionally links current
+formal libpng (https://libpng.org/pub/png/libpng.html, libpng-2.0 licence) and
+zlib (https://zlib.net/, Zlib licence) for actual PNG encode/decode. Each batch
+archives their upstream source, exact tag/commit resolution and original
+LICENSE texts, plus the native codec probe and build identity. These are
+acceptance dependencies; default product/core builds do not link them.
+
 src/platform/windows/pseudo_minimize.rs and
 src/backends/windows/print_window_pseudo.rs and frame_pool_pseudo.rs are Rust migrations of:
   source/MaaWin32ControlUnit/Screencap/PseudoMinimizeHelper.h

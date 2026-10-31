@@ -81,7 +81,14 @@ function Restore-MeoJsonReference([string]$Archive,[string]$Identity,[string]$De
             # the consumed include cache was created with LF. Restore only a
             # byte sequence whose exact recorded prepared hash is confirmed.
             $bytes=[IO.File]::ReadAllBytes($path)
-            $canonical=[Text.Encoding]::UTF8.GetBytes([Text.Encoding]::UTF8.GetString($bytes).Replace("`r`n","`n"))
+            $normalized=[IO.MemoryStream]::new($bytes.Length)
+            try{
+                for($index=0;$index -lt $bytes.Length;$index++){
+                    if($bytes[$index] -eq 13 -and $index+1 -lt $bytes.Length -and $bytes[$index+1] -eq 10){continue}
+                    $normalized.WriteByte($bytes[$index])
+                }
+                $canonical=$normalized.ToArray()
+            }finally{$normalized.Dispose()}
             $canonicalHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($canonical)).ToLowerInvariant()
             if($canonicalHash -ne $header.sha256){throw 'Archived meojson header changed beyond its recorded newline form'}
             [IO.File]::WriteAllBytes($path,$canonical)

@@ -529,9 +529,17 @@ try {
     # build with MINGW/pthread/.a requirements. Use the same installed compiler
     # as C/C++; this does not disable separate NASM or CPU-dispatched kernels.
     $compiler = Join-Path $vs.installationPath "VC/Tools/MSVC/$toolset/bin/Hostx64/x64/cl.exe"
+    $generator = @('-G', 'Visual Studio 18 2026', '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($vs.installationPath)", "-DCMAKE_SYSTEM_VERSION=$($sdk.Name)")
+    . (Join-Path $PSScriptRoot prepare-png-codec.ps1)
+    $codecReplay=if($offline){{param($name) Prepared-File $name}}else{$null}
+    $codec=Prepare-PngCodec -Directory $inputsRoot -DepsRoot $DepsRoot -CMake $cmake -Generator $generator -CCompiler $compiler -Register {param($path) Save-Input $path} -Replay $codecReplay -StepPrefix opencv-png -ToolchainContext ([ordered]@{
+        vs_version=$vs.installationVersion;vs_instance=$vs.instanceId;toolset=$toolset;sdk=$sdk.Name;sdk_releases=$sdkReleases
+        sdk_kernel32_sha256=(Get-FileHash -LiteralPath (Join-Path $sdk.FullName 'um/x64/kernel32.lib') -Algorithm SHA256).Hash.ToLowerInvariant()
+    })
     $options = @("-DCMAKE_ASM_COMPILER:FILEPATH=$compiler", '-DBUILD_LIST=core,imgproc,imgcodecs', '-DBUILD_SHARED_LIBS=OFF', '-DBUILD_WITH_STATIC_CRT=OFF',
         '-DBUILD_TESTS=OFF', '-DBUILD_PERF_TESTS=OFF', '-DBUILD_EXAMPLES=OFF', '-DBUILD_opencv_apps=OFF',
         '-DWITH_PROTOBUF=OFF', '-DWITH_FLATBUFFERS=OFF', '-DWITH_IPP=ON', '-DBUILD_IPP_IW=ON')
+    $options += $codec.Options
     $opencvDownloads = Join-Path $DepsRoot downloads/opencv
     if ($offline) {
         $opencvDownloads = Join-Path $replayRoot downloads
@@ -552,6 +560,7 @@ try {
         cpu_policy = 'OpenCV upstream default CPU baseline, dispatch, SIMD and applicable HAL/third-party optimizations retained'
         module_policy = 'No DNN/OCR/inference module is selected. Disable unused Protobuf/Flatbuffers discovery; OpenCV 5 otherwise exports an unbuilt libprotobuf target in this static subset.'
         assembler_policy = 'Generic ASM uses the selected MSVC compiler to prevent GNU platform contamination. Separate NASM and optimized CPU kernels remain enabled.'
+        png_codec = $codec.Identity
     }
     $configPath = Join-Path $inputsRoot native-configuration.json
     Write-NewJson $configPath $configuration
@@ -569,7 +578,6 @@ try {
     } else { Copy-Item -LiteralPath $configPath -Destination $cacheIdentity }
     $opencvBuild = Join-Path $nativeRoot b
     $opencvInstall = Join-Path $nativeRoot i
-    $generator = @('-G', 'Visual Studio 18 2026', '-A', 'x64', "-DCMAKE_GENERATOR_INSTANCE=$($vs.installationPath)", "-DCMAKE_SYSTEM_VERSION=$($sdk.Name)")
     $opencvConfigureArguments = @('-S', $opencv, '-B', $opencvBuild, "-DCMAKE_INSTALL_PREFIX=$opencvInstall", "-DOPENCV_DOWNLOAD_PATH=$opencvDownloads") + $generator + $options
     Step 'opencv-configure' $cmake $opencvConfigureArguments
     # An untyped -D compiler path can reset FILEPATH to UNINITIALIZED only on
@@ -583,6 +591,7 @@ try {
     Save-Input $cvconfig
     $cvconfigText = Get-Content -LiteralPath $cvconfig -Raw
     $cacheText = Get-Content -LiteralPath $opencvCache -Raw
+    Assert-OpenCvPngCodec $opencvCache $cvconfig $codec
     $selectedAssembler = ($cacheText -split "`n" | Where-Object { $_ -match '^CMAKE_ASM_COMPILER:(STRING|FILEPATH)=' }) -replace '^CMAKE_ASM_COMPILER:(STRING|FILEPATH)=', ''
     if (-not $selectedAssembler -or [IO.Path]::GetFullPath($selectedAssembler.Trim()) -ne [IO.Path]::GetFullPath($compiler)) {
         throw 'OpenCV generic ASM compiler differs from the selected MSVC toolchain'
@@ -638,7 +647,9 @@ try {
             $jsonArchive=Prepared-File meojson-source.tar
             $jsonIdentity=Prepared-File meojson-prepared.json
             foreach($name in @('meojson-source.tar','meojson-prepared.json','meojson-LICENSE')){Save-Input (Prepared-File $name)}
-            $customJson=Restore-MeoJsonReference $jsonArchive $jsonIdentity (Join-Path $replayRoot ('custom-json-'+[DateTime]::UtcNow.Ticks))
+            $jsonRestoration=Join-Path $inputsRoot meojson-restoration.json
+            $customJson=Restore-MeoJsonReference $jsonArchive $jsonIdentity (Join-Path $replayRoot ('custom-json-'+[DateTime]::UtcNow.Ticks)) -RecordPath $jsonRestoration
+            Save-Input $jsonRestoration
         } else {$customJson=Prepare-MeoJsonReference $inputsRoot}
         $parityOptions+="-DMFS_MEOJSON_INCLUDE=$($customJson.Include)"
     }
@@ -976,7 +987,9 @@ try {
         @((Join-Path $UpstreamRoot LICENSE.md), 'MaaFramework-LICENSE.md'),
         @((Join-Path $maautils LICENSE.md), 'MaaUtils-LICENSE.md'),
         @((Join-Path $opencv LICENSE), 'OpenCV-LICENSE.txt'),
-        @((Join-Path $opencv COPYRIGHT), 'OpenCV-COPYRIGHT.txt')
+        @((Join-Path $opencv COPYRIGHT), 'OpenCV-COPYRIGHT.txt'),
+        @((Join-Path $inputsRoot PNG-LICENSE.txt), 'libpng-LICENSE.txt'),
+        @((Join-Path $inputsRoot ZLIB-LICENSE.txt), 'zlib-LICENSE.txt')
     )) {
         Copy-Item -LiteralPath $item[0] -Destination (Join-Path $licenses $item[1])
     }

@@ -29,6 +29,10 @@ Custom encoded/resize callbacks now have a separate 144-case native matrix throu
 | [Frame](docs/contracts/frame.md), [lifecycle](docs/contracts/lifecycle.md), and [C ABI](docs/contracts/c-abi.md) | Proposed caller guarantees; concrete SDK contracts are finalized in P3 |
 | [Development guide](docs/guides/development.md) | Commands available now and build/test responsibilities to implement later |
 
+An additional batch now replays fifteen original initial/formal FramePool native configurations for three rounds (45 invocations), with zero armed input and confirmed observer shutdown: ten configurations pass all rounds; the initial four pseudo modes and formal alpha=0 control fail the original known-color predicate every round. All other recorded layout/owner/close/apartment checks pass. The separate ten-entry old Rust supplement is prepared but unexecuted; it needs its own user-confirmed quiet window. Keep this additional scope distinct from the completed 36-log inventory and do not claim every old executable is covered.
+
+Explicit imgcodecs preparation now resolves and archives current formal libpng/zlib, runs real encode/decode, and verifies the exact OpenCV codec libraries. Scoped Windows development probes and all six Custom native/data regressions pass with these libraries. The earlier Linux PNG-fixture failure remains failed; new Linux/native formal acceptance is pending. Offline replay requires the new codec inputs, and recorded meojson headers are restored only to their exact prepared hash. These remain acceptance dependencies outside the capture core; details and limits are in the development guide.
+
 Keep each detailed rule in its authority; this file summarizes constraints and links to them. User authorization and preferences from the current task still apply; do not invent another approval requirement for work already authorized.
 
 ## Phase Order and Scope

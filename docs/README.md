@@ -10,6 +10,10 @@
 
 ## 阅读顺序与权威来源
 
+另 15 组旧 FramePool 原生配置已完成有效三轮、45 次调用，输入为零：10 组全通过，四个初版 pseudo 模式和正式版 alpha=0 对照三轮均未满足原颜色断言。它们单独封存；已重建的十个旧 Rust 入口尚待执行，不计作通过，见[连续复测范围](guides/development.md#本次连续三轮无输入复测)。
+
+原生 imgcodecs 准备新增显式最新正式 PNG/zlib、源/许可归档、实际编解码及确切链接库校验。Windows 开发范围的 Custom 编码/缩放与既有回归已通过；新 Linux 运行仍待验证，旧 PNG 夹具创建失败保留，详见[开发指南](guides/development.md#当前仓库与本机命令)。离线输入必须完整，meojson 旧归档仅在恢复后精确匹配已登记头文件哈希时使用；默认核心仍不链接这些验收依赖。
+
 Custom 已新增 UUID/能力位及 get_info 的同实现迁移。Windows 归档依赖下 64 组身份查询、592 组元数据/真实 StringBuffer/meojson 对照及实际字节、作用域和 owner 校核通过；Linux 身份查询及下载后独立复算亦通过。用户更新 VS2026 18.11.3 后，本机正式在线批次的 25 项原生检查全部通过；Linux Actions 41147180960 的 133 项组件检查亦通过，实际输出与来源已独立核对。macOS 仍缺正式 Xcode 27.2/27B52。Wlr 宿主构造失败已通过 131 项原生组件及完整来源核验；各项仍不完成 P1。实际范围见[开发指南](guides/development.md#当前仓库与本机命令)。
 
 Custom 新增真实原 C 创建/销毁与 C++ 捕获接口消费，Windows 归档输入下二十轮、1,308 次虚接口查询及 112 次 buffer 内原生调用方替换通过；后续本机正式在线及 Linux 原生批次也已通过；macOS 和 framework 转发继续待验证。较早 Linux 批次因嵌套 meojson 日志覆盖而失败，修正后最新 Linux 组件已通过；较早 Windows CI Custom 因离线清单缺少 meojson 在编译前失败，独立在线准备后，Actions 41164682813 与 41167609520 的该步骤已通过，完整 Windows job 另按实际结果记录。详细边界及保留记录见上述开发指南，不据此完成 P1。
