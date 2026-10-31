@@ -54,6 +54,7 @@ $frameMapEvidence = ''
 $frameSizeEvidence = ''
 $desktopEvidence = ''
 $metadataEvidence = ''
+$managerSizeEvidence = ''
 $customEvidence = ''
 $delegateEvidence = ''
 if($CustomParity -and ($Desktop -or $GdiParity -or $FramePoolContext)) {throw 'Custom parity is an independent callback entry without desktop/GDI prerequisites'}
@@ -255,6 +256,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         if ($Name -eq 'frame-pool-rust-size-boundary' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('native Rust FramePool size_boundary cycles=20 calls=60 rejected=18 recovery=20 retained=42 owners_released=1 completion_states=0 passed')) {
             throw 'Rust FramePool Size boundary matrix did not complete'
+        }
+        if ($Name -eq 'manager-native-size-rejection' -and $exitCode -eq 0) {
+            $observed = Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('native manager initial_size_rejection cycles=20 source_model_cases=20 real_framepool_rejections=40 selected_gdi=20 gdi_conversions=60 retained=20 owners_released=1 passed')) {
+                throw 'Native manager initial Size rejection regression did not complete'
+            }
         }
         if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary|fullscreen|workarea|geometry)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
         if ($Name -eq 'desktop-dup-rust-fullscreen' -and $exitCode -eq 0 -and
@@ -1031,6 +1039,9 @@ try {
         if ($ManagerParity) {
             # These cases run in distinct processes. Preserve any failed check
             # while continuing independent manager evidence, without retry.
+            $managerSizeEvidence=Join-Path $artifacts manager-size-rejection
+            $env:MFS_MANAGER_SIZE_ROOT=$managerSizeEvidence
+            $managerSizeCase='backends::windows::manager::size_tests::continues_to_gdi_after_framepool_rejects_nonpositive_initial_item_size'
             $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
@@ -1044,12 +1055,15 @@ try {
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
-                @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))}
+                @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-native-size-rejection';arguments=($parityArguments + @('--',$managerSizeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))}
             )
             foreach ($check in $managerChecks) {
                 try { Step $check.name cargo $check.arguments }
                 catch { $failed=$true; Write-Host $_.Exception.Message }
             }
+            try {Step 'manager-size-records' $ConfigureTool @('upstream-trace','manager-size',$managerSizeEvidence)}
+            catch {$failed=$true;Write-Host $_.Exception.Message}
             foreach($runtimeMask in @(1,2,4,8,16,32,63)) {
                 $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$runtimeMask
                 $env:MFS_DELEGATE_RUNTIME_RECORDS=Join-Path $delegateRuntimeEvidence "method-$runtimeMask"
@@ -1159,6 +1173,7 @@ finally {
     if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}
+    if($managerSizeEvidence -and (Test-Path -LiteralPath $managerSizeEvidence)) {Get-ChildItem -LiteralPath $managerSizeEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}
     if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
         Get-ChildItem -LiteralPath $screenEvidence -File | ForEach-Object { Save-Input $_.FullName }
     }

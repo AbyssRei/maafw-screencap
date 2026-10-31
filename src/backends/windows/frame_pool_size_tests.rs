@@ -121,7 +121,10 @@ fn preserves_original_size_query_catches_partial_states_and_recovery()
                         );
                         error_code = code.0;
                     }
-                    Err(Error::InvalidLayout) if mode == 8 => {}
+                    Err(Error::InvalidItemSize {
+                        width: 0,
+                        height: 64,
+                    }) if mode == 8 => {}
                     Err(error) => panic!("unexpected Size boundary error: {error:?}"),
                     Ok(_) => panic!("Size fault unexpectedly returned an image"),
                 }

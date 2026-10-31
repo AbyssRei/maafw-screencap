@@ -165,6 +165,7 @@ where
                         let class = match &error {
                             WinRtException(..) | Conversion(_) | Allocation(_)
                             | OwnerAllocation(_) => FailureClass::Exception,
+                            InvalidItemSize { .. } => FailureClass::NoImage,
                             InvalidLayout | Overflow => FailureClass::Safety,
                             Native("frame.ContentSize safety check", _) => FailureClass::Safety,
                             _ => FailureClass::NoImage,

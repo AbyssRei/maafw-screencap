@@ -35,6 +35,9 @@ pub(crate) enum Error<E> {
     WinRtException(&'static str, windows_core::HRESULT),
     Win32(&'static str, u32),
     InvalidWindow,
+    // Original init explicitly returns false for this native item result.
+    // Keep it distinct from layout checks added for safe pixel consumption.
+    InvalidItemSize { width: i32, height: i32 },
     InvalidLayout,
     Overflow,
     NoFrame,
@@ -333,7 +336,10 @@ impl<I> FramePoolCapture<I> {
         let item = self.item.as_ref().unwrap();
         let size = exception("GraphicsCaptureItem.Size", wgc::item_size(item))?;
         if size.Width <= 0 || size.Height <= 0 {
-            return Err(Error::InvalidLayout);
+            return Err(Error::InvalidItemSize {
+                width: size.Width,
+                height: size.Height,
+            });
         }
         // SAFETY: Query only, no memory borrowed from the HWND.
         if !unsafe { IsWindow(Some(self.window)) }.as_bool()

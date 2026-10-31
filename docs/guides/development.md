@@ -379,6 +379,14 @@ Rust 保留连接时先清除旧捕获 owner、再设置调用线程 PMv2 DPI、
 
 首次 manager 正式批次的 GDI 回归有两项因验收符号缺失而未执行：Rust 编译全部能力后，旧通用探针提前请求了该次 GDI-only 模块未选中的 ScreenDC 符号。该失败批次保留。GDI 与 ScreenDC 现使用显式探针入口，目标符号在各自开始原生故障状态前核验；修正后的 GDI 七项、ScreenDC 四项及 manager 两个入口已分别通过本机检查。后续正式 manager 批次的 20 项检查全部通过，包含 122 个脚本和 20 次真实 GDI 生命周期；记录仍为 P1/incomplete。正式 manager 批次串行运行独立回归/脚本/生命周期，保留每项失败而不中断其他独立证据，整批仍以任一失败为失败。
 
+2026-11-01 在 Size 边界与 manager 的职责核对中发现实际迁移偏差：原类首次 item Size 非正时 `init` 返回 false、`screencap` 返回无图，manager 仍保留其他成功候选；Rust 原先复用 `InvalidLayout`，被 native manager 归为 Safety，从而在已有 GDI 成功图像时提前中止选择。修复将这个原生拒绝拆为私有 `InvalidItemSize { width, height }` 并归入 NoImage；像素跨度、布局及溢出的安全错误分类保持原样，没有增加新的选法或 fallback 策略。
+
+独立回归 `size_tests::continues_to_gdi_after_framepool_rejects_nonpositive_initial_item_size` 用真实 Rust native factories 构造 GDI 与 FramePool/pseudo 候选，每次 FramePool 先执行真实 item Size 查询，再按显式测试控制返回零宽度。原 manager 的固定函数体模型通过后台/时钟/input=None 边界提供无图仍选 GDI 的预期；另一个完整原类/Rust Size 矩阵提供原生无图及清理证据，二者组合验证，不冒称完整原生原版 manager 同场执行。修复前的三轮均在首周期记录“原模型已选择 GDI、Rust warmup=Safety、没有胜出者”，退出码 `[101,101,101]`；原类/Rust Size 及 records 每轮仍通过。正式输入为零、最大间隔 78.35ms，监听正常注销，失败保持原始状态。
+
+修复后新程序的连续三轮全部通过，共十五次程序调用；原 C++ EXE、适配 DLL 与依赖 DLL 摘要同修复前一致。六十个 manager 生命周期中，120 次真实 FramePool 候选拒绝均为 NoImage，两次 GDI 预热/测速后仍能交付第三张图，共 180 次 GDI 捕获、60 张关闭后持帧和 120 份完整 BGR；246 个 manager 文件经独立复核，每个已记录 GDI 前后计数均相等。同期原类/Rust Size 矩阵再次通过 360 次调用、108 次预期拒绝、120 次恢复、252 张持帧、1,164 次真实查询及 1,080 份 BGR。518 个冻结输入、430 份产品源码、76 个 F blob、1,061 个实际 MSBuild 读取记录、七份生成绑定，以及八段原 manager 函数体均核对。正式输入为零、最大间隔 80.06ms，监听正常注销，无新物理正向控制声明。十六组 manager 破坏与十九组 Size 破坏被拒绝，两份不变副本通过；破坏语义记录前移除保存 report，另单独检查错误 report。
+
+新入口使用 `MFS_MANAGER_SIZE_ROOT`，校核命令为 `cargo xtask upstream-trace manager-size <外部目录> [--check-only]`；`upstream-parity manager` 已分别编排单项 native test、records、失败时登记与 CI 收集。Windows manager 能力的串行 workspace 138 项通过、73 项忽略，Release 核心构建、Clippy、格式和 PowerShell 解析通过。完整新原生 CI、系统真实零尺寸 item、其他原生候选故障/清理、全部混合方法与 framework/全平台验收仍待完成，旧失败和完整 P1 状态不变。
+
 修正标记计数后的 DesktopDup 原生 Actions 已通过全部 25 项，实际 20 轮标记绘制计数包含 1；此前失败保留。该轮 PrintWindow 30 项和 ScreenDC 19 项通过，FramePool 仍为 32 项通过、四项最小化原源码颜色失败。补充诊断 ZIP 已核对发布摘要，所含记录引用已校验；它不代替完整工程归档，也不撤销其他失败。
 
 `upstream-model pipewire` 是当前 Windows 原生 C++/OpenCV 工具链上的可移植消费端对照，单独标记为 P1/incomplete，不是 Linux 实际捕获。私有 `linux-pipewire` 能力现有消费端算法及首个待原生验证的 daemon/SHM driver 切片。原源码的等待 helper/锁 guard、格式表、connected/inactive/wait_for_frame_locked/screencap 函数体在构建目录提取，仅归一化换行；loop、clock 和格式编号是明确的脚本边界，Mat 所有者及转换使用真实 OpenCV。这不是完整原 Linux 类或 SPA 数值 ABI 的编译验证。

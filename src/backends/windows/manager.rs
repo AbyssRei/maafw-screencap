@@ -342,3 +342,7 @@ fn observe<I, F, E>(call: Call<I, F, E>) -> Observation<F, E> {
 #[cfg(all(test, feature = "prototype-windows"))]
 #[path = "manager_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "prototype-windows-com"))]
+#[path = "manager_size_tests.rs"]
+mod size_tests;

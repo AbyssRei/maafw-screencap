@@ -28,6 +28,7 @@ mod macos_display_patch;
 mod macos_sample_cases;
 mod macos_sample_matrix;
 mod manager_metadata;
+mod manager_size;
 mod native;
 mod native_tools;
 mod pipewire;
@@ -200,6 +201,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace framepool-empty <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-map <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-size <external matrix> [--check-only]\n\
+                      cargo xtask upstream-trace manager-size <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace wlr-early-close-prefix <external directory> [--check-only]\n\
                       cargo xtask upstream-trace wlr-retired-channel <Rust directory> <original prefix directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-geometry <external window-geometry directory> [--check-only]\n\
