@@ -70,11 +70,15 @@ Custom 另新增同一存活对象的同步回调重入入口：connect、connec
 
 确切 `561238723b40620244c5674de937d1222de0e048` 的本机正式在线批次随后通过全部 27 项原生检查。独立核对 7,663 项输入/日志、全部 394 个产品 Git 文件、十份实际原 API/头文件与固定 F 的字节，并保存正式测试程序、DLL 和锁文件；全部 Custom 实际输出与此前归档输入下的最终 Debug/Release 记录一致。VS2026、SDK 和 MSVC 身份与下述更新后工具链相同。[Actions 41167609520](https://github.com/AbyssRei/maafw-screencap/actions/runs/41167609520) 的 Linux 组件通过 135 项检查，下载后的五个独立记录入口均通过；4,728 份重入数据及图像、身份、metadata、实际 API 全部输出与本机一致，十份原 API/头文件与固定 F 一致。官方轻量包摘要与 37,897 份可用登记文件亦已核对；其中另有 472 份登记输入未包含在轻量包内，不把它描述为完整依赖/产品快照审计。该批 macOS 仍在取帧前缺正式 Xcode 27.2/27B52。
 
+Custom 新增独立编码/缩放回调入口：原 `MaaImageBufferResize`、encoded getter/setter 函数体与固定 F 字节一致，实际 MaaUtils ImageBuffer 与 PNG codec 保持在 callback 原调用点；Rust 沿同一 manager 接收其真实 Mat。144 组组合覆盖灰度/BGR/BGRA PNG、无效编码、非空地址的零长度、NULL 拒绝、0/1/255 回调值、原尺寸、2× 上/下采样、单边自动尺寸、双零及负尺寸。Windows 显式归档输入下，Debug 与 Release 各运行二十个生命周期、288 次源码/Rust 调用，均通过；每组另有 576 次独立缓存解码检查具体像素，24 次负尺寸 C++ 异常被测试边界容纳，288 个真实 Mat 保持到其 callback/context 结束后，独立 CPU 字节另在线程读取并跨过模块卸载。缓存输入覆盖后，原字节仍保持；false 保留原 caller 输出，成功空图仍覆盖它。诊断编码复制和 cache decode 是额外测试工作，不称为消除的捕获开销。
+
+`upstream-trace custom-images <外部 images 目录> [--check-only]` 独立复算全部 2,025 份数据、布局/owner、PNG chunk CRC、图样、缓存及持帧记录，Debug/Release 数据完全一致。首个独立校验器错误地把所有空 Mat 头都当作默认值：实际 `clear` 对已装入原始图的 Mat 调用 `release`，保留其类型/通道/步长，读取跨度和 owner 已归零；无效 imdecode 则是默认空头。失败的校验器、程序与原数据均保留；现按这两类来源分别严格校验，并要求源码/Rust 完整头一致。九组像素、持帧、cache decode、PNG CRC/尺寸、空头、owner、调用行及作用域计数篡改均拒绝；Windows/Unix 的真实入口拒绝八组零测试/缺摘要变体。原图像、身份、metadata、实际虚接口和重入回归输出与此前正式批次一致。新在线/其他平台、其余 codec/raw 类型、任意缩放与通用故障仍待验证；不是公共 SDK 或完整 P1 验收。
+
 用户更新后，VS2026 `18.11.3 / 18.11.12328.437` 与 SDK `10.0.28000.2957` 的新正式在线批次通过全部 25 项原生检查；实际参考编译器为 MSVC `19.51.36260.0`。准备、编译及验证期间产品源码保持不变，独立核对了 2,930 项输入/日志、固定 F 的 76 份来源及全部 392 个产品 Git 文件。图像、UUID、元数据和实际 C 创建/销毁/虚表门禁均通过，测试二进制与锁文件另存。
 
 [Actions 41147180960](https://github.com/AbyssRei/maafw-screencap/actions/runs/41147180960) 的 Linux 133 项组件检查及下载后 33,283 份可用登记文件校核亦通过；两平台各十份原 Custom API/manager/公共头与 F 原字节一致，真实编译命令消费这些来源，612 份 API 数据及 1,193 份元数据字节跨平台一致。轻量 Linux 包不含完整依赖与产品快照，不将其描述为完整源码归档审计。
 
-随后 [Actions 41164682813](https://github.com/AbyssRei/maafw-screencap/actions/runs/41164682813) 的 Linux 完整官方归档已补齐独立审计：70,787 份登记输入/日志、19 份完整产品快照（各 392 个 Git 文件）、F 全部 744 份原文件与来源归档、76 项显式来源及真实编译关联均核对。该批 Wlr/PipeWire 组件分别通过 131/133 项检查。其源码为 `7cf8896`，尚未包含后续重入切片；完整归档的结果不转移到 `5612387` 的轻量包。
+随后 [Actions 41164682813](https://github.com/AbyssRei/maafw-screencap/actions/runs/41164682813) 的 Linux 完整官方归档已补齐独立审计：70,787 份登记输入/日志、19 份完整产品快照（各 392 个 Git 文件）、F 全部 744 份原文件与来源归档、76 项显式来源及真实编译关联均核对。该批 Wlr/PipeWire 组件分别通过 131/133 项检查。其源码为 `7cf8896`，尚未包含后续重入切片；完整归档的结果不转移到其他批次。随后 `5612387` / Actions 41167609520 的完整官方 Linux 包也已核对 ZIP、完成 job 报出的内层 TAR 摘要、75,550 份登记输入/日志、F 全部 744 份文件/原归档与 76 项来源，以及 19 份各 394 个 Git 文件的产品快照；其中一个为按原测试主动改成不可编译的消费者，两个预期失败的配置记录仍保留失败状态。三份实际编译关联及十份 Custom 原 API/头文件均匹配固定 F，7,196 份实际 Custom 输入/数据另解出。这补齐该确切新批次的完整来源审计；原生语义仍按各组件及独立记录校核范围记录。
 
 该批 Windows Custom 在编译前失败：复用的 PrintWindow 离线清单没有新增 `meojson-source.tar`。现与 manager 一样为 Custom 单独在线准备并刷新 runner 工具链，保留离线入口的完整输入要求；后续 Actions 41164682813 与 41167609520 的 Custom 步骤均已通过，不把原准备失败归为采集断言，也不改写原结果。完整 Windows job 与其余组件各按实际结果记录，该批历史四项 FramePool pseudo 失败与 macOS 正式 Xcode 缺环境继续保留；完整 P1 仍未验收。
 

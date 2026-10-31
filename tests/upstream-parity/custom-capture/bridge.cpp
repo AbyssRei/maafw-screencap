@@ -318,3 +318,4 @@ uint64_t mfs_custom_info_count(uint32_t index) noexcept {
     return index<std::size(info_counts)?info_counts[index].load():UINT64_MAX;
 }
 #include "native-unit.inc"
+#include "images.inc"

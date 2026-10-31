@@ -79,3 +79,8 @@ MFS_CUSTOM_EXPORT int32_t mfs_custom_unit_fault(void*,uint32_t) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_unit_publish_image(void*,void*) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_unit_publish_uuid(void*,MaaStringBuffer*) noexcept;
 MFS_CUSTOM_EXPORT uint32_t mfs_custom_unit_publication_probe() noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_codec_fixture(uint32_t channels,void** output) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_encoded_set(MaaImageBuffer*,uint8_t*,size_t,uint8_t*) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_encoded_view(MaaImageBuffer*,MfsCustomStringView*) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_resize(MaaImageBuffer*,int32_t,int32_t,uint8_t*) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_codec_decode(const uint8_t*,size_t,void**) noexcept;

@@ -5,6 +5,7 @@ mod batch;
 mod configuration;
 mod custom_capture;
 mod custom_identity;
+mod custom_images;
 mod custom_metadata;
 mod custom_native_api;
 mod custom_reentry;
@@ -171,6 +172,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace custom-metadata <external metadata directory> [--check-only]\n\n\
                       cargo xtask upstream-trace custom-native-api <external native-api directory> [--check-only]\n\n\
                       cargo xtask upstream-trace custom-reentry <external reentry directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace custom-images <external images directory> [--check-only]\n\n\
                       cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\

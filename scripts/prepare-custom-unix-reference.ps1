@@ -28,6 +28,12 @@ function Assert-CustomReentryLog([string]$Text) {
         throw 'Custom nested original/Rust virtual callback, exception and scope matrix did not execute'
     }
 }
+function Assert-CustomImagesLog([string]$Text) {
+    if($Text -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+       -not $Text.Contains('Custom images lifecycles=20 cases=144 source_rust_captures=288 retained_native_images=288 inspection_decodes=576 input_actions=0 passed')){
+        throw 'Expected actual Custom encoded callbacks, cache/resize checks and retained native image owners'
+    }
+}
 function Test-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     $log=Join-Path $logsRoot custom-reference.log
     $status='failed'
@@ -129,6 +135,8 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
         Step custom-api-records $ConfigureTool @('upstream-trace','custom-native-api',(Join-Path $evidence native-api))
         Step custom-reentry-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::native_api::reentry::preserves_same_unit_nested_queries_faults_and_independent_callers','--','--exact','--ignored','--test-threads=1','--nocapture')
         Step custom-reentry-records $ConfigureTool @('upstream-trace','custom-reentry',(Join-Path $evidence reentry))
+        Step custom-images-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::images::preserves_encoded_callback_cache_resize_failures_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture')
+        Step custom-images-records $ConfigureTool @('upstream-trace','custom-images',(Join-Path $evidence images))
         Step custom-native-clippy cargo @('clippy','--workspace','--all-targets','--locked','--no-default-features','--features','custom-capture','--','-D','warnings')
         Step custom-core-direct-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','custom-capture')
         Step custom-core-runtime-tree cargo @('tree','--locked','-p','maafw-screencap','--edges','normal','--no-default-features','--features','custom-capture')

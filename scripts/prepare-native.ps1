@@ -257,6 +257,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected complete Custom nested virtual callbacks, exceptions and per-operation scope controls'
             }
         }
+        if($Name -eq 'custom-images-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('Custom images lifecycles=20 cases=144 source_rust_captures=288 retained_native_images=288 inspection_decodes=576 input_actions=0 passed')){
+                throw 'Expected actual Custom encoded callbacks, cache/resize checks and retained native image owners'
+            }
+        }
         if($Name -eq 'manager-delegate-parity' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -670,6 +677,8 @@ try {
         Step custom-api-records $ConfigureTool @('upstream-trace','custom-native-api',(Join-Path $customEvidence native-api))
         Step custom-reentry-parity cargo ($customArgs+@('backends::custom::native_tests::native_api::reentry::preserves_same_unit_nested_queries_faults_and_independent_callers','--','--exact','--ignored','--test-threads=1','--nocapture'))
         Step custom-reentry-records $ConfigureTool @('upstream-trace','custom-reentry',(Join-Path $customEvidence reentry))
+        Step custom-images-parity cargo ($customArgs+@('backends::custom::native_tests::images::preserves_encoded_callback_cache_resize_failures_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-images-records $ConfigureTool @('upstream-trace','custom-images',(Join-Path $customEvidence images))
         $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
         if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
         Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))

@@ -194,6 +194,8 @@ impl Lib {
 
 #[path = "identity.rs"]
 mod identity;
+#[path = "images.rs"]
+mod images;
 #[path = "metadata.rs"]
 mod metadata;
 #[path = "native-api.rs"]

@@ -67,6 +67,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'custom-reentry-parity'){
             $status='failed';Assert-CustomReentryLog $observed;$status='passed'
         }
+        if($Name -eq 'custom-images-parity'){
+            $status='failed';Assert-CustomImagesLog $observed;$status='passed'
+        }
         if($Name -eq 'custom-native-parity'){
             $status='failed';Assert-CustomNativeLog $observed;$status='passed'
         }
