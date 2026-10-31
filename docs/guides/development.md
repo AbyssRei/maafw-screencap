@@ -152,7 +152,9 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
-Wlr 新增显式 `early-close-prefix` 原版寿命边界探针，随 `upstream-context wlr` 编排；实现和 portable 校核已通过，本机不执行 Linux 原生测试，原生编译/运行待新的 Actions 验证。原 WaylandClient/WlrScreencap 函数不改写，链接观察器在真实 disconnect 请求处记录 connected、已清空的全局字段、三个代理快照引用数和原生 fd。二十轮各含无 capture、冷 capture、已分配缓冲 capture、活跃旧快照下重连四种场景，共 80 个关闭前缀；夹具仅对仍有旧代理的 60 次断开延后实际 native disconnect，待旧 capture 析构后再恰好执行一次，无 capture 对照立即转发。40 次关闭状态下的原截图须拒绝并保持调用方输出；20 次重连只在旧快照释放后由新 source 取图，不调用旧代理/新 client display 的组合。正常模式继续立即转发 disconnect。
+Wlr 新增显式 `early-close-prefix` 原版寿命边界探针，随 `upstream-context wlr` 编排；实现和 portable 校核已通过，本机不执行 Linux 原生测试，首次原生结果及修正状态见下段。原 WaylandClient/WlrScreencap 函数不改写，链接观察器在真实 disconnect 请求处记录 connected、已清空的全局字段、三个代理快照引用数和原生 fd。二十轮各含无 capture、冷 capture、已分配缓冲 capture、活跃旧快照下重连四种场景，共 80 个关闭前缀；夹具仅对仍有旧代理的 60 次断开延后实际 native disconnect，待旧 capture 析构后再恰好执行一次，无 capture 对照立即转发。40 次关闭状态下的原截图须拒绝并保持调用方输出；20 次重连只在旧快照释放后由新 source 取图，不调用旧代理/新 client display 的组合。正常模式继续立即转发 disconnect。
+
+首次原生 [Actions 41200307038](https://github.com/AbyssRei/maafw-screencap/actions/runs/41200307038) 已编译该探针，133 项 Wlr 检查中 131 项通过。新探针在 cycle 0 的首次重连失败：夹具位于归档目录的 socket 别名长 174 字节，被 libwayland 的 108 字节上限拒绝；记录校核器随后拒绝仅含三行的未完成矩阵。已完成的 control/cold/buffered 前缀分别记录零/一/一份存活快照引用，两个 64×48 原版即时图样正确，但没有完整持帧输出，不接受该批探针。官方 ZIP 摘要和 7,868 个可用登记路径已独立核对，501 个来源输入不在轻量包中；失败及部分记录保留。夹具现将别名放入原 socket 的短运行目录，同一环境下为 90 字节，并按原生 `sockaddr_un.sun_path` 检查含终止符的长度；只有确认自己成功创建的别名才在退出时删除，已有或不可检查的路径保持失败。仅修正夹具，修正后的原生验证待新的运行。
 
 `cargo xtask upstream-trace wlr-early-close-prefix <外部目录> [--check-only]` 独立核对完整 80 行、准确引用/状态/fd、80 份实际 task IDs，以及 60 张即时和 60 张持帧 BGR；拒绝缺行、额外文件、引用/资源不符或错误像素。夹具延后断开是明确的干预，不能用其配平结果证明原版在活跃代理下立即断开的清理有效，也不构成 Rust 早关/重连迁移或 P1 完成。现有 Rust `Client` 独占 connect/close 限制继续保留，后续安全适配仍须据实际原生结果决定。初次校核器编译因记录辅助函数名称不符而失败，日志保留；更正后 68 项 xtask 测试、格式、严格 Clippy 及 PowerShell 语法检查通过。
 

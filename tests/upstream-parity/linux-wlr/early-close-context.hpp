@@ -54,10 +54,17 @@ struct ObserveClose {
 void early_close_context(const std::filesystem::path& socket,const std::filesystem::path& directory) {
     struct Alias {
         std::filesystem::path path;
-        ~Alias() {std::error_code error;std::filesystem::remove(path,error);}
-    } alias{directory/"early-close-alias"};
-    require(!std::filesystem::exists(alias.path),"early-close alias already exists");
+        bool created=false;
+        ~Alias() {if(created) {std::error_code error;std::filesystem::remove(path,error);}}
+    } alias{socket.parent_path()/".mfs-close"};
+    const sockaddr_un address{};
+    require(alias.path.native().size()<sizeof(address.sun_path),"early-close alias exceeds native Unix socket path limit");
+    std::error_code alias_error;
+    const auto previous=std::filesystem::symlink_status(alias.path,alias_error);
+    require((!alias_error || alias_error==std::errc::no_such_file_or_directory)
+        && previous.type()==std::filesystem::file_type::not_found,"early-close alias exists or cannot be inspected");
     std::filesystem::create_symlink(socket,alias.path);
+    alias.created=true;
     const auto baseline_tasks=tasks();
     std::ofstream baseline(directory/"early-close-tasks.txt");
     for(const auto& id:baseline_tasks) {baseline<<id<<'\n';}

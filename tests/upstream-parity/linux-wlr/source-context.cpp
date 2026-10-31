@@ -21,6 +21,7 @@
 #include <stdexcept>
 #include <sys/random.h>
 #include <sys/mman.h>
+#include <sys/un.h>
 #include <thread>
 #include <utility>
 #include <unistd.h>
