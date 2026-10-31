@@ -160,11 +160,13 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
-Rust Wlr 新增关闭寿命安全适配，原生编译和矩阵结果待确认。每个 capture 在复制 manager/SHM/output 时保留确切 `Arc<Channel>`；client 仍立即清除 connected 和原顺序全局字段，默认先结束 capture 再关闭 client 的路径仍立即断开。只有活跃旧快照对应的原生连接延后到这些代理/缓冲区结束，避免 foreign Backend 使用失效 display。该额外寿命与原版受控前缀探针中的延后干预一致，不能描述为原版立即关闭行为。重连后的旧 capture 在发请求前按连接身份拒绝，不重新构造、不执行原版旧代理/新 display 的无效组合；关闭状态下仍拒绝且不进入转换。该 identity 只保护私有原生所有权，不提前确定 P3 的 SDK 代次模型。
+Rust Wlr 新增关闭寿命安全适配，已通过下述原生编译和受控矩阵。每个 capture 在复制 manager/SHM/output 时保留确切 `Arc<Channel>`；client 仍立即清除 connected 和原顺序全局字段，默认先结束 capture 再关闭 client 的路径仍立即断开。只有活跃旧快照对应的原生连接延后到这些代理/缓冲区结束，避免 foreign Backend 使用失效 display。该额外寿命与原版受控前缀探针中的延后干预一致，不能描述为原版立即关闭行为。重连后的旧 capture 在发请求前按连接身份拒绝，不重新构造、不执行原版旧代理/新 display 的无效组合；关闭状态下仍拒绝且不进入转换。该 identity 只保护私有原生所有权，不提前确定 P3 的 SDK 代次模型。
 
-client 可在 capture 句柄仍存在但未执行操作时串行 close/connect；实际捕获、转换或控制操作期间的关闭/重连重入返回 busy，标量作用域在返回/展开时释放，原生 dispatch 和转换期间不持状态锁。每次真正打开连接新增一个标准 Arc owner 和一份 fallible 临时路径副本，以保留来源路径拼写并避免在 native connect 上持元数据锁；原帧复制/转换/等待时点不变，不宣称消除了工作或接受一般重入/并发。原独占 client 回归仍单独保留，其他来源/FD-zero/registry/manager 回归须在新代码下重新执行。
+client 可在 capture 句柄仍存在但未执行操作时串行 close/connect；实际捕获、转换或控制操作期间的关闭/重连重入返回 busy，标量作用域在返回/展开时释放，原生 dispatch 和转换期间不持状态锁。每次真正打开连接新增一个标准 Arc owner 和一份 fallible 临时路径副本，以保留来源路径拼写并避免在 native connect 上持元数据锁；原帧复制/转换/等待时点不变，不宣称消除了工作或接受一般重入/并发。原独占 client 回归仍单独保留，既有来源/FD-zero/registry/manager 受控回归已在新代码的下述组件中重新执行。
 
-新 `early_close::closes_shared_client_after_ending_each_retained_native_snapshot` 入口计划二十轮、四模式，核对 80 个逻辑关闭/重连前缀、60 个延后 native channel、40 个关闭拒绝、20 个旧连接拒绝、120 次真实转换内 busy 控制、60 次捕获、各 60 个 raw/BGR 关闭后 owner、实际 fd/精确 task IDs 和 callback owner 配平。`cargo xtask upstream-trace wlr-retired-channel <Rust目录> <原版前缀目录> [--check-only]` 独立复算 382 份文件，并只读核对原版完整前缀，逐字节比较静态图样；alpha 字节仅保留，不补充原来源未给出的 alpha 保证。当前本机只验证 checker/语法与构建隔离，不能把 Windows host 的通过当作 Linux 编译或该矩阵通过。
+新 `early_close::closes_shared_client_after_ending_each_retained_native_snapshot` 入口执行二十轮、四模式，核对 80 个逻辑关闭/重连前缀、60 个延后 native channel、40 个关闭拒绝、20 个旧连接拒绝、120 次真实转换内 busy 控制、60 次捕获、各 60 个 raw/BGR 关闭后 owner、实际 fd/精确 task IDs 和 callback owner 配平。`cargo xtask upstream-trace wlr-retired-channel <Rust目录> <原版前缀目录> [--check-only]` 独立复算 382 份文件，并只读核对原版完整前缀，逐字节比较静态图样；alpha 字节仅保留，不补充原来源未给出的 alpha 保证。
+
+确切 `e9a6da80db53f5641770a3761b5e33cf4132e3cc` 的原生 [Actions 41211922418](https://github.com/AbyssRei/maafw-screencap/actions/runs/41211922418) Wlr 组件全部 135 项检查通过，包括 Rust 实际编译、严格 Clippy、新矩阵和既有回归。官方 ZIP 摘要、8,449 个可用登记路径及独立只读 checker 已核对；80 行 Rust 记录、240 份完整 raw/BGR 即时/持帧、80 份精确 task IDs、原版 202 份前缀文件另经复算。每模式最终 fd 均回到七，callback created/destroyed/dropped 分别配平为 6、6、9、18。首次本机复核使用了旧 xtask 可执行文件，在命令解析前被拒绝；旧工具日志保留，按同一归档锁文件重建当前 checker 后的新复核通过，没有改写原生数据。506 个完整来源输入不在轻量包中，完整来源审计待补；该受控适配不接受原版立即断开、一般重入/并发或完整 P1。
 
 Wlr 新增显式 `early-close-prefix` 原版寿命边界探针，随 `upstream-context wlr` 编排；实现和 portable 校核已通过，本机不执行 Linux 原生测试，首次原生结果及修正状态见下段。原 WaylandClient/WlrScreencap 函数不改写，链接观察器在真实 disconnect 请求处记录 connected、已清空的全局字段、三个代理快照引用数和原生 fd。二十轮各含无 capture、冷 capture、已分配缓冲 capture、活跃旧快照下重连四种场景，共 80 个关闭前缀；夹具仅对仍有旧代理的 60 次断开延后实际 native disconnect，待旧 capture 析构后再恰好执行一次，无 capture 对照立即转发。40 次关闭状态下的原截图须拒绝并保持调用方输出；20 次重连只在旧快照释放后由新 source 取图，不调用旧代理/新 client display 的组合。正常模式继续立即转发 disconnect。
 
