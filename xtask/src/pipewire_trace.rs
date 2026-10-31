@@ -13,6 +13,12 @@ const MIN_NS: u64 = 120_000_000_000;
 pub fn run(args: &[String]) -> Result<()> {
     if args
         .first()
+        .is_some_and(|kind| kind == "framepool-target-loss")
+    {
+        return crate::framepool_target_loss::run(&args[1..]);
+    }
+    if args
+        .first()
         .is_some_and(|kind| kind == "wlr-retired-channel")
     {
         return crate::wlr_retired_channel::run(&args[1..]);

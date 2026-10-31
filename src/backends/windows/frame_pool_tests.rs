@@ -3,6 +3,10 @@
 use super::*;
 
 #[cfg(feature = "prototype-windows-com")]
+#[path = "frame_pool_target_loss_tests.rs"]
+mod target_loss;
+
+#[cfg(feature = "prototype-windows-com")]
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host};
 
 #[test]

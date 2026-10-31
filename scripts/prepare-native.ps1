@@ -48,6 +48,7 @@ $screenGeometryEvidence = ''
 $screenPendingEvidence = ''
 $geometryEvidence = ''
 $frameContextEvidence = ''
+$frameTargetLossEvidence = ''
 $desktopEvidence = ''
 $metadataEvidence = ''
 $customEvidence = ''
@@ -207,10 +208,18 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact foreground case did not execute one native test'
             }
         }
-        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo)$' -and $exitCode -eq 0) {
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss)$' -and $exitCode -eq 0) {
             if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact native FramePool case did not execute one test'
             }
+        }
+        if ($Name -eq 'frame-pool-source-target-loss' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('original FramePool target_loss cycles=20 captures=20 rejected_calls=60 retained=20 fixture_joins=20 source_destructors=20 passed')) {
+            throw 'Original FramePool target-loss matrix did not complete'
+        }
+        if ($Name -eq 'frame-pool-rust-target-loss' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('native Rust FramePool target_loss cycles=20 captures=20 rejected_calls=60 retained=20 fixture_joins=20 image_owners_released=1 completion_states=0 passed')) {
+            throw 'Rust FramePool target-loss matrix did not complete'
         }
         if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary|fullscreen|workarea|geometry)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
         if ($Name -eq 'desktop-dup-rust-fullscreen' -and $exitCode -eq 0 -and
@@ -844,6 +853,13 @@ try {
             New-Item -ItemType Directory -Path $alphaEvidence|Out-Null
             Step frame-pool-source-alpha $alphaProgram @($alphaEvidence)
             Step frame-pool-source-alpha-records $ConfigureTool @('upstream-alpha','frame-pool',$alphaEvidence)
+            Step frame-pool-target-loss-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_target_loss_reference','--parallel','4')
+            $targetLossProgram=Join-Path $artifacts mfs_framepool_target_loss_reference.exe
+            Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_target_loss_reference.exe) -Destination $targetLossProgram
+            Save-Input $targetLossProgram
+            $frameTargetLossEvidence=Join-Path $frameContextEvidence target-loss
+            New-Item -ItemType Directory -Path (Join-Path $frameTargetLossEvidence source) | Out-Null
+            Step frame-pool-source-target-loss $targetLossProgram @((Join-Path $frameTargetLossEvidence source))
         }
         $contextFailures = [Collections.Generic.List[string]]::new()
         foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
@@ -926,6 +942,8 @@ try {
         $frameCase = 'backends::windows::frame_pool::tests::captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners'
         $frameLifecycleCase = 'backends::windows::frame_pool::tests::retains_pixels_across_twenty_complete_framepool_lifecycles'
         $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
+        $frameTargetLossCase = 'backends::windows::frame_pool::tests::target_loss::matches_original_repeated_target_loss_without_replaying_cached_pixels'
+        $caseSelection += @('--skip', $frameTargetLossCase)
         if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
         $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
         $desktopDefaultCase = 'backends::windows::desktop_dup::tests::selects_adapter_zero_output_zero_for_null_hwnd_and_retains_cpu_pixels'
@@ -988,6 +1006,9 @@ try {
             Step 'desktop-dup-rust-conversion-boundary' cargo ($parityArguments + @('--',$desktopConversionCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
         }
         if ($FramePoolParity) {
+            $env:MFS_FRAMEPOOL_TARGET_LOSS_ROOT = $frameTargetLossEvidence
+            Step 'frame-pool-rust-target-loss' cargo ($parityArguments + @('--', $frameTargetLossCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Step 'frame-pool-target-loss-records' $ConfigureTool @('upstream-trace', 'framepool-target-loss', $frameTargetLossEvidence)
             Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
             foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
                 $env:MFS_FRAMEPOOL_HOST_MODE = $modeName

@@ -13,6 +13,7 @@ mod custom_reentry;
 mod dependencies;
 mod desktop_fullscreen;
 mod frame_pool_alpha;
+mod framepool_target_loss;
 mod licenses;
 mod linux_compat;
 mod linux_config;
@@ -190,6 +191,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-geometry <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-pending <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace framepool-target-loss <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace wlr-early-close-prefix <external directory> [--check-only]\n\
                       cargo xtask upstream-trace wlr-retired-channel <Rust directory> <original prefix directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-geometry <external window-geometry directory> [--check-only]\n\
