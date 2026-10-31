@@ -1087,6 +1087,7 @@ int main(int argc,char** argv) {
             source->close();
             require(!source->connected(),"original source still connected after close");
             source.reset();
+            if(format_stream) format_stream->retain(held,cycle);
             if(memfd_control) {
                 memfd_control->finish(cycle,artifacts);
             }

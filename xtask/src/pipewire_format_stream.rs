@@ -52,7 +52,7 @@ fn expected(name: &str, channels: usize, phase: usize) -> (Vec<u8>, Vec<u8>, Vec
     (padded, raw, bgr)
 }
 
-fn phases(text: &str) -> Result<Vec<usize>> {
+fn phases(text: &str, both: bool) -> Result<Vec<usize>> {
     let mut lines = text.lines();
     if lines.next() != Some("cycle\tcall\tphase") {
         return Err("Format stream header differs".into());
@@ -73,10 +73,25 @@ fn phases(text: &str) -> Result<Vec<usize>> {
         }
         phases.push(usize::from(fields[2] == "1"));
     }
-    if lines.next().is_some() || !phases.contains(&0) || !phases.contains(&1) {
+    if lines.next().is_some() || (both && (!phases.contains(&0) || !phases.contains(&1))) {
         return Err("Format stream count or two-phase evidence incomplete".into());
     }
     Ok(phases)
+}
+
+fn validate_held(values: &[usize], held: &[usize], shared: bool) -> Result<()> {
+    if values.len() != 60 || held.len() != 60 {
+        return Err("Incomplete held phase table".into());
+    }
+    for (index, phase) in held.iter().copied().enumerate() {
+        if phase != values[if shared { index / 3 * 3 + 2 } else { index }] {
+            return Err("Original held cache/conversion phases differ".into());
+        }
+    }
+    if shared && values == held {
+        return Err("Original BGR cache overwrite witness absent".into());
+    }
+    Ok(())
 }
 
 pub fn run(args: &[String]) -> Result<()> {
@@ -111,10 +126,24 @@ pub fn run(args: &[String]) -> Result<()> {
         // End the closure borrow before adding the independently parsed tables.
         for side in ["source", "rust"] {
             let table = directory.join(side).join("calls.tsv");
-            let values = phases(&fs::read_to_string(&table)?)?;
+            let values = phases(&fs::read_to_string(&table)?, true)?;
             inputs.push(records::artifact(root, &table)?);
+            let held_values = if side == "source" {
+                let table = directory.join(side).join("held.tsv");
+                inputs.push(records::artifact(root, &table)?);
+                let held = phases(&fs::read_to_string(table)?, false)?;
+                validate_held(&values, &held, name == "BGR")?;
+                held
+            } else {
+                values.clone()
+            };
             for (index, phase) in values.iter().copied().enumerate() {
                 for held in ["", "-held"] {
+                    let phase = if held.is_empty() {
+                        phase
+                    } else {
+                        held_values[index]
+                    };
                     for extension in if side == "rust" {
                         &["raw", "bgr"][..]
                     } else {
@@ -146,7 +175,7 @@ pub fn run(args: &[String]) -> Result<()> {
                         .join(side)
                         .join(format!("{file}-after-shutdown.bgr"));
                     inputs.push(records::artifact(root, &path)?);
-                    if fs::read(path)? != oracle[values[index]].2 {
+                    if fs::read(path)? != oracle[held_values[index]].2 {
                         return Err("Final source CPU owner differs".into());
                     }
                 }
@@ -155,8 +184,8 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     inputs.sort_by(|a, b| a.path.cmp(&b.path));
     let report = serde_json::json!({"layout_version":1,"formats":7,"phases_per_format":2,"cycles_per_side":140,"captures_per_side":420,
-        "source_bgr_pixel_files":854,"rust_raw_bgr_pixel_files":1680,"oracle_files":28,"call_tables":14,"inputs":inputs,
-        "scope":"Real owned producer, native negotiation, original captures and Rust raw rows/conversion/retained CPU samples. Raw fixture arithmetic and BT.601 YUY2 BGR are independently recomputed here; source expected images use its actual format table/OpenCV, with conversion oracle scope distinct from live capture. Native commands separately require lifecycle, queue, resource, conversion/reuse and shutdown checks. No Portal/GPU, reconfiguration, full failure matrix or complete P1 acceptance."});
+        "source_bgr_pixel_files":854,"rust_raw_bgr_pixel_files":1680,"oracle_files":28,"phase_tables":21,"source_bgr_shared_cache":true,"inputs":inputs,
+        "scope":"Real owned producer, native negotiation, original captures and Rust raw rows/conversion/retained CPU samples. Raw fixture arithmetic and BT.601 YUY2 BGR are independently recomputed here; source expected images use its actual format table/OpenCV, with conversion oracle scope distinct from live capture. Original BGR heads alias the same cache and change to each lifecycle's final phase; Rust retained raw/BGR owners stay unchanged through its existing copy-on-write safety adaptation. Native commands separately require pointer aliases, lifecycle, queue, resource, conversion/reuse and shutdown checks. No Portal/GPU, reconfiguration, full failure matrix or complete P1 acceptance."});
     let output = root.join("format-stream-validation.json");
     if rest.is_empty() {
         records::create_json(&output, &report)?;
@@ -164,7 +193,7 @@ pub fn run(args: &[String]) -> Result<()> {
         return Err("Saved format stream validation differs".into());
     }
     println!(
-        "PipeWire real format stream records formats=7 cycles=280 captures=840 capture_held_files=2534 oracle_files=28 call_tables=14 verified"
+        "PipeWire real format stream records formats=7 cycles=280 captures=840 capture_held_files=2534 oracle_files=28 phase_tables=21 source_BGR_cache_alias=1 verified"
     );
     Ok(())
 }
@@ -180,7 +209,7 @@ mod tests {
                 .map(|i| format!("{}\t{}\t{}\n", i / 3, i % 3, i % 2))
                 .collect::<String>()
         );
-        assert_eq!(phases(&good).unwrap().len(), 60);
+        assert_eq!(phases(&good, true).unwrap().len(), 60);
         for bad in [
             good.replace("0\t1\t1", "0\t0\t1"),
             good.replace("0\t1\t1", "0\t1\t2"),
@@ -189,7 +218,7 @@ mod tests {
             format!("{good}0\t0\t0\n"),
             good.lines().take(60).collect::<Vec<_>>().join("\n"),
         ] {
-            assert!(phases(&bad).is_err());
+            assert!(phases(&bad, true).is_err());
         }
         let one_phase = format!(
             "cycle\tcall\tphase\n{}",
@@ -197,6 +226,17 @@ mod tests {
                 .map(|i| format!("{}\t{}\t0\n", i / 3, i % 3))
                 .collect::<String>()
         );
-        assert!(phases(&one_phase).is_err());
+        assert!(phases(&one_phase, true).is_err());
+        assert!(phases(&one_phase, false).is_ok());
+    }
+    #[test]
+    fn distinguishes_original_bgr_cache_overwrite_from_owning_conversion() {
+        let calls = (0..60).map(|i| i % 2).collect::<Vec<_>>();
+        let shared = (0..60).map(|i| calls[i / 3 * 3 + 2]).collect::<Vec<_>>();
+        assert!(validate_held(&calls, &shared, true).is_ok());
+        assert!(validate_held(&calls, &calls, false).is_ok());
+        assert!(validate_held(&calls, &calls, true).is_err());
+        assert!(validate_held(&calls, &shared, false).is_err());
+        assert!(validate_held(&calls[..59], &shared, true).is_err());
     }
 }
