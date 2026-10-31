@@ -12,9 +12,10 @@ foreach ($configurationFamily in @('windows','pipewire','wlr','screen-capture-ki
     $configurationArguments += @("--$configurationFamily",$(if ($configurationFamily -eq $Family) {'ON'} else {'OFF'}))
 }
 $configurationOutput = & $ConfigureTool @configurationArguments
-if ($LASTEXITCODE -ne 0) { throw 'Explicit prototype native configuration failed' }
+$configurationExitCode = $LASTEXITCODE
+$configurationOutput | ForEach-Object { Write-Host $_ }
+if ($configurationExitCode -ne 0) { throw 'Explicit prototype native configuration failed' }
 $configurationPaths = @($configurationOutput | Where-Object { $_.StartsWith('MFS_BUILD_CONFIGURATION=') })
 if ($configurationPaths.Count -ne 1) { throw 'Configuration did not return one build input' }
 $env:MFS_BUILD_CONFIGURATION = $configurationPaths[0].Substring('MFS_BUILD_CONFIGURATION='.Length)
 if (-not (Test-Path -LiteralPath $env:MFS_BUILD_CONFIGURATION -PathType Leaf)) { throw 'Prepared build input is missing' }
-$configurationOutput | ForEach-Object { Write-Host $_ }

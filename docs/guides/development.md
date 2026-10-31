@@ -674,6 +674,8 @@ ScreenDC 步骤结束后另立即上传 `p1-windows-screen-dc-diagnostics`，包
 
 配置中 Windows 检查 VS2026 MSVC x64 与 SDK 库；PipeWire 检查 pkg-config 的 PipeWire/SPA、原型 v1_2_0 所需版本、clang 与 libclang 文件；Wlr 检查 system libwayland-client；macOS 检查原生 SDK/framework stub。非标准 libclang 安装通过 LIBCLANG_PATH/LLVM_CONFIG_PATH 指明。探测不代替生成器实际加载、编译/链接、运行时能力、权限和真实捕获。现有原生原型入口在依赖准备后传入配置，`build.rs` 根据 TARGET/CARGO_CFG_TARGET_OS 复验本机目标、准确 feature 集及选中依赖的相同探测证据；SDK、版本或路径漂移时要求重新准备。旧格式仅保留归档解释，新原生构建使用含证据的新配置；只向 OUT_DIR 写归一化配置/声明，声明配置、环境和发现文件的增量失效输入，不在 Cargo 启动后改变后端选择。
 
+共用 `configure-prototype.ps1` 现在先保存子进程退出码并打印已捕获的标准输出，再检查失败和返回路径；原先失败时会在打印前抛出异常，丢失该输出。Windows PowerShell 隔离控制确认非零子进程仍以相同异常和退出码 17 失败，四族八次原/新成功调用的参数与配置路径也一致。该控制使用配置替身，没有执行原生配置或取帧；它不把 Actions 41248794571 的另一次 PipeWire P0 显式配置失败改为通过，实际子配置失败原因继续按归档记录审阅。
+
 `configuration-check` 验证 OFF 的真实构建、配置/feature 不匹配拒绝、不可发现依赖下的 AUTO 禁用与 ON 失败；Windows/macOS 使用明确指向空目录的 SDK/开发目录，Linux 隔离 pkg-config 搜索目录。它还复制源码到 deps 独立消费者，先证明含 compile_error 的捕获入口无法构建，再以空 Cargo home、归档 vendor 和独立 target 编译运行该消费者的 xtask，证明准备入口不依赖可构建的捕获 crate。预期拒绝及其原记录保留，不能重标为原生取帧通过。每个原生 Actions 平台执行这些检查，结果按实际批次记录。
 
 ## 构建责任与启动顺序
