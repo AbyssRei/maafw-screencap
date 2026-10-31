@@ -5,7 +5,7 @@ use super::*;
 use crate::backends::windows::parity_adapter::{Adapter, Image};
 use std::{error::Error as StdError, fs::OpenOptions, io::Write, path::Path};
 
-fn known(image: &Image) -> i32 {
+pub(super) fn known(image: &Image) -> i32 {
     assert_eq!(image.dimensions(), (96, 64));
     assert_eq!(image.bytes().len(), 18432);
     let marker = &image.bytes()[..3];
@@ -31,7 +31,11 @@ fn known(image: &Image) -> i32 {
     }
     phase
 }
-fn save(root: &Path, name: &str, image: Option<&Image>) -> Result<(), Box<dyn StdError>> {
+pub(super) fn save(
+    root: &Path,
+    name: &str,
+    image: Option<&Image>,
+) -> Result<(), Box<dyn StdError>> {
     let mut layout = OpenOptions::new()
         .write(true)
         .create_new(true)

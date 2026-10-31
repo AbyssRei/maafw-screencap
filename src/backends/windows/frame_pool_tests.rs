@@ -11,6 +11,10 @@ mod target_loss;
 mod queries;
 
 #[cfg(feature = "prototype-windows-com")]
+#[path = "frame_pool_empty_tests.rs"]
+mod empty_client;
+
+#[cfg(feature = "prototype-windows-com")]
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host};
 
 #[test]

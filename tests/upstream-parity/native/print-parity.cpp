@@ -138,8 +138,11 @@ int32_t mfs_print_parity_geometry(void* context, const int64_t* input, size_t co
     const HWND window = fixture.main;
     if (!window || fixture.child || fixture.popup
         || GetCurrentThreadId() != GetWindowThreadProcessId(window, nullptr)) { return 1; }
-    if (input[0] == 1) {
-        if (input[1] < 0 || input[1] > UINT32_MAX || input[4] <= 0 || input[5] <= 0) { return 1; }
+    if (input[0] == 1 || input[0] == 3) {
+        const bool zero_client = input[0] == 3;
+        if (input[1] < 0 || input[1] > UINT32_MAX || input[4] < 0 || input[5] < 0
+            || (!zero_client && (!input[4] || !input[5]))
+            || (zero_client && input[4] && input[5])) { return 1; }
         for (size_t i = 2; i < 6; ++i) {
             if (input[i] < INT32_MIN || input[i] > INT32_MAX) { return 1; }
         }

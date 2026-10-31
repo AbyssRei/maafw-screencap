@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Test-only Win32 query interposition after an actual FramePool mapping.
 use crate::platform::windows::wgc::native;
-use std::{cell::Cell, ffi::c_void, marker::PhantomData, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    ffi::c_void,
+    marker::PhantomData,
+    rc::Rc,
+};
 use windows_core::{BOOL, HRESULT};
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -11,8 +16,10 @@ pub(super) struct Trace {
     pub order: u32,
     pub win32: u32,
     pub dwm: i32,
+    pub client: Option<(i32, i32)>,
 }
 thread_local! { static ACTIVE: Cell<Option<Trace>> = const { Cell::new(None) }; }
+thread_local! { static BEFORE_CLIENT: RefCell<Option<Box<dyn FnMut()>>> = const { RefCell::new(None) }; }
 pub(super) struct Guard(PhantomData<Rc<()>>);
 impl Guard {
     pub fn begin(case: u32) -> Self {
@@ -29,9 +36,23 @@ impl Guard {
     pub fn trace(&self) -> Trace {
         ACTIVE.with(|state| state.get().unwrap())
     }
+    // Test callbacks own their window fixture through Rc. They run exactly on
+    // this synchronous caller after Map and before the real GetClientRect;
+    // native capture callbacks never borrow this closure or its context.
+    pub fn before_client(operation: Box<dyn FnMut()>) -> Self {
+        let guard = Self::begin(0);
+        BEFORE_CLIENT.with(|slot| {
+            assert!(slot.borrow().is_none());
+            *slot.borrow_mut() = Some(operation);
+        });
+        guard
+    }
 }
 impl Drop for Guard {
     fn drop(&mut self) {
+        BEFORE_CLIENT.with(|slot| {
+            slot.borrow_mut().take();
+        });
         ACTIVE.with(|state| state.set(None));
     }
 }
@@ -68,6 +89,11 @@ fn invalid() -> native::HWND {
 #[allow(non_snake_case)]
 pub(super) unsafe fn GetClientRect(window: native::HWND, output: *mut native::RECT) -> BOOL {
     let case = enter(1);
+    BEFORE_CLIENT.with(|slot| {
+        if let Some(mut operation) = slot.borrow_mut().take() {
+            operation();
+        }
+    });
     // SAFETY: Same live exact output as production. The failure case changes
     // only the opaque handle presented to OS validation.
     let result =
@@ -84,6 +110,18 @@ pub(super) unsafe fn GetClientRect(window: native::HWND, output: *mut native::RE
                 (*output).bottom = (*output).top.checked_add(96).unwrap();
             }
         }
+        ACTIVE.with(|state| {
+            if let Some(mut trace) = state.get() {
+                // SAFETY: Native success initialized this exact RECT output.
+                trace.client = Some(unsafe {
+                    (
+                        (*output).right.checked_sub((*output).left).unwrap(),
+                        (*output).bottom.checked_sub((*output).top).unwrap(),
+                    )
+                });
+                state.set(Some(trace));
+            }
+        });
     } else {
         error(code, None);
     }

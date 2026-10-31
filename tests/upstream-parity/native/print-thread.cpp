@@ -129,7 +129,9 @@ void run(Owner& owner, Arguments arguments) noexcept
                 owner.queue_gate.hold();
             }
             else if (owner.marker && message.hwnd == owner.marker && message.message == WM_TIMER && message.wParam == 1) {
-                marker_frame(owner);
+                // KillTimer leaves already queued WM_TIMER messages in place.
+                // A stopped zero-client marker must not render those late ticks.
+                if (owner.marker_timer) { marker_frame(owner); }
             }
             else if (!message.hwnd && message.message == command_message) {
                 Command command;
@@ -155,8 +157,21 @@ void run(Owner& owner, Arguments arguments) noexcept
                     result = mfs_print_parity_scene(owner.fixture.owner, parameter);
                 }
                 else if (command == Command::geometry) {
-                    result = mfs_print_parity_geometry(owner.fixture.owner, owner.geometry_input.data(),
-                        owner.geometry_input.size(), owner.geometry_output.data(), owner.geometry_output.size());
+                    // A zero-client intervention cannot render the in-client
+                    // marker. Stop it on its UI owner before resizing; an
+                    // explicit positive-size restore resumes the same timer.
+                    bool timer_ready = true;
+                    if (owner.geometry_input[0] == 3 && owner.marker_inside && owner.marker_timer) {
+                        timer_ready = KillTimer(owner.marker, 1) != 0;
+                        if (timer_ready) { owner.marker_timer = false; }
+                    }
+                    result = timer_ready ? mfs_print_parity_geometry(owner.fixture.owner, owner.geometry_input.data(),
+                        owner.geometry_input.size(), owner.geometry_output.data(), owner.geometry_output.size()) : 1;
+                    if (result == 0 && owner.geometry_input[0] == 1 && owner.marker_inside && !owner.marker_timer) {
+                        owner.marker_timer = SetTimer(owner.marker, 1, 50, nullptr) != 0;
+                        result = owner.marker_timer ? 0 : 1;
+                        if (result == 0) { marker_frame(owner); }
+                    }
                 }
                 else if (command == Command::activate) {
                     SetActiveWindow(static_cast<HWND>(owner.fixture.hwnd));

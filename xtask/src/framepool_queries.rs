@@ -12,7 +12,7 @@ const PHASES: [&str; 3] = ["warm", "probe", "recovery"];
 fn failure(case: usize) -> bool {
     matches!(case, 1 | 2 | 4)
 }
-fn numbers(line: &str, text_column: Option<(usize, &str)>) -> Result<Vec<i64>> {
+pub(super) fn numbers(line: &str, text_column: Option<(usize, &str)>) -> Result<Vec<i64>> {
     line.split('\t')
         .enumerate()
         .map(|(i, value)| {
@@ -129,7 +129,7 @@ fn states(text: &str, final_text: &str) -> Result<()> {
     }
     Ok(())
 }
-fn known(bytes: &[u8], marker: i64) -> Result<()> {
+pub(super) fn known(bytes: &[u8], marker: i64) -> Result<()> {
     if marker == -1 {
         return if bytes.is_empty() {
             Ok(())

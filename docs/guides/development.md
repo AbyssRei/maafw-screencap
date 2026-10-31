@@ -162,13 +162,15 @@ cargo clippy --workspace --all-targets --features prototype-windows-com -- -D wa
 
 ## 当前 P1 迁移与对照
 
+确切 e9a6da8 的 Linux 完整工程归档现已恢复并独立核对：原 978,649,088 字节下载以 unexpected EOF 终止，保留不变；新目录通过 HTTP 206 补齐后，1,805,569,568 字节官方 ZIP 摘要及全部 CRC 匹配。完整 tar 的十九份清单、78,420 个独立登记输入/日志、十八份正常 409 文件 Git 快照、一份故意不可编译夹具及 76 个 F blob 均通过。Wlr 组件完整 8,955 个路径与既有轻量包清单逐字节对应，补齐了轻量复核缺少的 506 个来源输入；原生通过仍限既有 135 项及其受控运行范围。35 文件、6,523,518,270 字节的归档/审阅封存已只读核对；没有扩展原版立即断开、通用重入/并发或完整 P1 的验收范围。
+
 Rust Wlr 新增关闭寿命安全适配，已通过下述原生编译和受控矩阵。每个 capture 在复制 manager/SHM/output 时保留确切 `Arc<Channel>`；client 仍立即清除 connected 和原顺序全局字段，默认先结束 capture 再关闭 client 的路径仍立即断开。只有活跃旧快照对应的原生连接延后到这些代理/缓冲区结束，避免 foreign Backend 使用失效 display。该额外寿命与原版受控前缀探针中的延后干预一致，不能描述为原版立即关闭行为。重连后的旧 capture 在发请求前按连接身份拒绝，不重新构造、不执行原版旧代理/新 display 的无效组合；关闭状态下仍拒绝且不进入转换。该 identity 只保护私有原生所有权，不提前确定 P3 的 SDK 代次模型。
 
 client 可在 capture 句柄仍存在但未执行操作时串行 close/connect；实际捕获、转换或控制操作期间的关闭/重连重入返回 busy，标量作用域在返回/展开时释放，原生 dispatch 和转换期间不持状态锁。每次真正打开连接新增一个标准 Arc owner 和一份 fallible 临时路径副本，以保留来源路径拼写并避免在 native connect 上持元数据锁；原帧复制/转换/等待时点不变，不宣称消除了工作或接受一般重入/并发。原独占 client 回归仍单独保留，既有来源/FD-zero/registry/manager 受控回归已在新代码的下述组件中重新执行。
 
 新 `early_close::closes_shared_client_after_ending_each_retained_native_snapshot` 入口执行二十轮、四模式，核对 80 个逻辑关闭/重连前缀、60 个延后 native channel、40 个关闭拒绝、20 个旧连接拒绝、120 次真实转换内 busy 控制、60 次捕获、各 60 个 raw/BGR 关闭后 owner、实际 fd/精确 task IDs 和 callback owner 配平。`cargo xtask upstream-trace wlr-retired-channel <Rust目录> <原版前缀目录> [--check-only]` 独立复算 382 份文件，并只读核对原版完整前缀，逐字节比较静态图样；alpha 字节仅保留，不补充原来源未给出的 alpha 保证。
 
-确切 `e9a6da80db53f5641770a3761b5e33cf4132e3cc` 的原生 [Actions 41211922418](https://github.com/AbyssRei/maafw-screencap/actions/runs/41211922418) Wlr 组件全部 135 项检查通过，包括 Rust 实际编译、严格 Clippy、新矩阵和既有回归。官方 ZIP 摘要、8,449 个可用登记路径及独立只读 checker 已核对；80 行 Rust 记录、240 份完整 raw/BGR 即时/持帧、80 份精确 task IDs、原版 202 份前缀文件另经复算。每模式最终 fd 均回到七，callback created/destroyed/dropped 分别配平为 6、6、9、18。首次本机复核使用了旧 xtask 可执行文件，在命令解析前被拒绝；旧工具日志保留，按同一归档锁文件重建当前 checker 后的新复核通过，没有改写原生数据。506 个完整来源输入不在轻量包中，完整来源审计待补；该受控适配不接受原版立即断开、一般重入/并发或完整 P1。
+确切 `e9a6da80db53f5641770a3761b5e33cf4132e3cc` 的原生 [Actions 41211922418](https://github.com/AbyssRei/maafw-screencap/actions/runs/41211922418) Wlr 组件全部 135 项检查通过，包括 Rust 实际编译、严格 Clippy、新矩阵和既有回归。官方 ZIP 摘要、8,449 个可用登记路径及独立只读 checker 已核对；80 行 Rust 记录、240 份完整 raw/BGR 即时/持帧、80 份精确 task IDs、原版 202 份前缀文件另经复算。每模式最终 fd 均回到七，callback created/destroyed/dropped 分别配平为 6、6、9、18。首次本机复核使用了旧 xtask 可执行文件，在命令解析前被拒绝；旧工具日志保留，按同一归档锁文件重建当前 checker 后的新复核通过，没有改写原生数据。506 个完整来源输入不在轻量包中；其后完整归档审阅已按本节开头补齐，不扩展运行时证明；该受控适配不接受原版立即断开、一般重入/并发或完整 P1。
 
 Wlr 新增显式 `early-close-prefix` 原版寿命边界探针，随 `upstream-context wlr` 编排；实现和 portable 校核已通过，本机不执行 Linux 原生测试，首次原生结果及修正状态见下段。原 WaylandClient/WlrScreencap 函数不改写，链接观察器在真实 disconnect 请求处记录 connected、已清空的全局字段、三个代理快照引用数和原生 fd。二十轮各含无 capture、冷 capture、已分配缓冲 capture、活跃旧快照下重连四种场景，共 80 个关闭前缀；夹具仅对仍有旧代理的 60 次断开延后实际 native disconnect，待旧 capture 析构后再恰好执行一次，无 capture 对照立即转发。40 次关闭状态下的原截图须拒绝并保持调用方输出；20 次重连只在旧快照释放后由新 source 取图，不调用旧代理/新 client display 的组合。正常模式继续立即转发 disconnect。
 
@@ -254,7 +256,15 @@ cargo xtask upstream-context macos # native macOS arm64 original Objective-C++ c
 
 另一个真实 FramePool 控制在 cache clone 的 C++ 边界抛出异常，核对临时结果 owner 释放、原生关闭结果，并在错误返回后观察到 staging 可再次成功 Map；精确 Map/Unmap 调用拦截仍是独立待验项。显式返回的清理错误进入固定证据槽；Drop 的失败采用固定原子记录，避免在主错误展开时格式化、分配或因日志 I/O 再次 panic。这些局部控制不替代完整失败矩阵。
 
-原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积，真实零客户区原生矩阵仍待补齐。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
+原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积；真实窗口干预与准备恢复的限定证据见下文，立即恢复及完整相关矩阵仍待验收。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
+
+2026-11-01 已补真实零客户区控制：窗口 owner 在一次真实 WGC Map 后、GetClientRect 前将客户区宽、高或两者置零，保留非零外窗口。原类返回有值但为空的 Mat；Rust 的私有 EmptySample 清除旧 cache，零分支不复制/转换像素。测试用 Rc 持有窗口直到同步查询干预结束，不改变捕获实现、等待或默认选项。夹具 owner 在零客户区期间停止内部更新 timer，正尺寸恢复后重新启动，关闭前完成 timer/window/class 清理和 join。
+
+立即恢复场景尚未通过：首批原版三轮均失败于恢复颜色，Rust 三轮各完成二十生命周期，既有十模式查询回归全过。随后仅补“断言前保存所有字节”的原版诊断为 `[0,1,1]`，另一个插入一次只读 ContentSize 查询的诊断为 `[1,1,0]`；四路输入均为零、监听注销已核对。灰黑失败图仅有 2×2 或 96×2 灰色区域，而当次 GDI 查询看到已知图样；插桩失败帧仍报告 96×64 ContentSize。它们未证明灰黑原因，不能据此把较早失败归因于旧 ContentSize、用户输入或熄屏。只读插桩的确切单语句变换在原生 build 目录生成，原 F 源码不改；它的时序观察不代替未插桩结果。
+
+另一个明确准备画面的恢复对照已完成有效连续三轮：恢复后先全幅重绘，并等待两次真实 owner 呈现，再只调用一次原版/Rust 捕获。共 360 次调用、120 次真实零客户区、120 次准备后的恢复及 240 张关闭后持帧全部通过；720 份 BGR 中 480 份非空，1,464 个零客户区文件及另 1,452 个查询回归文件经独立复核，十三组破坏控制被拒绝。506 个冻结输入、418 份产品源码和 76 个 F blob 匹配；正式输入为零，最大间隔 81.79ms，监听正常注销，无新增物理正向控制声明。首份审阅报告误把另一诊断批次的 70.27ms 写进汇总字段，初始报告保留，新目录完整复算已改正为本批 81.79ms。随后按 [KillTimer 的已排队消息规则](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-killtimer)补上停止状态的迟到 WM_TIMER 拒绝，最终源码再次连续三轮通过同一十八次程序调用和完整像素/记录核验，输入为零、最大间隔 77.38ms；两个准备批次分别保留，不修改任何立即恢复失败。
+
+`MFS_FRAMEPOOL_EMPTY_ROOT` 选择外部矩阵，`MFS_FRAMEPOOL_EMPTY_RESTORE_BARRIER=1` 显式启用准备控制；原程序 `--empty-client` 保留立即恢复，`--empty-client-prepared` 启用准备控制。`cargo xtask upstream-trace framepool-empty <外部矩阵> [--check-only]` 要求完整几何、空输出/持帧、cache/转换/owner、两次呈现和 488 个文件；正式编排使用准备控制。它不接受立即恢复竞态、零尺寸 GraphicsCaptureItem、完整 GPU 资源、一般窗口竞争或 P1；新 CI 继续待执行。默认核心没有新增行为。
 
 Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像素，再在 UI owner 上销毁目标并完成 join；下一次捕获在窗口有效性检查立即失败，不继续轮询、转换或替换旧缓存。显式 session/pool 关闭通过，关闭后 CPU 图像仍有效。此项保留上游失败时的部分状态；后续重复原源码对照见下一段，其他原生故障全过程仍待完成。
 

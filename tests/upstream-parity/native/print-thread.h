@@ -39,6 +39,8 @@ MFS_PARITY_EXPORT int32_t mfs_print_thread_prepare(void* owner, uint32_t layered
 MFS_PARITY_EXPORT int32_t mfs_print_thread_scene(void* owner, uint32_t alternative);
 // Executes the print-parity geometry control on the existing joined UI owner.
 // Arrays are copied before posting; caller storage is not borrowed by callbacks.
+// Operation 3 explicitly requires a zero client dimension, stops an existing
+// in-client timer before resizing, and operation 1 resumes it after restoration.
 MFS_PARITY_EXPORT int32_t mfs_print_thread_geometry(void* owner,
     const int64_t* input, size_t count, int64_t* output, size_t capacity);
 // Diagnostic fixture control only: reproduce layered/transparent restoration
