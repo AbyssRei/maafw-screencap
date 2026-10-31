@@ -15,6 +15,10 @@ mod queries;
 mod empty_client;
 
 #[cfg(feature = "prototype-windows-com")]
+#[path = "frame_pool_map_tests.rs"]
+mod map_boundary;
+
+#[cfg(feature = "prototype-windows-com")]
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host};
 
 #[test]

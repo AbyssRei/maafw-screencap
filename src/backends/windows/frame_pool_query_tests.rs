@@ -45,10 +45,18 @@ pub(super) fn save(
         .create_new(true)
         .open(root.join(format!("{name}.bgr")))?;
     if let Some(image) = image {
+        let (width, height) = image.dimensions();
+        writeln!(
+            layout,
+            "{width}\t{height}\t{}\t{}",
+            image.stride(),
+            image.bytes().len()
+        )?;
+        pixels.write_all(image.bytes())?;
+        pixels.flush()?;
+        layout.flush()?;
         known(image);
         assert_eq!(image.stride(), 288);
-        writeln!(layout, "96\t64\t288\t18432")?;
-        pixels.write_all(image.bytes())?;
     } else {
         writeln!(layout, "0\t0\t0\t0")?;
     }

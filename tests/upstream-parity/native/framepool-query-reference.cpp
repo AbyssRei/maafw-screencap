@@ -20,6 +20,7 @@
 #include <winrt/Windows.Security.Authorization.AppCapabilityAccess.h>
 #include <array>
 #include <chrono>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -120,6 +121,13 @@ void mfs_observe_frame_content(winrt::Windows::Graphics::SizeInt32 size)
 #undef MAA_CTRL_UNIT_NS_END
 #define MAA_CTRL_UNIT_NS_BEGIN namespace MfsFrameQueryOriginal {
 #define MAA_CTRL_UNIT_NS_END }
+#include "Screencap/FramePoolScreencap.h"
+#if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
+#include "framepool-map-probe.hpp"
+#define d3d_context_ ::mfs_map_probe::context(d3d_context_)
+#define cached_image_ ::mfs_map_probe::cache(cached_image_)
+#define bgra_to_bgr ::mfs_map_probe::convert
+#endif
 #define GetClientRect client
 #define ClientToScreen origin
 #define DwmGetWindowAttribute bounds
@@ -129,6 +137,11 @@ void mfs_observe_frame_content(winrt::Windows::Graphics::SizeInt32 size)
 #undef ClientToScreen
 #undef DwmGetWindowAttribute
 #undef GetWindowRect
+#if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
+#undef d3d_context_
+#undef cached_image_
+#undef bgra_to_bgr
+#endif
 
 namespace {
 struct Initialization { bool owned = false; ~Initialization() { if (owned) { RoUninitialize(); } } };
@@ -283,8 +296,14 @@ int empty_client(const std::filesystem::path& root, bool prepare_restore = false
     return 1;
 }
 }
+#if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
+#include "framepool-map-cases.hpp"
+#endif
 int wmain(int argc, wchar_t** argv)
 {
+#if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
+    if (argc == 3 && std::wstring_view(argv[1]) == L"--map-boundary") { return map_boundary(argv[2]); }
+#endif
     if (argc == 3 && std::wstring_view(argv[1]) == L"--empty-client") { return empty_client(argv[2]); }
     if (argc == 3 && std::wstring_view(argv[1]) == L"--empty-client-prepared") { return empty_client(argv[2], true); }
     if (argc != 2) { return 1; }

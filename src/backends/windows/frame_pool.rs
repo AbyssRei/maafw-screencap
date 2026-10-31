@@ -465,14 +465,12 @@ impl<I> FramePoolCapture<I> {
         let context = present("ID3D11DeviceContext", self.context.as_ref())?;
         // SAFETY: Matching original staging allocation/device, caller serialized.
         unsafe {
-            context.CopyResource(staging, &texture);
+            wgc::copy_resource(context, staging, &texture);
         }
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         // SAFETY: Original staging CPU-read mapping; guard owns one Unmap.
         native("Map", unsafe {
-            context
-                .Map(staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
-                .ok()
+            wgc::map_read(context, staging, &mut mapped).ok()
         })?;
         evidence.mapped_pitch = mapped.RowPitch;
         let _mapping = Mapping {
@@ -607,7 +605,7 @@ impl Drop for Mapping<'_> {
         // SAFETY: Owns one successful same-thread Map of subresource zero;
         // both interfaces outlive this guard, including conversion unwind.
         unsafe {
-            self.context.Unmap(self.texture, 0);
+            wgc::unmap(self.context, self.texture);
         }
     }
 }

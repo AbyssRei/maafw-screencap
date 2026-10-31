@@ -20,6 +20,53 @@ use windows_core::Interface;
 #[path = "wgc_factory.rs"]
 mod factory;
 
+#[cfg(all(test, feature = "prototype-windows-com"))]
+#[path = "wgc_map_probe.rs"]
+pub(crate) mod map_probe;
+
+/// # Safety
+/// Both textures belong to this live context's device and have compatible
+/// descriptions. The serial caller retains all three interfaces for the call.
+#[inline]
+pub(crate) unsafe fn copy_resource(
+    context: &ID3D11DeviceContext,
+    target: &ID3D11Texture2D,
+    source: &ID3D11Texture2D,
+) {
+    #[cfg(all(test, feature = "prototype-windows-com"))]
+    map_probe::copy(context, target);
+    unsafe { context.CopyResource(target, source) };
+}
+
+/// # Safety
+/// The serial caller owns a CPU-readable staging texture from this context's
+/// device and a writable output. Success transfers one same-thread Unmap duty.
+#[inline]
+pub(crate) unsafe fn map_read(
+    context: &ID3D11DeviceContext,
+    texture: &ID3D11Texture2D,
+    output: &mut D3D11_MAPPED_SUBRESOURCE,
+) -> windows_core::HRESULT {
+    #[cfg(all(test, feature = "prototype-windows-com"))]
+    {
+        unsafe { map_probe::map(context, texture, output) }
+    }
+    #[cfg(not(all(test, feature = "prototype-windows-com")))]
+    {
+        unsafe { context.Map(texture, 0, D3D11_MAP_READ, 0, Some(output)) }
+    }
+}
+
+/// # Safety
+/// This exact context/texture owns one successful subresource-zero Map on this
+/// caller. No borrowed mapped bytes may be used after this call.
+#[inline]
+pub(crate) unsafe fn unmap(context: &ID3D11DeviceContext, texture: &ID3D11Texture2D) {
+    unsafe { context.Unmap(texture, 0) };
+    #[cfg(all(test, feature = "prototype-windows-com"))]
+    map_probe::unmapped(context, texture);
+}
+
 pub(crate) fn activation<C: windows_core::RuntimeName>() -> windows_core::Result<IActivationFactory>
 {
     factory::load::<C, IActivationFactory>()

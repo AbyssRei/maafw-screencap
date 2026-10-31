@@ -254,7 +254,7 @@ cargo xtask upstream-context macos # native macOS arm64 original Objective-C++ c
 
 `upstream-parity frame-pool` 显式编译独立原 executable 与最小绘图/转换适配，不把原 C++/WinRT 工厂缓存放入可卸载的验收 DLL。它从原图记录启动未初始化/MTA/MTA 加当前线程 dispatcher/STA 四个独立 Rust 进程，核对逐字节像素、转换/克隆次数、独立 cache/result 所有者、关闭原生对象和窗口后的持帧、completion event 释放、调用方 COM/DPI，并保留 GDI 回归。四种本机上下文均通过局部检查；第二次调用实际观察到 2 秒等待后的缓存克隆。dispatcher 仅在捕获和原生对象关闭后的夹具退出阶段 pump，等待真实 ShutdownQueueAsync 完成，捕获内不添加 pump；自有 COM 引用配平后恢复未初始化。另有 20 次 Rust 窗口/device/session/pool 创建、实际捕获、幂等 uninit 与析构，逐张比对原图并一直持有全部 CPU 结果；核对精确 image-owner 数、completion event 和关闭错误，全部窗口 join 和 dispatcher 完成后再检查像素。这是相同原图的 Rust 重复生命周期检查，尚非 C++ 重复/故障全过程对照，也未测量全部 GPU/系统资源泄漏。完整原生故障/异常/清理、尺寸/DPI/边框/从属窗口/权限、伪最小化包装和 manager 尚未验收。
 
-另一个真实 FramePool 控制在 cache clone 的 C++ 边界抛出异常，核对临时结果 owner 释放、原生关闭结果，并在错误返回后观察到 staging 可再次成功 Map；精确 Map/Unmap 调用拦截仍是独立待验项。显式返回的清理错误进入固定证据槽；Drop 的失败采用固定原子记录，避免在主错误展开时格式化、分配或因日志 I/O 再次 panic。这些局部控制不替代完整失败矩阵。
+另一个真实 FramePool 控制在 cache clone 的 C++ 边界抛出异常，核对临时结果 owner 释放、原生关闭结果，并在错误返回后观察到 staging 可再次成功 Map；后续精确 Map/Unmap 局部对照见下文。显式返回的清理错误进入固定证据槽；Drop 的失败采用固定原子记录，避免在主错误展开时格式化、分配或因日志 I/O 再次 panic。这些局部控制不替代完整失败矩阵。
 
 原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积；真实窗口干预与准备恢复的限定证据见下文，立即恢复及完整相关矩阵仍待验收。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
 
@@ -276,7 +276,13 @@ Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像
 
 入口 `queries::matches_original_mapped_query_failures_fallback_and_roi_clamps` 使用 `MFS_FRAMEPOOL_QUERY_ROOT`；`cargo xtask upstream-trace framepool-queries <外部矩阵> [--check-only]` 独立验证双方查询顺序、真实错误、恢复、全部布局/像素与 484 个登记文件。归档依赖开发构建的连续三轮全部通过：360 次映射捕获调用，其中 36 次按预期拒绝；120 次 recovery、324 张持帧、720 份 BGR 文件中 648 份非空，另 72 份是失败分支的空输出。四路正式输入为零，系统输入时间和光标不变，最大间隔 78.00ms，监听正常注销；504 个冻结输入、416 份产品源码、76 个 F blob、1,048 个原生编译/链接读取记录和四份生成绑定均已核对。不变副本通过，十三组缺失调用/错误、查询顺序、恢复、cache/转换、owner、像素、布局和文件/报告破坏被拒绝。
 
-首次监听在注册前遇到随附 PowerShell 7.6.5 的 WinForms 编译引用问题，没有执行截图；后续使用系统 Windows PowerShell 5.1 运行原有完整 C# 监听代码，先通过独立编译再注册。失败准备及两次原程序头文件/名称解析编译失败均单独保留，没有把它们计为捕获执行。此批按用户授权自动开始，没有声称新注册获得了新的物理正向控制。Release 核心构建、格式、Clippy、串行 workspace 和 PowerShell 解析通过；新 Actions 原生执行、完整依赖在线验收、真实外窗口竞争、零客户区及其他原生故障/完整 GPU 资源计数仍待完成，不接受完整 P1。
+首次监听在注册前遇到随附 PowerShell 7.6.5 的 WinForms 编译引用问题，没有执行截图；后续使用系统 Windows PowerShell 5.1 运行原有完整 C# 监听代码，先通过独立编译再注册。失败准备及两次原程序头文件/名称解析编译失败均单独保留，没有把它们计为捕获执行。此批按用户授权自动开始，没有声称新注册获得了新的物理正向控制。Release 核心构建、格式、Clippy、串行 workspace 和 PowerShell 解析通过；后续查询/目标销毁的原生 CI 范围见下一段，完整依赖来源、真实外窗口竞争、其他原生故障/完整 GPU 资源计数仍待完成，不接受完整 P1。
+
+确切 `b200f563c8319cc0f322af43b6f04dc696833357` 的 [Actions 41224789341](https://github.com/AbyssRei/maafw-screencap/actions/runs/41224789341) FramePool 组件为 52/56 项通过：原源码/Rust 查询与目标销毁及各自 records 均通过，四个既有原 pseudo 颜色断言仍失败。官方 94,002,736 字节 ZIP 的完整摘要/CRC、748 个可用登记路径、484 个查询文件和 163 个目标销毁文件经下载后复核；240 份查询 BGR 另经独立全幅图样计算。四张失败 pseudo 原图均为 96×64 全黑 BGR，不据此推断原因。轻量包未含 86 个登记输入，完整来源/依赖审阅待补；该 CI 不替代本机无输入三轮结果，也不接受整个 Windows job 或 P1。
+
+2026-11-01 另新增真实 Map/Unmap 边界对照。独立 `mfs_framepool_map_reference` 与既有查询程序共同直接包含同一固定 F 原类；仅前者使用词法表达式视图转发原 `ID3D11DeviceContext` 和 cache 字段，不替换 COM 对象或 vtable。成功路径保持真实 CopyResource、Map、转换、cache clone/赋值及 Unmap 顺序。故障一向真实 Map 提交 `UINT_MAX` 子资源，记录原生 `E_INVALIDARG`，不读取失败的映射输出，也不调用 Unmap；故障二在真实成功 Map 后让 C++ 转换抛出受控异常、Rust 转换器返回错误，核对恰好一次同线程 Unmap、旧 cache 地址/字节不变及下一次单独捕获恢复。两侧均保持返回图像与 cache 独立，持有 CPU 图像至 native/窗口/调用方初始化结束后再次保存；Rust 另记录必要 BGRA 安全复制、最终 CPU/completion owner 和关闭错误。测试钩子仅在原生测试配置下启用，正式调用仍使用子资源零，等待/默认值不改。
+
+入口 `map_boundary::preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion_failures` 使用 `MFS_FRAMEPOOL_MAP_ROOT`；`cargo xtask upstream-trace framepool-map <外部矩阵> [--check-only]` 核对双方调用顺序、HRESULT、原生身份、cache、布局、完整像素、持帧和 724 个文件，正式编排及 CI 收集均已接入。归档开发依赖下连续三轮全部通过，连同独立十模式查询回归共十八次程序调用。Map 矩阵共 360 次调用、42 次预期原生 Map 拒绝、36 次受控转换失败、120 次 recovery 和 282 张持帧；1,080 份 BGR 中 924 份非空，2,172 个 Map 文件、另 1,452 个查询回归文件、512 个冻结输入、423 份产品源码、76 个固定 F blob、1,059 个实际 MSBuild 读取记录和四份生成绑定独立核对。输入为零、最大采样间隔 79.59ms，监听正常注销；不变副本通过，十七组调用/清理/错误/cache/owner/像素/文件/报告破坏被拒绝。没有声明本次注册的新物理正向控制；构建审阅最初误查独立 `.cpp` 文件名，在写归档前被拒绝，修正为实际共享翻译单元后通过，原生结果不变。串行 workspace 122 项通过、24 项忽略，严格 Clippy、格式与 PowerShell 解析通过。新矩阵原生 CI、设备丢失、分配失败、Rust panic、完整 GPU 资源计数和完整 P1 仍待验收。
 
 `frame_pool_pseudo.rs` 已迁移原 FramePool 伪最小化包装，复用同一个 helper，并在 inner 的 session/pool/device/cache 析构前完整销毁 helper，保留 stop/join/恢复的先后顺序；`windows-frame-pool` 无须启用 PrintWindow。独立原 executable 另有五个包装场景：普通可见，以及普通/layered 窗口的最小化后 stop/inactive。参考文件记录图像和四个时点的原生样式、alpha、iconic、前台及客户区尺寸。Rust 对照执行 20 次包装生命周期，比较图像字节、样式/透明度/最小化及尺寸、独立 image owner 和关闭后像素；前台位单独记录，最小化夹具要求目标不是前台，不将跨进程的前台权限当作等价保证。
 

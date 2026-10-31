@@ -299,6 +299,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/target-loss/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/queries/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/empty-client/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/map-boundary/**
           if-no-files-found: warn
       - name: Archive engineering evidence
         if: always()

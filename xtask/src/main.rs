@@ -14,6 +14,7 @@ mod dependencies;
 mod desktop_fullscreen;
 mod frame_pool_alpha;
 mod framepool_empty;
+mod framepool_map;
 mod framepool_queries;
 mod framepool_target_loss;
 mod licenses;
@@ -196,6 +197,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace framepool-target-loss <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-queries <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-empty <external matrix> [--check-only]\n\
+                      cargo xtask upstream-trace framepool-map <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace wlr-early-close-prefix <external directory> [--check-only]\n\
                       cargo xtask upstream-trace wlr-retired-channel <Rust directory> <original prefix directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-geometry <external window-geometry directory> [--check-only]\n\
