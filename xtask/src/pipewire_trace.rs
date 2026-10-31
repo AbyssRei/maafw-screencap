@@ -62,6 +62,9 @@ pub fn run(args: &[String]) -> Result<()> {
     if args.first().is_some_and(|kind| kind == "screen-geometry") {
         return crate::screen_geometry::run(&args[1..]);
     }
+    if args.first().is_some_and(|kind| kind == "screen-pending") {
+        return crate::screen_pending::run(&args[1..]);
+    }
     if args
         .first()
         .is_some_and(|kind| kind == "macos-sample-matrix")

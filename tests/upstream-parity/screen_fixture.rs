@@ -14,6 +14,57 @@ struct Span {
     popup_height: i32,
 }
 type Close = unsafe extern "C" fn(*mut *mut c_void) -> i32;
+#[cfg(feature = "windows-screen-dc")]
+type QueueGate = unsafe extern "C" fn(*mut c_void, u32, *mut u64, usize) -> i32;
+#[cfg(feature = "windows-screen-dc")]
+pub struct QueueHold<'a> {
+    fixture: &'a mut Fixture,
+    control: QueueGate,
+    released: bool,
+}
+#[cfg(feature = "windows-screen-dc")]
+impl QueueHold<'_> {
+    pub fn hwnd(&self) -> *mut c_void {
+        self.fixture.hwnd()
+    }
+    fn operation(&self, operation: u32) -> Result<[u64; 7], Box<dyn Error>> {
+        let mut output = [0; 7];
+        // SAFETY: Exact print-thread.h declaration. This direct gate operation
+        // never posts a synchronous command to the blocked UI owner. The
+        // exclusive fixture borrow retains its context/worker/module and
+        // prevents ordinary fixture commands and close until release/drop.
+        let status = unsafe {
+            (self.control)(
+                self.fixture.span.owner,
+                operation,
+                output.as_mut_ptr(),
+                output.len(),
+            )
+        };
+        if status != 0 {
+            return Err(
+                format!("native queue gate {operation}: {status}, state={output:?}").into(),
+            );
+        }
+        Ok(output)
+    }
+    pub fn state(&self) -> Result<[u64; 7], Box<dyn Error>> {
+        self.operation(1)
+    }
+    pub fn release(mut self) -> Result<[u64; 7], Box<dyn Error>> {
+        self.released = true;
+        self.operation(2)
+    }
+}
+#[cfg(feature = "windows-screen-dc")]
+impl Drop for QueueHold<'_> {
+    fn drop(&mut self) {
+        if !self.released {
+            self.released = true;
+            let _ = self.operation(2);
+        }
+    }
+}
 pub struct Fixture {
     module: Arc<Module>,
     span: Span,
@@ -104,6 +155,54 @@ impl Adapter {
     }
 }
 impl Fixture {
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn activate(&self) -> Result<(), Box<dyn Error>> {
+        type Activate = unsafe extern "C" fn(*mut c_void) -> i32;
+        type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
+        // SAFETY: Exact print-thread.h owner command, before any queue gate.
+        let activate: Activate = unsafe { self.module.symbol(c"mfs_print_thread_activate")? };
+        let info: Info = unsafe { self.module.symbol(c"mfs_print_thread_activation_info")? };
+        let status = unsafe { activate(self.span.owner) };
+        let mut observed = [0; 5];
+        // SAFETY: Direct mutex-protected snapshot of the completed owner command;
+        // no window callback borrows this exact initialized output storage.
+        let info_status = unsafe { info(self.span.owner, observed.as_mut_ptr(), observed.len()) };
+        if status != 0 || info_status != 0 {
+            let boundary = if status == 5
+                && info_status == 0
+                && observed[3] != 0
+                && observed[1] == observed[3]
+                && observed[2] != observed[3]
+            {
+                "missing_environment: owned window is active on its UI queue but lacks actual foreground"
+            } else {
+                "owned fixture activation failed"
+            };
+            return Err(format!(
+                "{boundary}; status={status} info_status={info_status} observation={observed:?}"
+            )
+            .into());
+        }
+        Ok(())
+    }
+    #[cfg(feature = "windows-screen-dc")]
+    pub fn hold_queue(&mut self) -> Result<QueueHold<'_>, Box<dyn Error>> {
+        // SAFETY: Resolve before arming; an armed gate always has a release
+        // guard, including a native error or a Rust assertion unwind.
+        let control: QueueGate = unsafe { self.module.symbol(c"mfs_print_thread_queue_gate")? };
+        let hold = QueueHold {
+            fixture: self,
+            control,
+            released: false,
+        };
+        let state = hold.operation(0)?;
+        if state[..5] != [1, 1, 0, 0, 0] || state[5] == 0 || state[5] == state[6] {
+            return Err(
+                format!("native queue gate did not hold a separate owner: {state:?}").into(),
+            );
+        }
+        Ok(hold)
+    }
     #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
     pub fn geometry(&self, input: [i64; 6]) -> Result<[i64; 31], Box<dyn Error>> {
         type Geometry =

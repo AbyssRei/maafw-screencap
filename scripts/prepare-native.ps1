@@ -150,6 +150,18 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected the complete native ScreenDC geometry/capture matrix, not zero tests or a partial filter'
             }
         }
+        if ($Name -eq 'screen-native-pending-parity' -and $exitCode -eq 0) {
+            $observed = Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('screen_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0')) {
+                throw 'Expected the full initial-capture matrix with real queued corrections, not zero tests'
+            }
+        }
+        if ($Name -eq 'screen-native-pending-parity' -and $exitCode -ne 0 -and
+            (Get-Content -LiteralPath $logPath -Raw).Contains('missing_environment: owned window is active on its UI queue but lacks actual foreground')) {
+            $status = 'missing_environment'
+            throw 'Queued-correction first capture requires the actual foreground before holding its UI queue; no capture was accepted'
+        }
         if ($Name -in @('desktop-dup-source-window-fullscreen','desktop-dup-source-window-workarea','desktop-dup-source-window-geometry') -and $exitCode -eq 77) {
             $status='missing_environment';throw 'Fullscreen DesktopDupWindow needs a visible native taskbar/work-area distinction'
         }
@@ -880,6 +892,9 @@ try {
             $screenGeometryEvidence = Join-Path $artifacts screen-native-geometry
             New-Item -ItemType Directory -Path $screenGeometryEvidence | Out-Null
             $env:MFS_SCREEN_GEOMETRY_EVIDENCE = $screenGeometryEvidence
+            $screenPendingEvidence = Join-Path $artifacts screen-native-pending
+            New-Item -ItemType Directory -Path $screenPendingEvidence | Out-Null
+            $env:MFS_SCREEN_PENDING_EVIDENCE = $screenPendingEvidence
             $geometryEvidence = Join-Path $artifacts corrected-fork-geometry
             New-Item -ItemType Directory -Path $geometryEvidence | Out-Null
             $env:MFS_F_GEOMETRY_ARTIFACTS = $geometryEvidence
@@ -903,9 +918,10 @@ try {
         $foregroundCase = 'backends::windows::print_window::tests::parity::pseudo_minimize::restores_original_attributes_after_real_foreground_reactivation'
         [string[]]$caseSelection = @($parityFilter, '--include-ignored', '--test-threads=1', '--nocapture')
         $screenGeometryCase = 'backends::windows::screen_dc::tests::native_geometry::captures_corrected_native_clients_without_repeated_adjustment'
+        $screenPendingCase = 'backends::windows::screen_dc::tests::native_pending::matches_first_capture_before_queued_window_adjustment_is_consumed'
         # This visible geometry matrix has its own process and complete-count
         # guard; manager/FramePool shared feature sets must not run it implicitly.
-        $caseSelection += @('--skip', $screenGeometryCase)
+        $caseSelection += @('--skip', $screenGeometryCase, '--skip', $screenPendingCase)
         $frameCase = 'backends::windows::frame_pool::tests::captures_original_framepool_pixels_and_retains_result_and_cache_clone_owners'
         $frameLifecycleCase = 'backends::windows::frame_pool::tests::retains_pixels_across_twenty_complete_framepool_lifecycles'
         $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
@@ -990,6 +1006,8 @@ try {
         if ($ScreenDcParity) {
             Step 'screen-native-geometry-parity' cargo ($parityArguments + @('--', $screenGeometryCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
             Step 'screen-native-geometry-records' $ConfigureTool @('upstream-trace', 'screen-geometry', $screenGeometryEvidence)
+            Step 'screen-native-pending-parity' cargo ($parityArguments + @('--', $screenPendingCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Step 'screen-native-pending-records' $ConfigureTool @('upstream-trace', 'screen-pending', $screenPendingEvidence)
         }
     }
     $licenses = Join-Path $artifacts licenses

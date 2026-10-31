@@ -22,6 +22,13 @@ MFS_PARITY_EXPORT int32_t mfs_print_thread_close(void** owner);
 // UI owner id, calling id, actual HWND owner id, process id.
 MFS_PARITY_EXPORT int32_t mfs_print_thread_info(void* owner, uint64_t* output, size_t capacity);
 MFS_PARITY_EXPORT int32_t mfs_print_thread_activate(void* owner);
+// Explicit one-shot queue intervention. Operations: 0 post/await gate entry,
+// 1 snapshot, 2 direct release/await exit. No UI-owner command may be requested
+// between successful entry and release. Seven u64 outputs: armed, entered,
+// released, exited, timed_out, UI owner TID, caller TID. Either timeout fails.
+// release is mandatory before close/join; the gate also fails open after 10s.
+MFS_PARITY_EXPORT int32_t mfs_print_thread_queue_gate(void* owner, uint32_t operation,
+    uint64_t* output, size_t capacity);
 // Last explicit activation: SetForegroundWindow BOOL, active HWND, foreground
 // HWND, target HWND, foreground process id. Observations do not bypass policy.
 MFS_PARITY_EXPORT int32_t mfs_print_thread_activation_info(void* owner, uint64_t* output, size_t capacity);

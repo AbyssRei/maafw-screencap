@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "print-thread.h"
 #include "print-pseudo.h"
+#include "print-queue-gate.hpp"
 #include "MaaUtils/SafeWindows.hpp"
 #include <dwmapi.h>
 #include <algorithm>
@@ -14,6 +15,7 @@
 
 namespace {
 constexpr UINT command_message = WM_APP + 0x71;
+constexpr UINT queue_gate_message = WM_APP + 0x72;
 enum class Command { none, stats, close, activate, prepare, restore_control, updates, inside_updates, update_info, scene, geometry };
 struct Owner {
     std::thread worker;
@@ -42,6 +44,7 @@ struct Owner {
     std::array<uint64_t, 3> update_info {};
     std::array<uint64_t, 13> stats {};
     std::array<uint64_t, 5> activation {};
+    MfsPrintQueueGate queue_gate;
 };
 struct Arguments {
     int32_t width, height, popup_width, popup_height, x, y;
@@ -122,7 +125,10 @@ void run(Owner& owner, Arguments arguments) noexcept
         bool closed = false;
         int received = 0;
         while (!closed && (received = GetMessageW(&message, nullptr, 0, 0)) > 0) {
-            if (owner.marker && message.hwnd == owner.marker && message.message == WM_TIMER && message.wParam == 1) {
+            if (!message.hwnd && message.message == queue_gate_message) {
+                owner.queue_gate.hold();
+            }
+            else if (owner.marker && message.hwnd == owner.marker && message.message == WM_TIMER && message.wParam == 1) {
                 marker_frame(owner);
             }
             else if (!message.hwnd && message.message == command_message) {
@@ -342,6 +348,36 @@ int32_t mfs_print_thread_activate(void* context)
 {
     if (!context) { return 1; }
     try { return request(*static_cast<Owner*>(context), Command::activate); }
+    catch (...) { return 3; }
+}
+int32_t mfs_print_thread_queue_gate(void* context, uint32_t operation, uint64_t* output, size_t capacity)
+{
+    if (!context || !output || capacity != 7 || operation > 2) { return 1; }
+    try {
+        auto& owner = *static_cast<Owner*>(context);
+        DWORD thread = 0;
+        {
+            std::lock_guard lock(owner.mutex);
+            if (!owner.ready || owner.exited || owner.pending || owner.close_failed) { return 1; }
+            thread = owner.thread;
+        }
+        if (!thread || thread == GetCurrentThreadId()) { return 1; }
+        bool ok = true;
+        if (operation == 0) {
+            if (!owner.queue_gate.arm()) { return 1; }
+            ok = PostThreadMessageW(thread, queue_gate_message, 0, 0) != 0;
+            // Even a failed post/entry leaves an armed gate. Release it so an
+            // already queued message cannot prevent subsequent fixture close.
+            if (ok) { ok = owner.queue_gate.await_entry(); }
+            if (!ok) { owner.queue_gate.release(); }
+        }
+        else if (operation == 2) { ok = owner.queue_gate.release(); }
+        const auto state = owner.queue_gate.state();
+        std::copy(state.begin(), state.end(), output);
+        output[5] = thread;
+        output[6] = GetCurrentThreadId();
+        return ok ? 0 : 2;
+    }
     catch (...) { return 3; }
 }
 int32_t mfs_print_thread_activation_info(void* context, uint64_t* output, size_t capacity)

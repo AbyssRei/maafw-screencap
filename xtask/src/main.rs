@@ -35,6 +35,7 @@ mod records;
 mod reference;
 mod review;
 mod screen_geometry;
+mod screen_pending;
 mod windows_delegate;
 mod wlr;
 mod wlr_early_close;
@@ -187,6 +188,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-geometry <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace screen-pending <external directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-geometry <external window-geometry directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-fullscreen <external window-fullscreen directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-workarea <external window-workarea directory> [--check-only]\n\
