@@ -62,7 +62,9 @@ PNG 修复随后已在 [Actions 41184885199](https://github.com/AbyssRei/maafw-s
 
 Custom 现另有实际原始像素类型矩阵：显式适配器根据编译头文件查询 13 种深度及 128 种通道，共 1,664 种规范类型，涵盖 16F/16BF、Bool 和扩展整数类型；这些值仅用于私有对照，不是公开 SDK 格式。原 `MaaImageBufferSetRawData` 函数体保持不变，安全验收桥先检查类型、保留深度和可读 span，再在同一原/Rust manager 回调位置调用真实 setter。Windows 归档依赖开发验证的 Debug、Release 各通过 4,992 组、9,984 次真实调用；0/1/255 返回值、输入覆盖后的 clone、false 输出保留、9,984 个 Mat 在 input/context 结束后持有和模块卸载后的独立 CPU 字节读取均核对，两个 profile 的 9,662,208 字节捕获和持帧流逐字节一致。
 
-六类短 span、保留深度、额外类型位及溢出几何输入均在调用原 setter 前被拒绝，原 helper 调用计数和已有输出不变；七组篡改记录被独立 `upstream-trace custom-raw <外部 raw 目录> [--check-only]` 拒绝。实际 OpenCV 类型头随原生批次归档，零测试/缺失完整计数不能通过入口校验；六项既有 Custom native/data 回归、workspace 测试和 Clippy 通过。首个 standalone 命令因父输出目录未创建在实际捕获前失败，记录保持失败，补齐外部目录后使用相同程序执行；新增的 span 拒绝矩阵另有后续独立执行。这仍是 Windows 开发对照，新的正式在线及其他平台运行待完成；不表示所有编码格式、类型标志组合、颜色转换或完整 Custom/P1 已验收，核心截图算法未变。
+六类短 span、保留深度、额外类型位及溢出几何输入均在调用原 setter 前被拒绝，原 helper 调用计数和已有输出不变；七组篡改记录被独立 `upstream-trace custom-raw <外部 raw 目录> [--check-only]` 拒绝。实际 OpenCV 类型头随原生批次归档，零测试/缺失完整计数不能通过入口校验；六项既有 Custom native/data 回归、workspace 测试和 Clippy 通过。首个 standalone 命令因父输出目录未创建在实际捕获前失败，记录保持失败，补齐外部目录后使用相同程序执行；新增的 span 拒绝矩阵另有后续独立执行。上述本机结果仍是 Windows 开发对照，不表示所有编码格式、类型标志组合、颜色转换或完整 Custom/P1 已验收，核心截图算法未变。
+
+随后 [Actions 41186951837](https://github.com/AbyssRei/maafw-screencap/actions/runs/41186951837) 的确切 `2730b87` Linux PipeWire 组件通过全部 156 项检查，包含新增 raw 原生与实际记录入口。官方轻量 ZIP 的 SHA-256 与登记摘要一致，下载后独立复核 39,965 个实际登记路径及全部检查日志；原图像、编码/缩放、身份、metadata、实际虚接口、重入与 raw 七项数据校验均通过。Linux 的 1,664 类型、4,992 案例、9,984 次原/Rust helper 调用及 9,984 个保留 owner 均核对；类型目录、逐例记录、六类拒绝记录、作用域/释放计数和两个各 9,662,208 字节的实际捕获/持帧流与 Windows Release 逐字节相同。轻量包仍有 491 个未提供或占位输入，完整源码/依赖审计待完成，不能由该组件接受整个 Linux job、其他平台或完整 P1。同一 run 的 macOS 两个入口日志明确停在正式 Xcode `27.2 (27B52)` 缺失前提，未新增实际取帧结果；不替用 RC 或覆盖早期失败。
 
 PNG 参照依赖现由 `scripts/prepare-png-codec.ps1` 显式准备：在线批次每次查询正式 libpng/zlib，登记版本、确切 Git 来源、规范源归档与许可，构建静态库并运行六个已知 RGBA 像素的真实编解码探针；Windows 及 Unix 的 imgcodecs 准备使用相同依赖，并检查 OpenCV 确实选择这些库，禁止静默回落到其他 PNG/zlib。libpng 使用官方主页的当前公开版而非没有 Release 条目的 GitHub 镜像；本次为 libpng 1.6.59、zlib 1.3.2。离线批次必须包含登记的 release/page/resolution/source 输入；缓存复用仍进行在线更新检查。
 
