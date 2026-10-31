@@ -195,9 +195,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial Custom callback and real ImageBuffer migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-parity custom --offline-inputs $index.runs[-1].path
+          # Custom metadata needs meojson, which earlier screenshot components
+          # do not archive. Prepare this component's complete online batch.
+          ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo xtask upstream-parity custom
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial screenshot-manager migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
