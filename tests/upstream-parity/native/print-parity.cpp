@@ -1,8 +1,9 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #include "print-parity.h"
-#include "gdi-probe-internal.hpp"
+#include <windows.h>
 #if defined(MFS_UPSTREAM_PRINT_CPP)
+#include "gdi-probe-internal.hpp"
 #include "Screencap/PrintWindowScreencap.h"
 #endif
 #include <array>
@@ -45,10 +46,38 @@ struct Fixture {
     HRESULT corner_result = E_PENDING;
 };
 
+struct MarkerClip {
+    HDC dc;
+    Pattern& pattern;
+    int saved = 0;
+    bool ready = true;
+    MarkerClip(HDC target, Pattern& state) noexcept : dc(target), pattern(state)
+    {
+        if (!pattern.inside_marker) { return; }
+        saved = SaveDC(dc);
+        ready = saved != 0 && ExcludeClipRect(dc, 0, 0, 16, 16) != ERROR;
+        if (!ready) { pattern.failed = true; }
+    }
+    bool restore() noexcept
+    {
+        if (!saved) { return true; }
+        const int level = saved;
+        saved = 0; // A failed native restore is reported, never retried.
+        if (!RestoreDC(dc, level)) { pattern.failed = true; return false; }
+        return true;
+    }
+    ~MarkerClip() { restore(); }
+};
+
 void draw(HWND hwnd, HDC dc, Pattern& pattern) noexcept
 {
     RECT client {};
     if (!GetClientRect(hwnd, &client)) { pattern.failed = true; return; }
+    // During marker-only WM_PAINT the first background fill used to erase the
+    // old marker before the final fill restored it. Keep either complete phase
+    // visible at every GDI operation boundary, including full-client repaints.
+    MarkerClip clip(dc, pattern);
+    if (!clip.ready) { return; }
     const std::array<RECT, 3> regions {
         RECT { 0, 0, client.right / 3, client.bottom },
         RECT { client.right / 3, 0, client.right, client.bottom / 2 },
@@ -66,6 +95,7 @@ void draw(HWND hwnd, HDC dc, Pattern& pattern) noexcept
         if (!filled || !deleted) { pattern.failed = true; return; }
     }
     if (pattern.inside_marker) {
+        if (!clip.restore()) { return; }
         RECT marker { 0, 0, 16, 16 };
         HBRUSH brush = CreateSolidBrush(pattern.marker_alternative ? 0x001a2b3c : 0x004e5f60);
         if (!brush) { pattern.failed = true; return; }

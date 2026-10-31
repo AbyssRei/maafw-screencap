@@ -169,6 +169,8 @@ if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
     target_link_libraries(mfs_desktop_dup_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 Dwmapi D3D11 Dxgi)
 endif()
 if(MFS_BUILD_GDI_PARITY)
+add_executable(mfs_render_marker_control print-marker-control.cpp)
+target_link_libraries(mfs_render_marker_control PRIVATE Gdi32 User32 Dwmapi)
 add_library(mfs_gdi_parity SHARED
     gdi-parity.cpp
     gdi-probe.cpp

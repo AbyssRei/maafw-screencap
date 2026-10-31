@@ -4,6 +4,10 @@
 
 ## 本轮原生与 CI 复核
 
+已修正已知标记绘制夹具的一个中间状态：背景填充先排除左上角 16×16 标记，恢复调用方 DC clip 后再绘制新标记。隐藏窗口/私有 DIB 控制编译实际 [renderer](../../tests/upstream-parity/native/print-parity.cpp)，在每次真实 FillRect 后检查全图、clip、bitmap 与资源；旧绘制函数体未改的对照有 12/16 个无标记边界，修正版独立构建及主 CMake 新目标均为 16/16 个有效标记，GDI 均为 2→2、清理错误为零。48 份完整 BGRA 已独立复算；共享 renderer 和 PrintWindow 两种适配编译通过。该控制没有桌面捕获，不能确定历史 WGC 是否采到了该中间状态。实际 Step 的五组控制另验证有效运行、空/不完整摘要拒绝、资源不平衡拒绝与非零退出保留；CI 轻量包已接入控制记录。捕获流程、等待及像素断言未变，新的托管捕获回归仍待验收。
+
+初版 `bf5303a` 的 [Actions 41247571643](https://github.com/AbyssRei/maafw-screencap/actions/runs/41247571643) Windows 轻量包已复核七组件共 300/306 项通过、15,928 个可用登记路径；尚缺 603 个唯一来源/依赖输入，不能称为完整源审计。FramePool 为 61/67：四项原 pseudo 颜色断言、原版 Map 标记及随后缺少调用行的 checker 仍失败。Map 只写完两周期六行，第三周期 warm 的 18,432 字节 BGR 恰为三个无标记背景区域；另外五项下载数据检查通过。此原始失败单独保留，不由上述夹具控制重标或倒推原因，整个 Windows job 和 P1 未验收。
+
 确切 `10d73c92fa2953c157373ef252ab28725b14ad5b` 的 [Actions 41240527770](https://github.com/AbyssRei/maafw-screencap/actions/runs/41240527770) PipeWire 164 项检查通过。MemFd 真实流受控 NULL-data 的 40 行记录、240 份原始/持帧像素及 Rust 60 次 map/unmap 已独立复核，既有真实 kernel DMA 回归通过。完整 Linux 工程 ZIP/tar 随后核对全部 19 份清单、79,300 个登记路径、18 份普通 436 文件 Git 快照、一份不可构建控制快照、76 个 F blob 和实际 CMake 来源；全部 40,422 个 PipeWire 原生路径与轻量 native-result 原始字节匹配，补齐其 86 个输入缺口。原版复制/映射次数仍为 unknown，未接受自然 NULL、GPU/Portal、任意故障或完整 P1。
 
 确切 `983da16b7fcc5ba53849c564216b414d8ea38b47` 的 [Actions 41236808686](https://github.com/AbyssRei/maafw-screencap/actions/runs/41236808686) Size 四项及 manager Size 拒绝两项检查通过。独立复核全部 400 份像素及 808 个矩阵文件：Size 共 120 次调用、388 次实际查询、36 次拒绝、40 次恢复和 84 张持帧；manager 共 20 生命周期、40 次 FramePool 拒绝、60 次 GDI 捕获和 20 张持帧。完整 Windows ZIP/tar 核对全部 23 份清单、43,171 个登记路径、22 份普通 430 文件快照、一份不可构建控制快照及 76 个 F blob；FramePool 2,789 和 manager 3,020 个原生路径合并去重为 5,805 个，全部匹配，补齐 174 个输入缺口。该批七组件仍为 302/306 通过，四个原版 pseudo 断言保持失败。manager 证明组合原函数体模型、独立原版 Size 矩阵和真实 Rust native factories，不是完整原生原版 manager 同场执行。

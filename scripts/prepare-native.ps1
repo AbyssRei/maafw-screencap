@@ -142,6 +142,12 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($Name -eq 'render-marker-input-control' -and $exitCode -eq 0) {
+            $observed = [IO.File]::ReadAllText($logPath)
+            if ($observed -notmatch '(?m)^marker input control draws=4 fills=16 valid=16 unmarked=0 other=0 errors=0 gdi=(\d+),\1 cleanup=0 hidden=1 native_capture=0 passed\r?$') {
+                throw 'Expected all sixteen private-DIB marker boundaries and balanced GDI resources; no desktop capture'
+            }
+        }
         if ($Name -eq 'screen-window-helper-original-parity' -and $exitCode -eq 0) {
             $observed = Get-Content -LiteralPath $logPath -Raw
             if ($observed -notmatch '(?m)^test result: ok\. 5 passed; 0 failed; 0 ignored;' -or
@@ -896,6 +902,14 @@ try {
         $frameContextEvidence = Join-Path $artifacts frame-pool-context
         New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
         if($FramePoolParity) {
+            Step render-marker-control-build $cmake @('--build',$build,'--config','Release','--target','mfs_render_marker_control','--parallel','4')
+            $markerControl=Join-Path $artifacts mfs_render_marker_control.exe
+            Copy-Item -LiteralPath (Join-Path $build Release/mfs_render_marker_control.exe) -Destination $markerControl
+            Save-Input $markerControl
+            $markerControlEvidence=Join-Path $frameContextEvidence marker-input-control
+            New-Item -ItemType Directory -Path $markerControlEvidence|Out-Null
+            try { Step render-marker-input-control $markerControl @($markerControlEvidence) }
+            finally { Get-ChildItem -LiteralPath $markerControlEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName } }
             Step frame-pool-alpha-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_alpha_reference','--parallel','4')
             $alphaProgram=Join-Path $artifacts mfs_framepool_alpha_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_alpha_reference.exe) -Destination $alphaProgram
