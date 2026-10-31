@@ -203,7 +203,11 @@ impl Fixture {
         }
         Ok(hold)
     }
-    #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
+    #[cfg(any(
+        feature = "windows-screen-dc",
+        feature = "windows-desktop-dup-window",
+        feature = "windows-frame-pool"
+    ))]
     pub fn geometry(&self, input: [i64; 6]) -> Result<[i64; 31], Box<dyn Error>> {
         type Geometry =
             unsafe extern "C" fn(*mut c_void, *const i64, usize, *mut i64, usize) -> i32;
@@ -237,7 +241,7 @@ impl Fixture {
         }
         Ok(())
     }
-    #[cfg(feature = "windows-desktop-dup-window")]
+    #[cfg(any(feature = "windows-desktop-dup-window", feature = "windows-frame-pool"))]
     pub fn start_inside_desktop_updates(&mut self) -> Result<(), Box<dyn Error>> {
         type Start = unsafe extern "C" fn(*mut c_void) -> i32;
         // SAFETY: Exact print-thread.h owner command. The UI owner retains the
@@ -249,7 +253,7 @@ impl Fixture {
         }
         Ok(())
     }
-    #[cfg(feature = "windows-desktop-dup")]
+    #[cfg(any(feature = "windows-desktop-dup", feature = "windows-frame-pool"))]
     pub fn desktop_update_info(&self) -> Result<[u64; 3], Box<dyn Error>> {
         type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
         let info: Info = unsafe { self.module.symbol(c"mfs_desktop_fixture_update_info")? };

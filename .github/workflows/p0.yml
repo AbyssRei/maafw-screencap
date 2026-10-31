@@ -297,6 +297,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/window-geometry/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/alpha-sequence/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/target-loss/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/queries/**
           if-no-files-found: warn
       - name: Archive engineering evidence
         if: always()

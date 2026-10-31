@@ -146,6 +146,8 @@ cargo test --release --test p0-interop --features prototype-windows-com -- --inc
 cargo clippy --workspace --all-targets --features prototype-windows-com -- -D warnings
 ```
 
+启用 `prototype-windows-com` 后，非桌面 COM 探针也使用 `-- --test-threads=1`。其初始化配平检查要求进程中没有另一个测试持有 MTA；独立原生控制确认，另一个 MTA 尚存时，新线程的 `CoGetApartmentType` 会成功报告 implicit MTA。本次未串行的 workspace 调用因此有两项配平前提断言失败，原日志保留；按既有原生编排串行执行后，所选 workspace 的 120 项检查全部通过，另有 22 项显式忽略。该修正是执行方式校正，未修改断言或 COM 实现。
+
 `prototype-windows` 在自有小窗口绘制确定颜色，以 GetDC → compatible bitmap → BitBlt → GetBitmapBits 实际取帧，校验 BGR 字节，并在释放原生资源后验证独立像素及跨线程释放。`prototype-windows-com` 叠加私有 rich 投影与三项测试：平衡 WinRT 初始化计数、宿主 STA 拒绝 MTA 后保持 apartment，以及显式 WARP 设备的 D3D11 → DXGI → WinRT 对象身份往返与 staging 像素读回。后者校验非对称两行 BGRA，按实际 RowPitch 只复制目标像素，释放所有原生对象后跨线程持帧，并核查线程 DPI 上下文。WARP 是明确选择的软件设备，不是硬件失败后的回退。
 
 第四项 COM 测试创建使用上游 `Create` 入口的 FramePool，核查未启动会话时的“原生 HRESULT 成功 + 空帧”与 rich 投影空错误的差异，并验证未启动会话的事件注册、显式注销 HRESULT、Close 和闭包持有状态释放。该用例未启动捕获，没有在途回调，不能作为事件送达或回调排空证据。维护输入还显式选择窄投影需要的工厂接口壳及 delegate 类型，避免生成代码缺少依赖；不修改生成器输出，也不调用 P3 的 CreateFreeThreaded。
@@ -259,6 +261,12 @@ Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像
 2026-11-01 新增独立 `mfs_framepool_target_loss_reference`，直接编译固定 F 的原类；Rust 对照入口为 `target_loss::matches_original_repeated_target_loss_without_replaying_cached_pixels`，`MFS_FRAMEPOOL_TARGET_LOSS_ROOT` 指定外部 source/rust 矩阵。两侧各二十个 MTA 生命周期：一次真实取帧后在窗口 owner 上销毁并完成 join，同一失效 HWND 连续调用三次，必须拒绝返回缓存图像；原类实际析构，Rust 还检查失败时 pool/session/item 和 cache 不变、poll/复制/转换为零、显式关闭及最终 CPU/completion owner。所有首次图像保持至 native 捕获和调用方初始化结束后，再逐字节保存持帧。`cargo xtask upstream-trace framepool-target-loss <外部矩阵> [--check-only]` 核对 163 份实际文件、已知内部图样及 source/Rust/持帧的完整字节一致性；耗时只作观察，不作为延迟保证。正式 FramePool 编排显式构建原程序，分别运行 source、单项 Rust 和 records，最终轻量包收集该目录。
 
 这项矩阵在归档开发依赖下已完成有效连续三轮，共九次程序调用、120 次初始捕获、360 次销毁后拒绝和 120 张关闭后持帧。独立审阅核对 240 份完整 BGR、489 个登记 native 文件、500 个冻结输入、412 份产品源文件和 76 个固定 F blob；原始/低级鼠标键盘事件为零，系统输入时间/光标不变，最大采样间隔 78.70ms，监听已确认注销。完整不变副本复算通过，九组缺失持帧、边缘字节不符、黑图、布局、回放、owner 计数、调用线程替换、额外文件及拒绝次数破坏均被拒绝。没有声称新注册的四路监听获得了新的物理正向控制，也不改写旧程序结论。新原生 CI 尚待运行；原 C++ 私有字段未被插桩，完整 GPU 资源计数、其他宿主/故障/窗口身份重用和完整 P1 均未验收，捕获实现与等待语义未改。
+
+2026-11-01 另补映射后的查询/裁剪对照。`mfs_framepool_query_reference` 直接包含固定 F 的原类，仅在测试翻译单元拦截四个 Win32 查询；Rust 的同类拦截仅在显式原生测试配置下编译。十种模式分别为普通查询、GetClientRect 失败、ClientToScreen 失败、DWM 失败后 GetWindowRect 回退、回退也失败、客户区宽/高超过纹理、客户原点右/下越界及负向原点钳制。失败通过向真实 OS 查询提交无效不透明句柄产生；矩形变化是明确的测试干预。两侧各二十生命周期，每次执行 warm/probe/recovery 三次实际 WGC 捕获，不重试截图。成功图像必须全幅符合已知图样和实际更新标记，失败不得交付像素；持帧在 native/窗口/调用方初始化结束后再次保存。Rust 还验证真实 Map、失败时旧 cache 不变且没有复制/转换、恢复后的重新映射/转换、native 槽位及最终 CPU/completion owner。
+
+入口 `queries::matches_original_mapped_query_failures_fallback_and_roi_clamps` 使用 `MFS_FRAMEPOOL_QUERY_ROOT`；`cargo xtask upstream-trace framepool-queries <外部矩阵> [--check-only]` 独立验证双方查询顺序、真实错误、恢复、全部布局/像素与 484 个登记文件。归档依赖开发构建的连续三轮全部通过：360 次映射捕获调用，其中 36 次按预期拒绝；120 次 recovery、324 张持帧、720 份 BGR 文件中 648 份非空，另 72 份是失败分支的空输出。四路正式输入为零，系统输入时间和光标不变，最大间隔 78.00ms，监听正常注销；504 个冻结输入、416 份产品源码、76 个 F blob、1,048 个原生编译/链接读取记录和四份生成绑定均已核对。不变副本通过，十三组缺失调用/错误、查询顺序、恢复、cache/转换、owner、像素、布局和文件/报告破坏被拒绝。
+
+首次监听在注册前遇到随附 PowerShell 7.6.5 的 WinForms 编译引用问题，没有执行截图；后续使用系统 Windows PowerShell 5.1 运行原有完整 C# 监听代码，先通过独立编译再注册。失败准备及两次原程序头文件/名称解析编译失败均单独保留，没有把它们计为捕获执行。此批按用户授权自动开始，没有声称新注册获得了新的物理正向控制。Release 核心构建、格式、Clippy、串行 workspace 和 PowerShell 解析通过；新 Actions 原生执行、完整依赖在线验收、真实外窗口竞争、零客户区及其他原生故障/完整 GPU 资源计数仍待完成，不接受完整 P1。
 
 `frame_pool_pseudo.rs` 已迁移原 FramePool 伪最小化包装，复用同一个 helper，并在 inner 的 session/pool/device/cache 析构前完整销毁 helper，保留 stop/join/恢复的先后顺序；`windows-frame-pool` 无须启用 PrintWindow。独立原 executable 另有五个包装场景：普通可见，以及普通/layered 窗口的最小化后 stop/inactive。参考文件记录图像和四个时点的原生样式、alpha、iconic、前台及客户区尺寸。Rust 对照执行 20 次包装生命周期，比较图像字节、样式/透明度/最小化及尺寸、独立 image owner 和关闭后像素；前台位单独记录，最小化夹具要求目标不是前台，不将跨进程的前台权限当作等价保证。
 

@@ -12,6 +12,12 @@ use std::{
 };
 use windows_core::Interface;
 
+#[cfg(all(test, feature = "prototype-windows-com"))]
+#[path = "frame_pool_query_probe.rs"]
+mod query_probe;
+#[cfg(all(test, feature = "prototype-windows-com"))]
+use query_probe::{ClientToScreen, DwmGetWindowAttribute, GetClientRect, GetWindowRect};
+
 // Drop must preserve cleanup evidence without formatting, allocating or
 // panicking on an I/O failure while another primary error is already unwinding.
 pub(crate) static DROP_CLOSE_ERRORS: [AtomicI32; 2] = [AtomicI32::new(0), AtomicI32::new(0)];
