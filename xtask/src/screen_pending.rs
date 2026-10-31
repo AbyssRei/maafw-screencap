@@ -80,6 +80,33 @@ fn screen(row: &[i64]) -> [i64; 4] {
         row[17] + row[15],
     ]
 }
+fn completed_geometry_matches(
+    setup: &[i64],
+    completed: &[i64],
+    final_geometry: &[i64],
+    delta: [i64; 2],
+) -> bool {
+    if setup.len() != 31 || completed.len() != 31 || final_geometry.len() != 31 {
+        return false;
+    }
+    // The caller has validated native i32 coordinates. Widened translations
+    // fit i64. Both the outer bounds and ClientToScreen origin move; the local
+    // GetClientRect, styles, monitor and fixture configuration stay unchanged.
+    let outer = [
+        setup[8] + delta[0],
+        setup[9] + delta[1],
+        setup[10] + delta[0],
+        setup[11] + delta[1],
+    ];
+    completed[8..12] == outer
+        && completed[21..25] == [outer[0], outer[1], outer[2] - outer[0], outer[3] - outer[1]]
+        && completed[..8] == setup[..8]
+        && completed[12..16] == setup[12..16]
+        && completed[16..18] == [setup[16] + delta[0], setup[17] + delta[1]]
+        && completed[18..20] == setup[18..20]
+        && completed[26..31] == setup[26..31]
+        && final_geometry == completed
+}
 fn pixels(bytes: &[u8]) -> Result<()> {
     if bytes.len() != 192 * 128 * 3 {
         return Err("pending image size differs".into());
@@ -212,21 +239,11 @@ fn validate(root: &Path) -> Result<Report> {
                 );
             }
             let delta = [after[0] - before[0], after[1] - before[1]];
-            let outer = [
-                setup[8] + delta[0],
-                setup[9] + delta[1],
-                setup[10] + delta[0],
-                setup[11] + delta[1],
-            ];
-            if completed[8..12] != outer
-                || completed[21..25]
-                    != [outer[0], outer[1], outer[2] - outer[0], outer[3] - outer[1]]
-                || completed[..8] != setup[..8]
-                || completed[12..20] != setup[12..20]
-                || completed[26..31] != setup[26..31]
-                || final_geometry != completed
-            {
-                return Err("pending completed geometry/message differs".into());
+            if !completed_geometry_matches(&setup, &completed, &final_geometry, delta) {
+                return Err(format!(
+                    "pending completed geometry/message differs at {cycle} {side}"
+                )
+                .into());
             }
             for stage in ["pending", "completed"] {
                 let mut original = Vec::new();
@@ -281,6 +298,75 @@ fn validate(root: &Path) -> Result<Report> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn accepts_translated_screen_origin_and_rejects_other_geometry_changes() {
+        // A framed 192x128 client moves upward by a 48px work-area correction.
+        // The screen origin follows the move; the local client rect does not.
+        let setup = [
+            0,
+            0,
+            1920,
+            1080,
+            0,
+            0,
+            1920,
+            1032,
+            -8,
+            921,
+            200,
+            1088,
+            0,
+            0,
+            192,
+            128,
+            0,
+            952,
+            0x14cf_0000,
+            0x108,
+            1,
+            -8,
+            921,
+            208,
+            167,
+            0x34,
+            96,
+            1,
+            0,
+            208,
+            167,
+        ];
+        let mut moved = setup;
+        moved[9] = 873;
+        moved[11] = 1040;
+        moved[17] = 904;
+        moved[20] = 2;
+        moved[22] = 873;
+        assert!(completed_geometry_matches(&setup, &moved, &moved, [0, -48]));
+        for index in [0, 4, 8, 9, 12, 14, 16, 17, 18, 19, 21, 22, 23, 24, 26, 30] {
+            let mut wrong = moved;
+            wrong[index] += 1;
+            assert!(!completed_geometry_matches(
+                &setup,
+                &wrong,
+                &wrong,
+                [0, -48]
+            ));
+        }
+        let mut later = moved;
+        later[20] += 1;
+        assert!(!completed_geometry_matches(
+            &setup,
+            &moved,
+            &later,
+            [0, -48]
+        ));
+        assert!(!completed_geometry_matches(
+            &setup[..30],
+            &moved,
+            &moved,
+            [0, -48]
+        ));
+    }
     #[test]
     fn rejects_wrong_layout_out_of_range_coordinates_and_blank_capture() {
         assert!(array("[1,2]", 4).is_err());

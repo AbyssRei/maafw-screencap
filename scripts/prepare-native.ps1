@@ -45,6 +45,7 @@ if ($PipeWireControl -and -not $GdiParity) { throw 'PipeWire control model requi
 $framePoolSource = $FramePoolContext -or $FramePoolParity
 $screenEvidence = ''
 $screenGeometryEvidence = ''
+$screenPendingEvidence = ''
 $geometryEvidence = ''
 $frameContextEvidence = ''
 $desktopEvidence = ''
@@ -1054,6 +1055,11 @@ finally {
     if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}
     if ($screenEvidence -and (Test-Path -LiteralPath $screenEvidence)) {
         Get-ChildItem -LiteralPath $screenEvidence -File | ForEach-Object { Save-Input $_.FullName }
+    }
+    foreach ($screenNativeDirectory in @($screenGeometryEvidence, $screenPendingEvidence)) {
+        if ($screenNativeDirectory -and (Test-Path -LiteralPath $screenNativeDirectory)) {
+            Get-ChildItem -LiteralPath $screenNativeDirectory -Recurse -File | ForEach-Object { Save-Input $_.FullName }
+        }
     }
     if ($frameContextEvidence -and (Test-Path -LiteralPath $frameContextEvidence)) {
         Get-ChildItem -LiteralPath $frameContextEvidence -Recurse -File | ForEach-Object { Save-Input $_.FullName }

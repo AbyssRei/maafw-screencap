@@ -578,6 +578,8 @@ Windows CI 另上传 `p1-windows-component-diagnostics`，包含当次 P1 compon
 
 ScreenDC 步骤结束后另立即上传 `p1-windows-screen-dc-diagnostics`，包括该组件的清单、原生结果、日志和全部参考程序 artifact，不等待后续 DesktopDup、Custom、manager 或 FramePool。异步调整首帧的 `screen-native-pending` 部分记录、布局与持帧文件同时加入最终 Windows 轻量包；缺少文件和未完成矩阵保持实际状态，上传本身不构成捕获验收。
 
+确切 bd79217 的 [Actions 41207497250](https://github.com/AbyssRei/maafw-screencap/actions/runs/41207497250) ScreenDC 组件为 30/32 项通过：首帧原生测试完成 40 组、80 次捕获和 80 张关闭后持帧，随后 records 步骤及外层 preparation 失败。独立 checker 误将 `ClientToScreen` 的屏幕原点纳入不变字段，同时又要求窗口真实移动；现保留客户区本地矩形、样式和配置不变，明确核对屏幕原点按相同 delta 平移，并用回归测试拒绝原点、尺寸、样式、消息与后续状态变化。71 项 xtask 测试、严格 Clippy 和格式检查通过，不据此接受原生矩阵。官方 ZIP 摘要、427 个可用登记路径、160 份完整首帧/最终/持帧 BGR 及既有 152 次几何捕获、380 份快照已独立核对；旧轻量包未包含 pending TSV/布局，完整 321 文件复算待补。还发现这两个原生 artifact 目录没有进入 `native-result` 输入登记，现由 finally 在成功或失败时均枚举登记；该修正尚待新批次确认。旧 CI 失败、缺失记录和本机前台环境失败保持原状态，该 CI 也没有本机输入观察器，不替代旧程序的有效连续复测结论。
+
 `batch --prepare-only` 只更新 nightly、解析/核验最新 Cargo 依赖并归档锁文件、元数据和 vendor；不编译捕获 crate，不运行测试或离线消费，不能作为构建通过记录。
 
 后续本机批次发现 WGC/WARP 原型的间歇性访问冲突，系统事件将故障地址归到已卸载的 `GraphicsCapture.dll`；该批次已失败，尚未进入 GDI 对照。调试器或独立压力诊断未复现不撤销原失败，具体根因和修复仍待确认。[WGC 维护者的相关调查](https://github.com/robmikh/Win32CaptureSample/issues/99)记录了内部异步工作与模块卸载的竞态，但目前不能据此断定本机根因。显式离线 GDI 对照只证明其指定输入和 GDI 组件，不替代该失败批次或 WGC 退出验收。
