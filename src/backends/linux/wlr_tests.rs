@@ -9,6 +9,8 @@ use std::{
     ptr::NonNull,
 };
 
+#[path = "wlr_early_close_tests.rs"]
+mod early_close;
 #[path = "wlr_host_tests.rs"]
 mod host;
 #[path = "wlr_host_construction_tests.rs"]
@@ -544,7 +546,7 @@ fn retains_shared_client_after_caller_and_first_capture_release() {
     let mut held_bgr = Vec::new();
     held_bgr.try_reserve_exact(60).unwrap();
     for cycle in 0..20 {
-        let mut client = Client::new().unwrap();
+        let client = Client::new().unwrap();
         assert!(client.connect(Path::new(&socket)).unwrap());
         let client = client.into_shared().unwrap();
         let owner = Arc::downgrade(&client);
@@ -688,7 +690,7 @@ fn reconnects_same_and_changed_paths_after_old_capture_owners_end() {
     let mut held_bgr = Vec::new();
     held_bgr.try_reserve_exact(20).unwrap();
     for cycle in 0..20 {
-        let mut client = Client::new().unwrap();
+        let client = Client::new().unwrap();
         let counts = client.context.counts.clone();
         assert!(client.connect(&socket).unwrap());
         let output_id = client
@@ -721,8 +723,8 @@ fn reconnects_same_and_changed_paths_after_old_capture_owners_end() {
                 .protocol_id(),
             output_id
         );
-        client.close();
-        client.close();
+        client.close().unwrap();
+        client.close().unwrap();
         assert!(!client.connected().unwrap());
         released_counts(&counts);
         assert!(client.connect(&socket).unwrap());
@@ -743,19 +745,18 @@ fn reconnects_same_and_changed_paths_after_old_capture_owners_end() {
         drop(source);
         // Unique native owner is recovered only after all capture/proxy
         // snapshots have ended. No disconnect under a foreign backend clone.
-        let mut client =
-            Arc::try_unwrap(client).unwrap_or_else(|_| panic!("live old client owner"));
+        let client = Arc::try_unwrap(client).unwrap_or_else(|_| panic!("live old client owner"));
         assert!(client.connect(&missing).is_err());
         assert!(!client.connected().unwrap());
-        assert!(client.channel.is_none());
+        assert!(client.current_channel().unwrap().is_none());
         assert!(client.context.state().unwrap().globals.output.is_none());
-        assert_eq!(client.socket_path, missing);
+        assert_eq!(client.connection_state().unwrap().socket_path, missing);
         released_counts(&counts);
         let before_missing = counts.outer.load(Ordering::Acquire);
         assert!(client.connect(&missing).is_err());
         assert_eq!(counts.outer.load(Ordering::Acquire), before_missing);
         assert!(client.connect(&socket).unwrap());
-        client.close();
+        client.close().unwrap();
         released_counts(&counts);
         drop(client);
         assert_eq!(fds(), baseline_fds);

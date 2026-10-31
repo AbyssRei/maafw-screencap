@@ -23,7 +23,7 @@ fn preserves_last_output_and_existing_snapshots_through_global_removal() {
     drop(adapter.convert(warm, 0).unwrap());
     let baseline_fds = fds();
     let baseline_tasks = tasks();
-    let mut client = Client::new().unwrap();
+    let client = Client::new().unwrap();
     assert!(client.connect(&socket).unwrap());
     let client = client.into_shared().unwrap();
     let counts = client.context.counts.clone();

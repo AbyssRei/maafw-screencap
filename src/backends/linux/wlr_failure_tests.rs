@@ -32,7 +32,7 @@ fn preserves_failed_outputs_and_buffer_reuse_before_native_disconnect() {
     for cycle in 0..20 {
         let counts;
         {
-            let mut client = Client::new().unwrap();
+            let client = Client::new().unwrap();
             assert!(client.connect(&socket).unwrap());
             let client = client.into_shared().unwrap();
             counts = client.context.counts.clone();

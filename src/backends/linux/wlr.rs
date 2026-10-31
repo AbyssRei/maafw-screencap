@@ -1,11 +1,13 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Private Wlr migration. Captures retain one shared client and independent
-//! native buffer/result state; early-close and complete fault parity remain P1.
+//! native buffer/result state. Retired channels outlive their proxy snapshots;
+//! immediate native close with live proxies is an explicit safety adaptation.
 //! Callback-internal roundtrips and frame lifetime through conversion stay U.
 use crate::platform::linux::wayland::{Channel, Error, callback_roundtrip, same_source_path};
 use memmap2::{MmapMut, MmapOptions};
 use std::{
+    cell::Cell,
     fs::File,
     marker::PhantomData,
     mem::ManuallyDrop,
@@ -633,12 +635,77 @@ pub(crate) struct Evidence {
 // The client context receives registry events; each capture has another Context
 // for its own frame callbacks. Only the scalar evidence ledger is shared. No
 // state guard or exclusive client borrow survives native dispatch.
-pub(crate) struct Client {
-    context: Arc<Context>,
-    channel: Option<Channel>,
+#[derive(Default)]
+struct ConnectionState {
+    channel: Option<Arc<Channel>>,
     socket_path: PathBuf,
 }
+// Control needs exclusive access only while executing, not while idle capture
+// handles exist. A capture/conversion may nest another capture, but may not
+// reenter close/connect and replace a native connection underneath dispatch.
+// These scalar guards never hold a state lock over native calls or conversion.
+struct ClientUse<'a> {
+    uses: &'a Cell<usize>,
+    counts: &'a Counts,
+    control: bool,
+}
+impl Drop for ClientUse<'_> {
+    fn drop(&mut self) {
+        let value = self.uses.get();
+        if self.control && value == usize::MAX {
+            self.uses.set(0);
+        } else if !self.control && (1..usize::MAX).contains(&value) {
+            self.uses.set(value.checked_sub(1).unwrap());
+        } else {
+            cleanup(self.counts, rustix::io::Errno::INVAL.raw_os_error());
+        }
+    }
+}
+pub(crate) struct Client {
+    context: Arc<Context>,
+    connection: Mutex<ConnectionState>,
+    uses: Cell<usize>,
+}
 impl Client {
+    fn control(&self) -> Result<ClientUse<'_>, Error> {
+        if self.uses.get() != 0 {
+            return Err(Error::new(
+                "Wlr client operation busy",
+                rustix::io::Errno::BUSY.raw_os_error(),
+            ));
+        }
+        self.uses.set(usize::MAX);
+        Ok(ClientUse {
+            uses: &self.uses,
+            counts: &self.context.counts,
+            control: true,
+        })
+    }
+    fn capture_use(&self) -> Result<ClientUse<'_>, Error> {
+        let next = self
+            .uses
+            .get()
+            .checked_add(1)
+            .filter(|n| *n < usize::MAX)
+            .ok_or(Error::new(
+                "Wlr client control busy",
+                rustix::io::Errno::BUSY.raw_os_error(),
+            ))?;
+        self.uses.set(next);
+        Ok(ClientUse {
+            uses: &self.uses,
+            counts: &self.context.counts,
+            control: false,
+        })
+    }
+    fn connection_state(&self) -> Result<MutexGuard<'_, ConnectionState>, Error> {
+        self.connection
+            .lock()
+            .map_err(|_| Error::new("Wlr connection state poisoned", -2))
+    }
+    fn current_channel(&self) -> Result<Option<Arc<Channel>>, Error> {
+        Ok(self.connection_state()?.channel.clone())
+    }
     pub fn into_shared(self) -> Result<Arc<Self>, Error> {
         // Standard shared ownership only. Channel's Rc marker keeps Client
         // and every Arc<Client> on this native channel; no Send/Sync is asserted.
@@ -656,26 +723,43 @@ impl Client {
         .map_err(|_| Error::allocation())?;
         Ok(Self {
             context,
-            channel: None,
-            socket_path: PathBuf::new(),
+            connection: Mutex::new(ConnectionState::default()),
+            uses: Cell::new(0),
         })
     }
-    pub fn connect(&mut self, path: &Path) -> Result<bool, Error> {
-        if !same_source_path(&self.socket_path, path) {
-            self.close();
-            self.socket_path.clear();
-            self.socket_path
+    pub fn connect(&self, path: &Path) -> Result<bool, Error> {
+        let _control = self.control()?;
+        let changed = !same_source_path(&self.connection_state()?.socket_path, path);
+        if changed {
+            self.close_inner();
+            let mut state = self.connection_state()?;
+            state.socket_path.clear();
+            state
+                .socket_path
                 .try_reserve_exact(path.as_os_str().len())
                 .map_err(|_| Error::allocation())?;
-            self.socket_path.push(path);
+            state.socket_path.push(path);
         }
-        if self.channel.is_some() {
+        if self.current_channel()?.is_some() {
             // Same live path is the source's no-op, including no roundtrip.
             return self.connected();
         }
-        self.channel = Some(Channel::connect(&self.socket_path)?);
+        let socket = {
+            let state = self.connection_state()?;
+            // Preserve the retained source spelling even when a new path has
+            // equal filesystem components. The fallible temporary copy avoids
+            // holding a metadata lock over native connect/logging callbacks.
+            let mut socket = PathBuf::new();
+            socket
+                .try_reserve_exact(state.socket_path.as_os_str().len())
+                .map_err(|_| Error::allocation())?;
+            socket.push(&state.socket_path);
+            socket
+        };
+        let channel = Arc::try_new(Channel::connect(&socket)?).map_err(|_| Error::allocation())?;
+        self.connection_state()?.channel = Some(channel);
         if let Err(error) = self.bind_protocol() {
-            self.close();
+            self.close_inner();
             return Err(error);
         }
         self.context.state()?.connected = true;
@@ -685,11 +769,13 @@ impl Client {
         Ok(self.context.state()?.connected)
     }
     fn bind_protocol(&self) -> Result<(), Error> {
+        let channel = self
+            .current_channel()?
+            .ok_or(Error::new("closed Wlr channel", -1))?;
         // SAFETY: All connection clones/proxies are internal. Captures retain
-        // Arc<Client> until their copied proxies/buffers have ended. connect
-        // and close need &mut Client, unavailable while any capture retains it.
-        // Closing/reconnecting with live snapshots is not yet migrated.
-        let conn = unsafe { self.channel.as_ref().unwrap().connection() };
+        // their exact Arc<Channel> until copied proxies/buffers have ended.
+        // This local owner covers binding/dispatch; control reentry is rejected.
+        let conn = unsafe { channel.connection() };
         let registry = conn
             .display()
             .send_constructor::<wl_registry::WlRegistry>(
@@ -718,21 +804,22 @@ impl Client {
     }
     fn roundtrip(&self) -> Result<(), Error> {
         self.context.counts.increment(&self.context.counts.outer);
-        // SAFETY: Temporary immutable connection borrow does not escape Client.
-        unsafe {
-            self.channel
-                .as_ref()
-                .ok_or(Error::new(
-                    "closed Wlr channel",
-                    rustix::io::Errno::INVAL.raw_os_error(),
-                ))?
-                .connection()
-        }
-        .roundtrip()
-        .map(|_| ())
-        .map_err(|_| Error::new("wl_display_roundtrip", -1))
+        let channel = self.current_channel()?.ok_or(Error::new(
+            "closed Wlr channel",
+            rustix::io::Errno::INVAL.raw_os_error(),
+        ))?;
+        // SAFETY: Local channel owner covers dispatch and all temporary clones.
+        unsafe { channel.connection() }
+            .roundtrip()
+            .map(|_| ())
+            .map_err(|_| Error::new("wl_display_roundtrip", -1))
     }
-    pub fn close(&mut self) {
+    pub fn close(&self) -> Result<(), Error> {
+        let _control = self.control()?;
+        self.close_inner();
+        Ok(())
+    }
+    fn close_inner(&self) {
         {
             let mut s = self
                 .context
@@ -740,9 +827,8 @@ impl Client {
                 .lock()
                 .unwrap_or_else(|poison| poison.into_inner());
             s.connected = false;
-            // Original client order; no capture can retain a proxy while this
-            // unique client borrow exists. Registry callback data ends before
-            // the native display/backend queue owner below.
+            // Original logical close/order. Idle captures may retain the three
+            // snapshot owners; each holds its exact channel through their drop.
             let g = &mut s.globals;
             g.pointer.take();
             g.keyboard.take();
@@ -752,26 +838,41 @@ impl Client {
             g.output.take();
             g.registry.take();
         }
-        drop(self.channel.take());
+        let channel = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
+            .channel
+            .take();
+        // With no snapshots this closes immediately. Otherwise native teardown
+        // is deliberately deferred until their last channel lease ends, as the
+        // observed original prefix fixture does. Never disconnect underneath a
+        // foreign Backend/proxy; this extra lifetime is not original cleanup.
+        drop(channel);
     }
 }
 impl Drop for Client {
     fn drop(&mut self) {
-        self.close();
+        // Active guards borrow a live client owner, so final Arc destruction
+        // cannot occur during dispatch/conversion/control in safe use.
+        self.close_inner();
     }
 }
 pub(crate) struct Capture {
     context: Arc<Context>,
     client: Option<Arc<Client>>,
+    channel: Option<Arc<Channel>>,
     _owner: PhantomData<Rc<()>>,
 }
 impl Capture {
     pub fn connect(path: &Path) -> Result<Self, Error> {
-        let mut client = Client::new()?;
+        let client = Client::new()?;
         client.connect(path)?;
         Self::from_client(client.into_shared()?)
     }
     pub fn from_client(client: Arc<Client>) -> Result<Self, Error> {
+        let active = client.capture_use()?;
+        let channel = client.current_channel()?;
         let state = {
             let s = client.context.state()?;
             State {
@@ -790,9 +891,11 @@ impl Capture {
             counts: client.context.counts.clone(),
         })
         .map_err(|_| Error::allocation())?;
+        drop(active);
         Ok(Self {
             context,
             client: Some(client),
+            channel,
             _owner: PhantomData,
         })
     }
@@ -809,6 +912,11 @@ impl Capture {
         &mut self,
         convert: impl FnOnce(Sample) -> Result<T, Error>,
     ) -> Result<T, Error> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or(Error::new("closed Wlr source", -1))?;
+        let _active = client.capture_use()?;
         let (manager, output) = {
             let s = self.context.state()?;
             if !s.connected
@@ -820,6 +928,17 @@ impl Capture {
             {
                 return Err(Error::new(
                     "closed Wlr source",
+                    rustix::io::Errno::INVAL.raw_os_error(),
+                ));
+            }
+            let current = client.current_channel()?;
+            if !matches!((&self.channel, &current), (Some(old), Some(now)) if Arc::ptr_eq(old, now))
+            {
+                // Original old proxies plus a reconnected client's new display
+                // violate the native connection contract. Reject before any
+                // request/dispatch; do not silently rebuild or use stale proxies.
+                return Err(Error::new(
+                    "Wlr stale connection snapshot",
                     rustix::io::Errno::INVAL.raw_os_error(),
                 ));
             }
@@ -948,6 +1067,9 @@ impl Capture {
             s.manager.take();
         }
         drop(self.client.take());
+        // All proxy/buffer owners ended above. If logically closed/replaced,
+        // this may now perform the one deferred native display disconnect.
+        drop(self.channel.take());
     }
     pub fn evidence(&self) -> Evidence {
         let c = &self.context.counts;

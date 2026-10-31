@@ -71,7 +71,7 @@ fn preserves_embedded_nul_native_name_and_full_reconnect_identity() {
         for name in [b"\0mfs-unused".as_slice(), b""] {
             assert!(client.connect(Path::new(OsStr::from_bytes(name))).is_err());
             assert!(!client.connected().unwrap());
-            assert!(client.channel.is_none());
+            assert!(client.current_channel().unwrap().is_none());
             assert!(client.context.state().unwrap().globals.output.is_none());
         }
         drop(client);
@@ -227,7 +227,7 @@ fn preserves_source_path_components_and_native_reconnect_failures() {
         client = Arc::try_unwrap(shared).unwrap_or_else(|_| panic!("old path capture owner"));
         assert!(client.connect(path(&trailing)).is_err());
         assert!(!client.connected().unwrap());
-        assert!(client.channel.is_none());
+        assert!(client.current_channel().unwrap().is_none());
         assert!(client.context.state().unwrap().globals.output.is_none());
         assert!(client.connect(&socket).unwrap());
         drop(client);

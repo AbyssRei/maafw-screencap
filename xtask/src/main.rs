@@ -43,6 +43,7 @@ mod wlr_failures;
 mod wlr_host_api;
 mod wlr_protocol;
 mod wlr_registry;
+mod wlr_retired_channel;
 
 #[path = "../../build-support/p0-configuration.rs"]
 mod build_configuration;
@@ -189,6 +190,8 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-geometry <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-pending <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace wlr-early-close-prefix <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace wlr-retired-channel <Rust directory> <original prefix directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-geometry <external window-geometry directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-fullscreen <external window-fullscreen directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-workarea <external window-workarea directory> [--check-only]\n\

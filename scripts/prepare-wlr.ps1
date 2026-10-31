@@ -125,6 +125,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         $rustContextSummary=switch($Name){
             'rust-wlr-shared-client' {'native Rust Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained_raw=60 retained_bgr=60 independent_buffers=20 resources_balanced=1 passed'}
             'rust-wlr-reconnect' {'native Rust Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 same_missing_retry=20 subsequent_connect=20 captures=20 retained_raw=20 retained_bgr=20 resources_balanced=1 passed'}
+            'rust-wlr-retired-channel' {'native Rust Wlr early_close cycles=20 cases=80 control_prefixes=80 retained_native_channels=60 closed_rejected=40 stale_rejected=20 captures=60 retained_raw=60 retained_bgr=60 busy_control_rejections=120 resources_balanced=1 passed'}
             'rust-wlr-manager' {'native Rust Wlr manager cycles=20 captures=60 connects=40 retained_raw=60 retained_bgr=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed'}
             'rust-wlr-native-host' {'native Rust Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained_raw=60 retained_bgr=60 legacy_constructors=20 shared_last_client=20 final_callback_owners_released=20 input_actions=0 passed'}
             'rust-wlr-host-construction' {'native Rust Wlr host_create_failure objects=20 constructor_errors=20 captures=60 retained_raw=60 retained_bgr=60 final_callback_owners_released=20 resources_balanced=1 input_actions=0 passed'}
@@ -382,6 +383,10 @@ try{
             try { Step ('rust-wlr-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr',('backends::linux::wlr::tests::'+$probe[1]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
+        try { Step rust-wlr-retired-channel timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::early_close::closes_shared_client_after_ending_each_retained_native_snapshot','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step wlr-retired-channel-records $ConfigureTool @('upstream-trace','wlr-retired-channel',(Join-Path $env:MFS_P1_WLR_RUST_ARTIFACTS early-close),(Join-Path $referenceArtifacts early-close-prefix)) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-manager timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::forwards_native_manager_reconnects_and_retains_images_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $hostMatrix=Join-Path $referenceArtifacts wlr-native-api-matrix

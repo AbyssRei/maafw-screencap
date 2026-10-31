@@ -128,7 +128,6 @@ impl Factory for NativeFactory {
     fn connect_client(&mut self, client: &mut Client, socket: &[u8]) -> Result<bool, Error> {
         #[cfg(feature = "linux-wlr")]
         {
-            let client = Arc::get_mut(client).ok_or(Error::InvalidPrivateOwner)?;
             match client.connect(Path::new(std::ffi::OsStr::from_bytes(socket))) {
                 Ok(value) => Ok(value),
                 Err(error) => {
