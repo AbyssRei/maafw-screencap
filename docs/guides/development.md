@@ -264,7 +264,9 @@ cargo xtask upstream-context macos # native macOS arm64 original Objective-C++ c
 
 另一个明确准备画面的恢复对照已完成有效连续三轮：恢复后先全幅重绘，并等待两次真实 owner 呈现，再只调用一次原版/Rust 捕获。共 360 次调用、120 次真实零客户区、120 次准备后的恢复及 240 张关闭后持帧全部通过；720 份 BGR 中 480 份非空，1,464 个零客户区文件及另 1,452 个查询回归文件经独立复核，十三组破坏控制被拒绝。506 个冻结输入、418 份产品源码和 76 个 F blob 匹配；正式输入为零，最大间隔 81.79ms，监听正常注销，无新增物理正向控制声明。首份审阅报告误把另一诊断批次的 70.27ms 写进汇总字段，初始报告保留，新目录完整复算已改正为本批 81.79ms。随后按 [KillTimer 的已排队消息规则](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-killtimer)补上停止状态的迟到 WM_TIMER 拒绝，最终源码再次连续三轮通过同一十八次程序调用和完整像素/记录核验，输入为零、最大间隔 77.38ms；两个准备批次分别保留，不修改任何立即恢复失败。
 
-`MFS_FRAMEPOOL_EMPTY_ROOT` 选择外部矩阵，`MFS_FRAMEPOOL_EMPTY_RESTORE_BARRIER=1` 显式启用准备控制；原程序 `--empty-client` 保留立即恢复，`--empty-client-prepared` 启用准备控制。`cargo xtask upstream-trace framepool-empty <外部矩阵> [--check-only]` 要求完整几何、空输出/持帧、cache/转换/owner、两次呈现和 488 个文件；正式编排使用准备控制。它不接受立即恢复竞态、零尺寸 GraphicsCaptureItem、完整 GPU 资源、一般窗口竞争或 P1；新 CI 继续待执行。默认核心没有新增行为。
+`MFS_FRAMEPOOL_EMPTY_ROOT` 选择外部矩阵，`MFS_FRAMEPOOL_EMPTY_RESTORE_BARRIER=1` 显式启用准备控制；原程序 `--empty-client` 保留立即恢复，`--empty-client-prepared` 启用准备控制。`cargo xtask upstream-trace framepool-empty <外部矩阵> [--check-only]` 要求完整几何、空输出/持帧、cache/转换/owner、两次呈现和 488 个文件；正式编排使用准备控制。它不接受立即恢复竞态、零尺寸 GraphicsCaptureItem、完整 GPU 资源、一般窗口竞争或 P1；限定原生 CI 结果见下文。默认核心没有新增行为。
+
+确切 `0c3ae155a7245cb1a692f329d5ea2ad9ba6bcb03` 的 [Actions 41229336665](https://github.com/AbyssRei/maafw-screencap/actions/runs/41229336665) FramePool 组件为 55/59 项通过：原类/Rust 零客户区准备恢复及 records 均通过，既有查询和目标销毁也通过，四个原 pseudo 已知颜色断言仍失败。官方 95,751,571 字节 ZIP 摘要/CRC、1,240 个可用登记路径、488 个零客户区文件、484 个查询文件和 163 个目标销毁文件独立核对；零客户区和查询共 480 份完整 BGR 另经全幅图样复算。该次零矩阵为 120 次调用、40 次真实零客户区、40 次准备恢复及 80 张持帧，两次呈现屏障均有记录；它不接受立即恢复或新 manager 分类修复。轻量包缺 86 个来源/依赖输入，完整来源审阅仍待补。首份审阅汇总误用临时布尔变量覆盖四个失败名称，初始报告原样保留，新目录复算已恢复实际列表，原生数据与状态不改；四张失败 pseudo 图仍为全黑。该组件结果不接受整个 Windows job 或完整 P1。
 
 Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像素，再在 UI owner 上销毁目标并完成 join；下一次捕获在窗口有效性检查立即失败，不继续轮询、转换或替换旧缓存。显式 session/pool 关闭通过，关闭后 CPU 图像仍有效。此项保留上游失败时的部分状态；后续重复原源码对照见下一段，其他原生故障全过程仍待完成。
 
