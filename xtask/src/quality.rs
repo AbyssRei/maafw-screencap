@@ -5,7 +5,15 @@ use crate::{Result, git, repository};
 
 pub fn run(args: &[String]) -> Result<()> {
     let message = match args {
-        [] => String::from_utf8(git(repository(), &["log", "-1", "--format=%B"])?)?,
+        [] => {
+            let selected = match std::env::var("MFS_COMMIT_MESSAGE_REF") {
+                Ok(value) => Some(value),
+                Err(std::env::VarError::NotPresent) => None,
+                Err(error) => return Err(error.into()),
+            };
+            let selected = commit_ref(selected.as_deref())?;
+            String::from_utf8(git(repository(), &["log", "-1", "--format=%B", selected])?)?
+        }
         [flag, path] if flag == "--message-file" => std::fs::read_to_string(path)?,
         _ => return Err("expected check [--message-file <path>]".into()),
     };
@@ -42,6 +50,20 @@ pub fn run(args: &[String]) -> Result<()> {
     Ok(())
 }
 
+fn commit_ref(value: Option<&str>) -> Result<&str> {
+    let value = value.unwrap_or("HEAD");
+    if value == "HEAD"
+        || (value.len() == 40
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)))
+    {
+        Ok(value)
+    } else {
+        Err("commit message ref must be HEAD or an exact lowercase Git SHA".into())
+    }
+}
+
 fn commit_message(message: &str) -> Result<()> {
     let subject = message.lines().next().ok_or("empty commit message")?;
     let (prefix, description) = subject
@@ -71,6 +93,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn accepts_exact_ci_head_without_accepting_revision_expressions_or_options() {
+        let sha = "4140ac9674a9fde174212c895c8c37ff3acf1ef8";
+        assert_eq!(commit_ref(None).unwrap(), "HEAD");
+        assert_eq!(commit_ref(Some("HEAD")).unwrap(), "HEAD");
+        assert_eq!(commit_ref(Some(sha)).unwrap(), sha);
+        for invalid in [
+            "",
+            "--all",
+            "HEAD^",
+            "main",
+            "4140ac96",
+            "4140AC9674A9FDE174212C895C8C37FF3ACF1EF8",
+        ] {
+            assert!(commit_ref(Some(invalid)).is_err());
+        }
+    }
+
+    #[test]
     fn accepts_scopes_breaking_markers_and_custom_types() {
         for message in [
             "feat: capture",
@@ -93,6 +133,7 @@ mod tests {
             "fix!: ",
             "fix: ",
             "fix(gdi))!: malformed",
+            "Merge pull request #1 from contributor/topic",
         ] {
             assert!(commit_message(message).is_err(), "accepted {message:?}");
         }

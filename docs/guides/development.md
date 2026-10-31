@@ -614,6 +614,8 @@ cargo xtask wlr-prototype      # Linux x64：真实 wlroots headless/Pixman 与 
 
 私有 C++/OpenCV 适配器验证 C 布局和失败输出、真实外部线程回调、stop 排空及回调内拒绝、原生像素覆写/释放后的 Rust 独立持帧、跨线程释放和 Rust/C++ 异常边界。独立参考程序直接编译固定未打补丁的 `GdiScreencap.cpp`，局部对照 DLL 另可显式编译 `PrintWindowScreencap.cpp`，在原调用点执行上游转换；其构建、加载/FFI 和受控窗口实际捕获分别记账。这些参考入口不代表六种 Windows 方法或完整 U，P0 的准备验收另见计划状态。具体构建/原生测试结果以各批次记录为准。
 
+文档校验使用 `python -B scripts/check-documentation.py`，内部失败控制使用 `--self-test`。它检查全部 Git 跟踪 Markdown 的仓库内链接、锚点、空白及 Conventional Commit subject，不更新 Rust/原生工具链或执行捕获。新增 `Documentation and commit checks` 工作流在分支 push、PR 和手动调度运行；纯 Markdown 分支 push 不再触发原生工作流，源码、脚本和 CI 配置变更仍触发三平台，所有 PR 及原生手动调度保留完整矩阵。这些 CI 调整尚待托管验证；文档绿色状态不构成任何原生或阶段验收。两种检查在 CI 中都以 `MFS_COMMIT_MESSAGE_REF` 指定实际贡献者提交，限制为 HEAD 或完整小写 SHA；PR 原生构建仍使用正常 merge checkout，不把 GitHub 合成合并 subject 当作贡献者消息。
+
 网络不可用时，可显式选择已登记、具备所需依赖归档的原生运行记录，使用其依赖快照验证当前源码：
 
 ```text
