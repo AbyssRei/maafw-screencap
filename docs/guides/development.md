@@ -66,13 +66,17 @@ Custom 另新增同一存活对象的同步回调重入入口：connect、connec
 
 首个实际对照中，原 C++ 的 UUID→UUID 成功，Rust 验收桥因要求 active scopes=1 而返回错误 1；原失败、当时 Rust 程序与原 DLL 均保留。仅修正私有验收桥：图像作用域使用 owner-thread 栈，字符串作用域另绑定真实 buffer 和单调身份，metadata 记录本操作结束后应恢复的外层身份。它允许内层完成时外层 buffer 仍存活，保持每个操作自己的 parse/as_object 发生在 buffer 内、实际 Mat/UUID 发布发生在其 buffer 结束前、type 替换发生在自己的 buffer 结束后。七项控制仍拒绝作用域外发布、跨当前 buffer 解析、内层存活时提前替换外层值及内层自身提前替换；两层分别结束后的正确替换与字节也须通过。未修改原源码或核心 manager 的行为。
 
-`upstream-trace custom-reentry <外部 reentry 目录> [--check-only]` 独立复算 4,728 份实际数据、回调顺序/深度、完整能力位、Mat 布局/owner、内外层输出、scope 控制与释放记录；七种宽度、深度、控制、owner、像素、持有值和析构篡改均被拒绝。既有图像 96 例、身份 64 例、metadata 592 例及真实 API 1,308 次查询回归通过。Windows 与 Unix 原生脚本均接入新精确测试、完整摘要/零测试拒绝及独立记录复算；新在线/其他平台门禁尚待执行。这只是同 owner channel、一次嵌套的来源行为对照，不定义公共 SDK 允许的重入、并发使用或活动销毁，通用分配失败、framework loader 和完整 P1 仍未验收。
+`upstream-trace custom-reentry <外部 reentry 目录> [--check-only]` 独立复算 4,728 份实际数据、回调顺序/深度、完整能力位、Mat 布局/owner、内外层输出、scope 控制与释放记录；七种宽度、深度、控制、owner、像素、持有值和析构篡改均被拒绝。既有图像 96 例、身份 64 例、metadata 592 例及真实 API 1,308 次查询回归通过。Windows 与 Unix 原生脚本均接入新精确测试、完整摘要/零测试拒绝及独立记录复算；正式在线与 Linux 后续结果见下文。这只是同 owner channel、一次嵌套的来源行为对照，不定义公共 SDK 允许的重入、并发使用或活动销毁，通用分配失败、framework loader 和完整 P1 仍未验收。
+
+确切 `561238723b40620244c5674de937d1222de0e048` 的本机正式在线批次随后通过全部 27 项原生检查。独立核对 7,663 项输入/日志、全部 394 个产品 Git 文件、十份实际原 API/头文件与固定 F 的字节，并保存正式测试程序、DLL 和锁文件；全部 Custom 实际输出与此前归档输入下的最终 Debug/Release 记录一致。VS2026、SDK 和 MSVC 身份与下述更新后工具链相同。[Actions 41167609520](https://github.com/AbyssRei/maafw-screencap/actions/runs/41167609520) 的 Linux 组件通过 135 项检查，下载后的五个独立记录入口均通过；4,728 份重入数据及图像、身份、metadata、实际 API 全部输出与本机一致，十份原 API/头文件与固定 F 一致。官方轻量包摘要与 37,897 份可用登记文件亦已核对；其中另有 472 份登记输入未包含在轻量包内，不把它描述为完整依赖/产品快照审计。该批 macOS 仍在取帧前缺正式 Xcode 27.2/27B52。
 
 用户更新后，VS2026 `18.11.3 / 18.11.12328.437` 与 SDK `10.0.28000.2957` 的新正式在线批次通过全部 25 项原生检查；实际参考编译器为 MSVC `19.51.36260.0`。准备、编译及验证期间产品源码保持不变，独立核对了 2,930 项输入/日志、固定 F 的 76 份来源及全部 392 个产品 Git 文件。图像、UUID、元数据和实际 C 创建/销毁/虚表门禁均通过，测试二进制与锁文件另存。
 
 [Actions 41147180960](https://github.com/AbyssRei/maafw-screencap/actions/runs/41147180960) 的 Linux 133 项组件检查及下载后 33,283 份可用登记文件校核亦通过；两平台各十份原 Custom API/manager/公共头与 F 原字节一致，真实编译命令消费这些来源，612 份 API 数据及 1,193 份元数据字节跨平台一致。轻量 Linux 包不含完整依赖与产品快照，不将其描述为完整源码归档审计。
 
-该批 Windows Custom 在编译前失败：复用的 PrintWindow 离线清单没有新增 `meojson-source.tar`。现与 manager 一样为 Custom 单独在线准备并刷新 runner 工具链，保留离线入口的完整输入要求，新 CI 待验证；没有把准备失败归为采集断言，也不改写原结果。该批 Windows 四项 FramePool pseudo 失败与 macOS 正式 Xcode 缺环境继续保留；完整 P1 仍未验收。
+随后 [Actions 41164682813](https://github.com/AbyssRei/maafw-screencap/actions/runs/41164682813) 的 Linux 完整官方归档已补齐独立审计：70,787 份登记输入/日志、19 份完整产品快照（各 392 个 Git 文件）、F 全部 744 份原文件与来源归档、76 项显式来源及真实编译关联均核对。该批 Wlr/PipeWire 组件分别通过 131/133 项检查。其源码为 `7cf8896`，尚未包含后续重入切片；完整归档的结果不转移到 `5612387` 的轻量包。
+
+该批 Windows Custom 在编译前失败：复用的 PrintWindow 离线清单没有新增 `meojson-source.tar`。现与 manager 一样为 Custom 单独在线准备并刷新 runner 工具链，保留离线入口的完整输入要求；后续 Actions 41164682813 与 41167609520 的 Custom 步骤均已通过，不把原准备失败归为采集断言，也不改写原结果。完整 Windows job 与其余组件各按实际结果记录，该批历史四项 FramePool pseudo 失败与 macOS 正式 Xcode 缺环境继续保留；完整 P1 仍未验收。
 
 Custom 的私有迁移入口为 `upstream-parity custom`，首批正式编排限 Windows x64/VS2026，不要求可见桌面。核心 `custom-capture` feature 只编入通用回调算法，无原生运行依赖；原生验收显式编译固定原 manager 的构造、connect、connected、screencap、inactive 函数体、完整原 callback table 和原 raw setter，并使用真实 MaaUtils ImageBuffer/vtable 与 OpenCV core/imgproc/imgcodecs。局部本机对照已运行 96 个案例/192 次源码与 Rust 截图调用，覆盖缺失 table/回调、0/1/2/255 返回值、三种实际头文件定义的 8-bit 类型、成功空图、失败保留旧输出、raw setter 克隆、修改借用表和 C++ 异常后独立调用；36 个 Mat head 保持到 context/input 销毁后，最终 head/context/adapter scope 配平。独立 `upstream-custom` 逐字节复算全部 192 份输出及原生 ABI/资源记录。首个正式在线批次的 22 项原生检查全部通过，但命令最后因归档验证器漏识别新组件前缀失败，原日志保留。补齐前缀和既有 scope/parent/phase 测试后，`cargo xtask reference verify-run runs/<run-id>/manifest.json` 已只读校核该批次完整输入；它不重新截图、不登记或改写状态，不能把原命令失败变为通过。修正后的 876cfbb Actions 入口已通过 18 项离线原生检查，下载后的 192 份实际输出、ABI 与 owner 记录亦独立校核通过；该早期图像批次本身不验证 manager 虚表/create-destroy、UUID/info/features 或其他平台；后续切片见上文，encoded/resize/全部类型和完整 P1 仍未验收。OpenCV 5 的类型常量由实际编译头读取，不使用旧主版本的位打包假设。
 
