@@ -187,6 +187,18 @@ jobs:
           $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
           cargo xtask upstream-parity screen-dc --offline-inputs $index.runs[-1].path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload Windows ScreenDC diagnostics
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-windows-screen-dc-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-screen-dc-windows-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-screen-dc-windows-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-screen-dc-windows-*/inputs/screen-dc-scope.md
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-screen-dc-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-screen-dc-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**
+          if-no-files-found: warn
       - name: Validate partial DesktopDup and window migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         run: |
@@ -279,6 +291,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate-runtime/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/corrected-fork-geometry/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/screen-native-geometry/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/screen-native-pending/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/window-fullscreen/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/window-workarea/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/window-geometry/**

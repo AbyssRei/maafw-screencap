@@ -574,6 +574,8 @@ Actions 通过 `scripts/archive-evidence.ps1` 将 reference 打包为 `p0-eviden
 
 Windows CI 另上传 `p1-windows-component-diagnostics`，包含当次 P1 component 的清单、原生结果、嵌套日志及参考程序原始 BGR/几何记录；捕获失败后也执行上传。它用于快速读取具体断言，不包含完整来源、依赖和归档元数据，不能代替上述完整证据包，也不改变失败状态。准备阶段未产生对应文件时明确报告无匹配文件。
 
+ScreenDC 步骤结束后另立即上传 `p1-windows-screen-dc-diagnostics`，包括该组件的清单、原生结果、日志和全部参考程序 artifact，不等待后续 DesktopDup、Custom、manager 或 FramePool。异步调整首帧的 `screen-native-pending` 部分记录、布局与持帧文件同时加入最终 Windows 轻量包；缺少文件和未完成矩阵保持实际状态，上传本身不构成捕获验收。
+
 `batch --prepare-only` 只更新 nightly、解析/核验最新 Cargo 依赖并归档锁文件、元数据和 vendor；不编译捕获 crate，不运行测试或离线消费，不能作为构建通过记录。
 
 后续本机批次发现 WGC/WARP 原型的间歇性访问冲突，系统事件将故障地址归到已卸载的 `GraphicsCapture.dll`；该批次已失败，尚未进入 GDI 对照。调试器或独立压力诊断未复现不撤销原失败，具体根因和修复仍待确认。[WGC 维护者的相关调查](https://github.com/robmikh/Win32CaptureSample/issues/99)记录了内部异步工作与模块卸载的竞态，但目前不能据此断定本机根因。显式离线 GDI 对照只证明其指定输入和 GDI 组件，不替代该失败批次或 WGC 退出验收。
