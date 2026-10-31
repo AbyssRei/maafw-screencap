@@ -41,6 +41,8 @@ The subsequent exact-b9e9f42 Linux PipeWire component on Actions 41184885199 pas
 
 Keep each detailed rule in its authority; this file summarizes constraints and links to them. User authorization and preferences from the current task still apply; do not invent another approval requirement for work already authorized.
 
+Actions 41186951837 Windows archive review now verifies all 23 manifests, 39,504 distinct registered paths, product snapshots, 76 fixed-F blobs and seven actual native source roots. Seven components contain 283 checks: 279 pass; four original FramePool pseudo known-color checks remain failed. Seven Custom and seventeen other downloaded-data verifiers pass. All four failed original images are black 96x64 BGR with exit 5; neither diagnostic success nor archive integrity proves a black-image cause or full P1 acceptance. The development guide records exact source-text normalization, controlled fixtures and runtime limits.
+
 ## Phase Order and Scope
 
 Follow **P0 preparation → P1 complete corrected-fork extraction F → P2 source freeze and complete extraction acceptance → P3 SDK/correctness and planned native migrations → P4/P5 strategies, bindings and assets → P6 measured optimization**. [ADR 0003](docs/decisions/0003-corrected-fork-extraction-baseline.md) supersedes the old unpatched-U then fixed-old-PR-P sequence. Apply the revised PR #1587 semantics during P1 migration; P2 does not apply a second patch. All platform backends and direct screenshot helper/manager paths must pass P1 before P2 starts. Do not start final SDK implementation or additional behavior changes before P2 acceptance.
