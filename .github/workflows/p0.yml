@@ -35,6 +35,9 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 2
+      - name: Check independent FramePool diagnostic sequencing
+        shell: pwsh
+        run: ./tests/prototypes/framepool-independent.ps1
       - name: Update nightly before configuring Cargo caches
         run: rustup update nightly --no-self-update
       - name: Configure external cache and evidence directories

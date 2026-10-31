@@ -391,6 +391,14 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
     }
 }
 
+function Invoke-FrameCheck([string]$Name, [string]$Program, [string[]]$Arguments) {
+    # These captures run in separate processes with their own fixtures. Retain
+    # each failed Step and the nonpassing batch, then collect independent cases.
+    # Dependency setup, compilation and source-identity checks remain strict.
+    try { Step $Name $Program $Arguments }
+    catch { $script:failed = $true; Write-Host $_.Exception.Message }
+}
+
 function Api([string]$Endpoint) {
     $response = & gh api $Endpoint
     if ($LASTEXITCODE -ne 0) { throw "GitHub API query failed: $Endpoint" }
@@ -902,24 +910,24 @@ try {
             Save-Input $targetLossProgram
             $frameTargetLossEvidence=Join-Path $frameContextEvidence target-loss
             New-Item -ItemType Directory -Path (Join-Path $frameTargetLossEvidence source) | Out-Null
-            Step frame-pool-source-target-loss $targetLossProgram @((Join-Path $frameTargetLossEvidence source))
+            Invoke-FrameCheck frame-pool-source-target-loss $targetLossProgram @((Join-Path $frameTargetLossEvidence source))
             Step frame-pool-queries-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_query_reference','--parallel','4')
             $queryProgram=Join-Path $artifacts mfs_framepool_query_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_query_reference.exe) -Destination $queryProgram
             Save-Input $queryProgram
             $frameQueryEvidence=Join-Path $frameContextEvidence queries
             New-Item -ItemType Directory -Path (Join-Path $frameQueryEvidence source) | Out-Null
-            Step frame-pool-source-queries $queryProgram @((Join-Path $frameQueryEvidence source))
+            Invoke-FrameCheck frame-pool-source-queries $queryProgram @((Join-Path $frameQueryEvidence source))
             $frameEmptyEvidence=Join-Path $frameContextEvidence empty-client
             New-Item -ItemType Directory -Path (Join-Path $frameEmptyEvidence source) | Out-Null
-            Step frame-pool-source-empty-client $queryProgram @('--empty-client-prepared',(Join-Path $frameEmptyEvidence source))
+            Invoke-FrameCheck frame-pool-source-empty-client $queryProgram @('--empty-client-prepared',(Join-Path $frameEmptyEvidence source))
             Step frame-pool-map-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_map_reference','--parallel','4')
             $mapProgram=Join-Path $artifacts mfs_framepool_map_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_map_reference.exe) -Destination $mapProgram
             Save-Input $mapProgram
             $frameMapEvidence=Join-Path $frameContextEvidence map-boundary
             New-Item -ItemType Directory -Path (Join-Path $frameMapEvidence source) | Out-Null
-            Step frame-pool-source-map-boundary $mapProgram @('--map-boundary',(Join-Path $frameMapEvidence source))
+            Invoke-FrameCheck frame-pool-source-map-boundary $mapProgram @('--map-boundary',(Join-Path $frameMapEvidence source))
             Step frame-pool-size-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_size_reference','--parallel','4')
             $sizeProgram=Join-Path $artifacts mfs_framepool_size_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_size_reference.exe) -Destination $sizeProgram
@@ -935,7 +943,7 @@ try {
             Copy-Item -LiteralPath $sizeGenerated -Destination (Join-Path $sizeInput FramePoolScreencap.cpp)
             $frameSizeEvidence=Join-Path $frameContextEvidence size-boundary
             New-Item -ItemType Directory -Path (Join-Path $frameSizeEvidence source) | Out-Null
-            Step frame-pool-source-size-boundary $sizeProgram @('--size-boundary',(Join-Path $frameSizeEvidence source))
+            Invoke-FrameCheck frame-pool-source-size-boundary $sizeProgram @('--size-boundary',(Join-Path $frameSizeEvidence source))
         }
         $contextFailures = [Collections.Generic.List[string]]::new()
         foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
@@ -1093,21 +1101,21 @@ try {
         }
         if ($FramePoolParity) {
             $env:MFS_FRAMEPOOL_TARGET_LOSS_ROOT = $frameTargetLossEvidence
-            Step 'frame-pool-rust-target-loss' cargo ($parityArguments + @('--', $frameTargetLossCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
-            Step 'frame-pool-target-loss-records' $ConfigureTool @('upstream-trace', 'framepool-target-loss', $frameTargetLossEvidence)
+            Invoke-FrameCheck 'frame-pool-rust-target-loss' cargo ($parityArguments + @('--', $frameTargetLossCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck 'frame-pool-target-loss-records' $ConfigureTool @('upstream-trace', 'framepool-target-loss', $frameTargetLossEvidence)
             $env:MFS_FRAMEPOOL_QUERY_ROOT = $frameQueryEvidence
-            Step 'frame-pool-rust-queries' cargo ($parityArguments + @('--', $frameQueryCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
-            Step 'frame-pool-query-records' $ConfigureTool @('upstream-trace', 'framepool-queries', $frameQueryEvidence)
+            Invoke-FrameCheck 'frame-pool-rust-queries' cargo ($parityArguments + @('--', $frameQueryCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck 'frame-pool-query-records' $ConfigureTool @('upstream-trace', 'framepool-queries', $frameQueryEvidence)
             $env:MFS_FRAMEPOOL_EMPTY_ROOT = $frameEmptyEvidence
             $env:MFS_FRAMEPOOL_EMPTY_RESTORE_BARRIER = '1'
-            Step 'frame-pool-rust-empty-client' cargo ($parityArguments + @('--', $frameEmptyCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
-            Step 'frame-pool-empty-records' $ConfigureTool @('upstream-trace', 'framepool-empty', $frameEmptyEvidence)
+            Invoke-FrameCheck 'frame-pool-rust-empty-client' cargo ($parityArguments + @('--', $frameEmptyCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck 'frame-pool-empty-records' $ConfigureTool @('upstream-trace', 'framepool-empty', $frameEmptyEvidence)
             $env:MFS_FRAMEPOOL_MAP_ROOT = $frameMapEvidence
-            Step 'frame-pool-rust-map-boundary' cargo ($parityArguments + @('--', $frameMapCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
-            Step 'frame-pool-map-records' $ConfigureTool @('upstream-trace', 'framepool-map', $frameMapEvidence)
+            Invoke-FrameCheck 'frame-pool-rust-map-boundary' cargo ($parityArguments + @('--', $frameMapCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck 'frame-pool-map-records' $ConfigureTool @('upstream-trace', 'framepool-map', $frameMapEvidence)
             $env:MFS_FRAMEPOOL_SIZE_ROOT = $frameSizeEvidence
-            Step 'frame-pool-rust-size-boundary' cargo ($parityArguments + @('--', $frameSizeCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
-            Step 'frame-pool-size-records' $ConfigureTool @('upstream-trace', 'framepool-size', $frameSizeEvidence)
+            Invoke-FrameCheck 'frame-pool-rust-size-boundary' cargo ($parityArguments + @('--', $frameSizeCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck 'frame-pool-size-records' $ConfigureTool @('upstream-trace', 'framepool-size', $frameSizeEvidence)
             Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
             foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
                 $env:MFS_FRAMEPOOL_HOST_MODE = $modeName
