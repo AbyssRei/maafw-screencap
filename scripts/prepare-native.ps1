@@ -51,6 +51,7 @@ $frameContextEvidence = ''
 $frameTargetLossEvidence = ''
 $frameEmptyEvidence = ''
 $frameMapEvidence = ''
+$frameSizeEvidence = ''
 $desktopEvidence = ''
 $metadataEvidence = ''
 $customEvidence = ''
@@ -210,7 +211,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact foreground case did not execute one native test'
             }
         }
-        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss|queries|empty-client|map-boundary)$' -and $exitCode -eq 0) {
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss|queries|empty-client|map-boundary|size-boundary)$' -and $exitCode -eq 0) {
             if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact native FramePool case did not execute one test'
             }
@@ -246,6 +247,14 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         if ($Name -eq 'frame-pool-rust-map-boundary' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('native Rust FramePool map_boundary cycles=20 calls=60 map_failures=7 conversion_errors=6 recovery=20 retained=47 owners_released=1 completion_states=0 passed')) {
             throw 'Rust FramePool Map boundary matrix did not complete'
+        }
+        if ($Name -eq 'frame-pool-source-size-boundary' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('original FramePool size_boundary cycles=20 calls=60 rejected=18 recovery=20 retained=42 passed')) {
+            throw 'Original FramePool Size boundary matrix did not complete'
+        }
+        if ($Name -eq 'frame-pool-rust-size-boundary' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('native Rust FramePool size_boundary cycles=20 calls=60 rejected=18 recovery=20 retained=42 owners_released=1 completion_states=0 passed')) {
+            throw 'Rust FramePool Size boundary matrix did not complete'
         }
         if ($Name -match '^desktop-dup-rust-(lifecycles|default-output|conversion-boundary|fullscreen|workarea|geometry)$' -and $exitCode -eq 0 -and (Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') { throw 'Exact DesktopDup native test did not execute one test' }
         if ($Name -eq 'desktop-dup-rust-fullscreen' -and $exitCode -eq 0 -and
@@ -903,6 +912,22 @@ try {
             $frameMapEvidence=Join-Path $frameContextEvidence map-boundary
             New-Item -ItemType Directory -Path (Join-Path $frameMapEvidence source) | Out-Null
             Step frame-pool-source-map-boundary $mapProgram @('--map-boundary',(Join-Path $frameMapEvidence source))
+            Step frame-pool-size-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_size_reference','--parallel','4')
+            $sizeProgram=Join-Path $artifacts mfs_framepool_size_reference.exe
+            Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_size_reference.exe) -Destination $sizeProgram
+            Save-Input $sizeProgram
+            $sizeOriginal = [IO.File]::ReadAllText((Join-Path $UpstreamRoot source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp)).Replace("`r`n", "`n")
+            $sizeGenerated = Join-Path $build framepool-size-observed.cpp
+            if ([regex]::Matches($sizeOriginal, [regex]::Escape('cap_item_.Size()')).Count -ne 4 -or
+                [IO.File]::ReadAllText($sizeGenerated).Replace("`r`n", "`n") -cne $sizeOriginal.Replace('cap_item_.Size()', '::mfs_size_probe::size(cap_item_)')) {
+                throw 'Generated FramePool Size source differs from the four reviewed expressions'
+            }
+            $sizeInput = Join-Path $frameContextEvidence size-input
+            New-Item -ItemType Directory -Path $sizeInput | Out-Null
+            Copy-Item -LiteralPath $sizeGenerated -Destination (Join-Path $sizeInput FramePoolScreencap.cpp)
+            $frameSizeEvidence=Join-Path $frameContextEvidence size-boundary
+            New-Item -ItemType Directory -Path (Join-Path $frameSizeEvidence source) | Out-Null
+            Step frame-pool-source-size-boundary $sizeProgram @('--size-boundary',(Join-Path $frameSizeEvidence source))
         }
         $contextFailures = [Collections.Generic.List[string]]::new()
         foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
@@ -989,7 +1014,8 @@ try {
         $frameQueryCase = 'backends::windows::frame_pool::tests::queries::matches_original_mapped_query_failures_fallback_and_roi_clamps'
         $frameEmptyCase = 'backends::windows::frame_pool::tests::empty_client::clears_warm_cache_on_real_zero_client_and_recovers_without_old_pixels'
         $frameMapCase = 'backends::windows::frame_pool::tests::map_boundary::preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion_failures'
-        $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase)
+        $frameSizeCase = 'backends::windows::frame_pool::tests::size_boundary::preserves_original_size_query_catches_partial_states_and_recovery'
+        $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase, '--skip', $frameSizeCase)
         if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
         $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
         $desktopDefaultCase = 'backends::windows::desktop_dup::tests::selects_adapter_zero_output_zero_for_null_hwnd_and_retains_cpu_pixels'
@@ -1065,6 +1091,9 @@ try {
             $env:MFS_FRAMEPOOL_MAP_ROOT = $frameMapEvidence
             Step 'frame-pool-rust-map-boundary' cargo ($parityArguments + @('--', $frameMapCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
             Step 'frame-pool-map-records' $ConfigureTool @('upstream-trace', 'framepool-map', $frameMapEvidence)
+            $env:MFS_FRAMEPOOL_SIZE_ROOT = $frameSizeEvidence
+            Step 'frame-pool-rust-size-boundary' cargo ($parityArguments + @('--', $frameSizeCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Step 'frame-pool-size-records' $ConfigureTool @('upstream-trace', 'framepool-size', $frameSizeEvidence)
             Step 'frame-pool-factory-native' cargo ($parityArguments + @('--', 'platform::windows::wgc::factory::tests::', '--include-ignored', '--test-threads=1', '--nocapture'))
             foreach ($modeName in @('uninitialized','mta','mta-dispatcher','sta')) {
                 $env:MFS_FRAMEPOOL_HOST_MODE = $modeName

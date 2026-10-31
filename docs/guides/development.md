@@ -256,7 +256,7 @@ cargo xtask upstream-context macos # native macOS arm64 original Objective-C++ c
 
 另一个真实 FramePool 控制在 cache clone 的 C++ 边界抛出异常，核对临时结果 owner 释放、原生关闭结果，并在错误返回后观察到 staging 可再次成功 Map；后续精确 Map/Unmap 局部对照见下文。显式返回的清理错误进入固定证据槽；Drop 的失败采用固定原子记录，避免在主错误展开时格式化、分配或因日志 I/O 再次 panic。这些局部控制不替代完整失败矩阵。
 
-原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积；真实窗口干预与准备恢复的限定证据见下文，立即恢复及完整相关矩阵仍待验收。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。这些错误路径仍需原生故障对照，不能仅凭审阅认定通过。
+原客户区 ROI 为零面积时，OpenCV 路径返回 empty Mat 并以空克隆替换缓存；内部实现单独返回 EmptySample 并清空旧缓存，不能与无帧超时混同。几何单元检查覆盖零面积；真实窗口干预与准备恢复的限定证据见下文，立即恢复及完整相关矩阵仍待验收。初始化的三次 Size 查询保持各自 catch 边界：创建 pool 参数中的失败按原逻辑返回 false，首尾两次异常保留逃出局部 catch 的部分状态；再次 CreateForWindow 前也按 put_abi 释放旧 item。受控 Size 返回/异常的局部对照见下文，真实系统故障、其他初始化/清理错误仍待验收。
 
 2026-11-01 已补真实零客户区控制：窗口 owner 在一次真实 WGC Map 后、GetClientRect 前将客户区宽、高或两者置零，保留非零外窗口。原类返回有值但为空的 Mat；Rust 的私有 EmptySample 清除旧 cache，零分支不复制/转换像素。测试用 Rc 持有窗口直到同步查询干预结束，不改变捕获实现、等待或默认选项。夹具 owner 在零客户区期间停止内部更新 timer，正尺寸恢复后重新启动，关闭前完成 timer/window/class 清理和 join。
 
@@ -283,6 +283,12 @@ Rust 端另有真实目标销毁控制：先取帧并核对独立夹具内部像
 2026-11-01 另新增真实 Map/Unmap 边界对照。独立 `mfs_framepool_map_reference` 与既有查询程序共同直接包含同一固定 F 原类；仅前者使用词法表达式视图转发原 `ID3D11DeviceContext` 和 cache 字段，不替换 COM 对象或 vtable。成功路径保持真实 CopyResource、Map、转换、cache clone/赋值及 Unmap 顺序。故障一向真实 Map 提交 `UINT_MAX` 子资源，记录原生 `E_INVALIDARG`，不读取失败的映射输出，也不调用 Unmap；故障二在真实成功 Map 后让 C++ 转换抛出受控异常、Rust 转换器返回错误，核对恰好一次同线程 Unmap、旧 cache 地址/字节不变及下一次单独捕获恢复。两侧均保持返回图像与 cache 独立，持有 CPU 图像至 native/窗口/调用方初始化结束后再次保存；Rust 另记录必要 BGRA 安全复制、最终 CPU/completion owner 和关闭错误。测试钩子仅在原生测试配置下启用，正式调用仍使用子资源零，等待/默认值不改。
 
 入口 `map_boundary::preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion_failures` 使用 `MFS_FRAMEPOOL_MAP_ROOT`；`cargo xtask upstream-trace framepool-map <外部矩阵> [--check-only]` 核对双方调用顺序、HRESULT、原生身份、cache、布局、完整像素、持帧和 724 个文件，正式编排及 CI 收集均已接入。归档开发依赖下连续三轮全部通过，连同独立十模式查询回归共十八次程序调用。Map 矩阵共 360 次调用、42 次预期原生 Map 拒绝、36 次受控转换失败、120 次 recovery 和 282 张持帧；1,080 份 BGR 中 924 份非空，2,172 个 Map 文件、另 1,452 个查询回归文件、512 个冻结输入、423 份产品源码、76 个固定 F blob、1,059 个实际 MSBuild 读取记录和四份生成绑定独立核对。输入为零、最大采样间隔 79.59ms，监听正常注销；不变副本通过，十七组调用/清理/错误/cache/owner/像素/文件/报告破坏被拒绝。没有声明本次注册的新物理正向控制；构建审阅最初误查独立 `.cpp` 文件名，在写归档前被拒绝，修正为实际共享翻译单元后通过，原生结果不变。串行 workspace 122 项通过、24 项忽略，严格 Clippy、格式与 PowerShell 解析通过。新矩阵原生 CI、设备丢失、分配失败、Rust panic、完整 GPU 资源计数和完整 P1 仍待验收。
+
+2026-11-01 新增十模式 Size 边界对照，入口为 `size_boundary::preserves_original_size_query_catches_partial_states_and_recovery`，使用 `MFS_FRAMEPOOL_SIZE_ROOT`。独立原程序 `mfs_framepool_size_reference --size-boundary <source>` 从固定 F 原 `.cpp` 生成只替换四处 Size 表达式的副本；每次先查询真实 `GraphicsCaptureItem`，再按测试模式返回受控 `E_ABORT`、零宽度或一次尺寸差异。独立翻译单元在依赖已包含后仅将原头的 `private` 访问改为 `public`，直接观察原类字段，字段和其他函数体不改。记录中的 `native_hresult` 为投影异常码，零表示投影调用成功；不声称读取了成功调用的底层 HRESULT。它验证冷初始化首/第二/末查询及正常检查的异常边界，另覆盖触发重建后的三处异常、首次零宽度和第二次零宽度参数的真实 pool 创建拒绝。尤其第二次 Size 异常在冷启动清空 item，在重建路径保留 item；末查询异常保留已启动 session/pool，下一次捕获经原尺寸检查重建。全部失败保持旧 cache 地址/字节，并以一次单独调用恢复，没有截图重试。Rust 使用同一私有实现，测试钩子在真实查询后返回受控结果；正式构建继续直接查询原 item。
+
+`cargo xtask upstream-trace framepool-size <外部矩阵> [--check-only]` 核对双方异常/空返回区别、原生槽位、last size、全部 Size 原始成功结果与受控结果、cache、像素及 726 个文件。归档开发依赖下连续三轮及独立十模式查询回归的十八次程序调用全部通过：Size 矩阵共 360 次捕获调用、108 次预期拒绝、120 次 recovery、252 张关闭后持帧和 1,164 次真实 Size 查询；1,080 份 BGR 中 864 份非空，2,178 个 Size 文件、另 1,452 个查询回归文件、517 个冻结输入、428 份产品源码、76 个 F blob、1,060 个实际 MSBuild 读取记录和四份生成绑定独立核对。原始/低级鼠标键盘事件为零，系统输入时间与光标不变，最大间隔 162.61ms，监听已注销；没有新物理正向控制声明。不变副本通过，十九组错误边界、部分状态、原生/受控结果、线程、复制、owner、像素和文件/报告破坏被拒绝；其中十八组先删除保存的 report，确认由实际语义检查拒绝。串行 workspace 123 项通过、25 项忽略，Clippy、格式通过。最初 Rust 诊断误要求 Image 实现 Debug 的编译失败，以及构建审阅输出目录未创建的失败分别保留，均未执行额外截图或改变原生结果。
+
+正式编排已接入 Size 入口，并新增生成源码的四表达式校验、实际副本归档和轻量包收集；记录归档代码在上述三轮后加入，已对实际编译的生成源码独立执行并核对哈希，完整原生编排/CI 仍待验收。此矩阵仅验证受控返回如何经过真实原生对象和原有控制流，不表示观察到系统 Size API 自发失败、真实零尺寸捕获 item 或外部窗口尺寸竞争；完整 GPU 资源计数、设备/分配故障、其余原生矩阵和 P1 仍未通过，核心默认值和等待行为未改。
 
 `frame_pool_pseudo.rs` 已迁移原 FramePool 伪最小化包装，复用同一个 helper，并在 inner 的 session/pool/device/cache 析构前完整销毁 helper，保留 stop/join/恢复的先后顺序；`windows-frame-pool` 无须启用 PrintWindow。独立原 executable 另有五个包装场景：普通可见，以及普通/layered 窗口的最小化后 stop/inactive。参考文件记录图像和四个时点的原生样式、alpha、iconic、前台及客户区尺寸。Rust 对照执行 20 次包装生命周期，比较图像字节、样式/透明度/最小化及尺寸、独立 image owner 和关闭后像素；前台位单独记录，最小化夹具要求目标不是前台，不将跨进程的前台权限当作等价保证。
 

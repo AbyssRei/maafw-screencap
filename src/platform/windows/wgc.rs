@@ -24,6 +24,22 @@ mod factory;
 #[path = "wgc_map_probe.rs"]
 pub(crate) mod map_probe;
 
+#[cfg(all(test, feature = "prototype-windows-com"))]
+#[path = "wgc_size_probe.rs"]
+pub(crate) mod size_probe;
+
+#[inline]
+pub(crate) fn item_size(item: &GraphicsCaptureItem) -> windows_core::Result<SizeInt32> {
+    #[cfg(all(test, feature = "prototype-windows-com"))]
+    {
+        size_probe::size(item)
+    }
+    #[cfg(not(all(test, feature = "prototype-windows-com")))]
+    {
+        item.Size()
+    }
+}
+
 /// # Safety
 /// Both textures belong to this live context's device and have compatible
 /// descriptions. The serial caller retains all three interfaces for the call.

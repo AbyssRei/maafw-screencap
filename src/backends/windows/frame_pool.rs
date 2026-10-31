@@ -331,7 +331,7 @@ impl<I> FramePoolCapture<I> {
             // Both factory references leave the source try-block before Size.
         }
         let item = self.item.as_ref().unwrap();
-        let size = exception("GraphicsCaptureItem.Size", item.Size())?;
+        let size = exception("GraphicsCaptureItem.Size", wgc::item_size(item))?;
         if size.Width <= 0 || size.Height <= 0 {
             return Err(Error::InvalidLayout);
         }
@@ -352,7 +352,7 @@ impl<I> FramePoolCapture<I> {
         // Keep the original second Size query at pool creation.
         // This argument is inside source's pool-creation try/catch; unlike
         // the first/last Size calls, its failure returns false from init.
-        let size = native("GraphicsCaptureItem.Size for pool", item.Size())?;
+        let size = native("GraphicsCaptureItem.Size for pool", wgc::item_size(item))?;
         self.pool = Some(native(
             "Direct3D11CaptureFramePool.Create",
             wgc::create_pool(&runtime, size),
@@ -371,7 +371,7 @@ impl<I> FramePoolCapture<I> {
         native("StartCapture", session.StartCapture())?;
         let size = exception(
             "GraphicsCaptureItem.Size",
-            self.item.as_ref().unwrap().Size(),
+            wgc::item_size(self.item.as_ref().unwrap()),
         )?;
         self.last_size = (size.Width, size.Height);
         Ok(())
@@ -385,7 +385,7 @@ impl<I> FramePoolCapture<I> {
         if !unsafe { IsWindow(Some(self.window)) }.as_bool() {
             return Err(Error::InvalidWindow);
         }
-        let size = match item.Size() {
+        let size = match wgc::item_size(item) {
             Ok(size) => size,
             Err(error) => {
                 self.uninit_into(evidence);

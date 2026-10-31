@@ -121,7 +121,16 @@ void mfs_observe_frame_content(winrt::Windows::Graphics::SizeInt32 size)
 #undef MAA_CTRL_UNIT_NS_END
 #define MAA_CTRL_UNIT_NS_BEGIN namespace MfsFrameQueryOriginal {
 #define MAA_CTRL_UNIT_NS_END }
+#if defined(MFS_FRAMEPOOL_SIZE_OBSERVER)
+// Every dependency of this header is already included above. Access changes
+// only for this separately compiled test class; its fields/layout stay intact.
+#define private public
+#endif
 #include "Screencap/FramePoolScreencap.h"
+#if defined(MFS_FRAMEPOOL_SIZE_OBSERVER)
+#undef private
+#include "framepool-size-probe.hpp"
+#endif
 #if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
 #include "framepool-map-probe.hpp"
 #define d3d_context_ ::mfs_map_probe::context(d3d_context_)
@@ -299,8 +308,14 @@ int empty_client(const std::filesystem::path& root, bool prepare_restore = false
 #if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
 #include "framepool-map-cases.hpp"
 #endif
+#if defined(MFS_FRAMEPOOL_SIZE_OBSERVER)
+#include "framepool-size-cases.hpp"
+#endif
 int wmain(int argc, wchar_t** argv)
 {
+#if defined(MFS_FRAMEPOOL_SIZE_OBSERVER)
+    if (argc == 3 && std::wstring_view(argv[1]) == L"--size-boundary") { return size_boundary(argv[2]); }
+#endif
 #if defined(MFS_FRAMEPOOL_MAP_OBSERVER)
     if (argc == 3 && std::wstring_view(argv[1]) == L"--map-boundary") { return map_boundary(argv[2]); }
 #endif

@@ -19,6 +19,10 @@ mod empty_client;
 mod map_boundary;
 
 #[cfg(feature = "prototype-windows-com")]
+#[path = "frame_pool_size_tests.rs"]
+mod size_boundary;
+
+#[cfg(feature = "prototype-windows-com")]
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host};
 
 #[test]
