@@ -429,6 +429,8 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 无 data 指针的 MemFd 映射已迁移，原 helper/手动描述符路径已有原生 Actions 对照，实际 NULL-data 流仍未验收。私有 rustix owner 保持原 `PROT_READ`、`MAP_PRIVATE`、零映射偏移及 maxsize/缺省 chunk.size 长度选择，只借用 native fd；目标行复制后先 unmap，再通知成功和归还 buffer，失败/展开同样释放映射。新增 fstat 验证实际文件覆盖目标行可读跨度；这项安全检查增加一次系统调用，不将其称为性能优化。非零 owned mapoffset 仍显式拒绝并留待完整来源/偏移审阅，不提前改为 P3 偏移处理。已有 SHM 指针仍由 native lease 保活；DMA-BUF 同步和完整清理失败矩阵仍未验收。
 
+`upstream-context pipewire` 另接入真实 MemFd 流的 NULL-data 受控入口，原生 Linux 编译/运行待验收。PipeWire 会为 MemFd 补回 MAPPABLE，因此采用只加载到两个独立消费进程的 ELF 测试介入：真实 dequeue 后暂时隐藏 `spa_data.data`，每个归还/异常清理边界先恢复原指针；保留真实 fd、chunk、布局、生产器、路由、MAP_BUFFERS 和完整原 C++。原版与 Rust 各要求 20 生命周期/60 次已知像素取帧、关闭后全部持帧、原生 fd/线程检查及 dequeue/restore 配平；Rust 另要求每次真实回调独立 map/unmap，且 DMA 计数为零。原版没有额外插桩复制/映射次数，记录为 unknown。`cargo xtask upstream-trace pipewire-memfd-stream <外部目录> [--check-only]` 校核 40 行记录、240 份原始/持帧图像及摘要，缺失、未恢复、残留 lease、错误计数或像素不符均失败。它不证明自然产生 NULL 的流、DMA/GPU、Portal、完整失败矩阵或 P1；既有 DMA 实际流通过记录保持独立。
+
 显式 MemFd helper 入口编译固定原 `ScopedBufferMap`，生成 20 个真实 memfd、60 组 padded/maxsize-zero/无 chunk 的 RGB/BGR 参考，检查原生只读/private VMA、unmap、fd 保留与覆盖/关闭后的持帧。Rust 对照 native `spa_data` 布局、60 次复制映射及 60 次单独权限观察映射，复制入口返回后要求 VMA 消失，关闭 fd 后保留 60 张 RGB/BGR；另检查负/过宽 fd、非零 mapoffset、短文件、空跨度和真实 mmap 权限失败。额外 60 次观察映射仅属于测试；不声称与源码映射次数或耗时相同，也不将手动 SPA 描述符当作真实 PipeWire callback/queue 验收。映射与 unmap 错误分别保留，未用后者覆盖首次复制错误。
 
 首个 owned MemFd 原生批次在 Linux 测试编译时因 rustix 权限错误常量拼写失败，尚未运行上述 helper 或任一取帧 probe；失败日志与诊断归档保留。常量修正后的后续原生批次通过上述 helper、六类拒绝及现有四条受控取帧路径；mmap 权限失败实际为 errno 13。Rust 的 60 次复制映射和 60 次额外权限观察映射各自 unmap 配平，未消费 native fd，关闭后保留 60 张 raw RGB 与 60 张 BGR。原 helper 的 60 张 RGB/BGR 和 60 份带填充输入另有独立像素/填充复算；本机格式/Clippy 不代替这些 Linux 结果，也不撤销此前失败。

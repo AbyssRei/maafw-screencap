@@ -24,6 +24,9 @@ mod reinit;
 #[path = "fd_fault_tests.rs"]
 mod fd_fault;
 
+#[path = "memfd_stream_tests.rs"]
+mod memfd_stream;
+
 struct RawAudit;
 impl Converter<RawFrame> for RawAudit {
     type Image = RawFrame;
@@ -162,22 +165,22 @@ fn marker(frame: &RawFrame) -> u32 {
 #[test]
 #[ignore = "explicit native Linux owned-daemon SHM driver probe, not full source/OpenCV parity"]
 fn captures_requested_shm_rows_and_retains_sixty_cpu_samples_after_shutdown() {
-    run_raw_probe(false, false);
+    run_raw_probe(false, false, false);
 }
 
 #[test]
 #[ignore = "explicit native supplied-socket success ownership, not Portal authorization/failure acceptance"]
 fn captures_supplied_fd_shm_and_closes_twenty_consumed_sockets() {
-    run_raw_probe(true, false);
+    run_raw_probe(true, false, false);
 }
 
 #[test]
 #[ignore = "requires the owned real kernel DMA producer and native source POD oracle"]
 fn captures_null_data_dma_stream_with_paired_sync_and_retained_cpu_samples() {
-    run_raw_probe(false, true);
+    run_raw_probe(false, true, false);
 }
 
-fn run_raw_probe(supplied_fd: bool, dma_stream: bool) {
+fn run_raw_probe(supplied_fd: bool, dma_stream: bool, memfd_stream: bool) {
     let socket = env::var("MFS_P0_PIPEWIRE_SOCKET").expect("explicit private producer socket");
     let remote = env::var("PIPEWIRE_REMOTE").expect("explicit private daemon name");
     let runtime = env::var("PIPEWIRE_RUNTIME_DIR").expect("explicit private runtime");
@@ -186,7 +189,9 @@ fn run_raw_probe(supplied_fd: bool, dma_stream: bool) {
         .unwrap()
         .parse::<u32>()
         .unwrap();
-    let directory = env::var(if dma_stream {
+    let directory = env::var(if memfd_stream {
+        "MFS_P1_PIPEWIRE_MEMFD_STREAM_ARTIFACTS"
+    } else if dma_stream {
         "MFS_P1_PIPEWIRE_DMA_STREAM_ARTIFACTS"
     } else if supplied_fd {
         "MFS_P1_PIPEWIRE_FD_ARTIFACTS"
@@ -228,7 +233,11 @@ fn run_raw_probe(supplied_fd: bool, dma_stream: bool) {
     task_snapshot(Path::new(&directory), "baseline", &baseline);
     let mut held = Vec::new();
     held.try_reserve_exact(60).unwrap();
+    let probe = memfd_stream.then(memfd_stream::Probe::new);
     for cycle in 0..20 {
+        if let Some(probe) = &probe {
+            probe.arm();
+        }
         // new is fallible only before it performs raw global initialization.
         let offered = supplied_fd.then(|| UnixStream::connect(&socket).unwrap());
         let native = if let Some(stream) = &offered {
@@ -280,6 +289,16 @@ fn run_raw_probe(supplied_fd: bool, dma_stream: bool) {
         consumer.reset_after_close();
         assert!(!native.connected());
         let evidence = native.evidence();
+        if let Some(probe) = &probe {
+            probe.finish(cycle, Path::new(&directory), &evidence);
+            for call in 0..3 {
+                fs::write(
+                    Path::new(&directory).join(format!("cycle-{cycle}-call-{call}-held.rgb")),
+                    held[cycle * 3 + call].0.pixels(),
+                )
+                .unwrap();
+            }
+        }
         assert_eq!(evidence.fault, 0, "{evidence:?}");
         assert_eq!(evidence.queue_error, 0, "{evidence:?}");
         assert_eq!(evidence.core_disconnect_error, 0, "{evidence:?}");
@@ -333,7 +352,11 @@ fn run_raw_probe(supplied_fd: bool, dma_stream: bool) {
     })
     .join()
     .unwrap();
-    if dma_stream {
+    if memfd_stream {
+        eprintln!(
+            "native Rust PipeWire MemFd NULL intervention cycles=20 captures=60 owning_maps=60 unmaps=60 restored_all=1 retained=60 passed"
+        );
+    } else if dma_stream {
         eprintln!(
             "native Rust PipeWire DMA stream cycles=20 captures=60 NULL_data=60 READ_START=60 READ_END=60 unmaps=60 retained=60 passed"
         );

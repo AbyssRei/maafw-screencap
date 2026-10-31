@@ -93,6 +93,8 @@ Linux manager 的 Input=None 编排、两分钟 PipeWire 长流及 Wlr 受控转
 | [C ABI 与回调契约](contracts/c-abi.md) | ABI 演进、声明生成、provider、回调和语言边界；P3 定案，P5 消费验收 |
 | [开发与验证指南](guides/development.md) | 当前可执行命令，以及准备/构建/测试任务的实施要求；明确区分已存在和计划入口 |
 
+真实 MemFd 流的 NULL-data 测试介入及独立记录校验已接入，原生 Linux 编译/运行待验收；既有 kernel DMA 实际流结果保持独立，范围见[开发指南](guides/development.md#当前仓库与本机命令)。
+
 ## 分层与变更规则
 
 - plans/ 回答做什么、阶段顺序和退出条件；保留计划第 1–18 节编号，详细规则以链接指向主题文档。

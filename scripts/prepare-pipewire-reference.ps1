@@ -95,6 +95,13 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Save $saved
     Step pipewire-fd-fault-linkage ldd @($fault)
     $env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY=$fault
+    $memfd=Join-Path $refBuild libmfs_pipewire_memfd_probe.so
+    if($memfd -match '[:\s]'){throw 'The explicit MemFd probe path cannot be encoded in LD_PRELOAD'}
+    $saved=Join-Path $refInputs libmfs_pipewire_memfd_probe.so
+    Copy-Item -LiteralPath $memfd -Destination $saved
+    Save $saved
+    Step pipewire-memfd-probe-linkage ldd @($memfd)
+    $env:MFS_P1_PIPEWIRE_MEMFD_PROBE_LIBRARY=$memfd
     $dma=Join-Path $refBuild libmfs_pipewire_dma_fixture.so
     $saved=Join-Path $refInputs libmfs_pipewire_dma_fixture.so
     Copy-Item -LiteralPath $dma -Destination $saved

@@ -89,6 +89,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected one real incoming NULL-data DMA test with paired native sync/unmap, queue and CPU owner checks'
             }
         }
+        if($Name -eq 'original-pipewire-memfd-stream' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original PipeWire MemFd NULL intervention cycles=20 captures=60 restored_all=1 retained=60 passed')) {
+            throw 'Expected twenty original real MemFd streams with restored native pointers and retained known BGR'
+        }
+        if($Name -eq 'rust-pipewire-memfd-stream') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('native Rust PipeWire MemFd NULL intervention cycles=20 captures=60 owning_maps=60 unmaps=60 restored_all=1 retained=60 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'Expected one real MemFd callback intervention test with sixty owning maps/unmaps and native pointer restoration'
+            }
+        }
         if ($Name -eq 'pipewire-fd-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_early_error result=null errno=\d+ input_fd_open=[01] observed') {
             throw 'Expected the real native early-error descriptor observation'
         }
@@ -705,6 +714,15 @@ try {
             $fdTest=Capture-TestProgram rust-pipewire-fd-retry-build
             Step rust-pipewire-supplied-fd-retry timeout @('--signal=TERM','--kill-after=5s','180s','env',"LD_PRELOAD=$env:MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY",$fdTest,'backends::linux::pipewire::native::tests::reinit::retries_proven_live_fd_after_native_add_io_failure_and_retains_both_sessions','--exact','--ignored','--test-threads=1','--nocapture')
         } catch { $failed=$true; Write-Host $_.Exception.Message }
+        . (Join-Path $PSScriptRoot validate-pipewire-memfd-stream.ps1)
+        try { Invoke-PipeWireMemFdStream }
+        catch {
+            $failed=$true
+            $memfdError=Join-Path $logsRoot pipewire-memfd-stream-error.log
+            $_.Exception.ToString()|Set-Content -LiteralPath $memfdError -Encoding utf8
+            $checks.Add([ordered]@{name='pipewire-memfd-stream-setup';status='failed';log=(Artifact $memfdError)})
+            Write-Host $_.Exception.Message
+        }
         # End the ordinary producer/route premise before starting a separate
         # kernel DMA producer. Product stream flags and routing policy stay U.
         StopOwned route-supervisor $routeSupervisor $routeOut $routeError

@@ -58,6 +58,7 @@ constexpr int WIDTH=28,HEIGHT=24;
 void require(bool condition,const char* message) {
     if(!condition) { throw std::runtime_error(message); }
 }
+#include "memfd-control.hpp"
 template<typename Function> Function fault_symbol(const char* name) {
     void* pointer=dlsym(RTLD_DEFAULT,name);
     const char* expected=std::getenv("MFS_P1_PIPEWIRE_FD_FAULT_LIBRARY");
@@ -1023,7 +1024,11 @@ int main(int argc,char** argv) {
             reinitialization_context(argv[2],node,argv[4],std::string_view(argv[1])=="--fd-retry");
             return 0;
         }
-        require(argc==4,"usage: source-context <private socket> <node ID> <artifact directory>");
+        const bool memfd_null=argc==5 && std::string_view(argv[1])=="--memfd-null";
+        if(memfd_null) { ++argv; --argc; }
+        std::optional<MemFdControl> memfd_control;
+        if(memfd_null) memfd_control.emplace();
+        require(argc==4,"usage: source-context [--memfd-null] <private socket> <node ID> <artifact directory>");
         const std::string_view id=argv[2];
         uint32_t node=0;
         const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
@@ -1042,6 +1047,7 @@ int main(int argc,char** argv) {
         uint32_t previous=0;
         for(int cycle=0;cycle<20;++cycle) {
             std::cout<<"source begin cycle="<<cycle<<'\n';
+            if(memfd_control) memfd_control->begin();
             const int fd=connect_socket(argv[1]);
             // Transfer the descriptor at the original constructor boundary.
             // Its native connect call consumes it. No second close on error.
@@ -1075,6 +1081,12 @@ int main(int argc,char** argv) {
             source->close();
             require(!source->connected(),"original source still connected after close");
             source.reset();
+            if(memfd_control) {
+                memfd_control->finish(cycle,artifacts);
+                for(int call=0;call<3;++call)
+                    save(held[static_cast<size_t>(cycle)*3+call].image,
+                        artifacts/("cycle-"+std::to_string(cycle)+"-call-"+std::to_string(call)+"-held.bgr"));
+            }
             errno=0;
             require(fcntl(fd,F_GETFD)==-1 && errno==EBADF,"source input socket still open after destruction");
             const size_t fds=count_entries("/proc/self/fd");
@@ -1129,6 +1141,8 @@ int main(int argc,char** argv) {
         save(held.front().image,artifacts/"first-after-shutdown.bgr");
         save(held.back().image,artifacts/"last-after-shutdown.bgr");
         std::cout<<"original PipeWire source cycles=20 captures=60 retained=60 passed\n";
+        if(memfd_null)
+            std::cout<<"original PipeWire MemFd NULL intervention cycles=20 captures=60 restored_all=1 retained=60 passed\n";
         return 0;
 #endif
     } catch(const std::exception& error) {

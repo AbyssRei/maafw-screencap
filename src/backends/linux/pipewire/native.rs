@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! First native driver slice: daemon/unsafe supplied-FD source connection and
 //! requested-frame copies from readable SHM/owned MemFd/DMA mappings. General FD
-//! ownership, native incoming DMA/NULL-data streams and full P1 remain unfinished.
+//! ownership and full P1 remain unfinished. Scoped native kernel DMA streams
+//! passed separately; controlled NULL-data MemFd stream acceptance is pending.
 use super::{
     Driver, Format,
     buffer::{Chunk, CopyError, CopyEvidence, Layout, RawCache, RawFrame},
