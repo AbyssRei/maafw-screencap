@@ -145,7 +145,8 @@ impl<'a> InfoObjects for Objects<'a> {
     }
     fn set_custom_type(&self, info: &mut Info<'a>) -> Result<(), i32> {
         // SAFETY: Unique object borrow. Adapter also rejects this operation
-        // while a native stack StringBuffer scope is still active.
+        // before this operation's own StringBuffer scope ends. An enclosing
+        // reentrant callback's separate buffer is allowed to remain alive.
         status(unsafe { (self.0.metadata.set_type)(info.pointer.as_ptr()) })
     }
 }

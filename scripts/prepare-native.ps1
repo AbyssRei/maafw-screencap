@@ -53,7 +53,7 @@ $customEvidence = ''
 $delegateEvidence = ''
 if($CustomParity -and ($Desktop -or $GdiParity -or $FramePoolContext)) {throw 'Custom parity is an independent callback entry without desktop/GDI prerequisites'}
 if($CustomParity) {
-    $pending.Add('Private Custom screenshot slice only: actual fixed callback table, selected original manager bodies, unchanged raw C setter and real MaaUtils ImageBuffer/vtable. Rust preserves synchronous nonzero-byte callback, borrowed table/context, false output and true-empty semantics; real Mat heads retain CPU storage after temporary buffer/context/input destruction. Ninety-six source/Rust cases and native callback exception/subsequent distinct capture are explicit. Native ABI/raw types use actual compiled header values, never frozen OpenCV 4 type packing. Additional selected-body UUID/features and metadata gates use actual StringBuffer/meojson and retain original scope/order/bytes. Capture-side original create/destroy and actual public virtual consumers now have a separate same-manager gate with in-scope caller publication. Input/app/shell actions, framework loader, general failures/reentrancy, encoded/resize/all-type and all-platform/full P1 remain unaccepted. Opaque acceptance Mat/object heads add bookkeeping allocations; default product/core custom feature has no OpenCV/JSON dependency.')
+    $pending.Add('Private Custom screenshot slice only: actual fixed callback table, selected original manager bodies, unchanged raw C setter and real MaaUtils ImageBuffer/vtable. Rust preserves synchronous nonzero-byte callback, borrowed table/context, false output and true-empty semantics; real Mat heads retain CPU storage after temporary buffer/context/input destruction. Ninety-six source/Rust cases and native callback exception/subsequent distinct capture are explicit. Native ABI/raw types use actual compiled header values, never frozen OpenCV 4 type packing. Additional selected-body UUID/features and metadata gates use actual StringBuffer/meojson and retain original scope/order/bytes. Capture-side original create/destroy and actual public virtual consumers now have a separate same-manager gate with in-scope caller publication. The separate 7x7 same-unit synchronous nested-callback gate checks distinct native callers, actual nested C++ exceptions, per-operation scopes and retained values. Input/app/shell actions, framework loader, general failures, concurrent/destruction reentrancy, encoded/resize/all-type and all-platform/full P1 remain unaccepted. Opaque acceptance Mat/object heads add bookkeeping allocations; default product/core custom feature has no OpenCV/JSON dependency.')
 }
 if ($PipeWireControl) {
     $pending.Add('Portable PipeWire consumer control model only. Compile fixed loop_wait_until/LoopLocker, format table, connected/inactive/wait_for_frame_locked/screencap bodies with explicit fake loop/clock and symbolic format IDs, real OpenCV Mat owners/conversion. Compare 74 scripts and 118 operations, including ignored set_active errors, whole-second waits/spurious wakes, third/fourth timeout boundary, disconnected predicates, cached owner reuse and conversion after unlock. This does not compile the full original Linux class, SPA numeric ABI or native PipeWire setup/POD/stream/buffer/teardown. The private Rust driver interface is not a native driver. Existing Linux native coverage remains the P0 prototype; no Linux backend or P1 acceptance.')
@@ -248,6 +248,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
                -not $observed.Contains('Custom native API lifecycles=20 source_rust_virtual_queries=1308 actual_create_destroy=1 public_bases=15 rust_drop_callbacks=20 scoped_caller_publications=112 retained_pixel_pairs=20 input_actions=0 passed')){
                 throw 'Expected actual Custom public create/destroy, virtual dispatch and in-scope caller publication'
+            }
+        }
+        if($Name -eq 'custom-reentry-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('Custom reentry lifecycles=20 operation_pairs=49 fault_variants=2 actual_queries=7840 nested_cpp_exceptions=1960 held_native_values=240 scope_controls=7 input_actions=0 passed')){
+                throw 'Expected complete Custom nested virtual callbacks, exceptions and per-operation scope controls'
             }
         }
         if($Name -eq 'manager-delegate-parity' -and $exitCode -eq 0) {
@@ -661,6 +668,8 @@ try {
         Step custom-metadata-records $ConfigureTool @('upstream-trace','custom-metadata',(Join-Path $customEvidence metadata))
         Step custom-api-parity cargo ($customArgs+@('backends::custom::native_tests::native_api::consumes_original_creation_virtual_capture_and_destruction_with_rust_manager','--','--exact','--ignored','--test-threads=1','--nocapture'))
         Step custom-api-records $ConfigureTool @('upstream-trace','custom-native-api',(Join-Path $customEvidence native-api))
+        Step custom-reentry-parity cargo ($customArgs+@('backends::custom::native_tests::native_api::reentry::preserves_same_unit_nested_queries_faults_and_independent_callers','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-reentry-records $ConfigureTool @('upstream-trace','custom-reentry',(Join-Path $customEvidence reentry))
         $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
         if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
         Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))

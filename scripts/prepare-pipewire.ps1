@@ -67,6 +67,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'custom-native-parity'){Assert-CustomNativeLog (Get-Content -LiteralPath $log -Raw)}
         if($Name -eq 'custom-metadata-parity'){Assert-CustomMetadataLog (Get-Content -LiteralPath $log -Raw)}
         if($Name -eq 'custom-api-parity'){Assert-CustomApiLog (Get-Content -LiteralPath $log -Raw)}
+        if($Name -eq 'custom-reentry-parity'){Assert-CustomReentryLog (Get-Content -LiteralPath $log -Raw)}
         if($Name -eq 'custom-core-runtime-tree'){Assert-CustomRuntimeTree (Get-Content -LiteralPath $log -Raw)}
         if ($Name -eq 'rust-pipewire-consumer-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;') {
             throw 'Expected four portable consumer tests; the external source oracle remains explicitly ignored on this Linux entry'

@@ -37,12 +37,20 @@ struct CustomControlUnitMgr {
 namespace {
 std::atomic<uint64_t> images=0,contexts=0,entered=0,exited=0;
 std::atomic<uint64_t> uuid_entered=0,uuid_exited=0,uuid_outputs=0;
-thread_local uint32_t active_string_scopes=0;
-thread_local uint32_t active_image_scopes=0;
+struct Scope;
+thread_local Scope* current_image_scope=nullptr;
+struct StringScope;
+thread_local StringScope* current_string_scope=nullptr;
+thread_local uint64_t string_scope_identity=0;
+uint64_t current_string_identity() noexcept;
 std::atomic<uint64_t> info_counts[5]{}; // live, empty, parse attempts, parsed objects, type sets
 struct Info {
     json::object value;
-    explicit Info(json::object object):value(std::move(object)){++info_counts[0];}
+    // Type replacement belongs after this operation's own temporary buffer,
+    // while any enclosing reentrant operation's buffer may still be alive.
+    uint64_t type_scope;
+    explicit Info(json::object object,uint64_t scope=current_string_identity())
+        :value(std::move(object)),type_scope(scope){++info_counts[0];}
     ~Info(){--info_counts[0];}
 };
 struct UuidOutput {
@@ -51,9 +59,19 @@ struct UuidOutput {
     ~UuidOutput(){--uuid_outputs;}
 };
 struct StringScope {
-    StringScope(){++uuid_entered;++active_string_scopes;}
-    ~StringScope(){--active_string_scopes;++uuid_exited;}
+    StringScope* previous=current_string_scope;
+    MaaStringBuffer* buffer=nullptr;
+    uint64_t identity;
+    StringScope(){
+        if(string_scope_identity==UINT64_MAX)throw std::overflow_error("Custom scope identity exhausted");
+        identity=++string_scope_identity;current_string_scope=this;
+        ++uuid_entered;
+    }
+    StringScope(const StringScope&)=delete;
+    StringScope& operator=(const StringScope&)=delete;
+    ~StringScope(){current_string_scope=previous;++uuid_exited;}
 };
+uint64_t current_string_identity() noexcept {return current_string_scope?current_string_scope->identity:0;}
 struct Image {
     cv::Mat value;
     explicit Image(cv::Mat v):value(std::move(v)) {++images;}
@@ -67,8 +85,11 @@ struct Context {
     ~Context() {--contexts;}
 };
 struct Scope {
-    Scope(){++entered;++active_image_scopes;}
-    ~Scope(){--active_image_scopes;++exited;}
+    Scope* previous=current_image_scope;
+    Scope(){current_image_scope=this;++entered;}
+    Scope(const Scope&)=delete;
+    Scope& operator=(const Scope&)=delete;
+    ~Scope(){current_image_scope=previous;++exited;}
 };
 template<class F> int32_t guarded(F&& f) noexcept {
     try {return f();}catch(const cv::Exception&){return 2;}
@@ -220,7 +241,7 @@ int32_t mfs_custom_features(void* context,uint8_t source,uint64_t* result) noexc
 }
 int32_t mfs_custom_string_scope(MfsCustomStringScope action,void* argument) noexcept {
     if(!action)return 1;
-    return guarded([&]{StringScope scope;MAA_NS::StringBuffer buffer;return action(argument,&buffer);});
+    return guarded([&]{StringScope scope;MAA_NS::StringBuffer buffer;scope.buffer=&buffer;return action(argument,&buffer);});
 }
 int32_t mfs_custom_string_set(MaaStringBuffer* buffer,const uint8_t* bytes,size_t length) noexcept {
     if(!buffer || !readable(bytes,length))return 1;
@@ -270,14 +291,15 @@ int32_t mfs_custom_info_empty(void** output) noexcept {
 }
 int32_t mfs_custom_info_parse(MaaStringBuffer* buffer,void** output) noexcept {
     if(!output)return 1;*output=nullptr;
-    if(!buffer || active_string_scopes!=1)return 1;
+    if(!buffer || !current_string_scope || current_string_scope->buffer!=buffer)return 1;
     return guarded([&]{++info_counts[2];auto parsed=json::parse(buffer->get());
         if(!parsed || !parsed->is_object())return 0;
         // Exact source as_object copy, obtained before stack StringBuffer ends.
-        *output=new Info(parsed->as_object());++info_counts[3];return 0;});
+        const auto parent=current_string_scope->previous;
+        *output=new Info(parsed->as_object(),parent?parent->identity:0);++info_counts[3];return 0;});
 }
 int32_t mfs_custom_info_type(void* info) noexcept {
-    if(!info || active_string_scopes!=0)return 1;
+    if(!info || static_cast<Info*>(info)->type_scope!=current_string_identity())return 1;
     return guarded([&]{static_cast<Info*>(info)->value["type"]="custom";++info_counts[4];return 0;});
 }
 int32_t mfs_custom_info_source(void* context,void** output) noexcept {

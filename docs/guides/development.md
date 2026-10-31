@@ -62,6 +62,12 @@ Custom 的 `get_info` 现也迁移至同一私有 Rust manager。Rust 保留默�
 
 Custom 另新增 null 回调表的私有创建拒绝和真实原生接口消费：完整原 API/manager 两份 cpp、原公共头和基类按固定 F 编译，仅覆盖日志；真实 `MaaCustomControlUnitCreate/Destroy` 和 C++ 虚表消费捕获、连接、身份、能力及元数据，同一 Rust manager 经窄测试桥接入。原输入方法仅为编译完整参考类保留；Rust 测试类未调用的输入/app/shell 槽返回 false，不构成输入迁移或完整 framework 接口承诺。Windows 归档输入的二十轮生命周期及 1,308 次源码/Rust 虚接口查询、四组实际基类/混入类型、七类真实回调异常及后续独立调用、二十次实际析构后的 Rust 状态通知均通过。原生调用方的 56 次 Mat 替换与 56 次 UUID 替换均在其临时 buffer 存活时完成；作用域外调用被拒绝，metadata 继续保持原解析/替换顺序。最初字节正确但延后原生调用方替换的桥已保存为诊断快照，不作所有权时序验收。二十对真实 Mat、字符串和对象持有至 unit/context/回调状态结束后，独立 CPU 像素在模块卸载后跨线程读取。opaque head 增加记账分配，独立 Rust UUID 表示增加字节复制；没有第二份整帧复制。`upstream-trace custom-native-api <外部 native-api 目录> [--check-only]` 独立复算实际输出、布局、调用顺序及作用域/owner 记录，并复核同批原生图像 ABI；六种篡改记录均被拒绝。后续本机/Linux 原生入口见下文；macOS、通用故障/重入和 framework loader 继续待验证，控制计数不是一般堆泄漏证明，完整 P1/SDK 未验收。
 
+Custom 另新增同一存活对象的同步回调重入入口：connect、connected、inactive、features、UUID、screencap、get_info 七种外层回调各嵌套七种真实虚接口操作，分别执行正常内层调用与回调内临时替换原表项后抛出真实 C++ 异常，再恢复同一借用表并继续外层操作。Windows 显式归档依赖下二十轮生命周期，Debug/Release 各通过 7,840 次源码/Rust 虚接口查询与 1,960 次嵌套异常；内外层 UUID、图像和 JSON 使用不同内容，240 个原生值跨过 unit/context 销毁仍保持，独立 CPU 字节在模块卸载后跨线程读取。
+
+首个实际对照中，原 C++ 的 UUID→UUID 成功，Rust 验收桥因要求 active scopes=1 而返回错误 1；原失败、当时 Rust 程序与原 DLL 均保留。仅修正私有验收桥：图像作用域使用 owner-thread 栈，字符串作用域另绑定真实 buffer 和单调身份，metadata 记录本操作结束后应恢复的外层身份。它允许内层完成时外层 buffer 仍存活，保持每个操作自己的 parse/as_object 发生在 buffer 内、实际 Mat/UUID 发布发生在其 buffer 结束前、type 替换发生在自己的 buffer 结束后。七项控制仍拒绝作用域外发布、跨当前 buffer 解析、内层存活时提前替换外层值及内层自身提前替换；两层分别结束后的正确替换与字节也须通过。未修改原源码或核心 manager 的行为。
+
+`upstream-trace custom-reentry <外部 reentry 目录> [--check-only]` 独立复算 4,728 份实际数据、回调顺序/深度、完整能力位、Mat 布局/owner、内外层输出、scope 控制与释放记录；七种宽度、深度、控制、owner、像素、持有值和析构篡改均被拒绝。既有图像 96 例、身份 64 例、metadata 592 例及真实 API 1,308 次查询回归通过。Windows 与 Unix 原生脚本均接入新精确测试、完整摘要/零测试拒绝及独立记录复算；新在线/其他平台门禁尚待执行。这只是同 owner channel、一次嵌套的来源行为对照，不定义公共 SDK 允许的重入、并发使用或活动销毁，通用分配失败、framework loader 和完整 P1 仍未验收。
+
 用户更新后，VS2026 `18.11.3 / 18.11.12328.437` 与 SDK `10.0.28000.2957` 的新正式在线批次通过全部 25 项原生检查；实际参考编译器为 MSVC `19.51.36260.0`。准备、编译及验证期间产品源码保持不变，独立核对了 2,930 项输入/日志、固定 F 的 76 份来源及全部 392 个产品 Git 文件。图像、UUID、元数据和实际 C 创建/销毁/虚表门禁均通过，测试二进制与锁文件另存。
 
 [Actions 41147180960](https://github.com/AbyssRei/maafw-screencap/actions/runs/41147180960) 的 Linux 133 项组件检查及下载后 33,283 份可用登记文件校核亦通过；两平台各十份原 Custom API/manager/公共头与 F 原字节一致，真实编译命令消费这些来源，612 份 API 数据及 1,193 份元数据字节跨平台一致。轻量 Linux 包不含完整依赖与产品快照，不将其描述为完整源码归档审计。

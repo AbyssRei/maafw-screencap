@@ -138,7 +138,7 @@ int32_t mfs_custom_unit_fault(void* context,uint32_t operation) noexcept {
     return 0;
 }
 int32_t mfs_custom_unit_publish_image(void* destination,void* image) noexcept {
-    if(!destination || !image || active_image_scopes!=1)return 1;
+    if(!destination || !image || !current_image_scope)return 1;
     return guarded([&]{
         // The Mat head was obtained from this live ImageBuffer before entering
         // this function. Move its real storage to the actual caller now, so no
@@ -147,7 +147,7 @@ int32_t mfs_custom_unit_publish_image(void* destination,void* image) noexcept {
         ++unit_counts[6];return 0;});
 }
 int32_t mfs_custom_unit_publish_uuid(void* destination,MaaStringBuffer* buffer) noexcept {
-    if(!destination || !buffer || active_string_scopes!=1)return 1;
+    if(!destination || !buffer || !current_string_scope || current_string_scope->buffer!=buffer)return 1;
     return guarded([&]{
         // Same original std::string assignment, including reuse/empty/NUL
         // semantics, while the original temporary buffer is still alive.

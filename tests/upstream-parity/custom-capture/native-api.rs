@@ -3,6 +3,8 @@
 //! Consume real original C creation/destruction and actual public C++ vtables.
 //! Rust callbacks route only capture/identity/info to the same private manager.
 use super::*;
+#[path = "native-reentry.rs"]
+mod reentry;
 use metadata::{Info, Objects};
 use std::{
     ffi::{CStr, c_char},
