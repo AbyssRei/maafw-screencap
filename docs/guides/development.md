@@ -445,13 +445,17 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 无 data 指针的 MemFd 映射已迁移，原 helper/手动描述符路径已有原生 Actions 对照，真实流的受控 NULL-data 对照见下文；自然产生 NULL 指针的来源仍未覆盖。私有 rustix owner 保持原 `PROT_READ`、`MAP_PRIVATE`、零映射偏移及 maxsize/缺省 chunk.size 长度选择，只借用 native fd；目标行复制后先 unmap，再通知成功和归还 buffer，失败/展开同样释放映射。新增 fstat 验证实际文件覆盖目标行可读跨度；这项安全检查增加一次系统调用，不将其称为性能优化。非零 owned mapoffset 仍显式拒绝并留待完整来源/偏移审阅，不提前改为 P3 偏移处理。已有 SHM 指针仍由 native lease 保活；DMA-BUF 同步和完整清理失败矩阵仍未验收。
 
-`upstream-context pipewire` 新增普通真实流的七格式入口（RGB、RGBA、RGBx、BGR、BGRA、BGRx、YUY2）；初版局部原生结果见下文，修正版完整矩阵仍待验证。它沿用现有自有 daemon/精确路由和生产器，显式格式模式提供两种交替 raw 图样及十二字节行填充，不改变默认 P0 和原 RGB 序号模式。原完整 C++ 与 Rust 每格式各要求二十生命周期、六十张即时/关闭后持帧、两种实际图样及 native fd/线程退出；Rust 另检查真实协商后的 raw 格式/紧致行、独立 CPU owner、复制/归还配平、原转换分支和 BGR 同一存储复用。保留 raw 的测试观察会阻止 cache 存储复用，不作为默认分配量或性能对照。
+`upstream-context pipewire` 新增普通真实流的七格式入口（RGB、RGBA、RGBx、BGR、BGRA、BGRx、YUY2）；初版及修正版受控原生结果见下文，完整来源与 P1 验收仍单独核对。它沿用现有自有 daemon/精确路由和生产器，显式格式模式提供两种交替 raw 图样及十二字节行填充，不改变默认 P0 和原 RGB 序号模式。原完整 C++ 与 Rust 每格式各要求二十生命周期、六十张即时/关闭后持帧、两种实际图样及 native fd/线程退出；Rust 另检查真实协商后的 raw 格式/紧致行、独立 CPU owner、复制/归还配平、原转换分支和 BGR 同一存储复用。保留 raw 的测试观察会阻止 cache 存储复用，不作为默认分配量或性能对照。
 
 `cargo xtask upstream-trace pipewire-format-stream <外部目录> [--check-only]` 独立复算原始图样、行填充和 RGB/BGR/四通道转换；YUY2 使用与当前 OpenCV 一致的 BT.601 定点舍入/饱和公式。它要求十四份完整调用表、七份原版关闭后持有表、二十八份原表/OpenCV oracle 和 2,534 份即时/持帧字节，不能只比较共用转换器。Windows/OpenCV 生成的合成记录通过本机 checker，十二组缺失/重复/像素/填充/持帧/报告破坏被拒绝；这只验证夹具和记录逻辑，不是 Linux 编译、真实流或 P1 验收。Portal/GPU、动态重协商及完整故障矩阵仍未覆盖。
 
 源码复核发现上述入口初版误要求原版 BGR 的早期输出始终不变：F 的 `latest_frame_.create` 加 `memcpy` 会复用同尺寸 Mat，BGR 返回的浅头共享该缓存，后续捕获会改写早期像素；其他六格式经转换得到独立 BGR。校核现分别要求原版 BGR 的三个同生命周期头地址相同、关闭后均匹配该周期最后一次输出，并保留即时与关闭后图样；Rust 则验证既有 CPU 所有权适配在仍有持帧时分配新存储，原始与 BGR 持帧不变。这是已有安全适配的显式差异，未修改产品或原版算法。实际新 C++ 验收头在 Windows/OpenCV 的自有 helper 控制中观察到 40 对缓存别名、20 次早期输出被覆写；SPA 枚举在该控制中为符号替身，没有执行 Linux 流。原生 Linux 结果及初版批次各保留自己的实际状态。
 
-初版确切 `bf5303a125747f2926a9f94150b644820eb1f29e` 的 [Actions 41247571643](https://github.com/AbyssRei/maafw-screencap/actions/runs/41247571643) PipeWire 组件实际为 192/194 项通过：七种 Rust 流均通过 420 次捕获及原始/BGR 持帧，六种原版转换格式通过 360 次捕获。原版 BGR 完成第零周期三次捕获后，旧持帧不变断言失败；其即时/持帧文件确认第二次输出由 phase 0 被改写为最后一次的 phase 1，随后初版 checker 严格拒绝缺少调用行。官方 ZIP、43,006 个可用登记路径、2,418 份捕获/持帧字节和二十八份 Linux oracle 均独立核对；oracle 与已独立复算的 Windows/OpenCV 夹具一致，含 YUY2。轻量包的完整来源输入仍待补；初版两个失败不改写为通过。修正版确切 `206755e` 的原生完整矩阵仍在运行，不能据初版局部通过或缓存覆写见证接受整批或 P1。
+初版确切 `bf5303a125747f2926a9f94150b644820eb1f29e` 的 [Actions 41247571643](https://github.com/AbyssRei/maafw-screencap/actions/runs/41247571643) PipeWire 组件实际为 192/194 项通过：七种 Rust 流均通过 420 次捕获及原始/BGR 持帧，六种原版转换格式通过 360 次捕获。原版 BGR 完成第零周期三次捕获后，旧持帧不变断言失败；其即时/持帧文件确认第二次输出由 phase 0 被改写为最后一次的 phase 1，随后初版 checker 严格拒绝缺少调用行。官方 ZIP、43,006 个可用登记路径、2,418 份捕获/持帧字节和二十八份 Linux oracle 均独立核对；oracle 与已独立复算的 Windows/OpenCV 夹具一致，含 YUY2。轻量包当时缺少的 87 项来源输入随后由完整归档补齐，初版两个失败不改写为通过；修正版范围见下文，不据此接受整个 job 或 P1。
+
+初版同一 run 的完整官方 Linux ZIP/tar 随后核对全部十九份清单、82,123 个登记路径、十八份普通 444 文件 Git 快照、一份不可构建控制、76 个 F blob 和实际 CMake 来源。全部 43,093 个 PipeWire native 路径及原始内外清单与轻量包匹配，补齐 87 项输入；原版 BGR 持帧断言和不完整 checker 仍失败，来源核对不将其改为通过。
+
+修正版确切 `206755edd8efa4bfaa023d2b957c917bbfc08e69` 的 [Actions 41248794571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41248794571) PipeWire 组件通过全部 195 项检查；比初版多一项缓存未命中的 `source-drm-clone`，没有删除原检查。七格式原版/Rust 各完成 140 生命周期、420 次捕获；独立下载复核 43,088 个可用登记路径、2,534 份实际即时/持帧字节、28 份 oracle 和 21 份表。原版 BGR 实际记录四十对缓存别名及二十次早期持帧被覆盖；Rust 既有所有权适配保留不变 raw/BGR。轻量包仍缺 87 项完整来源输入。同一 run 的另一个 PipeWire P0 命令在显式配置阶段失败、尚未运行其取帧；macOS 实际日志仍为正式 Xcode 27.2/27B52 缺失。组件通过不代替这些独立失败或整个 Linux job/P1 验收。
 
 确切 `8f75fef1cad09d386a39f9debbf3f59e497d51d4` 的 [Actions 41243712698](https://github.com/AbyssRei/maafw-screencap/actions/runs/41243712698) FramePool 组件为 61/67 项通过。原四项 pseudo 颜色失败保留，Rust Size 另在第 16 周期恢复时记录 marker `[31,83,167]`，尚未保存恢复图和对应完整行，随后严格 checker 拒绝缺失 Size 调用；不能据 marker 推断完整图像或根因。Size 失败后八项独立 factory/调用环境/生命周期/参考捕获检查仍执行并通过，失败状态和整批失败均保留。下载后五项其他 FramePool 数据校验通过，Size 仍严格失败；2,540 个轻量登记路径核对，缺少的 88 项输入随后由完整归档全部补齐。
 
@@ -674,7 +678,7 @@ ScreenDC 步骤结束后另立即上传 `p1-windows-screen-dc-diagnostics`，包
 
 配置中 Windows 检查 VS2026 MSVC x64 与 SDK 库；PipeWire 检查 pkg-config 的 PipeWire/SPA、原型 v1_2_0 所需版本、clang 与 libclang 文件；Wlr 检查 system libwayland-client；macOS 检查原生 SDK/framework stub。非标准 libclang 安装通过 LIBCLANG_PATH/LLVM_CONFIG_PATH 指明。探测不代替生成器实际加载、编译/链接、运行时能力、权限和真实捕获。现有原生原型入口在依赖准备后传入配置，`build.rs` 根据 TARGET/CARGO_CFG_TARGET_OS 复验本机目标、准确 feature 集及选中依赖的相同探测证据；SDK、版本或路径漂移时要求重新准备。旧格式仅保留归档解释，新原生构建使用含证据的新配置；只向 OUT_DIR 写归一化配置/声明，声明配置、环境和发现文件的增量失效输入，不在 Cargo 启动后改变后端选择。
 
-共用 `configure-prototype.ps1` 现在先保存子进程退出码并打印已捕获的标准输出，再检查失败和返回路径；原先失败时会在打印前抛出异常，丢失该输出。Windows PowerShell 隔离控制确认非零子进程仍以相同异常和退出码 17 失败，四族八次原/新成功调用的参数与配置路径也一致。该控制使用配置替身，没有执行原生配置或取帧；它不把 Actions 41248794571 的另一次 PipeWire P0 显式配置失败改为通过，实际子配置失败原因继续按归档记录审阅。
+共用 `configure-prototype.ps1` 现在先保存子进程退出码并打印已捕获的标准输出，再检查失败和返回路径；原先失败时会在打印前抛出异常，丢失该输出。Windows 上的 PowerShell 隔离控制确认非零子进程仍以相同异常和退出码 17 失败，四族八次原/新成功调用的参数与配置路径也一致。该控制使用配置替身，没有执行原生配置或取帧；它不把 Actions 41248794571 的另一次 PipeWire P0 显式配置失败改为通过，实际子配置失败原因继续按归档记录审阅。
 
 `configuration-check` 验证 OFF 的真实构建、配置/feature 不匹配拒绝、不可发现依赖下的 AUTO 禁用与 ON 失败；Windows/macOS 使用明确指向空目录的 SDK/开发目录，Linux 隔离 pkg-config 搜索目录。它还复制源码到 deps 独立消费者，先证明含 compile_error 的捕获入口无法构建，再以空 Cargo home、归档 vendor 和独立 target 编译运行该消费者的 xtask，证明准备入口不依赖可构建的捕获 crate。预期拒绝及其原记录保留，不能重标为原生取帧通过。每个原生 Actions 平台执行这些检查，结果按实际批次记录。
 
