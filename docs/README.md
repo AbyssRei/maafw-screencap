@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Actions 现按[计划 §5.6](plans/maafw-screencap-extraction-plan.md#56-依赖选型与最新版本策略)使用 runner 可用的预装工具，记录实际版本与能力；版本落后于最新发布或发布查询不可用均不阻断 CI。本机默认最新策略保留。确切 `682e629` 的整个 Linux 原生 job 已通过；macOS 已越过旧 Xcode 版本门禁，P0 捕获与 manager 原接口查询通过，P1 的十二项显示/夹具及记录失败仍保留。下文较早批次的正式 Xcode 缺失属于历史结果，当前完整 P1 仍未通过，详见[本轮 CI 复核](guides/development.md#本轮原生与-ci-复核)。
+
 Windows manager 的 63 个非空方法组合已全部通过本机连续三轮原生/数据测试及独立汇总，输入为零。另一次 Query/Map/Size 回归中，Map/Size 三轮通过；原版 Query 第二轮发生已卸载 GraphicsCapture.dll 的执行访问冲突，记录校核失败，保留失败。确切2d2898f的 Linux 官方产物及24组数据复核亦通过，完整来源、托管 Windows 和 P1 总体验收仍待完成。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
 确切 ffcb3a0 的 Actions 41254680236 已通过 PipeWire 194 项和 Wlr 135 项组件检查；官方 ZIP、51,625 个可用登记路径及 24 组下载后数据检查独立复核通过。已用 Windows 长路径修正 136 项误记缺失，轻量包仍缺完整来源输入；Windows 四项原版 FramePool pseudo 失败及 macOS 正式 Xcode 门禁保持实际状态，不接受完整 P1。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
@@ -10,7 +12,7 @@ FramePool Query/Map/Size 的失败记录已前移至严格像素断言之前；M
 
 Windows 原生 manager 的方法组合入口与 CI 编排已扩展至全部 63 个非空 mask；旧 FramePool 批次因一次 810ms 监听缺口作废并封存。修订观察器后，同一原生程序的 mask 2–5 已连续三轮通过且原始输入/像素独立复核有效，连同既有 mask 1 构成当时的有效前缀；随后全部 63 项的汇总结果见上文。每项保留原二十生命周期、像素与持帧断言及独立输入监测，实际边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
-macOS 私有 Input=None features 及同 manager 的原工厂/虚接口查询消费已补齐；Windows 归档输入 Debug/Release 的受控不可用分支通过，真实 Mac 构建和执行仍待正式 Xcode runner。完整 P1 未完成，实际入口、计数及适配边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
+macOS 私有 Input=None features 及同 manager 的原工厂/虚接口查询消费已补齐；Windows 归档输入 Debug/Release 的受控不可用分支通过，确切 `e243fee` 的原生 Mac 入口亦已通过，下载后独立核对 528 组快照及 2,113 次虚接口调用。它只接受查询切片；轻量包仍缺六十项完整输入，显示取帧与完整 P1 未完成，实际入口、计数及适配边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
 2026-10-31 当前本机结论按用户要求以各原程序最新的[连续三轮无输入复测](guides/development.md#本次连续三轮无输入复测)为准。36 份候选历史失败日志对应的程序/配置已全部完成有效三轮，另保留七种原 FramePool 模式；三批共 132 次调用，按原日志配置计为 5 份通过、31 份失败，待补为零。新增 23 份的 69 次调用连续约 362 秒，原始/低级鼠标键盘事件为零、系统输入计时和光标不变，最大采样间隔 79.87ms，监听已确认注销。失败按实际像素/资源断言、加载、配置或测试假设区分，不能全部视为库缺陷。该范围是已枚举的 36 份历史失败日志，不宣称每个曾构建的可执行文件都已穷举；完整 P1 未通过。
 
