@@ -67,7 +67,10 @@ fn pixels(image: &Image, scope: [i32; 4]) -> bool {
 fn captures_selected_method_through_original_and_rust_factories()
 -> Result<(), Box<dyn std::error::Error>> {
     let method: u64 = std::env::var("MFS_DELEGATE_CAPTURE_METHOD")?.parse()?;
-    assert!([1, 2, 4, 8, 16, 32, 63].contains(&method));
+    // Exercise every nonempty subset of the six original method bits. Native
+    // timing may choose different winners on each side; validate each output
+    // using its own selected method and original monitor/window geometry.
+    assert!((1..=63).contains(&method));
     let build = std::fs::canonicalize(PathBuf::from(
         std::env::var_os("MFS_DELEGATE_NATIVE_BUILD").ok_or("native build required")?,
     ))?;

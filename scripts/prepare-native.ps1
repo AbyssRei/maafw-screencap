@@ -410,7 +410,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             & $ConfigureTool upstream-delegate win32-factory $env:MFS_DELEGATE_FACTORY_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual factory construction records failed independent verification'}
         }
-        if($Name -match '^manager-delegate-runtime-(1|2|4|8|16|32|63)$' -and $exitCode -eq 0) {
+        if($Name -match '^manager-delegate-runtime-([1-9]|[1-5][0-9]|6[0-3])$' -and $exitCode -eq 0) {
             $runtimeMask=$Matches[1]
             $observed=Get-Content -LiteralPath $logPath -Raw
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -1148,7 +1148,7 @@ try {
             }
             try {Step 'manager-size-records' $ConfigureTool @('upstream-trace','manager-size',$managerSizeEvidence)}
             catch {$failed=$true;Write-Host $_.Exception.Message}
-            foreach($runtimeMask in @(1,2,4,8,16,32,63)) {
+            foreach($runtimeMask in 1..63) {
                 $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$runtimeMask
                 $env:MFS_DELEGATE_RUNTIME_RECORDS=Join-Path $delegateRuntimeEvidence "method-$runtimeMask"
                 try {Step "manager-delegate-runtime-$runtimeMask" cargo ($parityArguments+@('--',$delegateRuntimeCase,'--exact','--ignored','--test-threads=1','--nocapture'))}

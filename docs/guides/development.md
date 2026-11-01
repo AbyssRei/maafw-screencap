@@ -4,6 +4,10 @@
 
 ## 本轮原生与 CI 复核
 
+Windows 原生 manager/runtime 入口现扩展至六种原方法的全部 63 个非空位组合，`upstream-parity manager` 的 CI 编排亦逐项运行 `1..63`；原来六个单方法和全选组合的限制已移除。每项仍使用独立 source/Rust 进程/自有窗口、每侧二十个完整生命周期及六十张关闭后持帧，`cargo xtask upstream-delegate win32-runtime <mask> <外部目录> [--check-only]` 逐项复算像素、实际选择、事件和持有记录。实际测速可使双方选择不同赢家，仍按各自原生选择核对窗口/完整显示器范围，不能要求两次独立墙钟测量选择相同方法，也不据此声称逐候选耗时完全相同。空 mask/未知高位不属于此取帧矩阵；既有原 manager 的 None/未知选择器语义未改。
+
+本机全量矩阵正在按每个 mask 连续三轮执行，完整结果尚未汇总，不将入口扩展、编译通过或已完成前缀称为全部通过。各项拥有独立的新鼠标/键盘 Raw Input、低级 hook 监听及完整时间线；输入、前提失效、监听错误或超过 500ms 缺口使当前 mask 的整批三轮作废，其他已独立完成的 mask 保留各自结论。沿用户自动开始授权，不要求新的物理输入挑战，也不继承旧注册的正向控制。静止 FramePool 场景保留原等待/缓存路径，实测一轮约 5.5 分钟；未为缩短矩阵改等待或减少生命周期。程序、来源、工具链和原生编译输入已冻结外置，使用归档依赖开发输入；新在线、托管 CI 和完整 P1 继续待验收。
+
 macOS 私有 manager 已补 `get_features`：固定来源仅从输入 owner 汇集能力，当前 Input=None 路径在连接前后、失败重连及 inactive 后均返回零。新的原接口查询消费通过精确提取的完整 `MaaMacOSControlUnitCreate/Destroy` 函数体和真实 `MacOSControlUnitAPI` 虚表调用同一个 source/Rust manager，读取 connected、十进制窗口 UUID、能力位和有符号选择器元数据。它仍是显式查询 facade，输入和截图槽不在本项范围，不构造完整原 manager/input 类；Rust 同步回调、固定 CPU 复制及原生 meojson parse/object 表示转换均为明确记录的验收适配成本。
 
 本机归档输入 Debug/Release 各通过 66 组 ID/方法、132 个矩阵对象和一个故障控制对象、528 份快照、2,113 次虚接口查询及 1,255 次 Rust 回调；双方在 cold、连接、重连和 inactive 四阶段逐字节一致。销毁全部对象、卸载适配库后，固定 CPU 快照移入已 join 的线程继续读取。六项真实错误边界包含 NULL 输出/context/owner、原 NULL-safe Destroy 及被 C++ 边界收住的 Rust 查询错误；另外十组篡改记录均被独立校验器拒绝。七项实际 Step mock 控制验证非零退出、零测试、缺/少摘要、错误数据和 portable 环境不能通过 native 守卫；mock 的环境记录和库名是明确夹具，不构成 macOS 运行证据。

@@ -182,7 +182,7 @@ pub fn run(args: &[String]) -> Result<()> {
             ),
         };
     let mask: u64 = mask.parse()?;
-    if ![1, 2, 4, 8, 16, 32, 63].contains(&mask) {
+    if !(1..=63).contains(&mask) {
         return Err("Unknown native runtime mask".into());
     }
     let root = records::external_root(Path::new(path))?;
