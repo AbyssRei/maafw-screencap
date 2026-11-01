@@ -2,7 +2,11 @@ MaaFramework
 ============
 
 Repository: https://github.com/MaaXYZ/MaaFramework
-Migration source: commit 0fc6025c2fc224a171b57d89505e8d47acd2a8b1
+Fixed extraction source F: https://github.com/AbyssRei/MaaFramework
+Commit: 4140ac9674a9fde174212c895c8c37ff3acf1ef8
+Tree: 96aa4a72d3a7fd25e94e7f6ca3d66961d050d859
+Source ancestor: 0fc6025c2fc224a171b57d89505e8d47acd2a8b1
+Historical U/P source and validation records retain their own identities.
 Project licence: GNU Lesser General Public License version 3.
 This extraction follows LGPL-3.0-or-later, as stated in LICENSE; the full
 LGPL v3 and GPL v3 texts are both supplied in LICENSE.
@@ -29,7 +33,10 @@ linking OpenCV core/imgproc/imgcodecs without stub codec symbols. The selected
 body model is not the full manager virtual ABI, create/destroy API, input
 implementation or SDK provider. Native source/license inputs accompany each
 external acceptance batch; default builds and the custom-only core have no
-OpenCV dependency. Full Custom and P1 acceptance remain outstanding.
+OpenCV dependency. Separate real-interface consumers also compile the fixed
+CustomControlUnitAPI Create/Destroy bodies and public interface declarations
+through capture-only facades over that same private Rust manager. Full Custom,
+framework forwarding and P1 acceptance remain outstanding.
 
 The explicit OpenCV imgcodecs acceptance build additionally links current
 formal libpng (https://libpng.org/pub/png/libpng.html, libpng-2.0 licence) and
@@ -63,9 +70,11 @@ src/platform/windows/foreground.rs and geometry.rs migrate the default path of:
   source/MaaWin32ControlUnit/Base/ForegroundUtils.h
   source/MaaWin32ControlUnit/Screencap/HwndUtils.hpp
 
-They preserve the unpatched rcWork adjustment, native waits and cross-window
-DWORD cooldown. Atomic storage avoids the original unsynchronized shared
-DWORD access without serializing the native requests. Checked geometry rejects
+They preserve F's ordinary-window rcWork adjustment and exact WS_POPUP client
+rcMonitor exemption with one unchanged-client/origin confirmation and a repeated
+WS_POPUP check, plus the original native waits and cross-window DWORD cooldown.
+This is not an atomic foreign-window snapshot. Atomic storage avoids the source's
+shared DWORD access without serializing the native requests. Checked geometry rejects
 undefined integer overflow; the original compatible-mode scale path is pending.
 
 The three GDI-family backends share DC/bitmap cleanup and private conversion/error
@@ -107,9 +116,38 @@ MaaUtils Time.hpp duration_since body; MaaUtils source/licence identities and
 all applicable notices accompany the external acceptance inputs. These targets
 and OpenCV remain excluded from default product builds.
 
-src/backends/linux/pipewire.rs partially migrates the consumer control flow of
-the fixed source/MaaLinuxControlUnit/Screencap/PipeWireScreencap.cpp. Native
-setup, POD and stream/buffer handling are not implemented by that module yet.
+src/backends/windows/delegate.rs and delegate_native.rs migrate the capture-only
+initialization/forwarding/ownership path of:
+  source/MaaGamepadControlUnit/Manager/GamepadControlUnitMgr.{h,cpp}
+
+The explicit native consumers compile its complete Win32ControlUnitLoader and
+selected outer screenshot bodies, and the original Win32ControlUnitAPI public
+headers and Create/Destroy bodies, with capture-only source/Rust facades. This
+does not import gamepad or input actions. The reachable MaaUtils/Boost loading
+algorithms and their notices are identified below.
+
+src/backends/linux/manager.rs, manager_config.rs and manager_compat.rs migrate
+the screenshot-relevant orchestration, configuration/query and legacy creation
+paths of:
+  source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.{h,cpp}
+  source/MaaLinuxControlUnit/Base/Config.h
+  source/MaaLinuxControlUnit/API/LinuxControlUnitAPI.cpp
+  source/MaaLinuxControlUnit/Compat/WlRootsControlUnitCompat.cpp
+  source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp
+
+The explicit source oracles compile selected exact manager/API bodies and the
+original compatibility creation functions, public headers and meojson types.
+Native Wlr/PipeWire contexts are separate from scripted host/input/Portal
+boundaries. Input selector values remain configuration/metadata; no input
+actions or host authorization implementation are imported. Full native manager,
+framework forwarding and P1 acceptance remain pending. The parser adaptation's
+meojson attribution appears below.
+
+src/backends/linux/pipewire.rs migrates the consumer control flow of the fixed
+source/MaaLinuxControlUnit/Screencap/PipeWireScreencap.cpp. Its private native
+driver, POD and buffer paths live in src/backends/linux/pipewire/, with native
+resource/memory/DMA boundaries in src/platform/linux/pipewire*.rs. Scoped native
+slices exist; complete format/failure/ownership and P1 acceptance remain pending.
 Explicit portable acceptance extracts the original wait/lock helpers, format
 table and consumer methods into its external build tree, with fake loop/clock
 and symbolic format IDs plus real OpenCV Mat ownership/conversion. This is not
@@ -163,14 +201,14 @@ unchanged, including its sample-buffer conversion. Its screenshot base is
 extracted from the same fixed Base/UnitBase.h; private namespace/logging exclude
 unrelated input/framework code. Original Objective-C manual reference counting,
 callback conversion and native waiting stay in that source. Self-owned AppKit
-fixtures and OpenCV acceptance preparation are separate; no Rust macOS product
-migration or completed P1 is claimed. Native inputs and their applicable notices
+fixtures and OpenCV acceptance preparation are separate from the private Rust
+migration below; complete P1 is not claimed. Native inputs and applicable notices
 remain external, and this target is excluded from default builds and SDK assets.
 
 src/backends/macos/screen_capture_kit.rs and the private platform pixel-buffer
 owner now begin Rust migration of that same fixed ScreenCaptureKitScreencap
 source, using maintained objc2/block2/dispatch2 bindings. Native semaphore
-waiting, callback conversion and source create-reference retention remain U;
+waiting, callback conversion and source create-reference retention follow F;
 explicit test-only residual reclamation is separate from product cleanup.
 Checked layout/locking, a counted independent CPU copy and contained failures
 are documented safety adaptations. Same-window original/native Rust probes
@@ -179,11 +217,53 @@ bindings. The shared OpenCV acceptance source remains outside the core tree.
 
 src/backends/macos/manager.rs and manager_native.rs migrate the screenshot-only
 MacOSControlUnitMgr path: connection/owner replacement, result forwarding,
-decimal UUID and inactive semantics. Input=None is an explicit acceptance
-boundary. The private native targets extract six unchanged manager function
-bodies; their original identities, source/license materials and scripted/native
-scope accompany the external batch. Metadata/full manager/API acceptance is
-pending; no public SDK binding or new input functionality is provided.
+decimal UUID, Input=None features, metadata and inactive semantics. Private
+targets extract exact manager bodies and the complete Create/Destroy bodies
+from source/MaaMacOSControlUnit/API/MacOSControlUnitAPI.cpp, using the real public
+headers through explicit query facades. Source/license identities accompany
+each batch. Portable query consumption is distinct from native macOS validation;
+complete manager/capture/API and P1 acceptance remain pending. No public SDK
+binding or new input functionality is provided.
+
+MaaUtils
+========
+
+Repository: https://github.com/MaaXYZ/MaaUtils
+Project licence: GNU Lesser General Public License version 3, as supplied in
+the prepared source's LICENSE.md. Its original licence and exact source identity
+are archived with each native acceptance batch; this project's LGPL v3 and
+GPL v3 texts are supplied in LICENSE.
+
+src/platform/windows/delegate.rs adapts the reachable fixed-name Windows
+load/reuse/symbol/unload behavior of include/MaaUtils/LibraryHolder.h, with
+standard Rust Arc/Weak ownership and a mutex. Explicit acceptance compiles that
+original header and the selected include/MaaUtils/Time.hpp duration_since body;
+Custom acceptance also compiles the real ImageBuffer/StringBuffer code. These
+source files have no additional per-file copyright or licence notices. MaaUtils
+is not a runtime dependency of the default product core.
+
+Boost.DLL
+=========
+
+Repository: https://github.com/boostorg/dll
+Licence: Boost Software License, Version 1.0.
+
+src/platform/windows/delegate.rs adapts the Windows fixed-name decoration/load
+sequence reached through MaaUtils LibraryHolder from:
+  libs/dll/include/boost/dll/detail/windows/shared_library_impl.hpp
+  libs/dll/include/boost/dll/shared_library.hpp
+
+Original notices from those files:
+  Copyright 2014 Renato Tegon Forti, Antony Polukhin.
+  Copyright Antony Polukhin, 2015-2026.
+
+Distributed under the Boost Software License, Version 1.0.
+The complete original licence is supplied in licenses/boost-BSL-1.0.txt.
+The adaptation uses native Windows loading directly; the core has no Boost
+runtime dependency. Explicit native acceptance compiles the original
+MaaUtils/Boost loader, with its corresponding source and licence inputs archived
+per batch. Other Boost components used by acceptance retain their own notices
+in those external source inputs.
 
 Microsoft C++/WinRT
 =================
