@@ -167,6 +167,13 @@ if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
         "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/include"
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit" ${OpenCV_INCLUDE_DIRS})
     target_link_libraries(mfs_desktop_dup_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 Dwmapi D3D11 Dxgi)
+    add_executable(mfs_desktop_map_reference desktop-map-reference.cpp print-parity.cpp print-thread.cpp)
+    target_include_directories(mfs_desktop_map_reference PRIVATE
+        "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/include"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit" ${OpenCV_INCLUDE_DIRS})
+    file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp" MFS_DESKTOP_DUP_CPP_PATH)
+    target_compile_definitions(mfs_desktop_map_reference PRIVATE MFS_UPSTREAM_DESKTOP_DUP_CPP="${MFS_DESKTOP_DUP_CPP_PATH}")
+    target_link_libraries(mfs_desktop_map_reference PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 Dwmapi D3D11 Dxgi)
 endif()
 if(MFS_BUILD_GDI_PARITY)
 add_executable(mfs_render_marker_control print-marker-control.cpp)

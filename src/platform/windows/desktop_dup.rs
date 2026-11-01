@@ -10,3 +10,7 @@
 pub(crate) mod native {
     include!(concat!(env!("OUT_DIR"), "/windows_desktop_dup.rs"));
 }
+
+#[cfg(all(test, feature = "prototype-windows"))]
+#[path = "desktop_dup_map_probe.rs"]
+pub(crate) mod map_probe;

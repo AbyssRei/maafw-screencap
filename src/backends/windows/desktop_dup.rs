@@ -311,6 +311,8 @@ impl DesktopDupCapture {
         let duplication = required("IDXGIOutputDuplication", self.duplication.as_ref())?;
         let mut info = DXGI_OUTDUPL_FRAME_INFO::default();
         let mut resource = std::ptr::null_mut();
+        #[cfg(all(test, feature = "prototype-windows"))]
+        crate::platform::windows::desktop_dup::map_probe::acquiring(duplication);
         // SAFETY: Exact ABI and original 2000ms native wait, initialized outputs.
         let code = unsafe {
             (duplication.vtable().AcquireNextFrame)(
@@ -320,6 +322,8 @@ impl DesktopDupCapture {
                 &mut resource,
             )
         };
+        #[cfg(all(test, feature = "prototype-windows"))]
+        crate::platform::windows::desktop_dup::map_probe::acquired(code);
         evidence.acquire = Some(code);
         if code == DXGI_ERROR_ACCESS_LOST {
             self.duplication.take();
@@ -380,13 +384,17 @@ impl DesktopDupCapture {
         let staging = required("staging texture null", self.readable.as_ref())?;
         // SAFETY: Same device, validated matching native texture layouts.
         unsafe { context.CopyResource(staging, &texture) };
+        #[cfg(all(test, feature = "prototype-windows"))]
+        crate::platform::windows::desktop_dup::map_probe::copied(context, staging);
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         // SAFETY: CPU-readable same-context staging. Guard owns a successful Map.
-        native("Map", unsafe {
-            context
-                .Map(staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
-                .ok()
-        })?;
+        #[cfg(not(all(test, feature = "prototype-windows")))]
+        let code = unsafe { context.Map(staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped)) };
+        #[cfg(all(test, feature = "prototype-windows"))]
+        let code = unsafe {
+            crate::platform::windows::desktop_dup::map_probe::map(context, staging, &mut mapped)
+        };
+        native("Map", code.ok())?;
         let _mapping = Mapping {
             context,
             texture: staging,
@@ -435,8 +443,10 @@ impl Drop for Acquisition<'_> {
     fn drop(&mut self) {
         // SAFETY: One successful acquisition on this caller; mapped and raw
         // texture owners have already ended. Preserve release error separately.
-        *self.release =
-            Some(unsafe { (self.duplication.vtable().ReleaseFrame)(self.duplication.as_raw()) });
+        let code = unsafe { (self.duplication.vtable().ReleaseFrame)(self.duplication.as_raw()) };
+        *self.release = Some(code);
+        #[cfg(all(test, feature = "prototype-windows"))]
+        crate::platform::windows::desktop_dup::map_probe::released(self.duplication, code);
         self.resource.take();
     }
 }
@@ -448,6 +458,8 @@ impl Drop for Mapping<'_> {
     fn drop(&mut self) {
         // SAFETY: Exactly one successful same-context/subresource Map.
         unsafe { self.context.Unmap(self.texture, 0) };
+        #[cfg(all(test, feature = "prototype-windows"))]
+        crate::platform::windows::desktop_dup::map_probe::unmapped(self.context, self.texture);
     }
 }
 /// # Safety
