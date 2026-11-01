@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Include inside an isolated test namespace after naming capture classes.
 // Only input=None is exercised; no input implementation is imported.
-struct InputBase { virtual ~InputBase()=default; virtual void inactive() {} };
+struct InputBase {
+    virtual ~InputBase()=default;
+    virtual void inactive() {}
+#ifdef MFS_MANAGER_QUERY_CONSUMER
+    MaaControllerFeature get_features() const { throw std::logic_error("excluded input feature consumption"); }
+#endif
+};
 struct BackgroundManagedKeyInput {
     explicit BackgroundManagedKeyInput(HWND) {}
     bool inactive() { return true; }
@@ -11,6 +17,11 @@ struct Win32ControlUnitMgr {
 #include "manager-enum.inc"
     Win32ControlUnitMgr(HWND,MaaWin32ScreencapMethod,MaaWin32InputMethod,MaaWin32InputMethod);
     bool connect(); bool connected() const; bool screencap(cv::Mat&); bool inactive();
+#ifdef MFS_MANAGER_QUERY_CONSUMER
+    bool request_uuid(std::string&);
+    MaaControllerFeature get_features() const;
+    json::object get_info() const;
+#endif
     std::unordered_map<ScreencapMethod,std::shared_ptr<ScreencapBase>> build_screencap_units() const;
     bool init_screencap();
     std::shared_ptr<ScreencapBase> speed_test(const std::unordered_map<ScreencapMethod,std::shared_ptr<ScreencapBase>>&) const;

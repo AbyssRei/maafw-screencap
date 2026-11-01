@@ -61,3 +61,25 @@ string(SUBSTRING "${_factory_source}" ${_create_begin} ${_create_length} _create
 string(SUBSTRING "${_factory_source}" ${_destroy_begin} -1 _destroy_body)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/delegate-factory-create.inc" "${_create_body}")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/delegate-factory-destroy.inc" "${_destroy_body}")
+
+# Original capture-side queries consumed through the real class interface.
+# The source facade still scopes input owners to None and is not the complete
+# original manager class. No query statement is substituted or hand copied.
+set(_query_cpp "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Manager/Win32ControlUnitMgr.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_query_cpp}")
+file(READ "${_query_cpp}" _query_source)
+string(REPLACE "\r\n" "\n" _query_source "${_query_source}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/delegate-manager-queries.inc" "// Exact fixed query bodies; newline normalization only.\n")
+foreach(_range "bool Win32ControlUnitMgr::request_uuid(|bool Win32ControlUnitMgr::start_app(" "json::object Win32ControlUnitMgr::get_info() const|MAA_CTRL_UNIT_NS_END")
+    string(REPLACE "|" ";" _bounds "${_range}")
+    list(GET _bounds 0 _start)
+    list(GET _bounds 1 _finish)
+    string(FIND "${_query_source}" "${_start}" _begin)
+    string(FIND "${_query_source}" "${_finish}" _end)
+    if(_begin LESS 0 OR _end LESS_EQUAL _begin)
+        message(FATAL_ERROR "Missing fixed manager query range: ${_start}")
+    endif()
+    math(EXPR _length "${_end}-${_begin}")
+    string(SUBSTRING "${_query_source}" ${_begin} ${_length} _body)
+    file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/delegate-manager-queries.inc" "${_body}\n")
+endforeach()

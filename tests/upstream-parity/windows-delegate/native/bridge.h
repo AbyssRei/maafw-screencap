@@ -17,6 +17,15 @@ struct MfsDnImage {
 };
 // Fixed allocation-independent diagnostic buffer, outside the provider DLL.
 struct MfsDnEvent { uint32_t kind,thread; uint64_t a,b,c,d; };
+struct MfsDnQueryValue { const uint8_t* data; size_t length; uint64_t scalar; };
+// CPU-only query snapshot owned by the caller. Native string/object temporaries
+// finish before this record leaves the bridge and before the provider unloads.
+struct MfsDnQueryResult {
+    int32_t connected,uuid_success;
+    uint64_t features;
+    size_t uuid_length,info_length;
+    uint8_t uuid[32],info[256];
+};
 // Acceptance-only synchronous Rust manager facade. capture returns a borrowed
 // initialized span valid until the next operation on that context. It is
 // copied by the provider BEFORE the callback context can be destroyed.
@@ -27,6 +36,7 @@ struct MfsDnHost {
     int32_t (*connect)(void*,void*,int32_t*) noexcept;
     int32_t (*capture)(void*,void*,MfsDnImage*,int32_t*) noexcept;
     int32_t (*inactive)(void*,void*,int32_t*) noexcept;
+    int32_t (*query)(void*,void*,uint32_t,MfsDnQueryValue*) noexcept;
 };
 extern "C" {
 MFS_DN int32_t mfs_dn_create(uintptr_t,uintptr_t,uint64_t,uint64_t,uint64_t,void**) noexcept;
@@ -34,6 +44,10 @@ MFS_DN int32_t mfs_dn_destroy(uintptr_t,void*) noexcept;
 MFS_DN int32_t mfs_dn_connect(void*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_capture(void*,MfsDnImage*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_inactive(void*,int32_t*) noexcept;
+MFS_DN int32_t mfs_dn_query(void*,MfsDnQueryResult*) noexcept;
+MFS_DN uintptr_t mfs_dn_query_window_create() noexcept;
+MFS_DN int32_t mfs_dn_query_window_destroy(uintptr_t) noexcept;
+MFS_DN int32_t mfs_dn_query_window_valid(uintptr_t) noexcept;
 MFS_DN void mfs_dn_release(void*) noexcept;
 MFS_DN int32_t mfs_dn_events(MfsDnEvent*,size_t,size_t*,uint64_t*) noexcept;
 MFS_DN int32_t mfs_dn_reset() noexcept;
@@ -48,4 +62,5 @@ MFS_DN int32_t mfs_dn_host_destroy(void*) noexcept;
 MFS_DN int32_t mfs_dn_host_connect(void*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_host_capture(void*,MfsDnImage*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_host_inactive(void*,int32_t*) noexcept;
+MFS_DN int32_t mfs_dn_host_query(void*,uint32_t,MfsDnQueryValue*) noexcept;
 }

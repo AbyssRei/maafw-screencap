@@ -59,6 +59,39 @@ int32_t mfs_dn_inactive(void* unit,int32_t* output) noexcept {
     try { *output=static_cast<MaaWin32ControlUnitHandle>(unit)->inactive();return 0; }
     catch(const std::bad_alloc&) { return 3; } catch(...) { return 2; }
 }
+int32_t mfs_dn_query(void* unit,MfsDnQueryResult* output) noexcept {
+    if(!unit || !output) { return 1; }
+    try {
+        auto* api=static_cast<MaaWin32ControlUnitHandle>(unit);
+        MfsDnQueryResult result={};
+        result.connected=api->connected();
+        std::string uuid="caller sentinel";
+        result.uuid_success=api->request_uuid(uuid);
+        result.features=api->get_features();
+        const auto info=json::value(api->get_info()).to_string();
+        if(uuid.size()>std::size(result.uuid) || info.size()>std::size(result.info)) { return 4; }
+        result.uuid_length=uuid.size();result.info_length=info.size();
+        std::copy(uuid.begin(),uuid.end(),result.uuid);
+        std::copy(info.begin(),info.end(),result.info);
+        // These are four separate real virtual calls. Atomic publication here
+        // belongs only to this CPU diagnostic snapshot, not to a source SDK.
+        *output=result;return 0;
+    } catch(const std::bad_alloc&) { return 3; } catch(...) { return 2; }
+}
+uintptr_t mfs_dn_query_window_create() noexcept {
+    // Message-only STATIC window: real HWND lifetime, no visible desktop or
+    // capture fixture. The calling thread owns creation and destruction.
+    const auto hwnd=CreateWindowExW(0,L"STATIC",L"mfs query lifetime",0,0,0,0,0,HWND_MESSAGE,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(hwnd) { mfs_dn_event(12,reinterpret_cast<uintptr_t>(hwnd),0,0,0); }
+    return reinterpret_cast<uintptr_t>(hwnd);
+}
+int32_t mfs_dn_query_window_destroy(uintptr_t value) noexcept {
+    auto hwnd=reinterpret_cast<HWND>(value);
+    if(!hwnd || GetWindowThreadProcessId(hwnd,nullptr)!=GetCurrentThreadId()) { return 1; }
+    if(!DestroyWindow(hwnd)) { return 2; }
+    mfs_dn_event(13,value,0,0,0);return 0;
+}
+int32_t mfs_dn_query_window_valid(uintptr_t value) noexcept { return IsWindow(reinterpret_cast<HWND>(value))?1:0; }
 int32_t mfs_dn_capture(void* unit,MfsDnImage* output,int32_t* success) noexcept {
     if(!unit || !output || !success) { return 1; } *success=0;
     try {
@@ -99,14 +132,16 @@ int32_t mfs_dn_reset() noexcept {
 uint32_t mfs_dn_mode() noexcept { std::lock_guard lock(mutex);return mode; }
 void mfs_dn_set_mode(uint32_t value) noexcept { std::lock_guard lock(mutex);mode=value; }
 int32_t mfs_dn_layout(size_t* output,size_t count) noexcept {
-    const size_t values[]={sizeof(MfsDnImage),alignof(MfsDnImage),offsetof(MfsDnImage,owner),offsetof(MfsDnImage,data),offsetof(MfsDnImage,length),offsetof(MfsDnImage,width),offsetof(MfsDnImage,height),offsetof(MfsDnImage,stride),sizeof(MfsDnEvent),alignof(MfsDnEvent),sizeof(MfsDnHost),alignof(MfsDnHost),offsetof(MfsDnHost,user),offsetof(MfsDnHost,create),offsetof(MfsDnHost,destroy),offsetof(MfsDnHost,connect),offsetof(MfsDnHost,capture),offsetof(MfsDnHost,inactive)};
+    const size_t values[]={sizeof(MfsDnImage),alignof(MfsDnImage),offsetof(MfsDnImage,owner),offsetof(MfsDnImage,data),offsetof(MfsDnImage,length),offsetof(MfsDnImage,width),offsetof(MfsDnImage,height),offsetof(MfsDnImage,stride),sizeof(MfsDnEvent),alignof(MfsDnEvent),sizeof(MfsDnHost),alignof(MfsDnHost),offsetof(MfsDnHost,user),offsetof(MfsDnHost,create),offsetof(MfsDnHost,destroy),offsetof(MfsDnHost,connect),offsetof(MfsDnHost,capture),offsetof(MfsDnHost,inactive),offsetof(MfsDnHost,query),
+        sizeof(MfsDnQueryValue),alignof(MfsDnQueryValue),offsetof(MfsDnQueryValue,data),offsetof(MfsDnQueryValue,length),offsetof(MfsDnQueryValue,scalar),
+        sizeof(MfsDnQueryResult),alignof(MfsDnQueryResult),offsetof(MfsDnQueryResult,connected),offsetof(MfsDnQueryResult,uuid_success),offsetof(MfsDnQueryResult,features),offsetof(MfsDnQueryResult,uuid_length),offsetof(MfsDnQueryResult,info_length),offsetof(MfsDnQueryResult,uuid),offsetof(MfsDnQueryResult,info)};
     if(!output || count!=std::size(values)) { return 1; }std::copy(std::begin(values),std::end(values),output);return 0;
 }
 int32_t mfs_dn_host_install(const MfsDnHost* value,size_t size) noexcept {
     std::lock_guard lock(mutex);
     if(host_live) { return 4; }
     if(!value) { host={};return 0; }
-    if(size!=sizeof(MfsDnHost) || !value->user || !value->create || !value->destroy || !value->connect || !value->capture || !value->inactive) { return 1; }
+    if(size!=sizeof(MfsDnHost) || !value->user || !value->create || !value->destroy || !value->connect || !value->capture || !value->inactive || !value->query) { return 1; }
     host=*value;return 0;
 }
 int32_t mfs_dn_host_create(uintptr_t hwnd,uint64_t method,void** output) noexcept {
@@ -134,4 +169,8 @@ int32_t mfs_dn_host_capture(void* context,MfsDnImage* output,int32_t* success) n
 int32_t mfs_dn_host_inactive(void* context,int32_t* output) noexcept {
     MfsDnHost callbacks;{ std::lock_guard lock(mutex);callbacks=host; }
     return callbacks.inactive?callbacks.inactive(callbacks.user,context,output):1;
+}
+int32_t mfs_dn_host_query(void* context,uint32_t selector,MfsDnQueryValue* output) noexcept {
+    MfsDnHost callbacks;{ std::lock_guard lock(mutex);callbacks=host; }
+    return callbacks.query?callbacks.query(callbacks.user,context,selector,output):1;
 }

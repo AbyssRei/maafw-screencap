@@ -5,6 +5,7 @@ use crate::{Result, records};
 use std::{fs, path::Path};
 #[path = "../../tests/upstream-parity/manager-metadata/cases.rs"]
 mod cases;
+pub(crate) use cases::cases as case_matrix;
 
 const NATIVE_ORACLE_INPUTS: [&str; 7] = [
     "mfs_manager_metadata_model.exe",

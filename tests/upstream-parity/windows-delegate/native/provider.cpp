@@ -19,6 +19,7 @@
 #include "MaaUtils/Logger.h"
 #include <unordered_map>
 #include <stdexcept>
+#include <sstream>
 #include <opencv2/core.hpp>
 #ifndef MFS_RUST_PROVIDER
 namespace Source {
@@ -32,9 +33,12 @@ using MAA_CTRL_UNIT_NS::DesktopDupScreencap;
 using MAA_CTRL_UNIT_NS::DesktopDupWindowScreencap;
 using MAA_CTRL_UNIT_NS::PrintWindowWithPseudoMinimizeScreencap;
 using MAA_CTRL_UNIT_NS::ScreenDCScreencap;
+#define MFS_MANAGER_QUERY_CONSUMER
 #include "../../native/manager-shim.h"
+#undef MFS_MANAGER_QUERY_CONSUMER
 #include "manager-time.inc"
 #include "manager-source.inc"
+#include "delegate-manager-queries.inc"
 }
 #endif
 namespace {
@@ -118,10 +122,53 @@ struct Unit final : MAA_CTRL_UNIT_NS::Win32ControlUnitAPI {
         return manager.inactive();
 #endif
     }
-    bool connected() const override { throw std::logic_error("excluded connected query"); }
-    bool request_uuid(std::string&) override { throw std::logic_error("excluded UUID query"); }
-    MaaControllerFeature get_features() const override { throw std::logic_error("excluded features"); }
-    json::object get_info() const override { throw std::logic_error("excluded metadata"); }
+    bool connected() const override {
+        mfs_dn_event(8,0,0,0,0);
+#ifdef MFS_RUST_PROVIDER
+        MfsDnQueryValue value={};require_host(mfs_dn_host_query(context,0,&value),"Rust connected query");
+        if(value.scalar>1 || value.data || value.length) { throw std::logic_error("invalid connected result"); }
+        return value.scalar!=0;
+#else
+        return manager.connected();
+#endif
+    }
+    bool request_uuid(std::string& uuid) override {
+        mfs_dn_event(9,0,0,0,0);
+#ifdef MFS_RUST_PROVIDER
+        MfsDnQueryValue value={};require_host(mfs_dn_host_query(context,1,&value),"Rust UUID query");
+        if(value.scalar>1 || !value.data || value.length>32) { throw std::logic_error("invalid UUID span"); }
+        // Consume borrowed Rust bytes before the next context operation.
+        if(value.scalar) { uuid.assign(reinterpret_cast<const char*>(value.data),value.length); }
+        return value.scalar!=0;
+#else
+        return manager.request_uuid(uuid);
+#endif
+    }
+    MaaControllerFeature get_features() const override {
+        mfs_dn_event(10,0,0,0,0);
+#ifdef MFS_RUST_PROVIDER
+        MfsDnQueryValue value={};require_host(mfs_dn_host_query(context,2,&value),"Rust features query");
+        if(value.data || value.length) { throw std::logic_error("invalid features result"); }
+        return value.scalar;
+#else
+        return manager.get_features();
+#endif
+    }
+    json::object get_info() const override {
+        mfs_dn_event(11,0,0,0,0);
+#ifdef MFS_RUST_PROVIDER
+        MfsDnQueryValue value={};require_host(mfs_dn_host_query(context,3,&value),"Rust metadata query");
+        if(!value.data || value.length>256 || value.scalar) { throw std::logic_error("invalid metadata span"); }
+        // Explicit acceptance representation conversion. The capture core has
+        // no JSON library; parsing/copying into the original native object is
+        // additional facade work, not eliminated source work.
+        auto parsed=json::parse(std::string(reinterpret_cast<const char*>(value.data),value.length));
+        if(!parsed || !parsed->is_object()) { throw std::logic_error("invalid metadata object"); }
+        return std::move(*parsed).as_object();
+#else
+        return manager.get_info();
+#endif
+    }
 #define MFS_EXCLUDED(name,args) bool name args override { throw std::logic_error("excluded input/app operation"); }
     MFS_EXCLUDED(start_app,(const std::string&))
     MFS_EXCLUDED(stop_app,(const std::string&))

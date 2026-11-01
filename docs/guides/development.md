@@ -4,13 +4,21 @@
 
 ## 本轮原生与 CI 复核
 
+Windows 原接口的四个查询槽现已接入同一私有 Rust manager：真实原 `Create/Destroy` 函数体返回原 `Win32ControlUnitAPI` 接口，由 C++ 调用方经虚表调用 `connected`、`request_uuid`、`get_features` 和 `get_info`。原版一侧编译精确提取的 manager 查询/连接函数体，Rust 一侧通过同步窄桥调用现有 manager；二者仍是显式 capture-only 验收类，Input=None，不构造完整原 manager/input 类。UUID 借用字节在下一次 context 操作前进入原生调用方的字符串；metadata 另显式解析为原 meojson 对象，该表示转换及复制是适配成本。桥在全部原生临时对象结束前复制固定 CPU 查询快照，按原头检查 33 项大小、对齐和偏移，不暴露 C++ 对象或 Rust String 借用。
+
+最终 Debug/Release 各通过 256 个工厂对象、500 组快照、2,000 次真实虚接口查询及 80 次隐藏消息窗口生命周期；合计 4,000 次查询、1,000 组模块/窗口关闭后快照，随后移入已 join 的线程继续读取。每侧包含 88 组完整指针/选择器值，另通过 None/未知方法连接，核对真实窗口销毁后 connected 的变化、停用、相同 HWND 的 UUID/元数据及完整模块卸载；None/未知方法不创建截图 backend。两配置各 36 组工厂构造和 274 组外层委托模型回归亦通过。实际入口为 `cargo xtask upstream-delegate win32-queries <外部目录> [--check-only]`，独立复算全部查询字节、工厂/窗口/虚接口顺序、线程、context 计数和持有结果；它不执行屏幕捕获。
+
+本批 456 份产品源码、76 个 F blob、十份实际编译读取日志及三十份编译/链接/生成读取日志的 1,019 个原生路径均核对归档，查询函数体与 F 相同。十三组篡改覆盖双方相同的 UUID/有符号元数据错误、销毁后状态复活、空记录、漏调用、错线程/工厂参数、context/host 次数、持有值、模块未卸载和缺失/额外产物，均被拒绝；首次失败的部分记录也严格拒绝。六项实际 Step mock 控制另拒绝零测试、少快照、缺摘要、非零退出和错误数据。首批在 Rust 对象创建时因提供的 DLL 路径含 `..`、不满足安全加载要求而失败；原版一侧已保存的 250 组查询保持部分证据，整批仍失败。独立加载控制确认规范路径的同一适配器符号/布局有效，新规范路径批次通过。首次 Rust EXE 未在后续测试输入表复用调整前冻结，不声明其逐字节原程序重放；两份 C++ provider DLL 与最终 Release 程序相同。
+
+默认 workspace 121 项通过、6 项忽略，Windows 模型 53 项通过、69 项忽略，新增查询另按精确入口实际执行；严格 Clippy、Windows manager Release 核心、格式和 PowerShell 解析通过。初次 Clippy 因输入表重复加载失败，现共用同一份定义；首版读取审计错误地将无 BOM 的生成日志按 UTF-16 解码，已分别识别编码并保留原失败。当前 106 项职责映射已刷新代码锚点及该局部原生证据，58 个原用例的完整待验收范围保留。该批沿归档的匹配 nightly/VS/SDK/OpenCV/Boost/MaaUtils/meojson 开发输入，不构成新的在线依赖、托管 CI、完整原 manager 类、混合捕获候选/故障或 P1 验收。新入口、非零测试守卫、部分输出登记与 CI 收集已接入；macOS features、全平台和完整调用链仍待完成。
+
 本轮重新按完整职责目录盘点 P1，而非只检查固定 F 的 76 个选定来源文件。最新原目录实际有 101 项来源、11 条捕获路由、58 个用例定义；与 F 选定范围合并后为 106 项，其中 99 个目录文件未变、两个目录文件改变，另有五个原目录未列入的 F 构建/回归文件。外层 Gamepad 截图委托、公共头、host Portal 边界及排除项仍逐项保留；HwndUtils 与根 CMake 的祖先差异明确记录。映射绑定归档的实现/验证代码及实际行文本，当前只到模块职责层级，不代表完整逐函数迁移或用例通过。58 个用例均保留各自尚未验收的完整范围；旧 U 几何定义不直接继承为 F 预期。
 
 实际格式及只读校验入口为 `cargo xtask reference responsibilities <reference 相对映射文件> [--root <外部目录>]`。它核对完整目录与所选 F 范围的并集、全部用例、F Git blob/来源字节、SHA-256、代码行锚点及已链接的局部证据；不修改记录，不产生捕获或阶段通过结论。八组实际破坏分别覆盖仅保留 76 项、漏用例、将捕获职责改为排除、漏 F 语义差异、错代码行、错来源摘要、虚构 passed 字段和路径逃逸，均被拒绝。此工具检查映射的完整性与来源，不能自动证明人工说明的完整语义。
 
 盘点发现的 Windows manager 查询缺口已补齐：同一私有 manager 新增 `request_uuid` 和 Input=None 下的 `get_features`。前者保持原 MSVC x64 指针流的十六位大写十六进制，包括空 HWND；不验证窗口，也不要求连接。后者因无 mouse/keyboard owner 返回零，不引入输入控制。显式函数体模型从固定 F 提取原 UUID/features 代码，以真实 MSVC 标准库执行，空输入指针分支保持，日志是测试边界；它不构造完整原 manager 或消费真实 C++ 虚表。最终 Debug/Release 各 88 组原版/Rust 查询通过，包含空值、符号位与完整 64 位边界，输出在 manager 作用域后继续保留。两配置原有 Windows/macOS 元数据另共 308 组回归通过；`cargo xtask upstream-metadata win32-identity <外部目录> [--check-only]` 独立复算实际查询记录。当前默认 workspace 120 项通过、6 项忽略，Windows 模型 53 项通过、68 项忽略，严格 Clippy、格式、Windows manager Release 核心构建及 PowerShell 解析通过。初次 Clippy 拒绝测试中不必要的显式 drop，现以词法作用域验证所有者结束；前后实际查询字节相同，失败日志保留。
 
-本批核对 454 份产品源码、两个实际编译读取日志、326 个原生输入和原函数体；新增 Step 的六项 mock 控制拒绝零测试、少案例、缺摘要、非零退出及双侧相同的错误记录。模型、提取代码和完整输出已归档；首个旧缓存仍指向祖先 U 的构建单独保留，最终两配置明确使用 F。该批采用匹配 nightly、meojson、VS/SDK 的离线开发输入，未做屏幕捕获或新的在线依赖验收。真正的 DLL 虚接口查询、完整 manager/factory 转发、macOS features 查询及全平台完整故障矩阵仍待完成；既有历史复测、原版像素失败和缺少正式 Xcode 的结论不变，P1 继续未完成。新 CI 入口已接入 manager 编排；网络 EOF 期间没有取得新托管验证结论。
+该早期字段查询批核对 454 份产品源码、两个实际编译读取日志、326 个原生输入和原函数体；新增 Step 的六项 mock 控制拒绝零测试、少案例、缺摘要、非零退出及双侧相同的错误记录。模型、提取代码和完整输出已归档；首个旧缓存仍指向祖先 U 的构建单独保留，最终两配置明确使用 F。该批采用匹配 nightly、meojson、VS/SDK 的离线开发输入，未做屏幕捕获或新的在线依赖验收；其自身不证明真实 DLL 虚接口消费，后续该项进展见本节开头。完整 manager/factory 转发、macOS features 查询及全平台完整故障矩阵仍待完成；既有历史复测、原版像素失败和缺少正式 Xcode 的结论不变，P1 继续未完成。新 CI 入口已接入 manager 编排；网络 EOF 期间没有取得新托管验证结论。
 
 Desktop Duplication 另新增真实 held-acquisition 拒绝矩阵：夹具先在同一 duplication 上取得并持有实际帧，再沿完整原版/Rust 公开捕获调用真实 `AcquireNextFrame(2000)`，获得系统返回的 `DXGI_ERROR_INVALID_CALL`。捕获失败时没有 CopyResource、Map、Unmap、ReleaseFrame 或转换；原 staging、duplication、尺寸及 warm 状态保持。随后夹具自己的 ReleaseFrame 必须成功，再次诊断释放必须被系统拒绝，最后只调用一次正常捕获并验证已知目标像素。Rust 另断言失败样本没有 native frame、释放或 CPU 复制证据，恢复时保留既有整屏安全复制及转换位置；C++ 沿固定 F 原函数和真实接口转发，原失效映射与 Rust 独立 CPU owner 的区别仍保留。这是私有受控测试前提，不定义公共 SDK 对外部 native frame 共享的支持。
 

@@ -35,6 +35,7 @@ $nativeMissingEnvironment = $false
 $delegateNativeEvidence = ''
 $delegateFactoryEvidence = ''
 $delegateRuntimeEvidence = ''
+$delegateQueryEvidence = ''
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
@@ -330,6 +331,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             & $ConfigureTool upstream-metadata win32-identity (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS win32-identity) >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Windows UUID/features artifact validation failed'}
+        }
+        if($Name -eq 'manager-virtual-queries' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('real virtual manager queries units=256 snapshots=500 calls=2000 host_queries=1000 window_lifetimes=80 retained_after_unload=500 captures=0 input_none=1 passed')) {
+                throw 'Expected actual original/Rust virtual queries and native message-window lifetimes'
+            }
+            & $ConfigureTool upstream-delegate win32-queries $env:MFS_DELEGATE_QUERY_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Real virtual manager query records rejected'}
         }
         if($Name -eq 'custom-native-parity' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -847,7 +857,7 @@ try {
             foreach($name in @('win32-info-source.inc','win32-info-members.inc','win32-identity-source.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
-            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
+            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','windows-delegate-manager-queries.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
             $env:MFS_DELEGATE_NATIVE_BUILD=Split-Path -Parent (Prepared-File mfs_delegate_bridge.dll)
         } else {
             # Adapt the native batch's record helpers without shadowing inputs.
@@ -868,7 +878,7 @@ try {
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
                 Save-Input $saved
             }
-            foreach($item in @(@('native-scope.txt','windows-delegate-native-scope.txt'),@('manager-source.inc','windows-delegate-native-manager-source.inc'),@('manager-enum.inc','windows-delegate-native-manager-enum.inc'),@('manager-time.inc','windows-delegate-native-manager-time.inc'),@('native-toolchain-Release.txt','windows-delegate-native-toolchain-Release.txt'),@('delegate-factory-create.inc','windows-delegate-factory-create.inc'),@('delegate-factory-destroy.inc','windows-delegate-factory-destroy.inc'))) {
+            foreach($item in @(@('native-scope.txt','windows-delegate-native-scope.txt'),@('manager-source.inc','windows-delegate-native-manager-source.inc'),@('manager-enum.inc','windows-delegate-native-manager-enum.inc'),@('manager-time.inc','windows-delegate-native-manager-time.inc'),@('native-toolchain-Release.txt','windows-delegate-native-toolchain-Release.txt'),@('delegate-factory-create.inc','windows-delegate-factory-create.inc'),@('delegate-factory-destroy.inc','windows-delegate-factory-destroy.inc'),@('delegate-manager-queries.inc','windows-delegate-manager-queries.inc'))) {
                 $saved=Join-Path $inputsRoot $item[1]
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
                 Save-Input $saved
@@ -887,6 +897,8 @@ try {
         $env:MFS_DELEGATE_NATIVE_RECORDS=$delegateNativeEvidence
         $delegateFactoryEvidence=Join-Path $artifacts windows-delegate-factory
         $env:MFS_DELEGATE_FACTORY_RECORDS=$delegateFactoryEvidence
+        $delegateQueryEvidence=Join-Path $artifacts windows-delegate-queries
+        $env:MFS_DELEGATE_QUERY_RECORDS=$delegateQueryEvidence
         $delegateRuntimeEvidence=Join-Path $artifacts windows-delegate-runtime
         New-Item -ItemType Directory -Path $delegateRuntimeEvidence | Out-Null
     }
@@ -1114,7 +1126,8 @@ try {
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
             $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
             $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
-            $caseSelection+=@('--skip',$managerIdentityCase)
+            $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
+            $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
@@ -1124,6 +1137,7 @@ try {
                 @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-virtual-queries';arguments=($parityArguments + @('--',$managerQueryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-native-size-rejection';arguments=($parityArguments + @('--',$managerSizeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))}
@@ -1246,6 +1260,7 @@ finally {
     if($delegateRuntimeEvidence -and (Test-Path -LiteralPath $delegateRuntimeEvidence)) {Get-ChildItem -LiteralPath $delegateRuntimeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
+    if($delegateQueryEvidence -and (Test-Path -LiteralPath $delegateQueryEvidence)) {Get-ChildItem -LiteralPath $delegateQueryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}

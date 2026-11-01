@@ -3,6 +3,12 @@
 // Included by owning private unit tests; no internals are exported for a model.
 #[path = "cases.rs"]
 mod cases;
+#[cfg(all(
+    target_os = "windows",
+    feature = "windows-manager",
+    feature = "prototype-windows"
+))]
+pub(crate) use cases::cases as case_matrix;
 pub fn compare(kind: &str, info: impl FnMut(u64, u64) -> String) {
     compare_rows(kind, kind, false, info);
 }

@@ -13,9 +13,42 @@ use std::{
 };
 #[path = "delegate_native_host_tests.rs"]
 mod host;
+#[path = "delegate_query_tests.rs"]
+mod queries;
 #[cfg(feature = "prototype-windows-com")]
 #[path = "delegate_runtime_tests.rs"]
 mod runtime;
+#[derive(Default)]
+#[repr(C)]
+struct QueryValue {
+    data: *const u8,
+    length: usize,
+    scalar: u64,
+}
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[repr(C)]
+struct QueryResult {
+    connected: i32,
+    uuid_success: i32,
+    features: u64,
+    uuid_length: usize,
+    info_length: usize,
+    uuid: [u8; 32],
+    info: [u8; 256],
+}
+impl Default for QueryResult {
+    fn default() -> Self {
+        Self {
+            connected: 0,
+            uuid_success: 0,
+            features: 0,
+            uuid_length: 0,
+            info_length: 0,
+            uuid: [0; 32],
+            info: [0; 256],
+        }
+    }
+}
 #[derive(Default)]
 #[repr(C)]
 struct Span {
@@ -95,7 +128,7 @@ impl Ops {
         unsafe {
             let layout: unsafe extern "C" fn(*mut usize, usize) -> i32 =
                 module.symbol(c"mfs_dn_layout")?;
-            let mut actual = [0; 18];
+            let mut actual = [0; 33];
             assert_eq!(layout(actual.as_mut_ptr(), actual.len()), 0);
             assert_eq!(
                 actual,
@@ -117,7 +150,22 @@ impl Ops {
                     offset_of!(host::Table, destroy),
                     offset_of!(host::Table, connect),
                     offset_of!(host::Table, capture),
-                    offset_of!(host::Table, inactive)
+                    offset_of!(host::Table, inactive),
+                    offset_of!(host::Table, query),
+                    size_of::<QueryValue>(),
+                    align_of::<QueryValue>(),
+                    offset_of!(QueryValue, data),
+                    offset_of!(QueryValue, length),
+                    offset_of!(QueryValue, scalar),
+                    size_of::<QueryResult>(),
+                    align_of::<QueryResult>(),
+                    offset_of!(QueryResult, connected),
+                    offset_of!(QueryResult, uuid_success),
+                    offset_of!(QueryResult, features),
+                    offset_of!(QueryResult, uuid_length),
+                    offset_of!(QueryResult, info_length),
+                    offset_of!(QueryResult, uuid),
+                    offset_of!(QueryResult, info)
                 ]
             );
             Ok(Self {

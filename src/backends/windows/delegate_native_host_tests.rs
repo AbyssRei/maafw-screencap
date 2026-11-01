@@ -21,6 +21,7 @@ pub(super) struct Table {
     pub connect: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut i32) -> i32,
     pub capture: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut Span, *mut i32) -> i32,
     pub inactive: unsafe extern "C" fn(*mut c_void, *mut c_void, *mut i32) -> i32,
+    pub query: unsafe extern "C" fn(*mut c_void, *mut c_void, u32, *mut QueryValue) -> i32,
 }
 type Install = unsafe extern "C" fn(*const Table, usize) -> i32;
 struct Stats {
@@ -31,11 +32,13 @@ struct Stats {
     captures: Cell<u32>,
     inactive: Cell<u32>,
     selected: Cell<u64>,
+    queries: [Cell<u32>; 4],
 }
 struct Context {
     output: ManagerImage<CpuImage>,
     manager: NativeManager<CpuImage>,
     adapter: Adapter,
+    query_text: String,
 }
 fn contained(call: impl FnOnce() -> i32) -> i32 {
     catch_unwind(AssertUnwindSafe(call)).unwrap_or(90)
@@ -70,6 +73,7 @@ unsafe extern "C" fn create(
             output: ManagerImage::Empty,
             manager: NativeManager::new(std::ptr::without_provenance_mut(hwnd), method),
             adapter,
+            query_text: String::new(),
         }) else {
             return 3;
         };
@@ -178,6 +182,51 @@ unsafe extern "C" fn inactive(user: *mut c_void, context: *mut c_void, output: *
         0
     })
 }
+unsafe extern "C" fn query(
+    user: *mut c_void,
+    context: *mut c_void,
+    selector: u32,
+    output: *mut QueryValue,
+) -> i32 {
+    contained(|| {
+        // SAFETY: The real provider retains its context and serializes these
+        // synchronous callbacks on the registered caller channel. Borrowed
+        // text is consumed into native caller storage before another context
+        // operation; it is never exposed as a public retained native lease.
+        let stats = unsafe { stats(user) };
+        let Some(count) = stats.queries.get(usize::try_from(selector).unwrap()) else {
+            return 1;
+        };
+        let context = unsafe { &mut *context.cast::<Context>() };
+        let mut value = QueryValue::default();
+        match selector {
+            0 => value.scalar = u64::from(context.manager.connected_native()),
+            1 => {
+                let mut text = String::new();
+                let Ok(success) = context.manager.request_uuid(&mut text) else {
+                    return 3;
+                };
+                context.query_text = text;
+                value.scalar = u64::from(success);
+            }
+            2 => value.scalar = context.manager.get_features(),
+            3 => {
+                let Ok(text) = context.manager.get_info() else {
+                    return 3;
+                };
+                context.query_text = text;
+            }
+            _ => unreachable!("four validated query selectors"),
+        }
+        if matches!(selector, 1 | 3) {
+            value.data = context.query_text.as_ptr();
+            value.length = context.query_text.len();
+        }
+        unsafe { *output = value };
+        count.set(count.get() + 1);
+        0
+    })
+}
 pub(super) struct Guard<'a> {
     stats: Option<Box<Stats>>,
     install: Install,
@@ -193,6 +242,7 @@ impl<'a> Guard<'a> {
             captures: Cell::new(0),
             inactive: Cell::new(0),
             selected: Cell::new(0),
+            queries: std::array::from_fn(|_| Cell::new(0)),
         })
         .unwrap();
         // SAFETY: Header/layout verified by Ops; stable Box is kept through
@@ -205,6 +255,7 @@ impl<'a> Guard<'a> {
             connect,
             capture,
             inactive,
+            query,
         };
         assert_eq!(unsafe { install(&table, size_of::<Table>()) }, 0);
         Self {
@@ -236,6 +287,9 @@ impl<'a> Guard<'a> {
     }
     pub(super) fn selected(&self) -> u64 {
         self.stats.as_ref().unwrap().selected.get()
+    }
+    pub(super) fn query_counts(&self) -> [u32; 4] {
+        std::array::from_fn(|index| self.stats.as_ref().unwrap().queries[index].get())
     }
 }
 impl Drop for Guard<'_> {

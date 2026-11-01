@@ -11,10 +11,12 @@ use std::{
 mod cases;
 #[path = "windows_delegate_native.rs"]
 mod native;
+#[path = "windows_delegate_queries.rs"]
+mod queries;
 #[path = "windows_delegate_runtime.rs"]
 mod runtime;
 
-pub const ORACLE_INPUTS: [&str; 22] = [
+pub const ORACLE_INPUTS: [&str; 23] = [
     "mfs_windows_delegate_model.exe",
     "windows-delegate-loader.inc",
     "windows-delegate-source.inc",
@@ -36,6 +38,7 @@ pub const ORACLE_INPUTS: [&str; 22] = [
     "windows-delegate-native-toolchain-Release.txt",
     "windows-delegate-factory-create.inc",
     "windows-delegate-factory-destroy.inc",
+    "windows-delegate-manager-queries.inc",
     "mfs_delegate_runtime_source.exe",
 ];
 pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
@@ -53,6 +56,9 @@ pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|arg| arg == "win32-queries") {
+        return queries::run(&args[1..]);
+    }
     if args.first().is_some_and(|arg| arg == "win32-runtime") {
         return runtime::run(&args[1..]);
     }
