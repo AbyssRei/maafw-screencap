@@ -10,6 +10,10 @@ function Save-ManagerMetadataReference([string]$BuildDirectory,[string]$RecordDi
         $savedMetadata=Join-Path $RecordDirectory $relative
         Copy-Item -LiteralPath (Join-Path $BuildDirectory $relative) -Destination $savedMetadata;Save $savedMetadata
     }
+    if($IsWindows) {
+        $savedMetadata=Join-Path $RecordDirectory 'win32-identity-source.inc'
+        Copy-Item -LiteralPath (Join-Path $BuildDirectory 'win32-identity-source.inc') -Destination $savedMetadata;Save $savedMetadata
+    }
     $env:MFS_P1_MANAGER_METADATA_MODEL=$program
     $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$OutputDirectory
 }

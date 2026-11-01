@@ -3,7 +3,22 @@
 // Included by owning private unit tests; no internals are exported for a model.
 #[path = "cases.rs"]
 mod cases;
-pub fn compare(kind: &str, mut info: impl FnMut(u64, u64) -> String) {
+pub fn compare(kind: &str, info: impl FnMut(u64, u64) -> String) {
+    compare_rows(kind, kind, false, info);
+}
+#[cfg(target_os = "windows")]
+pub fn compare_identity(mut query: impl FnMut(u64, u64) -> (bool, String, u64)) {
+    compare_rows("win32", "win32-identity", true, |id, method| {
+        let (success, uuid, features) = query(id, method);
+        format!("{}\t{uuid}\t{features}", u8::from(success))
+    });
+}
+fn compare_rows(
+    kind: &str,
+    directory_name: &str,
+    identity: bool,
+    mut info: impl FnMut(u64, u64) -> String,
+) {
     use std::{fmt::Write, fs, path::PathBuf, process::Command};
     let model =
         std::env::var_os("MFS_P1_MANAGER_METADATA_MODEL").expect("explicit metadata source model");
@@ -18,7 +33,7 @@ pub fn compare(kind: &str, mut info: impl FnMut(u64, u64) -> String) {
         assert!(!existing.canonicalize().unwrap().starts_with(&product));
     }
     fs::create_dir_all(&base).unwrap();
-    let directory = base.join(kind);
+    let directory = base.join(directory_name);
     fs::create_dir(&directory).unwrap();
     let mut cases = String::new();
     let mut expected = Vec::new();
@@ -28,7 +43,12 @@ pub fn compare(kind: &str, mut info: impl FnMut(u64, u64) -> String) {
     }
     let input = directory.join("cases.tsv");
     fs::write(&input, cases).unwrap();
-    let output = Command::new(model).arg(&input).output().unwrap();
+    let mut command = Command::new(model);
+    command.arg(&input);
+    if identity {
+        command.arg("--win32-identity");
+    }
+    let output = command.output().unwrap();
     fs::write(directory.join("source-stdout.txt"), &output.stdout).unwrap();
     fs::write(directory.join("source-stderr.txt"), &output.stderr).unwrap();
     assert!(
@@ -47,8 +67,15 @@ pub fn compare(kind: &str, mut info: impl FnMut(u64, u64) -> String) {
         writeln!(&mut rust, "{index}\t{value}").unwrap();
     }
     fs::write(directory.join("rust-stdout.txt"), rust).unwrap();
-    println!(
-        "manager metadata kind={kind} cases={} exact_original_json=1 input_none=1 no_native_connection=1 passed",
-        expected.len()
-    );
+    if identity {
+        println!(
+            "manager identity kind=win32 cases={} exact_original_uuid_features=1 input_none=1 no_native_connection=1 passed",
+            expected.len()
+        );
+    } else {
+        println!(
+            "manager metadata kind={kind} cases={} exact_original_json=1 input_none=1 no_native_connection=1 passed",
+            expected.len()
+        );
+    }
 }

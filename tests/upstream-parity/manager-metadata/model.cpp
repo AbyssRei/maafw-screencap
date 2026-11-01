@@ -13,6 +13,7 @@
 #include <fstream>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -22,11 +23,28 @@
 using HWND=void*; // Explicit portable pointer projection; never dereferenced.
 #endif
 namespace Win {
+#if defined(_WIN32)
+// No input object is created or queried. The exact original get_features body
+// must take its null-owner branches; unexpected consumption fails explicitly.
+struct InputQuery {
+    MaaControllerFeature get_features() const { throw std::logic_error("excluded input query"); }
+};
+#define LogWarn if(false) std::cerr
+#endif
 struct Win32ControlUnitMgr {
     json::object get_info() const;
 #include "win32-info-members.inc"
+#if defined(_WIN32)
+    bool request_uuid(std::string&);
+    MaaControllerFeature get_features() const;
+    std::shared_ptr<InputQuery> mouse_,keyboard_;
+#endif
 };
 #include "win32-info-source.inc"
+#if defined(_WIN32)
+#include "win32-identity-source.inc"
+#undef LogWarn
+#endif
 }
 namespace Mac {
 struct MacOSControlUnitMgr {
@@ -47,7 +65,11 @@ int main(int argc,char** argv) {
         static_assert(sizeof(HWND)==8 && sizeof(uintptr_t)==8);
         static_assert(sizeof(MaaWin32ScreencapMethod)==8 && sizeof(MaaWin32InputMethod)==8);
         static_assert(sizeof(MaaMacOSScreencapMethod)==8 && sizeof(MaaMacOSInputMethod)==8);
-        require(argc==2,"usage: model <explicit case table>");
+        const bool identity=argc==3 && std::string(argv[2])=="--win32-identity";
+        require(argc==2 || identity,"usage: model <explicit case table> [--win32-identity]");
+#if !defined(_WIN32)
+        require(!identity,"Win32 pointer-stream queries require native MSVC");
+#endif
         std::ifstream input(argv[1],std::ios::binary);require(input.good(),"cannot open metadata case table");
         std::string line;size_t row=0;
         while(std::getline(input,line)) {
@@ -60,6 +82,16 @@ int main(int argc,char** argv) {
                 manager.hwnd_=reinterpret_cast<HWND>(static_cast<uintptr_t>(id));
                 manager.screencap_method_=method;
                 require(manager.mouse_method_==0 && manager.keyboard_method_==0,"metadata model input must remain None");
+#if defined(_WIN32)
+                if(identity) {
+                    std::string uuid="caller sentinel";
+                    const bool success=manager.request_uuid(uuid);
+                    const auto features=manager.get_features();
+                    std::cout<<row<<'\t'<<success<<'\t'<<uuid<<'\t'<<features<<'\n';
+                    require(row<std::numeric_limits<size_t>::max(),"identity row count overflow");++row;
+                    continue;
+                }
+#endif
                 info=manager.get_info();
             }else {
                 require(kind=="macos" && id<=std::numeric_limits<uint32_t>::max(),"invalid macOS metadata target");

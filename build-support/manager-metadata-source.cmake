@@ -29,3 +29,18 @@ function(mfs_metadata_extract kind directory class first_member)
 endfunction()
 mfs_metadata_extract(win32 MaaWin32ControlUnit Win32ControlUnitMgr "HWND hwnd_")
 mfs_metadata_extract(macos MaaMacOSControlUnit MacOSControlUnitMgr "uint32_t window_id_")
+
+# Native MSVC pointer-stream and Input=None queries. Keep these separate from
+# the portable JSON model; ostream<void*> spelling is implementation-specific.
+if(WIN32)
+    file(READ "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Manager/Win32ControlUnitMgr.cpp" _source)
+    string(REPLACE "\r\n" "\n" _source "${_source}")
+    string(FIND "${_source}" "bool Win32ControlUnitMgr::request_uuid(" _begin)
+    string(FIND "${_source}" "bool Win32ControlUnitMgr::start_app(" _end)
+    if(_begin LESS 0 OR _end LESS_EQUAL _begin)
+        message(FATAL_ERROR "Missing fixed Win32 UUID/features query boundaries")
+    endif()
+    math(EXPR _length "${_end}-${_begin}")
+    string(SUBSTRING "${_source}" ${_begin} ${_length} _body)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/win32-identity-source.inc" "// Exact fixed query bodies; newline normalization only.\n${_body}")
+endif()

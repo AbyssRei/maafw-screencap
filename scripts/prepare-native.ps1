@@ -322,6 +322,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 if($LASTEXITCODE -ne 0){throw 'Metadata source/Rust artifact validation failed'}
             }
         }
+        if($Name -eq 'manager-identity-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('manager identity kind=win32 cases=88 exact_original_uuid_features=1 input_none=1 no_native_connection=1 passed')) {
+                throw 'Expected actual native MSVC original-body UUID/features comparison'
+            }
+            & $ConfigureTool upstream-metadata win32-identity (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS win32-identity) >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Windows UUID/features artifact validation failed'}
+        }
         if($Name -eq 'custom-native-parity' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -835,7 +844,7 @@ try {
             # product/runtime dependency or a new online version selection.
             $env:MFS_P1_MANAGER_METADATA_MODEL=Prepared-File mfs_manager_metadata_model.exe
             Save-Input $env:MFS_P1_MANAGER_METADATA_MODEL
-            foreach($name in @('win32-info-source.inc','win32-info-members.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
+            foreach($name in @('win32-info-source.inc','win32-info-members.inc','win32-identity-source.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
             foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
@@ -1104,11 +1113,14 @@ try {
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
             $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
+            $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
+            $caseSelection+=@('--skip',$managerIdentityCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
                 @{name='manager-metadata-parity';arguments=($parityArguments + @('--','metadata_matches_original','--ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-identity-parity';arguments=($parityArguments + @('--',$managerIdentityCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},

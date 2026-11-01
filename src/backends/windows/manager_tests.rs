@@ -13,6 +13,24 @@ fn metadata_matches_original_signed_selectors_and_pointer_identity() {
         .unwrap()
     });
 }
+#[test]
+#[ignore = "requires the explicitly built native MSVC UUID/features source model"]
+fn identity_matches_original_hwnd_stream_and_input_none_features() {
+    crate::backends::manager_metadata::compare_identity(|id, method| {
+        let mut uuid = String::from("caller sentinel");
+        let (success, features) = {
+            let manager = Manager::<()>::new(
+                std::ptr::without_provenance_mut(usize::try_from(id).unwrap()),
+                method,
+            );
+            let success = manager.request_uuid(&mut uuid).unwrap();
+            assert!(!manager.connected(&NativePlatform));
+            (success, manager.get_features())
+        };
+        // The query output is an owned value and survives this manager.
+        (success, uuid, features)
+    });
+}
 use crate::backends::windows::parity_adapter::{
     Adapter,
     manager::{Event, Report, Script, Step},

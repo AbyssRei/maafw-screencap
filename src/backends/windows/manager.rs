@@ -188,6 +188,24 @@ impl<U> Manager<U> {
     pub fn selected(&self) -> Option<Method> {
         self.selected.as_ref().map(|(method, _)| *method)
     }
+    pub fn request_uuid(&self, output: &mut String) -> Result<bool, TryReserveError> {
+        // Fixed MSVC ostream<void*> spelling: zero-padded uppercase hex,
+        // including a null HWND. The source never dereferences/validates it
+        // here and does not require connection. This is a legacy identity,
+        // not a persistent SDK source key.
+        let width = size_of::<*mut c_void>() * 2;
+        let mut value = String::new();
+        value.try_reserve_exact(width)?;
+        write!(&mut value, "{:0width$X}", self.window.addr())
+            .expect("String formatting cannot fail");
+        *output = value;
+        Ok(true)
+    }
+    pub const fn get_features(&self) -> u64 {
+        // This capture-only manager has no mouse or keyboard owner. Both
+        // source feature contributions are therefore absent (Input=None).
+        0
+    }
     pub fn get_info(&self) -> Result<String, TryReserveError> {
         let mut value = String::new();
         value.try_reserve_exact(256)?;
