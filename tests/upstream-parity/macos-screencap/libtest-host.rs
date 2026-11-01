@@ -5,8 +5,15 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{NSApplication, NSApplicationActivationPolicy};
 use objc2_foundation::{NSDate, NSDefaultRunLoopMode, NSRunLoop};
 use std::process::ExitCode;
+#[path = "same-binary-host.rs"]
+mod same_binary;
+#[path = "same-binary-protocol.rs"]
+pub(crate) mod same_binary_protocol;
 
 pub(crate) fn run(tests: &[&test::TestDescAndFn]) {
+    if same_binary::child() {
+        same_binary::run();
+    }
     if std::env::var("MFS_P1_MACOS_MAIN_THREAD_HOST").as_deref() != Ok("1") {
         finish(test::test_main_env_args(tests));
         return;

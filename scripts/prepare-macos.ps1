@@ -41,7 +41,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-same-binary-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -123,6 +123,22 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             }
             & $ConfigureTool upstream-macos-queries $env:MFS_MAC_MANAGER_QUERY_RECORDS >> $log 2>&1
             if($LASTEXITCODE -ne 0){$status='failed';throw 'Actual macOS query records rejected'}
+        }
+        if($Name -match '^rust-macos-same-binary-([01])$') {
+            $sameMode=$Matches[1]
+            $pattern="native Rust macOS same_binary mode=$sameMode invocations=3 usable_images=([0-3]) known_patch_images=([0-3]) scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 recorded"
+            $result=[regex]::Matches($observed,$pattern)
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or $result.Count -ne 1 -or
+                -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1')) {
+                $status='failed';throw 'Expected one real same-binary test, three observations and joined main-thread host'
+            }
+            $usable=[int]$result[0].Groups[1].Value;$known=[int]$result[0].Groups[2].Value
+            if($known -gt $usable -or ($sameMode -eq '1' -and ($usable -ne 3 -or $known -ne 3))) {
+                $status='failed';throw 'Same-binary CG positive control or observation counts differ'
+            }
+        }
+        if($Name -eq 'macos-same-binary-records' -and -not $observed.Contains('macOS same_binary arms=2 invocations=6 CG_positive_images=3 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed')) {
+            $status='failed';throw 'Incomplete same-binary observation records'
         }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -250,6 +266,7 @@ try {
             try { Run-RustMacosProbe $probe[0] ('backends::macos::screen_capture_kit::tests::'+$probe[1]) $executable $rustArtifacts }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
+        Run-MacosSameBinaryProbes $rustArtifacts
         try {Run-ObservedMacosSamePathProbe $rustArtifacts}
         catch {$failed=$true;Write-Host $_.Exception.Message}
     }else{

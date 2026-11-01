@@ -30,6 +30,7 @@ mod macos_capture_stages;
 mod macos_display_geometry;
 mod macos_display_patch;
 mod macos_manager_queries;
+mod macos_same_binary;
 mod macos_sample_cases;
 mod macos_sample_matrix;
 mod manager_metadata;
@@ -238,6 +239,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace macos-display-appkit-consumer <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-appkit-scene <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-cg-scene <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace macos-same-binary <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-observer-same-path <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-capture-stages <external observer directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-sample-matrix <external directory> [--check-only]\n\n\

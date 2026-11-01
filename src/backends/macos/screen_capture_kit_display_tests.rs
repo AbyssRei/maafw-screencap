@@ -208,7 +208,7 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
         "native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed"
     );
 }
-fn selection_record(selection: Option<DisplaySelection>) -> String {
+pub(super) fn selection_record(selection: Option<DisplaySelection>) -> String {
     match selection {
         Some(value) => format!(
             "1\t{}\t{}\t{}\t{}\n",

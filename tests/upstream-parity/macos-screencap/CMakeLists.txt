@@ -52,6 +52,16 @@ target_link_libraries(mfs_macos_observed_context PRIVATE ${_mfs_source_links})
 target_compile_definitions(mfs_macos_observed_context PRIVATE MFS_MAC_DISPATCH_OBSERVER=1)
 target_compile_options(mfs_macos_observed_context PRIVATE -fno-objc-arc -fblocks -Wall -Wextra
     -include "${CMAKE_CURRENT_SOURCE_DIR}/dispatch-observer.hpp")
+# Loaded only by the explicitly selected Rust scene-child entry, on main.
+# Keep it separate from the existing adapter so old consumer processes never
+# register these extra fixture classes merely by loading their converter.
+add_library(mfs_macos_same_binary_scene SHARED same-binary-scene.mm
+    "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
+target_include_directories(mfs_macos_same_binary_scene PRIVATE ${_mfs_source_includes})
+target_link_libraries(mfs_macos_same_binary_scene PRIVATE ${_mfs_source_links})
+target_compile_options(mfs_macos_same_binary_scene PRIVATE -fno-objc-arc -fblocks -Wall -Wextra)
+set_target_properties(mfs_macos_same_binary_scene PROPERTIES
+    CXX_VISIBILITY_PRESET hidden OBJCXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "Complete fixed ScreenCaptureKitScreencap header/Objective-C++ source compiles unchanged with manual reference counting. Screenshot base declaration is extracted unchanged; private namespace/logging exclude unrelated input/framework code. AppKit fixture lives on process main thread, original synchronous calls execute on joined callers, and native callbacks retain original five-second wait/conversion/release points. Controlled-window interior pixels and retained Mat owners are checked; resource/late-callback/format/full-display/manager parity and complete Rust acceptance remain incomplete. The explicit private adapter serves the initial Rust migration and exact selected manager-body scripts. It also compiles the same unchanged source separately for its image_from_sample_buffer helper; native-owned CVPixelBuffer/ready CMSampleBuffer fixtures exercise actual padded strides, conversion, overwrite and retained CPU owners without capturing a desktop or requesting capture permission. Original manager forwarding uses real unchanged SCK; Input=None is stubbed, full manager/API/metadata acceptance remains pending. OpenCV stays outside product/default builds.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"

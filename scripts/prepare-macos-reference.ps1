@@ -101,7 +101,31 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $adapter -Destination $saved;Save $saved
     Step macos-opencv-linkage otool @('-L',$adapter)
     $env:MFS_P1_MACOS_OPENCV_ADAPTER=$adapter
+    $sceneModule=Join-Path $build libmfs_macos_same_binary_scene.dylib
+    $saved=Join-Path $refInputs libmfs_macos_same_binary_scene.dylib
+    Copy-Item -LiteralPath $sceneModule -Destination $saved;Save $saved
+    Step macos-same-binary-scene-linkage otool @('-L',$sceneModule)
+    $env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE=$sceneModule
     return $executable
+}
+
+# Fresh parent/child process pairs; each pair uses exactly the same executable.
+# Source oracles and the existing external-scene probes keep their own results.
+function Run-MacosSameBinaryProbes([string]$Artifacts) {
+    $root=Join-Path $Artifacts same-binary-display
+    New-Item -ItemType Directory -Path $root|Out-Null
+    $test='backends::macos::screen_capture_kit::tests::same_binary::records_first_display_with_same_executable_scene_host'
+    foreach($mode in @(1,0)) {
+        $directory=Join-Path $root "mode-$mode"
+        New-Item -ItemType Directory -Path $directory|Out-Null
+        $env:MFS_P1_MACOS_SAME_BINARY_ROOT=$directory
+        $env:MFS_P1_MACOS_SAME_BINARY_MODE=[string]$mode
+        $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
+        try {Step "rust-macos-same-binary-$mode" cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$test,'--','--exact','--ignored','--test-threads=1','--nocapture')}
+        catch {$script:failed=$true;Write-Host $_.Exception.Message}
+    }
+    try {Step macos-same-binary-records $ConfigureTool @('upstream-trace','macos-same-binary',$root)}
+    catch {$script:failed=$true;Write-Host $_.Exception.Message}
 }
 
 function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[string]$Artifacts) {

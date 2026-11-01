@@ -6,6 +6,8 @@ use super::*;
 mod display_geometry;
 #[path = "screen_capture_kit_display_tests.rs"]
 mod display_patch;
+#[path = "screen_capture_kit_same_binary_tests.rs"]
+mod same_binary;
 #[path = "screen_capture_kit_sample_tests.rs"]
 mod sample_matrix;
 use std::{
