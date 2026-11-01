@@ -114,12 +114,13 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
     $foundationConsumer=$Name -eq 'rust-macos-display-foundation-consumer'
     $appkitConsumer=$Name -eq 'rust-macos-display-appkit-consumer'
     $appkitScene=$Name -eq 'rust-macos-display-appkit-scene'
-    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise','rust-macos-display-distinct-host','rust-macos-display-foundation-consumer','rust-macos-display-appkit-consumer','rust-macos-display-appkit-scene')
+    $cgScene=$Name -eq 'rust-macos-display-cg-scene'
+    $displayPatch=$Name -in @('rust-macos-display-patch','rust-macos-display-host-premise','rust-macos-display-distinct-host','rust-macos-display-foundation-consumer','rust-macos-display-appkit-consumer','rust-macos-display-appkit-scene','rust-macos-display-cg-scene')
     $originalFailure=$null
     try {
         $sceneExecutable=if($distinctHost){$script:MacosDistinctSceneExecutable}else{$Executable}
         $info=[Diagnostics.ProcessStartInfo]::new($sceneExecutable)
-        $sceneMode=if($appkitScene){'display-scene-appkit'}elseif($displayPatch){'display-scene'}else{'scene'}
+        $sceneMode=if($cgScene){'display-scene-cg'}elseif($appkitScene){'display-scene-appkit'}elseif($displayPatch){'display-scene'}else{'scene'}
         $info.ArgumentList.Add($sceneMode);$info.ArgumentList.Add($scene)
         $info.UseShellExecute=$false;$info.RedirectStandardOutput=$true;$info.RedirectStandardError=$true
         $server=[Diagnostics.Process]::Start($info)
@@ -133,10 +134,10 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $identity=Get-Content -LiteralPath $ready -Raw|ConvertFrom-Json
         if($identity.owner_pid -ne $server.Id -or $identity.width -ne 47 -or $identity.height -ne 31 -or $identity.colour -ne 'green' -or $identity.window_id -le 0){throw 'Unexpected owned native scene identity'}
         if($displayPatch -and $identity.display_patch -ne 1){throw 'Missing explicit first-display patch premise'}
-        if($distinctHost -or $foundationConsumer -or $appkitConsumer -or $appkitScene){
+        if($distinctHost -or $foundationConsumer -or $appkitConsumer -or $appkitScene -or $cgScene){
             $binaryIdentity=[ordered]@{}
             foreach($key in $script:MacosSceneIdentity.Keys){$binaryIdentity[$key]=$script:MacosSceneIdentity[$key]}
-            if($foundationConsumer -or $appkitConsumer -or $appkitScene){
+            if($foundationConsumer -or $appkitConsumer -or $appkitScene -or $cgScene){
                 $binaryIdentity.scene_path=$Executable
                 $binaryIdentity.scene_sha256=$binaryIdentity.consumer_sha256
                 $binaryIdentity.scene_unix_mode=$binaryIdentity.consumer_unix_mode
@@ -193,7 +194,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         $oracleRecord=Join-Path $directory source-oracle-identities.json
         Json $oracleRecord $oracleRecords;Save $oracleRecord
         foreach($file in $oracleFiles){Save $file.FullName}
-        if($displayPatch -and -not $distinctHost -and -not $foundationConsumer -and -not $appkitConsumer -and -not $appkitScene){
+        if($displayPatch -and -not $distinctHost -and -not $foundationConsumer -and -not $appkitConsumer -and -not $appkitScene -and -not $cgScene){
             # A distinct executable/child directory instruments the real
             # semaphore calls. Its timing/logging is diagnostic only; it never
             # supplies or replaces the unchanged oracle's status or images.
@@ -231,6 +232,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
                 if(-not $unexpected -and -not $forced -and $server.ExitCode -eq 0 -and $stdout -match 'owned macOS scene stop=1 main_thread=1 passed'){$status='passed'}
                 elseif($server.ExitCode -eq 77){$status='missing_environment'}
                 if($appkitScene -and $status -eq 'passed' -and -not $stdout.Contains('owned macOS appkit_scene main_thread=1 event_polling=1 window_closed=1 passed')){$status='failed'}
+                if($cgScene -and $status -eq 'passed' -and -not $stdout.Contains('owned macOS cg_scene geometry_queries=2 single_active_display=1 window_closed=1 passed')){$status='failed'}
             }finally{
                 $checks.Add([ordered]@{name="$Name-scene-stop";status=$status;log=(Artifact $log)})
                 $server.Dispose()
@@ -238,7 +240,7 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
         }
     }
     if($displayPatch){
-        $recordKind=if($appkitScene){'macos-display-appkit-scene'}elseif($appkitConsumer){'macos-display-appkit-consumer'}elseif($foundationConsumer){'macos-display-foundation-consumer'}elseif($distinctHost){'macos-display-distinct-host'}elseif($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
+        $recordKind=if($cgScene){'macos-display-cg-scene'}elseif($appkitScene){'macos-display-appkit-scene'}elseif($appkitConsumer){'macos-display-appkit-consumer'}elseif($foundationConsumer){'macos-display-foundation-consumer'}elseif($distinctHost){'macos-display-distinct-host'}elseif($hostPremise){'macos-display-host-premise'}else{'macos-display-patch'}
         try {Step "$recordKind-records" $ConfigureTool @('upstream-trace',$recordKind,$directory)}
         catch {if(-not $originalFailure){throw}}
         if($originalFailure){throw $originalFailure}

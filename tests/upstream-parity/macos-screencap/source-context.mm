@@ -308,6 +308,7 @@ int main(int argc,char** argv) {
             else if(mode=="display") { display(directory); }
             else if(mode=="scene") { scene(app,directory); }
             else if(mode=="display-scene" || appkit_scene) { display_patch_scene(app,directory); }
+            else if(mode=="display-scene-cg") { display_patch_cg_scene(app,directory); }
             else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
             else if(mode=="display-patch-host-premise" && argc==5) { display_patch_host_premise(directory,argv[3],argv[4]); }
             else if(foundation_consumer && argc==4) { display_patch_foundation_consumer(directory,argv[3]); }
@@ -317,6 +318,8 @@ int main(int argc,char** argv) {
             else { throw std::runtime_error("unknown original macOS context mode"); }
         }
         return 0;
+    }catch(const CgSceneUnavailable& error) {
+        std::cerr<<"missing_environment: "<<error.what()<<'\n';return 77;
     }catch(const std::exception& error) {
         std::cerr<<"original macOS context failure: "<<error.what()<<'\n';
 #ifdef MFS_MAC_DISPATCH_OBSERVER

@@ -2,6 +2,8 @@
 
 ## Actual State and Reading Order
 
+The separate macOS CoreGraphics scene control keeps source consumer/scene executable identity equal while changing only producer metadata queries. It requires one active display and independently checks owner/query/closure records with all existing pixels/leases. It remains diagnostic, awaits native CI, and cannot replace old failed source oracles or prove a broker/TCC cause; framework-internal calls are not observed. See the development guide.
+
 The native delegate has a separate consumed-object cleanup-error control. Run its exact ignored test alone: deliberate module references survive until process exit. Native object destruction precedes injected error returns; this tests conservative module retention and the sticky first error, not unknown consumption, native destructor exceptions or callback draining. The normal manager aggregate skips it before its dedicated process. See the development guide; full P1 remains incomplete.
 
 Exact e243fee CI crosses the former strict-latest Xcode gate: macOS P0 passes, and P1 records 119/131 checks with twelve real display/fixture and downstream-record failures. Linux records 27/195/140 P0/PipeWire/Wlr native passes but its old parser rejects preinstalled `policy`. The fixed parser now passes the complete 682e629 Linux job. The official complete e243fee archive independently verifies sixteen manifests, 75,709 paths, fifteen ordinary 467-file snapshots plus one unbuildable control and 76 F blobs; all 24 data validators and read-only rechecks of the three original native manifests pass. Original failed executions stay failed; preinstalled LLVM 22.1.2 identities are host observations, not another host's compiler/runtime or full P1 acceptance. The full review is sealed.

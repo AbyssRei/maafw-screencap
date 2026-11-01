@@ -98,6 +98,7 @@ void display_patch_scene(NSApplication* app,const std::filesystem::path& directo
     require(stopped.good(),"cannot acknowledge display scene closure");std::filesystem::rename(directory/"stopped.tmp",directory/"stopped.txt");
     std::cout<<"owned macOS scene stop=1 main_thread=1 passed\n";
 }
+#include "cg-display-scene.hpp"
 void display_patch(const std::filesystem::path& directory,const char* argument) {
     const auto wid=std::stoull(argument);require(wid>0 && wid<=UINT32_MAX,"display patch window ID narrowing");
     const auto g=display_geometry(static_cast<uint32_t>(wid));const auto identity=display_geometry_text(g);

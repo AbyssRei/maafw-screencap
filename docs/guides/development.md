@@ -4,6 +4,8 @@
 
 ## 本轮原生与 CI 复核
 
+macOS 新增独立 `display-scene-cg` 宿主控制：同一原版可执行路径继续承担场景与消费进程，场景改用 [CoreGraphics 活动显示器](https://developer.apple.com/documentation/coregraphics/cggetactivedisplaylist%28_%3A_%3A_%3A%29)和[自有窗口信息](https://developer.apple.com/documentation/coregraphics/cgwindowlistcopywindowinfo%28_%3A_%3A%29)发布几何，不在该场景代码路径显式调用 ScreenCaptureKit。它要求单活动显示器，记录两次几何查询、真实窗口/PID 和主线程关闭；权限仍用原 preflight 检查。消费端仍执行原 `display-patch` 和五秒等待，Rust 继续原捕获入口；`upstream-trace macos-display-cg-scene` 保留相同二进制/路径/权限、六次已知图样、十八份 payload、转换和所有权检查。该项用于隔离生产者枚举行为，原生编译/运行尚待 Actions，不替代旧失败 oracle，也不声称观察了框架内部调用或证明根因。
+
 委托销毁新增独立进程控制：使用真实原工厂和虚析构，不连接、不创建后端、不截图；边界先确实销毁对象，再返回两种受控清理错误。测试核对正常路径卸载、错误路径保留 DLL、第二个错误不覆盖首错，以及借用 bridge owner 结束后的模块保留。`cargo xtask upstream-delegate win32-destroy <外部记录目录> [--check-only]` 独立检查三组对象、原生调用线程、六条创建/销毁事件和模块观察；实际原生异常、销毁状态未知、回调排空及泄漏模块的回收仍待验收。这项测试必须通过精确筛选在独立进程运行，错误路径的模块引用保留到该进程退出；manager 编排会从聚合测试中排除它，再单独执行并收集失败记录。它不改变捕获或清理实现，也不完成 P1。
 
 CI 已按用户要求使用可用预装工具，不以严格最新版匹配作为门禁。确切 `e243fee` 的 [Actions 41294808000](https://github.com/AbyssRei/maafw-screencap/actions/runs/41294808000) macOS P0 捕获通过，P1 实际执行 131 项检查、119 项通过，包含新增原接口 manager 查询；五组原版显示/夹具场景与其数据检查，以及单独的同路径观察者与数据检查仍为十二项失败。部分原版在原五秒等待后返回空结果，另有夹具显示观察超时，不重标为工具链缺失或完整平台通过。Linux P0 的 27 项原生检查通过，但命令在随后的归档验证阶段失败：预装 LLVM 记录新增 `policy` 后，旧校验器仍只接受下载包格式；P1 PipeWire/Wlr 亦遇到该记录错误。旧失败原样保留，现增加独立的预装记录格式校验，保留旧下载格式，并继续拒绝未知字段、重复字段、缺失工具/生成库、路径越界、错误摘要和链接参数；升级查询失败或较新发布只作为参考。随后确切 `682e629` 的 [Actions 41299003920](https://github.com/AbyssRei/maafw-screencap/actions/runs/41299003920) 整个 Linux job 成功；其他平台和完整 P1 仍保留各自未完成范围。

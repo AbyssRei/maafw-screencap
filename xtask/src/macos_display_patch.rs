@@ -35,6 +35,7 @@ pub(crate) enum Probe {
     FoundationConsumer,
     AppkitConsumer,
     AppkitScene,
+    CgScene,
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -104,7 +105,7 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     let host_premise = probe == Probe::HostPremise;
     let (path,check_only)=match args {
         [path]=>(path,false),[path,flag] if flag=="--check-only"=>(path,true),
-        _=>return Err("expected upstream-trace macos-display-<patch|host-premise|distinct-host|foundation-consumer|appkit-consumer|appkit-scene> <actual external directory> [--check-only]".into()),
+        _=>return Err("expected upstream-trace macos-display-<patch|host-premise|distinct-host|foundation-consumer|appkit-consumer|appkit-scene|cg-scene> <actual external directory> [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -127,6 +128,7 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
             | Probe::FoundationConsumer
             | Probe::AppkitConsumer
             | Probe::AppkitScene
+            | Probe::CgScene
     ) {
         let identity: SceneExecutable =
             serde_json::from_slice(&read("scene-executable-identity.json")?)?;
@@ -157,6 +159,9 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     let g = macos_display_geometry::parse(std::str::from_utf8(&geometry_bytes)?)?;
     if g.window != scene.window_id || g.pid != scene.owner_pid {
         return Err("native first-display geometry substituted the owned window/process".into());
+    }
+    if probe == Probe::CgScene {
+        cg_scene_state(&read("scene/cg-scene-state.txt")?, &g)?;
     }
     let source_geometry = if host_premise {
         host_geometry(&g, &read("source-geometry-provenance.txt")?)?;
@@ -250,6 +255,14 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         report["paired_acceptance"] = false.into();
         report["scope"] = "Same-path, byte-identical original consumer and scene executable. Only the owned scene producer enables main-thread AppKit updateWindows, bounded nextEventMatchingMask and sendEvent for dequeued events. The uninstrumented consumer uses its original display-patch mode and Foundation loop; source class, geometry queries, default first display, original five-second wait and Rust host remain unchanged. Producer state is saved after native window close and before stop acknowledgment, requiring an initialized main-thread NSApplication, nonzero polls and matching updates; zero dequeued events never implies event dispatch. Producer closure does not certify source capture. Original source success, all six known-patch captures, eighteen payloads, full Rust conversion, same binary/path/mode/PID and owner checks remain mandatory. This producer-event control is not NSApplication.run, root-cause proof, replacement of old failures or complete P1 acceptance.".into();
     }
+    if probe == Probe::CgScene {
+        report["scene_geometry_origin"] = "core_graphics".into();
+        report["scene_geometry_queries"] = 2.into();
+        report["same_scene_executable_path"] = true.into();
+        report["diagnostic_only"] = true.into();
+        report["paired_acceptance"] = false.into();
+        report["scope"] = "Same-path, byte-identical original consumer and scene executable. This separate producer mode queries its one active display and owned window through CoreGraphics; no explicit ScreenCaptureKit enumeration/capture is called by that mode. This is a reviewed source-path premise, not observation of framework-internal calls. Consumer native SC geometry queries, original capture/default/five-second wait and Rust implementation remain unchanged. Records require actual single-display ID, scene PID/window, two producer geometry queries, native window closure, six successful known-patch captures, eighteen payloads, full Rust conversion and ownership checks. The control cannot replace prior failed oracles, prove a broker/TCC mechanism or complete P1 acceptance.".into();
+    }
     let output = root.join(match probe {
         Probe::HostPremise => "display-host-premise-validation.json",
         Probe::DistinctHost => "display-distinct-host-validation.json",
@@ -257,6 +270,7 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         Probe::FoundationConsumer => "display-foundation-consumer-validation.json",
         Probe::AppkitConsumer => "display-appkit-consumer-validation.json",
         Probe::AppkitScene => "display-appkit-scene-validation.json",
+        Probe::CgScene => "display-cg-scene-validation.json",
     });
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -268,6 +282,10 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     if host_premise {
         println!(
             "macOS display_host_premise source_captures=3 rust_captures=3 payloads=18 consumer_geometry_queries=0 live_consumer_display_identity_observed=0 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
+    } else if probe == Probe::CgScene {
+        println!(
+            "macOS display_cg_scene source_captures=3 rust_captures=3 payloads=18 producer_geometry_queries=2 same_binary_and_path_verified=1 scene_window_closed=1 known_owned_patch=6 diagnostic_only=1 paired_acceptance=0 full_P1_acceptance=0 passed"
         );
     } else if probe == Probe::AppkitScene {
         println!(
@@ -506,6 +524,19 @@ fn observer_waits(text: &str) -> Result<[[u64; 5]; 3]> {
     }
     Ok(output)
 }
+fn cg_scene_state(bytes: &[u8], g: &Geometry) -> Result<()> {
+    let expected = format!(
+        "geometry_origin=core_graphics\ngeometry_queries=2\ndisplay_count=1\ndisplay_id={}\nscene_pid={}\nwindow_id={}\nmain_thread=1\nwindow_closed=1\n",
+        g.display, g.pid, g.window
+    );
+    if g.count != 1 || bytes != expected.as_bytes() {
+        return Err(
+            "CoreGraphics scene identity, query/closure records or single-display premise differs"
+                .into(),
+        );
+    }
+    Ok(())
+}
 fn appkit_state(bytes: &[u8]) -> Result<[u64; 3]> {
     appkit_loop_state(bytes, "source_capture_passed")
 }
@@ -639,6 +670,34 @@ fn traces(text: &str, g: &Geometry) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_substituted_coregraphics_scene_owners_queries_and_unclosed_windows() {
+        let mut g = macos_display_geometry::parse(
+            "1\t17\t640\t480\t0\t0\t640\t480\t91\t7\t100\t100\t47\t31\t1\t2\n",
+        )
+        .unwrap();
+        let good = "geometry_origin=core_graphics\ngeometry_queries=2\ndisplay_count=1\ndisplay_id=17\nscene_pid=7\nwindow_id=91\nmain_thread=1\nwindow_closed=1\n";
+        cg_scene_state(good.as_bytes(), &g).unwrap();
+        for bad in [
+            good.replace("core_graphics", "screencapturekit"),
+            good.replace("queries=2", "queries=1"),
+            good.replace("queries=2", "queries=3"),
+            good.replace("count=1", "count=2"),
+            good.replace("display_id=17", "display_id=18"),
+            good.replace("scene_pid=7", "scene_pid=8"),
+            good.replace("window_id=91", "window_id=92"),
+            good.replace("main_thread=1", "main_thread=0"),
+            good.replace("window_closed=1", "window_closed=0"),
+            good.replace("window_closed=1\n", ""),
+            good.to_owned() + "window_closed=1\n",
+            good.to_owned() + "source_capture_passed=1\n",
+            good.replace("scene_pid=7", "scene_pid=07"),
+        ] {
+            assert!(cg_scene_state(bad.as_bytes(), &g).is_err());
+        }
+        g.count = 2;
+        assert!(cg_scene_state(good.as_bytes(), &g).is_err());
+    }
     #[test]
     fn rejects_failed_missing_duplicate_and_late_observer_wait_records() {
         let mut good = String::from(

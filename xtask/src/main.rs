@@ -235,6 +235,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace macos-display-foundation-consumer <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-appkit-consumer <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-appkit-scene <external directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace macos-display-cg-scene <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-observer-same-path <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-capture-stages <external observer directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-sample-matrix <external directory> [--check-only]\n\n\
