@@ -4,13 +4,17 @@
 
 ## 本轮原生与 CI 复核
 
+确切 `88208bd` 的 [Actions 41355524703](https://github.com/AbyssRei/maafw-screencap/actions/runs/41355524703) 原生 Mac 已编译新 Objective-C++ wrapper，并通过同进程原版/Rust 的两个 mode 及记录检查。CG 场景中双方各三次得到已知图样，SC 场景中双方各三次返回 None；原版 SC 耗时约 5.034/5.067/5.141 秒，Rust 约 5.002/5.048/5.143 秒。97 份真实矩阵文件匹配登记 SHA-256，独立核对实际可执行文件长度/FNV/路径、真实父子 PID/窗口归属、原版 native caller thread、两个实际加载模块路径一致、context 清理及场景关闭。十八份当前/持帧 payload 的全图通道转换、已知目标像素和 held bytes 通过；六次 None 没有附加替代图片，也没有被计为成功截图。该结果仅覆盖原版先行的顺序；不同时间的整个显示器像素、相反顺序、实际帧时间和原生 callback/session 排空仍未证明。
+
+该批官方轻量 ZIP 的 35,125,420 字节及完整摘要、11,166 条可用登记路径和十三份保存报告只读通过；随后完整官方 ZIP 的 351,041,182 字节及完整摘要亦通过。恢复的 29,522 份文件、27,965 条登记路径、十二份清单、十一份普通 483-file 产品快照与一份故意不可构建控制均核验；76 份固定 F 源文件、U/F 的 741/744 个 Git blobs 及归档模式通过。实际新 wrapper 的编译和原生消费、五份固定 SCK 类编译项（四份无 observer）、选定 Xcode/SDK 与 MRC 配置、十三份保存数据及完整 reference checker 通过，全部恢复字节（含 Git index/config）不变。这闭合了该确切批次的 542 项轻量缺口，没有借用旧 2c 来源；结果已封存。原生组件仍为 127/139、十二项既有失败，失败原版 AppKit 配对仍被拒绝，缺几何分支仍未原生触发；宿主关联的生产者/根因与完整 P1 仍未验收。
+
 macOS 同程序诊断现增加同进程原版调用，以补足先前只有 Rust caller 的范围。新增私有 `same-binary-original.mm` 与现有场景模块共同编译、链接未改动的固定 F `ScreenCaptureKitScreencap.mm`。每个 mode 仍在全新测试进程内启动同可执行文件的场景子进程；同一 libtest worker 先创建原版对象并严格调用三次，再进行既有三次 Rust 调用。没有增加截图重试、改变原版五秒等待/转换位置或替换旧 oracle。原版优先的顺序明确记录，不能据此宣称相反顺序、独立调用历史或整个显示器像素已一致。
 
 原版私有 context 在同一原生线程创建、访问和销毁，返回记录保留 None、Some(empty)、非空图像的区别，并保存真实线程/PID、耗时、编译的 Mat type/stride。非空 Mat 独立持有 CPU 像素，场景关闭和原版对象析构后再次写出 held bytes，随后销毁 context 并实际检查 owner 归零。原版模块与场景模块均保留加载引用至进程退出；对象析构和 context 归零不证明原生 callback/session 排空，不据此释放原版晚到回调的代码。
 
 `upstream-trace macos-same-binary` 新 schema2 强制两个 mode 共六次原版、六次 Rust 调用，逐次返回状态一致，有效图片须有准确已知目标像素与相同持帧字节；CG arm 要求原版/Rust 各三张已知图样。SC 的匹配 None/empty 是失败/空值观察，不能记为成功截图。额外全图核对每份 Rust packed BGRA 到 BGR 的通道转换，不要求不受控桌面区域在两次不同时间的截图间相同。源调用、native owner、模块身份、关闭记录、失败后附加图片、schema 混用和额外 original call 都严格校核；历史 schema1 的原报告形状不变，确切 c823 的真实保存报告仍只读通过。新的 native Step 完成标记要求原版三次调用，records Step 要求完整十二次；旧日志不能误满足新门禁。
 
-本机五份正向人工数据覆盖匹配 None、匹配 Some(empty)、有效图片、晚到不作当前结果及历史 schema1；26 项反向数据覆盖原版调用缺失、线程/PID/模块替换、None/empty/image 混淆、坏布局/持帧/目标像素、额外调用、虚报排空和全图通道错误等，新报告写出及只读回读通过。Mach-O 头、身份、返回/owner 元数据和 96×64 CPU 像素均为人工构造，不是新 Mac 程序或截图。38 项真实 Step 子进程 mock 与四项 wrapper 控制通过，保留 17/77 原退出及失败后继续独立入口。nightly 更新成功且版本未变；97 项 xtask 测试、工作区测试/Clippy、Release 构建和 Apple 目标 Rust 类型/Clippy 检查通过。这些是现有 Cargo.lock/缓存下的显式离线开发检查，新在线依赖解析仍待 CI。Windows 未编译新 Objective-C++；新同进程原版与 Rust 的真实 Mac 配对、来源/输入和像素审阅均待 CI，旧失败与完整 P1 仍未验收。
+本机五份正向人工数据覆盖匹配 None、匹配 Some(empty)、有效图片、晚到不作当前结果及历史 schema1；26 项反向数据覆盖原版调用缺失、线程/PID/模块替换、None/empty/image 混淆、坏布局/持帧/目标像素、额外调用、虚报排空和全图通道错误等，新报告写出及只读回读通过。Mach-O 头、身份、返回/owner 元数据和 96×64 CPU 像素均为人工构造，不是新 Mac 程序或截图。38 项真实 Step 子进程 mock 与四项 wrapper 控制通过，保留 17/77 原退出及失败后继续独立入口。nightly 更新成功且版本未变；97 项 xtask 测试、工作区测试/Clippy、Release 构建和 Apple 目标 Rust 类型/Clippy 检查通过。这些是现有 Cargo.lock/缓存下的显式离线开发检查，新在线依赖解析仍待 CI。上述本机检查未编译 Objective-C++；其后的真实 Mac 配对及完整来源复核见本节开头，旧失败与完整 P1 仍未验收。
 
 顺序诊断现在复用已有桌面更新夹具：每个 arm 在创建任何源对象前启动同显示器、与目标不重叠的 16×16 自有 marker，由窗口 owner 每 50ms 交替绘制，并贯穿整个 arm。目标像素、原版捕获类、调用次数/顺序和等待均不改；WGC 对象析构与第一条 post-object DD 调用之间没有新增准备、等待或 IO。新增 `frame-drivers.tsv` 记录 marker HWND/thread/PID、初末绘制数、错误、同显示器/不重叠与关闭证据；native 和 `upstream-trace framepool-order` 都严格校核。schema2 登记 56 份输入，Step 要求新的 driver/schema 完成标记及 `files=56`；历史 schema1 维持原 55 份输入和报告形状，旧日志不能满足新 Step。
 
