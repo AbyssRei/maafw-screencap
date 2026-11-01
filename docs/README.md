@@ -2,7 +2,7 @@
 
 Actions 现按[计划 §5.6](plans/maafw-screencap-extraction-plan.md#56-依赖选型与最新版本策略)使用 runner 可用的预装工具，记录实际版本与能力；版本落后于最新发布或发布查询不可用均不阻断 CI。本机默认最新策略保留。确切 `682e629` 的整个 Linux 原生 job 已通过；macOS 已越过旧 Xcode 版本门禁，P0 捕获与 manager 原接口查询通过，P1 的十二项显示/夹具及记录失败仍保留。下文较早批次的正式 Xcode 缺失属于历史结果，当前完整 P1 仍未通过，详见[本轮 CI 复核](guides/development.md#本轮原生与-ci-复核)。
 
-macOS 另实现同一 Rust 可执行文件分别运行场景与消费进程的诊断，使用独立新进程比较现有 CoreGraphics/ScreenCaptureKit 元数据场景。CG 仍严格要求三张已知图样；SC 的三次失败或空结果只作观察，当前/迟到结果分别记录，旧原版 oracle 不变。本机 Rust 跨目标、CPU 数据和真实 PowerShell 编排控制通过，Objective-C++ 编译与原生 Mac 执行仍待 Actions，不代表完整 P1 通过；命令和限制见同一复核记录。
+macOS 同一 Rust 可执行文件的场景/消费诊断现已在确切 `2c824c0` 原生编译执行：CG 三次返回已知图样，SC 三次均在原五秒等待后返回空结果。新记录检查误要求无 sample 回调的超时也有显式释放标记；修正后只读校核真实数据通过，成功图像的释放条件仍严格。原生批次保持 126/139、十三项失败，不以本机 checker 修正重标旧 CI 或接受完整 P1；命令、归档范围和限制见同一复核记录。
 
 确切 `a5cfa2e` 的三平台 CI 已终态：Linux PipeWire 194/194、Wlr 135/135；macOS 123/135；Windows 七组件 373/383，保留四项原版 FramePool pseudo 和六项 manager 失败。完整 Linux/macOS 工程包现已通过来源、登记输入和 24/12 组保存数据复核，分别补齐轻量包的 565/569 与 531 项缺失输入并封存；完整 P1 仍未通过。本机独立的 WGC/DesktopDupWindow 顺序实验三轮共 75 次调用均为预期图样，未复现托管外围差异，不替代 manager 验收。其输入监听、实际来源冻结范围及限制见上述[复核记录](guides/development.md#本轮原生与-ci-复核)。
 

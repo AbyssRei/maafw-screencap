@@ -254,15 +254,20 @@ pub fn run(args: &[String]) -> Result<()> {
             if state.len() != 11 {
                 return Err("same-binary return-state fields differ".into());
             }
-            for (key, value) in [
-                ("schema", 1),
-                ("result", row[1]),
-                ("fault", 0),
-                ("initial_inputs_released", 1),
-            ] {
+            for (key, value) in [("schema", 1), ("result", row[1]), ("fault", 0)] {
                 expect(&state, key, value)?;
             }
-            for key in ["timed_out", "content_calls", "sample_calls", "completed"] {
+            // This flag marks Inputs::release_initial inside the sample
+            // callback, not every way its retained fields can be destroyed.
+            // A timeout without that callback may validly record zero; it is
+            // an observation, never proof that native owners have drained.
+            for key in [
+                "timed_out",
+                "content_calls",
+                "sample_calls",
+                "completed",
+                "initial_inputs_released",
+            ] {
                 if number(&state, key)? > 1 {
                     return Err("duplicate same-binary callback/invalid flag".into());
                 }
@@ -287,6 +292,7 @@ pub fn run(args: &[String]) -> Result<()> {
                     ("content_calls", 1),
                     ("sample_calls", 1),
                     ("completed", 1),
+                    ("initial_inputs_released", 1),
                 ] {
                     expect(&state, key, value)?;
                 }
