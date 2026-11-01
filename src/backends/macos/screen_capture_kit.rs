@@ -33,8 +33,18 @@ pub(crate) trait Converter: Send + Sync + 'static {
     /// The independent packed BGRA copy adds work; native storage never escapes.
     fn convert(&self, sample: Sample) -> Result<Self::Image, Error>;
 }
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct DisplaySelection {
+    pub display_id: u32,
+    pub display_count: usize,
+    pub width: usize,
+    pub height: usize,
+}
 #[derive(Default)]
 pub(crate) struct Trace {
+    #[cfg(test)]
+    pub display_selection: Mutex<Option<DisplaySelection>>,
     pub pixels: pixel_buffer::Evidence,
     pub content_calls: AtomicUsize,
     pub sample_calls: AtomicUsize,
@@ -289,14 +299,15 @@ fn content<C: Converter>(
         // SAFETY: Same live content; source takes displays[0] without a primary
         // monitor identity rule. Do not infer another target for empty results.
         let displays = unsafe { content.displays() };
-        if displays.count() == 0 {
+        let display_count = displays.count();
+        if display_count == 0 {
             state.trace.source_failure.store(2, Ordering::Release);
             state.finish(Ok(None));
             return Ok(());
         }
         let display = displays.objectAtIndex(0);
         let excluded = NSArray::<SCWindow>::new();
-        (
+        let selected = (
             unsafe {
                 SCContentFilter::initWithDisplay_excludingWindows(
                     SCContentFilter::alloc(),
@@ -308,7 +319,24 @@ fn content<C: Converter>(
                 .map_err(|_| Error::new("negative source display width", -22))?,
             usize::try_from(unsafe { display.height() })
                 .map_err(|_| Error::new("negative source display height", -22))?,
-        )
+        );
+        #[cfg(test)]
+        {
+            // SAFETY: The content callback still owns this selected native
+            // display. Copy only scalars for explicit acceptance observation;
+            // no native owner escapes and production builds add no ID query.
+            let selection = DisplaySelection {
+                display_id: unsafe { display.displayID() },
+                display_count,
+                width: selected.1,
+                height: selected.2,
+            };
+            match state.trace.display_selection.lock() {
+                Ok(mut slot) => *slot = Some(selection),
+                Err(_) => state.trace.fault(-2),
+            }
+        }
+        selected
     };
     // SAFETY: Configuration is mutable only in this content callback, then
     // frozen through the API's screenshot completion ownership channel.

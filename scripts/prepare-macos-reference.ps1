@@ -189,6 +189,10 @@ function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[str
             original_oracle_passed=($null -eq $originalFailure)
             expected_source_files=$expectedOracles;recorded_source_files=$oracleFiles.Count
         })}
+        if($displayPatch){
+            $env:MFS_P1_MACOS_ORIGINAL_ORACLE_FAILED=if($originalFailure){'1'}else{'0'}
+            Json (Join-Path $directory display-evidence-schema.json) ([ordered]@{layout_version=2})
+        }
         if($oracleFiles.Count -ne $expectedOracles -and -not $originalFailure){throw 'Incomplete original oracle files before Rust execution'}
         $oracleRecords=@($oracleFiles|ForEach-Object{Artifact $_.FullName})
         $oracleRecord=Join-Path $directory source-oracle-identities.json

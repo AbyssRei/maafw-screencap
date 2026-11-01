@@ -10,6 +10,8 @@ use crate::{
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, fs, path::Path};
+#[path = "../../tests/upstream-parity/macos-screencap/display-premise.rs"]
+mod premise;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Scene {
@@ -36,6 +38,52 @@ pub(crate) enum Probe {
     AppkitConsumer,
     AppkitScene,
     CgScene,
+}
+fn report_name(probe: Probe) -> &'static str {
+    match probe {
+        Probe::HostPremise => "display-host-premise-validation.json",
+        Probe::DistinctHost => "display-distinct-host-validation.json",
+        Probe::Queried => "display-patch-validation.json",
+        Probe::FoundationConsumer => "display-foundation-consumer-validation.json",
+        Probe::AppkitConsumer => "display-appkit-consumer-validation.json",
+        Probe::AppkitScene => "display-appkit-scene-validation.json",
+        Probe::CgScene => "display-cg-scene-validation.json",
+    }
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DisplaySchema {
+    layout_version: u32,
+}
+fn record_version(
+    schema: Option<&[u8]>,
+    saved: Option<&serde_json::Value>,
+    check_only: bool,
+    unversioned_new_files: bool,
+) -> Result<u32> {
+    if let Some(bytes) = schema {
+        if serde_json::from_slice::<DisplaySchema>(bytes)?.layout_version != 2 {
+            return Err("unsupported display evidence schema".into());
+        }
+        return Ok(2);
+    }
+    if check_only
+        && !unversioned_new_files
+        && saved.is_some_and(|value| value["layout_version"].as_u64() == Some(1))
+    {
+        return Ok(1);
+    }
+    Err("new display evidence requires schema2 and actual Rust selection records; legacy read-only validation requires its saved schema1 report".into())
+}
+fn native_selection(bytes: &[u8], g: &Geometry) -> Result<()> {
+    let expected = format!("1\t{}\t{}\t{}\t{}\n", g.count, g.display, g.width, g.height);
+    if bytes != expected.as_bytes() {
+        return Err(
+            "actual Rust display selection post-return snapshot differs from source/scene expectation"
+                .into(),
+        );
+    }
+    Ok(())
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -108,6 +156,12 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         _=>return Err("expected upstream-trace macos-display-<patch|host-premise|distinct-host|foundation-consumer|appkit-consumer|appkit-scene|cg-scene> <actual external directory> [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
+    let output = root.join(report_name(probe));
+    let saved = if output.try_exists()? {
+        Some(records::read::<serde_json::Value>(&output)?)
+    } else {
+        None
+    };
     let mut artifacts = Vec::new();
     let mut read = |name: &str| -> Result<Vec<u8>> {
         let path = root.join(name);
@@ -169,9 +223,39 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
     } else {
         "source-display-geometry.tsv"
     };
-    for name in [source_geometry, "rust-display-geometry.tsv"] {
-        if read(name)? != geometry_bytes {
-            return Err("source/Rust native first-display identities differ".into());
+    let source_bytes = read(source_geometry)?;
+    if source_bytes != geometry_bytes || read("rust-display-geometry.tsv")? != geometry_bytes {
+        return Err("source geometry or copied Rust scene expectation differs".into());
+    }
+    let schema = if root.join("display-evidence-schema.json").try_exists()? {
+        Some(read("display-evidence-schema.json")?)
+    } else {
+        None
+    };
+    let new_files = root
+        .join("rust-display-geometry-provenance.txt")
+        .try_exists()?
+        || (0..3).any(|call| {
+            root.join(format!("display-call-{call}.rust-selection.tsv"))
+                .exists()
+                || root
+                    .join(format!("display-call-{call}.rust-late-selection.tsv"))
+                    .exists()
+        });
+    let version = record_version(schema.as_deref(), saved.as_ref(), check_only, new_files)?;
+    if version == 2 {
+        let expected =
+            premise::provenance(&geometry_bytes, Some(&source_bytes), false, host_premise)?;
+        if read("rust-display-geometry-provenance.txt")? != expected.as_bytes() {
+            return Err(
+                "Rust geometry provenance relabelled a copied expectation or failed oracle".into(),
+            );
+        }
+        for call in 0..3 {
+            native_selection(
+                &read(&format!("display-call-{call}.rust-selection.tsv"))?,
+                &g,
+            )?;
         }
     }
     if read("scene/stopped.txt")? != b"window_closed=1\n" {
@@ -209,7 +293,7 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
             }
         }
     }
-    let mut report = serde_json::json!({"layout_version":1,"source_captures":3,"rust_captures":3,"payloads":18,
+    let mut report = serde_json::json!({"layout_version":version,"source_captures":3,"rust_captures":3,"payloads":18,
         "original_first_display_id":g.display,"owned_window_id":g.window,"owned_pid":g.pid,"width":g.width,"height":g.height,
         "known_owned_patch_region":g.region,"artifacts":artifacts,
         "scope":"Actual unchanged original first-enumerated-display capture and same migrated Rust path, original display width/height configuration preserved. Separate AppKit owner places a 47x31 opaque green window on that actual display using matching NSScreen identity. Native SCDisplay/SCWindow point frames, real pid/window IDs and unchanged source observations fix the interior pixel region. All six source/Rust captures assert the known green patch; complete Rust BGRA-to-BGR conversion and all eighteen immediate/held files are checked. Rust callback/lock/native-input owners end before explicit source semaphore fixture reclamation and acknowledged scene shutdown; CPU owners are read on a joined thread afterward. Other full-desktop pixels are not prescribed or compared across different capture times. Not zero/multiple-display, mixed-scale/Retina, complete format/resource/late-callback coverage or full macOS/P1 acceptance."});
@@ -263,21 +347,22 @@ pub fn run(args: &[String], probe: Probe) -> Result<()> {
         report["paired_acceptance"] = false.into();
         report["scope"] = "Same-path, byte-identical original consumer and scene executable. This separate producer mode queries its one active display and owned window through CoreGraphics; no explicit ScreenCaptureKit enumeration/capture is called by that mode. This is a reviewed source-path premise, not observation of framework-internal calls. Consumer native SC geometry queries, original capture/default/five-second wait and Rust implementation remain unchanged. Records require actual single-display ID, scene PID/window, two producer geometry queries, native window closure, six successful known-patch captures, eighteen payloads, full Rust conversion and ownership checks. The control cannot replace prior failed oracles, prove a broker/TCC mechanism or complete P1 acceptance.".into();
     }
-    let output = root.join(match probe {
-        Probe::HostPremise => "display-host-premise-validation.json",
-        Probe::DistinctHost => "display-distinct-host-validation.json",
-        Probe::Queried => "display-patch-validation.json",
-        Probe::FoundationConsumer => "display-foundation-consumer-validation.json",
-        Probe::AppkitConsumer => "display-appkit-consumer-validation.json",
-        Probe::AppkitScene => "display-appkit-scene-validation.json",
-        Probe::CgScene => "display-cg-scene-validation.json",
-    });
-    if check_only && output.exists() {
-        if records::read::<serde_json::Value>(&output)? != report {
+    if version == 2 {
+        report["rust_geometry_file_origin"] = "scene_host_expectation".into();
+        report["native_rust_selection_snapshot"] = "after_invoke_before_file_io_and_drain".into();
+        report["late_selection_used_for_acceptance"] = false.into();
+    }
+    if check_only && let Some(saved) = saved {
+        if saved != report {
             return Err("saved macOS display patch report differs from actual records".into());
         }
     } else if !check_only {
         records::create_json(&output, &report)?;
+    }
+    if version == 1 {
+        println!(
+            "Legacy schema1: copied Rust geometry is a host expectation; native Rust selected display identity was not recorded"
+        );
     }
     if host_premise {
         println!(
@@ -670,6 +755,86 @@ fn traces(text: &str, g: &Geometry) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn requires_explicit_new_schema_and_limits_legacy_to_saved_read_only_records() {
+        let old = serde_json::json!({"layout_version":1});
+        let new = serde_json::json!({"layout_version":2});
+        assert_eq!(record_version(None, Some(&old), true, false).unwrap(), 1);
+        for check_only in [false, true] {
+            for new_files in [false, true] {
+                assert_eq!(
+                    record_version(
+                        Some(br#"{"layout_version":2}"#),
+                        None,
+                        check_only,
+                        new_files
+                    )
+                    .unwrap(),
+                    2
+                );
+                for saved in [None, Some(&new)] {
+                    assert!(record_version(None, saved, check_only, new_files).is_err());
+                }
+                if !check_only || new_files {
+                    assert!(record_version(None, Some(&old), check_only, new_files).is_err());
+                }
+            }
+        }
+        for bytes in [
+            br#"{"layout_version":1}"#.as_slice(),
+            br#"{"layout_version":3}"#,
+            br#"{"layout_version":2,"layout_version":2}"#,
+            br#"{"layout_version":2,"unknown":0}"#,
+            br#"{"layout_version":"2"}"#,
+            br#"{"layout_version":2.0}"#,
+            br#"{}"#,
+            br#"null"#,
+            b"",
+        ] {
+            assert!(record_version(Some(bytes), Some(&old), true, false).is_err());
+        }
+    }
+    #[test]
+    fn rejects_absent_substituted_or_noncanonical_native_display_selection() {
+        let g = macos_display_geometry::parse(
+            "1\t17\t640\t480\t0\t0\t640\t480\t91\t7\t100\t100\t47\t31\t1\t2\n",
+        )
+        .unwrap();
+        let good = "1\t1\t17\t640\t480\n";
+        native_selection(good.as_bytes(), &g).unwrap();
+        for bad in [
+            "",
+            "0\t0\t0\t0\t0\n",
+            "1\t2\t17\t640\t480\n",
+            "1\t1\t18\t640\t480\n",
+            "1\t1\t17\t641\t480\n",
+            "1\t1\t17\t640\t481\n",
+            "1\t1\t017\t640\t480\n",
+            "1\t1\t17\t640\t480",
+            "1\t1\t17\t640\t480\r\n",
+            "1\t1\t17\t640\t480\n\n",
+            "1\t1\t17\t640\t480\t0\n",
+        ] {
+            assert!(
+                native_selection(bad.as_bytes(), &g).is_err(),
+                "accepted {bad:?}"
+            );
+        }
+        // Correct independent Rust evidence never changes the original status.
+        for host_premise in [false, true] {
+            assert!(
+                original_status(
+                    OriginalStatus {
+                        original_oracle_passed: false,
+                        expected_source_files: if host_premise { 8 } else { 7 },
+                        recorded_source_files: if host_premise { 8 } else { 7 },
+                    },
+                    host_premise
+                )
+                .is_err()
+            );
+        }
+    }
     #[test]
     fn rejects_substituted_coregraphics_scene_owners_queries_and_unclosed_windows() {
         let mut g = macos_display_geometry::parse(

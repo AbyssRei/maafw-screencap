@@ -2,6 +2,8 @@
 
 Actions 现按[计划 §5.6](plans/maafw-screencap-extraction-plan.md#56-依赖选型与最新版本策略)使用 runner 可用的预装工具，记录实际版本与能力；版本落后于最新发布或发布查询不可用均不阻断 CI。本机默认最新策略保留。确切 `682e629` 的整个 Linux 原生 job 已通过；macOS 已越过旧 Xcode 版本门禁，P0 捕获与 manager 原接口查询通过，P1 的十二项显示/夹具及记录失败仍保留。下文较早批次的正式 Xcode 缺失属于历史结果，当前完整 P1 仍未通过，详见[本轮 CI 复核](guides/development.md#本轮原生与-ci-复核)。
 
+随后 `5710c16` 的 macOS CoreGraphics 场景对照通过原版/Rust 捕获及十八份 payload 的独立复核，组件仍为 122/135 通过、十三项失败。原版枚举失败导致 Rust 在截图前缺文件的测试依赖已修正，新记录区分场景预期和实际 Rust 原生显示器选择，迟到结果不可替代当前记录；新 schema2 原生验证待执行，旧失败保留，详见同一[复核记录](guides/development.md#本轮原生与-ci-复核)。
+
 Windows manager 的 63 个非空方法组合已全部通过本机连续三轮原生/数据测试及独立汇总，输入为零。另一次 Query/Map/Size 回归中，Map/Size 三轮通过；原版 Query 第二轮发生已卸载 GraphicsCapture.dll 的执行访问冲突，记录校核失败，保留失败。确切2d2898f的 Linux 官方产物及24组数据复核亦通过，完整来源、托管 Windows 和 P1 总体验收仍待完成。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
 确切 ffcb3a0 的 Actions 41254680236 已通过 PipeWire 194 项和 Wlr 135 项组件检查；官方 ZIP、51,625 个可用登记路径及 24 组下载后数据检查独立复核通过。已用 Windows 长路径修正 136 项误记缺失，轻量包仍缺完整来源输入；Windows 四项原版 FramePool pseudo 失败及 macOS 正式 Xcode 门禁保持实际状态，不接受完整 P1。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。

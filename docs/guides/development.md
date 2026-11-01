@@ -4,7 +4,11 @@
 
 ## 本轮原生与 CI 复核
 
-macOS 新增独立 `display-scene-cg` 宿主控制：同一原版可执行路径继续承担场景与消费进程，场景改用 [CoreGraphics 活动显示器](https://developer.apple.com/documentation/coregraphics/cggetactivedisplaylist%28_%3A_%3A_%3A%29)和[自有窗口信息](https://developer.apple.com/documentation/coregraphics/cgwindowlistcopywindowinfo%28_%3A_%3A%29)发布几何，不在该场景代码路径显式调用 ScreenCaptureKit。它要求单活动显示器，记录两次几何查询、真实窗口/PID 和主线程关闭；权限仍用原 preflight 检查。消费端仍执行原 `display-patch` 和五秒等待，Rust 继续原捕获入口；`upstream-trace macos-display-cg-scene` 保留相同二进制/路径/权限、六次已知图样、十八份 payload、转换和所有权检查。该项用于隔离生产者枚举行为，原生编译/运行尚待 Actions，不替代旧失败 oracle，也不声称观察了框架内部调用或证明根因。
+macOS 新增独立 `display-scene-cg` 宿主控制：同一原版可执行路径继续承担场景与消费进程，场景改用 [CoreGraphics 活动显示器](https://developer.apple.com/documentation/coregraphics/cggetactivedisplaylist%28_%3A_%3A_%3A%29)和[自有窗口信息](https://developer.apple.com/documentation/coregraphics/cgwindowlistcopywindowinfo%28_%3A_%3A%29)发布几何，不在该场景代码路径显式调用 ScreenCaptureKit。它要求单活动显示器，记录两次几何查询、真实窗口/PID 和主线程关闭；权限仍用原 preflight 检查。消费端仍执行原 `display-patch` 和五秒等待，Rust 继续原捕获入口；`upstream-trace macos-display-cg-scene` 保留相同二进制/路径/权限、六次已知图样、十八份 payload、转换和所有权检查。确切 `5710c16` 的 [Actions 41307803980](https://github.com/AbyssRei/maafw-screencap/actions/runs/41307803980) 已通过新原版、Rust 和记录三项，下载后十八份完整像素及相同程序身份、原生几何/查询/关闭记录亦通过只读复核。官方 ZIP 长度/摘要和 11,012 个可用登记路径均匹配，530 项完整输入仍缺；组件保持 122/135 通过、十三项失败，未接受完整 macOS/P1。该项用于隔离生产者枚举行为，不替代旧失败 oracle，也不声称观察了框架内部调用或证明根因。
+
+该批 `rust-macos-display-appkit-consumer` 在截图前因缺少原版几何文件失败：原版枚举已超时，未写出文件。现修正测试依赖，只有编排明确记录原 oracle 失败时，才允许使用自有场景几何继续取得独立 Rust 观察；已有原版几何不匹配仍立即失败，配对校核仍拒绝失败/不完整 oracle。原始执行失败不改写。`rust-display-geometry.tsv` 始终是复制的场景预期；新 `rust-display-geometry-provenance.txt` 明确来源和原版失败状态，不能将它称为 Rust 原生观察。
+
+新 schema2 为每次调用另存 `display-call-N.rust-selection.tsv`，包含实际选中的 `SCDisplay` ID、枚举数量和宽高，断言其匹配场景/源码几何。原生对象仍只在原回调生命周期内访问，只复制标量；ID 查询和记录锁仅在 `cfg(test)` 存在。调用返回后、任何文件 IO 和显式排空前取得一次快照；失败时并发回调仍可能推进，不声称这是原子返回快照。迟到状态写入独立 `rust-late-selection.tsv`，不能补齐当前调用记录或改变原返回失败。新配对记录要求明确 schema2、正确 provenance 和三次当前选择；历史 schema1 只允许带原保存报告、不含新增字段的只读复核，并明确其未独立记录 Rust 所选显示器。工作区测试、Clippy、构建、旧产物只读回归及九组实际文件篡改拒绝控制通过；schema2 正向控制使用旧像素和人工元数据，仅验证校核器，新版本 macOS 原生编译与取帧仍待 Actions。
 
 委托销毁新增独立进程控制：使用真实原工厂和虚析构，不连接、不创建后端、不截图；边界先确实销毁对象，再返回两种受控清理错误。测试核对正常路径卸载、错误路径保留 DLL、第二个错误不覆盖首错，以及借用 bridge owner 结束后的模块保留。`cargo xtask upstream-delegate win32-destroy <外部记录目录> [--check-only]` 独立检查三组对象、原生调用线程、六条创建/销毁事件和模块观察；实际原生异常、销毁状态未知、回调排空及泄漏模块的回收仍待验收。这项测试必须通过精确筛选在独立进程运行，错误路径的模块引用保留到该进程退出；manager 编排会从聚合测试中排除它，再单独执行并收集失败记录。它不改变捕获或清理实现，也不完成 P1。
 

@@ -1,6 +1,8 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
+#[path = "../../../tests/upstream-parity/macos-screencap/display-premise.rs"]
+mod premise;
 #[test]
 #[ignore = "requires native first-display AppKit patch scene and unchanged source capture"]
 fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
@@ -8,17 +10,37 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
     let directory = directory();
     let bytes = std::fs::read(env::var_os("MFS_P1_MACOS_DISPLAY_GEOMETRY").unwrap()).unwrap();
     let host_premise = env::var("MFS_P1_MACOS_HOST_GEOMETRY_PREMISE").as_deref() == Ok("1");
+    let original_failed = match env::var("MFS_P1_MACOS_ORIGINAL_ORACLE_FAILED").as_deref() {
+        Ok("0") => false,
+        Ok("1") => true,
+        _ => panic!("explicit original oracle outcome required for display evidence"),
+    };
     let source_geometry = if host_premise {
-        assert_eq!(std::fs::read(directory.join("source-geometry-provenance.txt")).unwrap(),
-            b"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n");
         "source-expected-geometry.tsv"
     } else {
         "source-display-geometry.tsv"
     };
-    assert_eq!(
-        bytes,
-        std::fs::read(directory.join(source_geometry)).unwrap()
-    );
+    let source_bytes = match std::fs::read(directory.join(source_geometry)) {
+        Ok(value) => Some(value),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => panic!("cannot read source display geometry: {error}"),
+    };
+    let provenance = premise::provenance(
+        &bytes,
+        source_bytes.as_deref(),
+        original_failed,
+        host_premise,
+    )
+    .expect("source/scene geometry premise");
+    if host_premise && source_bytes.is_some() {
+        assert_eq!(std::fs::read(directory.join("source-geometry-provenance.txt")).unwrap(),
+            b"origin=host_expected_snapshot\nconsumer_geometry_queries=0\nlive_consumer_display_identity_observed=0\nsingle_display_premise=1\n");
+    }
+    std::fs::write(
+        directory.join("rust-display-geometry-provenance.txt"),
+        provenance,
+    )
+    .unwrap();
     let geometry = display_geometry::parse(std::str::from_utf8(&bytes).unwrap()).unwrap();
     assert_eq!(geometry.window, scene());
     assert!(geometry.pid > 0 && geometry.display > 0);
@@ -42,6 +64,10 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
                 converter(&adapter, &trace, &samples, false, Duration::ZERO),
                 trace.clone(),
             );
+            // Snapshot before any file IO or explicit late-callback drain. A
+            // failed call may still have a concurrent callback; this is a
+            // post-return observation, not an atomic native return snapshot.
+            let selection = *trace.display_selection.lock().unwrap();
             let status = match &result {
                 Ok(Some(_)) => 1,
                 Ok(None) => 0,
@@ -52,6 +78,11 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
             std::fs::write(directory.join(format!("display-call-{call}.rust-status.txt")),format!(
                 "result={status}\nelapsed_ns={}\ntimed_out={}\ncontent_calls={}\nsample_calls={}\ncompleted={}\nsource_failure={}\nnative_error={}\nfault={}\nwait_result={}\nerror_debug={:?}\n",
                 started.elapsed().as_nanos(),u8::from(trace.timed_out.load(Ordering::Acquire)),trace.content_calls.load(Ordering::Acquire),trace.sample_calls.load(Ordering::Acquire),trace.completed.load(Ordering::Acquire),trace.source_failure.load(Ordering::Acquire),trace.native_error.load(Ordering::Acquire),trace.fault.load(Ordering::Acquire),trace.wait_result.load(Ordering::Acquire),result.as_ref().err())).unwrap();
+            std::fs::write(
+                directory.join(format!("display-call-{call}.rust-selection.tsv")),
+                selection_record(selection),
+            )
+            .unwrap();
             if status != 1 {
                 // Observe THIS failed call's late owners without another
                 // capture or a longer source wait. Its original Result remains
@@ -67,6 +98,11 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
                 if trace.request_released.load(Ordering::Acquire) == 1 {
                     trace.reclaim_source_semaphore_for_fixture();
                 }
+                std::fs::write(
+                    directory.join(format!("display-call-{call}.rust-late-selection.tsv")),
+                    selection_record(*trace.display_selection.lock().unwrap()),
+                )
+                .unwrap();
                 let (total, new_samples, late_sample) = {
                     let samples = samples.lock().unwrap();
                     (
@@ -89,6 +125,16 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
                 }
             }
             let image = result.unwrap().unwrap();
+            assert_eq!(
+                selection,
+                Some(DisplaySelection {
+                    display_id: geometry.display,
+                    display_count: usize::try_from(geometry.count).unwrap(),
+                    width: geometry.width,
+                    height: geometry.height,
+                }),
+                "actual Rust native selection differs from the owned scene expectation"
+            );
             drained(&trace, true);
             trace.reclaim_source_semaphore_for_fixture();
             let guard = samples.lock().unwrap();
@@ -161,4 +207,13 @@ fn captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown() {
     eprintln!(
         "native Rust macOS display_patch first_enumerated=1 captures=3 retained_raw=3 retained_bgr=3 known_owned_patch=3 scene_closed_before_cpu_read=1 callback_lock_pairs=3 fixture_reclaimed_refs=3 full_display_pixels_unasserted=1 passed"
     );
+}
+fn selection_record(selection: Option<DisplaySelection>) -> String {
+    match selection {
+        Some(value) => format!(
+            "1\t{}\t{}\t{}\t{}\n",
+            value.display_count, value.display_id, value.width, value.height
+        ),
+        None => "0\t0\t0\t0\t0\n".into(),
+    }
 }
