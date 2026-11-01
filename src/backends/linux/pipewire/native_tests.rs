@@ -87,7 +87,7 @@ fn assert_resources(
         )
         .unwrap();
         // Native stop/join and full destruction have already completed. Wait
-        // only for known PF_EXITING/no-mm tasks to leave proc, never for live
+        // only for known PF_EXITING generations to leave proc, never for live
         // callbacks, asynchronous cleanup, an FD, or another capture attempt.
         let start = Instant::now();
         loop {

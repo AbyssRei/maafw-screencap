@@ -6,6 +6,8 @@ Actions 现按[计划 §5.6](plans/maafw-screencap-extraction-plan.md#56-依赖�
 
 Windows manager 的 63 个非空方法组合已全部通过本机连续三轮原生/数据测试及独立汇总，输入为零。另一次 Query/Map/Size 回归中，Map/Size 三轮通过；原版 Query 第二轮发生已卸载 GraphicsCapture.dll 的执行访问冲突，记录校核失败，保留失败。确切2d2898f的 Linux 官方产物及24组数据复核亦通过，完整来源、托管 Windows 和 P1 总体验收仍待完成。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
+`5b0e624` 的 Linux 官方轻量包现核对长度、摘要和全部可用登记输入：PipeWire 192/194 通过，Wlr 135/135 通过。原版 RGBA 资源失败保留；按内核退出顺序修订了测试判据，同代已 join 且带 PF_EXITING 的任务不再以 proc 内存字段清零作为前提。回归与编排控制通过，新原生编译/运行待验证，详见同一[复核记录](guides/development.md#本轮原生与-ci-复核)。
+
 确切 ffcb3a0 的 Actions 41254680236 已通过 PipeWire 194 项和 Wlr 135 项组件检查；官方 ZIP、51,625 个可用登记路径及 24 组下载后数据检查独立复核通过。已用 Windows 长路径修正 136 项误记缺失，轻量包仍缺完整来源输入；Windows 四项原版 FramePool pseudo 失败及 macOS 正式 Xcode 门禁保持实际状态，不接受完整 P1。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
 同批 Windows 官方轻量包的 16,283 个可用登记路径及 31 组数据检查亦通过独立复核；七组件保持 304/308 通过，四项原版 pseudo 失败图像仍为黑图，604 个唯一来源输入尚待工程包补齐。完整 Windows job 和 P1 仍未通过，实际边界见上述开发指南。

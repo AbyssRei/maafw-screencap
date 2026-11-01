@@ -55,6 +55,9 @@ void task_retirement_read_fixture(const std::filesystem::path& directory) {
         const TaskStatReadFailure synthetic_live(live_before->id,ESRCH,true,true,false,0);
         require(!observe_post_join_failed_task(*live_before,synthetic_live,live_probe) && live_probe.stat_opened && live_probe.close_error==0,
             "retirement classifier accepted a real live task path");
+        const auto live_now=task(live_before->id);
+        require(live_now && !same_generation_kernel_retirement(*live_before,*live_now),
+            "post-join classifier accepted a real gated non-exiting worker");
 
         struct LimitedDescriptors {
             rlimit previous{};
@@ -118,6 +121,10 @@ void task_retirement_read_fixture(const std::filesystem::path& directory) {
         {auto altered=retired_probe;altered.directory_error=EACCES;reject_probe(altered);}
         Task exiting=*before;exiting.flags|=0x4;exiting.address_space=0;exiting.resident_pages=0;
         require(same_generation_kernel_retirement(*before,exiting),"same-generation synthetic exiting premise failed");
+        Task mapped=exiting;mapped.address_space=before->address_space;mapped.resident_pages=before->resident_pages;
+        require(same_generation_kernel_retirement(*before,mapped),"synthetic joined exiting task rejected retained proc memory");
+        Task mapped_no_rss=mapped;mapped_no_rss.resident_pages=0;
+        require(same_generation_kernel_retirement(*before,mapped_no_rss),"synthetic joined exiting task rejected reported virtual memory");
         auto reject_after=[&](Task altered) {
             require(!same_generation_kernel_retirement(*before,altered),"live/replaced synthetic task accepted");++synthetic_negatives;
         };
@@ -125,8 +132,8 @@ void task_retirement_read_fixture(const std::filesystem::path& directory) {
         {auto altered=exiting;altered.name="other";reject_after(std::move(altered));}
         {auto altered=exiting;altered.id="other";reject_after(std::move(altered));}
         {auto altered=exiting;altered.flags&=~uint64_t{0x4};reject_after(std::move(altered));}
-        {auto altered=exiting;altered.address_space=1;reject_after(std::move(altered));}
-        {auto altered=exiting;altered.resident_pages=1;reject_after(std::move(altered));}
+        {auto altered=mapped;altered.flags&=~uint64_t{0x4};reject_after(std::move(altered));}
+        require(!same_generation_kernel_retirement(exiting,exiting),"already-exiting before record accepted as a live owner");++synthetic_negatives;
         require(synthetic_negatives==24,"unexpected synthetic refusal-control count");
         require(!only_retiring_tasks({id},{},{}) && !only_retiring_tasks({},baseline_tasks,{*before}),
             "unknown task or missing baseline identity accepted");
@@ -167,6 +174,7 @@ void task_retirement_read_fixture(const std::filesystem::path& directory) {
         <<"\nreal_live_path_refused=1\nreal_EMFILE="<<limited_probe.stat_error
         <<"\nsynthetic_metadata_negatives="<<synthetic_negatives<<"\nfd_limit_restored=1\nboth_joined_controls_absent=1\nresources_balanced=1\n";
     saved.close();require(saved.good(),"cannot save retirement read fixture observations");
+    std::cout<<"task retirement-memory controls synthetic_cases=3 real_gated_nonexiting_refused=1 memory_fields_observed_only=1 passed\n";
     std::cout<<"native task retirement-read exact_ESRCH=1 joined_before_read=1 fresh_stat_and_directory_absent=1"
         <<" real_live_path_refused=1 real_EMFILE_refused=1 synthetic_metadata_negatives="<<synthetic_negatives
         <<" fd_limit_restored=1 both_joined_controls_absent=1 resources_balanced=1 passed\n";

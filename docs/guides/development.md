@@ -24,6 +24,12 @@ e243fee 的官方完整 Linux ZIP 随后核对长度与 SHA-256，完整 tar 恢
 
 同一 `5b0e624` 的 Linux job 则在原版 RGBA 流第零轮关闭资源断言失败：fd 为 8，匹配基线；线程计数为 2，基线为 1。Rust RGBA 独立入口通过，下游完整格式流记录校核因原版未完成而失败。PipeWire 原日志包含 join/stop 记录，但不足以单独证明额外任务身份或完整资源退出；当前保留失败并继续复核，不归因于预装工具版本或把 Rust 结果替入原版。
 
+该批 Linux 两份官方轻量 ZIP 的长度与摘要现已核对，PipeWire 的 43,123 个可用登记路径、Wlr 的 8,449 个路径均匹配；完整输入仍分别缺 565/569 项。原生组件保持 192/194 与 135/135 通过，先前部分传输得到的 297 个 RGBA 文件逐字节匹配完整官方包。关闭后的诊断快照显示同一 `MaaScreencap` TID/starttime 已带 PF_EXITING，但 vsize/RSS 仍非零；1/10/100ms 后仅剩基线任务。诊断发生在原失败判定后，不用这些后续样本改判原执行或补齐未完成的二十轮原版格式矩阵。
+
+实际 host 为 Linux 7.0.0-1017-azure。对照 [Linux 7.0 退出实现](https://github.com/torvalds/linux/blob/v7.0/kernel/exit.c)、[线程 ID 唤醒实现](https://github.com/torvalds/linux/blob/v7.0/kernel/fork.c)及 [set_tid_address 接口](https://man7.org/linux/man-pages/man2/set_tid_address.2.html)，child-TID 唤醒可以早于 `task->mm` 清零；PF_EXITING 与 proc 内存清零不是同一个阶段。官方基线来源及摘要已归档，未逐块核验 Ubuntu Azure 的补丁集。现仅修订测试观察器：在原生 stop/join/销毁完成、fd 精确匹配后，仍要求已知原先活跃任务的同一 id/name/starttime 和 PF_EXITING，允许 proc 内存字段仍有值，并继续要求 100ms 内任务集合精确恢复。未知、替换、未带退出标志的任务和未证明的读取错误仍拒绝；原有 ESRCH 与 stat/目录双 ENOENT 规则保留。
+
+本机新回归在旧判据下失败、在修订后通过；五项任务观察单测、完整工作区测试、Clippy、构建和十五个实际编排函数的 mock 子进程控制通过。C++ 控制补充三种明确标注的合成内存状态，并保持二十四项身份/读取/缺失证明反向控制，另直接拒绝仍受闸门控制的真实存活线程。独立一万次 std::thread join 观察将先记录原生 before 身份，join 后立即只读一次 stat，再做枚举和日志输出；计数区分缺失、退出且内存有值、退出且内存为零及未见退出标志。该控制会改变自身的观测时机，不与旧观察器比较发生率，也不代替原版捕获清理验收；某一类计数为零时不声称该阶段已原生触发。编排要求新控制摘要和全部迭代计数，旧程序或不完整输出不得通过。新 C++ 原生编译、控制执行和完整取帧复测仍待 Actions。
+
 逐提交 CI 另暴露依赖输入的串联问题：`2d2898f` 的 manager 在 libpng 查询收到 HTTP 503 后停止，后续便携 PipeWire 和 FramePool 读取最后一份清单，继而因缺少 `PNG-release.json` 失败。现把共享输入显式绑定到本 job 新产生的 PrintWindow 准备批次，核对公共来源/工具档案、实际摘要和 Rust 准备输入；捕获断言失败仍保留原退出码，不据此丢弃已经完整的依赖。该准备不完整时，其他独立组件各自在线准备，不扫描更早批次，也不把之后的 Custom/manager 清单自动替入。每个实际消费者仍核对原清单、工具链和归档输入；这是显式同 job 离线复用，不声称每次离线调用查询了最新版。
 
 选择控制覆盖缺 PNG、失败 Rust 准备、变更摘要、路径越界、错误/历史 producer；九次实际工作流脚本块的 mock 子进程验证原失败退出 17 保留，以及四个消费者有/无共享输入时的完整参数。PrintWindow 步骤显式接管原生命令退出码；另开启 PowerShell 原生命令错误偏好，用实际退出 17 的子进程验证仍能记录完整共享输入，去掉显式处理的对照则提前停止且没有发布共享输入。所有 mock 均零捕获，不安装工具。另从先前已封存的完整原生工程包复制并核对二十五项真实档案，在新外部副本上通过选择器，原材料未改；它不构成新的依赖更新、离线编译或捕获通过。此工作流改动仍需新原生 CI 执行，历史 HTTP 和后续失败保留。
@@ -533,7 +539,7 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 后续线程诊断确认：原 C++ 的多余 TID 在读取其详细信息时已消失；Rust OpenCV 的 MaaScreencap 任务带 PF_EXITING、vsize/RSS 为零、fd 表为空，1ms 观察即消失。该批 raw Rust 的 20 生命周期/60 张 RGB 及关闭后持帧检查通过；原 C++ 和 OpenCV 的即时 proc 数量断言仍保留为失败。后期 add_io 探针已实测返回 ENOMEM、恰好一次拦截，fd 在完整 teardown 后仍打开。早期和后期观察都不等于一般 fd 所有权契约已完成。
 
-据此修正测试的 proc 退出时点前提，已在受控原生批次通过：关闭前记录活跃 MaaScreencap 的 TID/starttime；原生 stop/join、对象销毁及严格 fd 检查之后，仅允许同身份任务已经消失或带 PF_EXITING 且无地址空间/RSS 时进入最长 100ms 的内核任务移除观察。原 baseline TID 必须全部保留，最终集合须完全恢复；未知任务、TID 替换、仍有用户态地址空间、fd 不符或逾期均失败。C++/Rust 均实际观察到约 1.1–1.3ms 的内核任务移除。测试没有等待仍活跃的 callback 完成；旧批次的即时数量断言不改判，捕获实现、等待和销毁顺序保持原样。
+早期据此修正测试的 proc 退出时点前提，已在当时受控原生批次通过：关闭前记录活跃 MaaScreencap 的 TID/starttime；原生 stop/join、对象销毁及严格 fd 检查之后，仅允许同身份任务已经消失或带 PF_EXITING 且无地址空间/RSS 时进入最长 100ms 的内核任务移除观察。原 baseline TID 必须全部保留，最终集合须完全恢复；未知任务、TID 替换、仍有用户态地址空间、fd 不符或逾期均失败。C++/Rust 均实际观察到约 1.1–1.3ms 的内核任务移除。测试没有等待仍活跃的 callback 完成；旧批次的即时数量断言不改判，捕获实现、等待和销毁顺序保持原样。
 
 私有 Rust driver 的 supplied-fd 建连切片已通过受控成功路径验证：与 daemon 方式共用原顺序的 loop/context/core/listener/stream 建立，只在非空 core 后将原 fd 数值置为 -1，close 不恢复它，后续 init 沿用原源码的 daemon 选择。该入口是显式 unsafe 的 U 适配，要求调用方保证独占 socket、移交前解除原 owning handle、完成原生清理后才处理失败残留；没有推导空 core 的一般所有权，也没有添加泛用 fd 清理或重试。独立进程用例通过 20 次私有 socket、60 张 RGB、归还/持帧及已消费 fd 在原生关闭后为 EBADF；它验证 fd 传输成功路径，重新初始化、实际 Portal 授权、通用失败/重试和安全宿主接口仍未完成。
 
@@ -670,7 +676,7 @@ Wlr 现另接入 `mfs_wlr_native_context`：完整原 WlRootsControlUnitCompat.c
 
 后续原生批次在更早的 Rust 测试目标编译处失败：JSON 创建夹具把节点 ID 放进 format 后失去原 Config 字段提供的 u32 推断，导致 E0284；该批次的 P0/P1 consumer 步骤均失败，尚未执行配置/捕获。现已显式声明 u32，修复后原生结果见下文；主机 Clippy 不编译该 Linux-only 测试体。
 
-原 C++ 调用器另新增 `--task-retirement-read-fixture <外部目录>`，仍与取帧实现分离。普通 proc task stat 读取保持严格，并保存 errno、bad/fail/eof 和实际字节数；只有原生 close/stop/join 与所有者退出之后，才允许对已知原先活跃 MaaScreencap 的精确 ESRCH/bad/fail/非 EOF/零字节失败，再做一次新的 stat open 与任务目录 stat，二者均为 ENOENT 才证明已消失。成功读出的任务仍核验相同 id/name/starttime、PF_EXITING、vsize/RSS 为零；未知、替换、活跃、部分数据或其他错误保持失败。没有增加取帧重试或改变既有 100ms 内核退出界限。独立原生控制通过真实命名线程的 held-stat 描述符产生 ESRCH，并要求已 join、文件/目录缺失；真实活线程路径与实际耗尽当前子进程 fd 后的 EMFILE 必须拒绝，随后关闭临时 fd、恢复原 soft/hard limit，并精确核对基线 task IDs/fd。另有 24 个明确标注的合成 metadata 反向控制，不代替真实原生退出证据。实现已加入显式 PipeWire 源码入口，并已通过下文的 94 项原生组件；普通 strict read-exit 原控制及所有旧失败记录继续保留，核心捕获/等待/像素与生命周期代码未改写。
+原 C++ 调用器另新增 `--task-retirement-read-fixture <外部目录>`，仍与取帧实现分离。普通 proc task stat 读取保持严格，并保存 errno、bad/fail/eof 和实际字节数；只有原生 close/stop/join 与所有者退出之后，才允许对已知原先活跃 MaaScreencap 的精确 ESRCH/bad/fail/非 EOF/零字节失败，再做一次新的 stat open 与任务目录 stat，二者均为 ENOENT 才证明已消失。初版成功读出的任务还要求相同 id/name/starttime、PF_EXITING、vsize/RSS 为零；未知、替换、活跃、部分数据或其他错误保持失败。没有增加取帧重试或改变既有 100ms 内核退出界限。独立原生控制通过真实命名线程的 held-stat 描述符产生 ESRCH，并要求已 join、文件/目录缺失；真实活线程路径与实际耗尽当前子进程 fd 后的 EMFILE 必须拒绝，随后关闭临时 fd、恢复原 soft/hard limit，并精确核对基线 task IDs/fd。另有 24 个明确标注的合成 metadata 反向控制，不代替真实原生退出证据。实现已加入显式 PipeWire 源码入口，并已通过下文的 94 项原生组件；普通 strict read-exit 原控制及所有旧失败记录继续保留，核心捕获/等待/像素与生命周期代码未改写。 此初版的内存字段附加条件已按[本轮内核退出复核](#本轮原生与-ci-复核)修订，新判据的原生执行仍待验证。
 
 修复 u32 推断后，原生 Linux PipeWire 93 项组件检查全部通过：原版 946 案例、Rust 946 创建/拒绝与 426 组 UUID/info、八项 manager 控制、JSON 创建后的真实 daemon/supplied-fd 转发均已执行；该批次的 540 个 manager 图像和双方长流的 9000 个像素文件已独立复核。配置原始输入/输出位于 inputs/source-reference，原轻量 artifact 的 glob 未包含它们，完整官方工程 artifact 的摘要已验证，全部 852 份接受后的 UUID/info 与 4974 个登记原生输入哈希已独立校核；今后的轻量包显式包含 configuration-*/config-oracle-sources 和 meojson 身份/许可。随后新增退出观察控制的 94 项组件也全部通过：实际错误为 ESRCH=3、bad/fail=1、eof=0、bytes=0，新 stat 与目录错误均为 ENOENT=2；活路径打开成功被拒绝，实际 EMFILE=24 被拒绝，24 个合成反向控制、fd limit 恢复与最终身份均通过。旧 strict read-exit 仍严格拒绝；不将这些结果追溯改写旧失败，也不据此接受完整 P1。
 

@@ -77,13 +77,15 @@ fn accepted_retired_read(before: Option<&Task>, failure: &Fault, probe: &Absence
     before.is_some_and(|before| exact_retired_read(before, failure) && proved_absent(probe))
 }
 fn same_generation_retirement(before: &Task, after: &Task) -> bool {
+    // Caller prerequisite: native stop/join/destruction has finished. Linux
+    // wakes CLONE_CHILD_CLEARTID joiners in mm_release before exit_mm clears
+    // task->mm. A known PF_EXITING generation can therefore still report vsize
+    // and RSS; these fields remain observations, not a userspace-liveness test.
     known_live_source(before)
         && after.id == before.id
         && after.name == before.name
         && after.started == before.started
         && after.flags & 0x4 != 0
-        && after.address_space == 0
-        && after.resident_pages == 0
 }
 fn parse(id: &OsStr, text: &str) -> Result<Task, Fault> {
     let invalid = || Fault {
@@ -270,6 +272,17 @@ mod tests {
         }
     }
     #[test]
+    fn accepts_joined_exiting_generation_before_proc_memory_clears() {
+        let original = before();
+        // Pure classifier premise AFTER a successful native join. These are
+        // synthetic metadata; actual join/proc evidence is recorded separately.
+        let exiting = Task {
+            flags: original.flags | 4,
+            ..original.clone()
+        };
+        assert!(same_generation_retirement(&original, &exiting));
+    }
+    #[test]
     fn refuses_live_or_substituted_task_generations() {
         let original = before();
         let exiting = Task {
@@ -297,17 +310,11 @@ mod tests {
                 flags: 0,
                 ..exiting.clone()
             },
-            Task {
-                address_space: 1,
-                ..exiting.clone()
-            },
-            Task {
-                resident_pages: 1,
-                ..exiting.clone()
-            },
         ] {
             assert!(!same_generation_retirement(&original, &altered));
         }
+        // An already-exiting before record never establishes a live owner.
+        assert!(!same_generation_retirement(&exiting, &exiting));
     }
     #[test]
     fn parses_parentheses_in_comm_but_rejects_missing_or_replaced_identity() {

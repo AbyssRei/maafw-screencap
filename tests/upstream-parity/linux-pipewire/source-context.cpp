@@ -179,8 +179,11 @@ bool proved_task_absent(const TaskAbsence& observed) {
         !observed.directory_exists && observed.directory_error==ENOENT;
 }
 bool same_generation_kernel_retirement(const Task& before,const Task& after) {
+    // After successful native stop/join/destruction only. Linux wakes child-TID
+    // joiners in mm_release before exit_mm clears task->mm. PF_EXITING commits
+    // this known generation to kernel exit even while proc vsize/RSS remain.
     return known_live_source_task(before) && after.id==before.id && after.name==before.name &&
-        after.started==before.started && (after.flags&0x4) && after.address_space==0 && after.resident_pages==0;
+        after.started==before.started && (after.flags&0x4);
 }
 bool observe_post_join_failed_task(const Task& before,const TaskStatReadFailure& failure,TaskAbsence& observed) {
     if(!exact_retired_read_failure(before,failure)) {return false;}
@@ -256,9 +259,9 @@ bool only_retiring_tasks(const std::vector<std::string>& actual,const std::vecto
         if(before==live.end() || !known_live_source_task(*before)) { return false; }
         try {
             if(auto after=task(id)) {
-                // Only a known same-generation PF_EXITING task with no userspace
-                // address space can finish kernel retirement here. Never a live
-                // worker, an unknown TID, or asynchronous callback/native cleanup.
+                // Only a known same-generation PF_EXITING task can finish
+                // kernel retirement here. Proc memory fields may lag join.
+                // Never a live worker, unknown TID or async native cleanup.
                 if(!same_generation_kernel_retirement(*before,*after)) { return false; }
             }
         }catch(const TaskStatReadFailure& failure) {
@@ -356,15 +359,53 @@ void observe_joined_tasks(const std::filesystem::path& directory) {
     std::filesystem::create_directories(directory);
     task_snapshot(directory,"join-control-baseline",task_ids());
     size_t residual=0;
+    size_t absent=0,read_absent=0,exiting_mapped=0,exiting_unmapped=0,nonexiting=0;
     for(size_t cycle=0;cycle<10000;++cycle) {
         pid_t tid=-1;
         int name_error=-1;
+        std::optional<Task> before;
+        std::exception_ptr worker_error;
         std::thread worker([&] {
-            name_error=pthread_setname_np(pthread_self(),"mfs-join-probe");
-            tid=gettid();
+            try {
+                // Same declared source-task name, but this is an owned standard
+                // thread control, never a PipeWire capture or cleanup oracle.
+                name_error=pthread_setname_np(pthread_self(),"MaaScreencap");
+                tid=gettid();
+                before=task(std::to_string(tid));
+            }catch(...) {worker_error=std::current_exception();}
         });
         worker.join(); // std::thread throws if the real pthread_join fails.
-        require(tid>0 && name_error==0,"joined thread identity unavailable");
+        if(worker_error) {std::rethrow_exception(worker_error);}
+        require(tid>0 && name_error==0 && before && known_live_source_task(*before),"joined thread identity unavailable");
+        // Read stat BEFORE enumeration, log output or later diagnostic samples.
+        // Capture the actual post-join scalar observation once; do not retry it.
+        std::optional<Task> after;
+        bool read_disappeared=false;
+        try {after=task(before->id);}
+        catch(const TaskStatReadFailure& failure) {
+            TaskAbsence observed;
+            if(!observe_post_join_failed_task(*before,failure,observed)) {throw;}
+            read_disappeared=true;++read_absent;
+        }
+        if(after) {
+            require(after->id==before->id && after->name==before->name && after->started==before->started,
+                "joined control task generation changed");
+            if(after->flags&0x4) {
+                require(same_generation_kernel_retirement(*before,*after),"known joined exiting control refused");
+                if(after->address_space || after->resident_pages) {++exiting_mapped;}
+                else {++exiting_unmapped;}
+            }else {
+                require(!same_generation_kernel_retirement(*before,*after),"non-exiting control accepted");
+                ++nonexiting;
+            }
+            if(exiting_mapped+exiting_unmapped+nonexiting<=20) {
+                std::cout<<"joined control stat cycle="<<cycle<<" id="<<after->id
+                    <<" before_started="<<before->started<<" after_started="<<after->started
+                    <<" before_flags="<<before->flags<<" after_flags="<<after->flags
+                    <<" address_space="<<after->address_space<<" resident_pages="<<after->resident_pages
+                    <<" owned_std_thread=1 backend_capture=0\n";
+            }
+        }else if(!read_disappeared) {++absent;}
         const auto tasks=task_ids();
         if(std::find(tasks.begin(),tasks.end(),std::to_string(tid))==tasks.end()) { continue; }
         ++residual;
@@ -380,6 +421,10 @@ void observe_joined_tasks(const std::filesystem::path& directory) {
         }
     }
     task_snapshot(directory,"join-control-final",task_ids());
+    require(absent+read_absent+exiting_mapped+exiting_unmapped+nonexiting==10000,"joined control observations incomplete");
+    std::cout<<"native joined-task memory samples=10000 absent_open="<<absent<<" absent_read="<<read_absent
+        <<" exiting_with_memory="<<exiting_mapped<<" exiting_without_memory="<<exiting_unmapped
+        <<" nonexiting="<<nonexiting<<" source_cleanup_acceptance=0 observed\n";
     // Observational control only: zero and nonzero residuals are both retained.
     // It cannot excuse a failed capture test or serve as cleanup acceptance.
     std::cout<<"native joined-task observation cycles=10000 residual_enumerations="<<residual<<" observed\n";

@@ -112,8 +112,19 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-fd-add-io-error-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'connect_fd_add_io_error result=null errno=\d+ input_fd_open=[01] after_teardown_fd_open=[01] intercepted_calls=1 observed') {
             throw 'Expected the actual native late connect_fd error with one explicit add_io interception'
         }
-        if ($Name -eq 'native-joined-task-observation' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native joined-task observation cycles=10000 residual_enumerations=\d+ observed') {
-            throw 'Expected the separate native pthread-join/proc visibility observation'
+        if ($Name -eq 'native-joined-task-observation') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $memory=[regex]::Matches($observed,'(?m)^native joined-task memory samples=10000 absent_open=(\d+) absent_read=(\d+) exiting_with_memory=(\d+) exiting_without_memory=(\d+) nonexiting=(\d+) source_cleanup_acceptance=0 observed\r?$')
+            if($observed -notmatch 'native joined-task observation cycles=10000 residual_enumerations=\d+ observed' -or $memory.Count -ne 1) {
+                throw 'Expected one complete separate native join/proc memory observation; this is not source cleanup acceptance'
+            }
+            $total=0L
+            for($index=1;$index -le 5;++$index) {
+                $value=[long]$memory[0].Groups[$index].Value
+                if($value -gt 10000){throw 'Joined-task observation count exceeds its actual iterations'}
+                $total+=$value
+            }
+            if($total -ne 10000){throw 'Joined-task observation counts do not cover all iterations'}
         }
         if ($Name -eq 'native-task-diagnostic-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'native task diagnostic empty_stream_failure=1 empty_file=1 bytes_file=1 missing_file=1 real_output_failure=1 passed') {
             throw 'Expected empty/readable/missing task inputs and a real diagnostic write-error control'
@@ -124,8 +135,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected one isolated Rust procfs causal test: real held-stat ESRCH, live-path/EMFILE refusal and restored limits/owners'
             }
         }
-        if($Name -eq 'rust-task-observer-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;') {
-            throw 'Expected four strict Rust task read/parser/identity/absence controls'
+        if($Name -eq 'rust-task-observer-controls' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 5 passed; 0 failed; 0 ignored;') {
+            throw 'Expected five Rust task read/parser/identity/absence and post-join memory controls'
         }
         if ($Name -eq 'pipewire-source-negotiation-pods' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire negotiation pods=3 saved') {
             throw 'Expected three original negotiation PODs'
@@ -271,8 +282,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'native-task-read-exit-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task read-exit opened_live=1 joined_before_read=1 path_absent=1 read=ESRCH strict_observer_rejected=1 fresh_open_absent=1 resources_balanced=1 passed')) {
             throw 'Expected native read ESRCH after controlled task exit and the unchanged strict observer rejection'
         }
-        if($Name -eq 'native-task-retirement-read-fixture' -and -not (Get-Content -LiteralPath $log -Raw).Contains('native task retirement-read exact_ESRCH=1 joined_before_read=1 fresh_stat_and_directory_absent=1 real_live_path_refused=1 real_EMFILE_refused=1 synthetic_metadata_negatives=24 fd_limit_restored=1 both_joined_controls_absent=1 resources_balanced=1 passed')) {
-            throw 'Expected actual held-stat ESRCH after join, strict fresh absence proof, real live/EMFILE refusals and labelled synthetic negatives'
+        if($Name -eq 'native-task-retirement-read-fixture') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('native task retirement-read exact_ESRCH=1 joined_before_read=1 fresh_stat_and_directory_absent=1 real_live_path_refused=1 real_EMFILE_refused=1 synthetic_metadata_negatives=24 fd_limit_restored=1 both_joined_controls_absent=1 resources_balanced=1 passed') -or
+                -not $observed.Contains('task retirement-memory controls synthetic_cases=3 real_gated_nonexiting_refused=1 memory_fields_observed_only=1 passed')) {
+                throw 'Expected actual held-stat ESRCH, strict absence/live/EMFILE refusals and both memory/identity metadata controls'
+            }
         }
         if ($Name -eq 'original-pipewire-source-reinit' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire reinit objects=20 sessions=40 captures=120 retained=120 consumed_sockets_closed=20 passed') {
             throw 'Expected twenty original same-object lifecycles, forty sessions and 120 held BGR images'
