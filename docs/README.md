@@ -1,6 +1,6 @@
 # 文档导航与维护约定
 
-Windows 原生 manager 的方法组合入口与 CI 编排已扩展至全部 63 个非空 mask；本机逐项连续三轮验证进行中，未完成部分仍待验收。每项保留原二十生命周期、像素与持帧断言及独立输入监测，实际边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
+Windows 原生 manager 的方法组合入口与 CI 编排已扩展至全部 63 个非空 mask；首批 GDI 三轮有效通过，FramePool 三轮因一次 810ms 监听缺口整批作废、原记录已封存，尚需补测。每项保留原二十生命周期、像素与持帧断言及独立输入监测，实际边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
 macOS 私有 Input=None features 及同 manager 的原工厂/虚接口查询消费已补齐；Windows 归档输入 Debug/Release 的受控不可用分支通过，真实 Mac 构建和执行仍待正式 Xcode runner。完整 P1 未完成，实际入口、计数及适配边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
