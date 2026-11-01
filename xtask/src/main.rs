@@ -131,6 +131,9 @@ fn run() -> Result<()> {
     if argv.starts_with(&["reference".into(), "catalog".into()]) {
         return review::run(&argv[2..]);
     }
+    if argv.starts_with(&["reference".into(), "responsibilities".into()]) {
+        return review::responsibility::run(&argv[2..]);
+    }
     if argv.starts_with(&["reference".into(), "verify-run".into()]) {
         return batch::verify_run(&argv[2..]);
     }

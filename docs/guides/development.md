@@ -4,6 +4,14 @@
 
 ## 本轮原生与 CI 复核
 
+本轮重新按完整职责目录盘点 P1，而非只检查固定 F 的 76 个选定来源文件。最新原目录实际有 101 项来源、11 条捕获路由、58 个用例定义；与 F 选定范围合并后为 106 项，其中 99 个目录文件未变、两个目录文件改变，另有五个原目录未列入的 F 构建/回归文件。外层 Gamepad 截图委托、公共头、host Portal 边界及排除项仍逐项保留；HwndUtils 与根 CMake 的祖先差异明确记录。映射绑定归档的实现/验证代码及实际行文本，当前只到模块职责层级，不代表完整逐函数迁移或用例通过。58 个用例均保留各自尚未验收的完整范围；旧 U 几何定义不直接继承为 F 预期。
+
+实际格式及只读校验入口为 `cargo xtask reference responsibilities <reference 相对映射文件> [--root <外部目录>]`。它核对完整目录与所选 F 范围的并集、全部用例、F Git blob/来源字节、SHA-256、代码行锚点及已链接的局部证据；不修改记录，不产生捕获或阶段通过结论。八组实际破坏分别覆盖仅保留 76 项、漏用例、将捕获职责改为排除、漏 F 语义差异、错代码行、错来源摘要、虚构 passed 字段和路径逃逸，均被拒绝。此工具检查映射的完整性与来源，不能自动证明人工说明的完整语义。
+
+盘点发现的 Windows manager 查询缺口已补齐：同一私有 manager 新增 `request_uuid` 和 Input=None 下的 `get_features`。前者保持原 MSVC x64 指针流的十六位大写十六进制，包括空 HWND；不验证窗口，也不要求连接。后者因无 mouse/keyboard owner 返回零，不引入输入控制。显式函数体模型从固定 F 提取原 UUID/features 代码，以真实 MSVC 标准库执行，空输入指针分支保持，日志是测试边界；它不构造完整原 manager 或消费真实 C++ 虚表。最终 Debug/Release 各 88 组原版/Rust 查询通过，包含空值、符号位与完整 64 位边界，输出在 manager 作用域后继续保留。两配置原有 Windows/macOS 元数据另共 308 组回归通过；`cargo xtask upstream-metadata win32-identity <外部目录> [--check-only]` 独立复算实际查询记录。当前默认 workspace 120 项通过、6 项忽略，Windows 模型 53 项通过、68 项忽略，严格 Clippy、格式、Windows manager Release 核心构建及 PowerShell 解析通过。初次 Clippy 拒绝测试中不必要的显式 drop，现以词法作用域验证所有者结束；前后实际查询字节相同，失败日志保留。
+
+本批核对 454 份产品源码、两个实际编译读取日志、326 个原生输入和原函数体；新增 Step 的六项 mock 控制拒绝零测试、少案例、缺摘要、非零退出及双侧相同的错误记录。模型、提取代码和完整输出已归档；首个旧缓存仍指向祖先 U 的构建单独保留，最终两配置明确使用 F。该批采用匹配 nightly、meojson、VS/SDK 的离线开发输入，未做屏幕捕获或新的在线依赖验收。真正的 DLL 虚接口查询、完整 manager/factory 转发、macOS features 查询及全平台完整故障矩阵仍待完成；既有历史复测、原版像素失败和缺少正式 Xcode 的结论不变，P1 继续未完成。新 CI 入口已接入 manager 编排；网络 EOF 期间没有取得新托管验证结论。
+
 Desktop Duplication 另新增真实 held-acquisition 拒绝矩阵：夹具先在同一 duplication 上取得并持有实际帧，再沿完整原版/Rust 公开捕获调用真实 `AcquireNextFrame(2000)`，获得系统返回的 `DXGI_ERROR_INVALID_CALL`。捕获失败时没有 CopyResource、Map、Unmap、ReleaseFrame 或转换；原 staging、duplication、尺寸及 warm 状态保持。随后夹具自己的 ReleaseFrame 必须成功，再次诊断释放必须被系统拒绝，最后只调用一次正常捕获并验证已知目标像素。Rust 另断言失败样本没有 native frame、释放或 CPU 复制证据，恢复时保留既有整屏安全复制及转换位置；C++ 沿固定 F 原函数和真实接口转发，原失效映射与 Rust 独立 CPU owner 的区别仍保留。这是私有受控测试前提，不定义公共 SDK 对外部 native frame 共享的支持。
 
 新用例和既有 Map 矩阵在同一新 EXE/DLL 上连续三轮，共十八次命令、720 次公开捕获调用的预期结果全部符合。新矩阵单独包含双方 360 次调用、120 次真实拒绝、120 次夹具成功释放、120 次额外释放拒绝、120 次恢复、240 张持帧及 480 份即时/持帧 BGR；Map 回归另有 564 份 BGR。`cargo xtask upstream-trace desktop-acquire <外部矩阵> [--check-only]` 核对每轮 326 份文件，合并 Map 三轮共核对 1,044 份像素和 2,115 份矩阵文件。十二组破坏覆盖错误拒绝码、提前释放夹具帧、额外释放成功、失败时复制/释放、状态或线程改变、错 staging、缺少 CPU 复制/调用行、改变的合法持帧及失败泄露像素，均被拒绝。六组实际 Step mock 控制另拒绝零测试、不完整/缺少摘要和非零退出。

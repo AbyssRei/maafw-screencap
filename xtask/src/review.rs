@@ -16,6 +16,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[path = "responsibility.rs"]
+pub(crate) mod responsibility;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum Method {
@@ -500,7 +503,7 @@ mod tests {
     use super::*;
     use serde_json::{Value, json};
 
-    fn fixture() -> Value {
+    pub(super) fn fixture() -> Value {
         let methods: Vec<_> = Method::ALL.iter().enumerate().map(|(n, method)| json!({"method":method,"source_paths":["capture.cpp"],"targets":[{"kind":"fixture","behavior":"source_implemented","explanation":"source-defined target","case_ids":[format!("U-CASE-{n}")]}],"conversion":"original point","ownership":"owned output","execution_channel":"native owner"})).collect();
         let cases: Vec<_> = Method::ALL.iter().enumerate().map(|(n, method)| json!({"id":format!("U-CASE-{n}"),"methods":[method],"source_paths":["capture.cpp"],"trigger":"controlled source","expected":"compare native evidence","execution":"not_run"})).collect();
         json!({"layout_version":1,"parent_u":{"path":"baseline.json","sha256":"0".repeat(64)},"reports":[{"id":"review","artifact":{"path":"review.md","sha256":"0".repeat(64)}}],"sources":[{"path":"capture.cpp","git_blob":"1".repeat(40),"sha256":"0".repeat(64),"responsibility":"backend","state":"reviewed","summary":"reviewed source behavior","report_ids":["review"],"evidence":[{"line":1,"text":"capture"}]}],"methods":methods,"cases":cases,"remaining":["Native U parity has not run"]})
