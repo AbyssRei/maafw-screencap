@@ -4,6 +4,14 @@
 
 ## 本轮原生与 CI 复核
 
+macOS 同程序诊断现增加同进程原版调用，以补足先前只有 Rust caller 的范围。新增私有 `same-binary-original.mm` 与现有场景模块共同编译、链接未改动的固定 F `ScreenCaptureKitScreencap.mm`。每个 mode 仍在全新测试进程内启动同可执行文件的场景子进程；同一 libtest worker 先创建原版对象并严格调用三次，再进行既有三次 Rust 调用。没有增加截图重试、改变原版五秒等待/转换位置或替换旧 oracle。原版优先的顺序明确记录，不能据此宣称相反顺序、独立调用历史或整个显示器像素已一致。
+
+原版私有 context 在同一原生线程创建、访问和销毁，返回记录保留 None、Some(empty)、非空图像的区别，并保存真实线程/PID、耗时、编译的 Mat type/stride。非空 Mat 独立持有 CPU 像素，场景关闭和原版对象析构后再次写出 held bytes，随后销毁 context 并实际检查 owner 归零。原版模块与场景模块均保留加载引用至进程退出；对象析构和 context 归零不证明原生 callback/session 排空，不据此释放原版晚到回调的代码。
+
+`upstream-trace macos-same-binary` 新 schema2 强制两个 mode 共六次原版、六次 Rust 调用，逐次返回状态一致，有效图片须有准确已知目标像素与相同持帧字节；CG arm 要求原版/Rust 各三张已知图样。SC 的匹配 None/empty 是失败/空值观察，不能记为成功截图。额外全图核对每份 Rust packed BGRA 到 BGR 的通道转换，不要求不受控桌面区域在两次不同时间的截图间相同。源调用、native owner、模块身份、关闭记录、失败后附加图片、schema 混用和额外 original call 都严格校核；历史 schema1 的原报告形状不变，确切 c823 的真实保存报告仍只读通过。新的 native Step 完成标记要求原版三次调用，records Step 要求完整十二次；旧日志不能误满足新门禁。
+
+本机五份正向人工数据覆盖匹配 None、匹配 Some(empty)、有效图片、晚到不作当前结果及历史 schema1；26 项反向数据覆盖原版调用缺失、线程/PID/模块替换、None/empty/image 混淆、坏布局/持帧/目标像素、额外调用、虚报排空和全图通道错误等，新报告写出及只读回读通过。Mach-O 头、身份、返回/owner 元数据和 96×64 CPU 像素均为人工构造，不是新 Mac 程序或截图。38 项真实 Step 子进程 mock 与四项 wrapper 控制通过，保留 17/77 原退出及失败后继续独立入口。nightly 更新成功且版本未变；97 项 xtask 测试、工作区测试/Clippy、Release 构建和 Apple 目标 Rust 类型/Clippy 检查通过。这些是现有 Cargo.lock/缓存下的显式离线开发检查，新在线依赖解析仍待 CI。Windows 未编译新 Objective-C++；新同进程原版与 Rust 的真实 Mac 配对、来源/输入和像素审阅均待 CI，旧失败与完整 P1 仍未验收。
+
 顺序诊断现在复用已有桌面更新夹具：每个 arm 在创建任何源对象前启动同显示器、与目标不重叠的 16×16 自有 marker，由窗口 owner 每 50ms 交替绘制，并贯穿整个 arm。目标像素、原版捕获类、调用次数/顺序和等待均不改；WGC 对象析构与第一条 post-object DD 调用之间没有新增准备、等待或 IO。新增 `frame-drivers.tsv` 记录 marker HWND/thread/PID、初末绘制数、错误、同显示器/不重叠与关闭证据；native 和 `upstream-trace framepool-order` 都严格校核。schema2 登记 56 份输入，Step 要求新的 driver/schema 完成标记及 `files=56`；历史 schema1 维持原 55 份输入和报告形状，旧日志不能满足新 Step。
 
 本机新增有效连续三轮共 75 次调用，75 张原始 BGR 全图逐字节符合已知图样；12 个目标窗口和 12 个 marker 均关闭。四路 Raw Input/低级 hook 事件为零，最大监听间隔 83.4621ms，监听器正常注销、writer 全部落盘并 join。本批没有新的物理正向挑战。1,461 个路径在捕获前冻结，含 26 项主要单元和 968 条原生依赖路径；实际编译消费的四份必需 F C++ 源码及其余来源逐项匹配固定 Git blobs。独立复核原路径/内容寻址副本、三轮报告、75 份全图、marker 与目标 owner 关系和清理均通过。报告原字段 `owned_windows_closed=4` 每轮只计四个目标，另四个 marker 单列，不能把整批全部相关窗口写成 12 个。

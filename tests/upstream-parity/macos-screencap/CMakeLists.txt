@@ -55,7 +55,7 @@ target_compile_options(mfs_macos_observed_context PRIVATE -fno-objc-arc -fblocks
 # Loaded only by the explicitly selected Rust scene-child entry, on main.
 # Keep it separate from the existing adapter so old consumer processes never
 # register these extra fixture classes merely by loading their converter.
-add_library(mfs_macos_same_binary_scene SHARED same-binary-scene.mm
+add_library(mfs_macos_same_binary_scene SHARED same-binary-scene.mm same-binary-original.mm
     "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
 target_include_directories(mfs_macos_same_binary_scene PRIVATE ${_mfs_source_includes})
 target_link_libraries(mfs_macos_same_binary_scene PRIVATE ${_mfs_source_links})

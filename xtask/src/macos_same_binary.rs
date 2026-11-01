@@ -128,6 +128,68 @@ fn selection(text: &str, g: &geometry::Geometry, required: bool) -> Result<()> {
     }
     Ok(())
 }
+fn original_call(
+    arm: &Path,
+    call: usize,
+    caller_result: u64,
+    g: &geometry::Geometry,
+    consumer: &BTreeMap<String, String>,
+    finish: &BTreeMap<String, String>,
+) -> Result<serde_json::Value> {
+    let row = rows(
+        &fs::read_to_string(arm.join(format!("original-call-{call}.tsv")))?,
+        5,
+    )?;
+    if row.len() != 1
+        || row[0][0] != u64::try_from(call)?
+        || !matches!(row[0][1], 0 | 1 | 3)
+        || row[0][1] != caller_result
+        || row[0][2] == 0
+        || row[0][3] == 0
+        || row[0][3] != number(finish, "caller_thread")?
+        || row[0][4] != number(consumer, "pid")?
+    {
+        return Err("same-process original/Rust return or native caller identity differs".into());
+    }
+    let usable = row[0][1] == 1;
+    let mut known = false;
+    let names = [
+        format!("original-call-{call}.bgr"),
+        format!("original-call-{call}-layout.tsv"),
+        format!("original-held-{call}.bgr"),
+    ];
+    if usable {
+        let bgr = fs::read(arm.join(&names[0]))?;
+        let layout = rows(&fs::read_to_string(arm.join(&names[1]))?, 5)?;
+        if layout.len() != 1
+            || layout[0][0] != u64::try_from(g.width)?
+            || layout[0][1] != u64::try_from(g.height)?
+            || layout[0][2]
+                < u64::try_from(g.width.checked_mul(3).ok_or("original stride overflow")?)?
+            || layout[0][3] == 0
+            || layout[0][3] != layout[0][4]
+            || bgr.len()
+                != g.width
+                    .checked_mul(g.height)
+                    .and_then(|n| n.checked_mul(3))
+                    .ok_or("original span overflow")?
+            || bgr != fs::read(arm.join(&names[2]))?
+        {
+            return Err("same-process original CPU layout/span/held bytes differ".into());
+        }
+        known = g.pixels(&bgr, 3).is_ok();
+        if !known {
+            return Err("same-process original successful result has unknown target pixels".into());
+        }
+    } else if names.iter().any(|name| arm.join(name).exists()) {
+        return Err("original None/empty result has a substituted CPU image".into());
+    }
+    Ok(
+        serde_json::json!({"call":call,"caller_result":row[0][1],"elapsed_ns":row[0][2],
+        "native_caller_thread":row[0][3],"pid":row[0][4],"usable_image":usable,"known_patch":known,
+        "caller_result_matches_rust":true,"full_display_pixels_paired":false}),
+    )
+}
 pub fn run(args: &[String]) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
@@ -147,6 +209,8 @@ pub fn run(args: &[String]) -> Result<()> {
     let mut calls = Vec::new();
     let mut arms = Vec::new();
     let mut common_path = None;
+    let mut common_schema = None;
+    let mut originals = Vec::new();
     for mode in 0..=1 {
         let arm = root.join(format!("mode-{mode}"));
         let read = |name: &str| -> Result<Vec<u8>> { Ok(fs::read(arm.join(name))?) };
@@ -219,11 +283,16 @@ pub fn run(args: &[String]) -> Result<()> {
             }
         }
         let summary = fields(&text("summary.txt")?)?;
-        if summary.len() != 12 {
+        let schema = number(&summary, "schema")?;
+        if !matches!(schema, 1 | 2)
+            || summary.len() != if schema == 1 { 12 } else { 18 }
+            || common_schema.is_some_and(|s| s != schema)
+        {
             return Err("same-binary summary fields differ".into());
         }
+        common_schema = Some(schema);
         for (key, value) in [
-            ("schema", 1),
+            ("schema", schema),
             ("mode", mode),
             ("invocations", 3),
             ("scene_closed", 1),
@@ -236,6 +305,49 @@ pub fn run(args: &[String]) -> Result<()> {
         ] {
             expect(&summary, key, value)?;
         }
+        let original_finish = if schema == 2 {
+            for (key, value) in [
+                ("original_invocations", 3),
+                ("original_first", 1),
+                ("original_owner_closed", 1),
+                ("paired_caller_results", 1),
+            ] {
+                expect(&summary, key, value)?;
+            }
+            let module = fields(&text("original-module.txt")?)?;
+            if module.len() != 3 || module.get("module_path") != producer.get("module_path") {
+                return Err("same-process original loaded module identity differs".into());
+            }
+            expect(&module, "schema", 1)?;
+            expect(&module, "module_retained_until_process_exit", 1)?;
+            if read("original-owner-closed.txt")?
+                != b"context_owners=0\nsource_callbacks_drained=0\n"
+            {
+                return Err("same-process original context closure evidence differs".into());
+            }
+            let finish = fields(&text("original-finish.txt")?)?;
+            if finish.len() != 8 || number(&finish, "caller_thread")? == 0 {
+                return Err("same-process original finish fields differ".into());
+            }
+            for (key, value) in [
+                ("schema", 1),
+                ("calls", 3),
+                ("pid", number(&consumer, "pid")?),
+                ("source_object_destroyed", 1),
+                ("callback_drain_proved", 0),
+                ("module_retained_until_process_exit", 1),
+            ] {
+                expect(&finish, key, value)?;
+            }
+            Some(finish)
+        } else {
+            if fs::read_dir(&arm)?
+                .any(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with("original-")))
+            {
+                return Err("legacy same-binary schema has new original caller evidence".into());
+            }
+            None
+        };
         let table = text("calls.tsv")?;
         let mut lines = table.lines();
         if lines.next() != Some("call\tresult\tknown_patch\telapsed_ns") {
@@ -246,6 +358,7 @@ pub fn run(args: &[String]) -> Result<()> {
             return Err("same-binary requires three actual call observations".into());
         }
         let (mut usable, mut known) = (0, 0);
+        let (mut original_usable, mut original_known) = (0_u64, 0_u64);
         for (call, row) in table.iter().enumerate() {
             if row[0] != u64::try_from(call)? || row[1] > 3 || row[2] > 1 || row[3] == 0 {
                 return Err("same-binary call index/result/elapsed differs".into());
@@ -325,6 +438,15 @@ pub fn run(args: &[String]) -> Result<()> {
                 {
                     return Err("same-binary current/held CPU span or identity differs".into());
                 }
+                if raw
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(bgr.as_chunks::<3>().0)
+                    .any(|(raw, bgr)| raw[..3] != *bgr)
+                {
+                    return Err("same-binary full BGRA/BGR channel conversion differs".into());
+                }
                 correct = g.pixels(&raw, 4).is_ok() && g.pixels(&bgr, 3).is_ok();
                 usable += 1;
                 known += u64::from(correct);
@@ -343,6 +465,18 @@ pub fn run(args: &[String]) -> Result<()> {
             }
             if row[2] != u64::from(correct) {
                 return Err("same-binary known-patch flag differs from actual pixels".into());
+            }
+            if let Some(finish) = &original_finish {
+                if row[1] == 1 && !correct {
+                    return Err(
+                        "same-process Rust successful result has unknown target pixels".into(),
+                    );
+                }
+                let mut original = original_call(&arm, call, row[1], &g, &consumer, finish)?;
+                original_usable += u64::from(original["usable_image"] == true);
+                original_known += u64::from(original["known_patch"] == true);
+                original["mode"] = serde_json::json!(mode);
+                originals.push(original);
             }
             let late = fields(&text(&format!("call-{call}-late.txt"))?)?;
             if late.len() != 7 {
@@ -374,6 +508,36 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         expect(&summary, "usable_images", usable)?;
         expect(&summary, "known_patch_images", known)?;
+        if let Some(finish) = &original_finish {
+            expect(&summary, "original_usable_images", original_usable)?;
+            expect(&summary, "original_known_patch_images", original_known)?;
+            expect(finish, "held_images", original_usable)?;
+            for entry in fs::read_dir(&arm)? {
+                let entry = entry?;
+                let name = entry.file_name();
+                let name = name.to_string_lossy();
+                if name.starts_with("original-")
+                    && (!entry.file_type()?.is_file()
+                        || ![
+                            "original-module.txt",
+                            "original-finish.txt",
+                            "original-owner-closed.txt",
+                        ]
+                        .contains(&name.as_ref())
+                            && !(0..3).any(|call| {
+                                [
+                                    format!("original-call-{call}.tsv"),
+                                    format!("original-call-{call}.bgr"),
+                                    format!("original-call-{call}-layout.tsv"),
+                                    format!("original-held-{call}.bgr"),
+                                ]
+                                .contains(&name.to_string())
+                            }))
+                {
+                    return Err("unexpected original call/context record".into());
+                }
+            }
+        }
         if mode == 1 && (usable, known) != (3, 3) {
             return Err("same-binary CG metadata positive control failed".into());
         }
@@ -398,8 +562,19 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     inventory(&root, &root, &mut artifacts)?;
     artifacts.sort_by(|a, b| a.path.cmp(&b.path));
-    let report = serde_json::json!({"layout_version":1,"arms":arms,"call_observations":calls,"actual_invocations":6,"inputs":artifacts,
+    let mut report = serde_json::json!({"layout_version":1,"arms":arms,"call_observations":calls,"actual_invocations":6,"inputs":artifacts,
         "scope":"Fresh Rust consumer/scene pairs with the same actual executable path, archived arm64 executable bytes and observed child/window identity. CG metadata is a strict three-image positive control; SC metadata results, including None/error/empty, are observations. Original five-second waits unchanged; no capture retry, source oracle substitution, late-frame recovery, callback-quiescence claim, border/broker cause or full P1 acceptance. The child retains its separate scene module until process exit."});
+    if common_schema == Some(2) {
+        report["layout_version"] = serde_json::json!(2);
+        report["actual_invocations"] = serde_json::json!(12);
+        report["actual_original_invocations"] = serde_json::json!(6);
+        report["actual_rust_invocations"] = serde_json::json!(6);
+        report["original_call_observations"] = serde_json::json!(originals);
+        report["original_first"] = serde_json::json!(true);
+        report["scope"] = serde_json::json!(
+            "Same-executable scene and same-process original/Rust display callers, with three unchanged original calls before three Rust calls on the same worker. Original/Rust None/empty/image results must match; Some images require exact known target pixels and unchanged held CPU bytes. CG is a strict three-image control per implementation. SC failures remain failed capture observations. Full display pixels, opposite invocation order, atomic timing, native callback drainage, prior failed oracle reclassification, root cause and complete P1 acceptance are not proved. Both explicit native module references remain loaded until process exit."
+        );
+    }
     let output = root.join("same-binary-validation.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -408,9 +583,15 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "macOS same_binary arms=2 invocations=6 CG_positive_images=3 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed"
-    );
+    if common_schema == Some(2) {
+        println!(
+            "macOS same_binary arms=2 invocations=12 original_calls=6 rust_calls=6 CG_positive_images=6 original_first=1 caller_results_equal=1 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "macOS same_binary arms=2 invocations=6 CG_positive_images=3 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }
 #[cfg(test)]

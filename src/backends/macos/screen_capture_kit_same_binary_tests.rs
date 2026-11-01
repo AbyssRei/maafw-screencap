@@ -7,6 +7,8 @@ use std::{
     fs,
     process::{Child, Command, Stdio},
 };
+#[path = "screen_capture_kit_original_host.rs"]
+mod original_host;
 
 struct Scene {
     child: Child,
@@ -176,6 +178,13 @@ fn records_first_display_with_same_executable_scene_host() {
     images.try_reserve_exact(3).unwrap();
     let mut usable = 0;
     let mut known = 0;
+    // Same parent process, executable identity, worker and still-live scene.
+    // Original-first is explicit; this is not an order-independent proof.
+    let original = original_host::Original::open(&root);
+    for call in 0..3 {
+        original.capture(call, &root);
+    }
+    let mut caller_results = Vec::new();
     let capture = Capture::new(0);
     for call in 0..3 {
         // A separate registry prevents another timed-out call's late raw sample
@@ -239,6 +248,7 @@ fn records_first_display_with_same_executable_scene_host() {
         }
         writeln!(rows, "{call}\t{status}\t{}\t{elapsed}", u8::from(correct)).unwrap();
         rows.flush().unwrap();
+        caller_results.push(status);
         pending.push((call, trace, samples));
         images.push(result.ok().flatten());
     }
@@ -253,6 +263,30 @@ fn records_first_display_with_same_executable_scene_host() {
         std::thread::sleep(Duration::from_millis(5));
     }
     scene.finish();
+    original.finish(&root);
+    let mut original_usable = 0;
+    let mut original_known = 0;
+    let mut equal_results = true;
+    for (call, result) in caller_results.iter().enumerate() {
+        let row: Vec<u64> = fs::read_to_string(root.join(format!("original-call-{call}.tsv")))
+            .unwrap()
+            .trim_end_matches('\n')
+            .split('\t')
+            .map(|v| v.parse().unwrap())
+            .collect();
+        assert_eq!(row.len(), 5);
+        assert_eq!(row[0], u64::try_from(call).unwrap());
+        equal_results &= row[1] == u64::try_from(*result).unwrap();
+        if row[1] == 1 {
+            let bytes = fs::read(root.join(format!("original-call-{call}.bgr"))).unwrap();
+            assert_eq!(
+                bytes,
+                fs::read(root.join(format!("original-held-{call}.bgr"))).unwrap()
+            );
+            original_usable += 1;
+            original_known += usize::from(geometry.pixels(&bytes, 3).is_ok());
+        }
+    }
     let mut faults = 0;
     for (call, trace, samples) in &pending {
         let released = trace.request_released.load(Ordering::Acquire) == 1
@@ -278,18 +312,32 @@ fn records_first_display_with_same_executable_scene_host() {
             fs::write(root.join(format!("held-{call}.raw")), samples[0].pixels()).unwrap();
         }
     }
-    fs::write(root.join("summary.txt"),format!("schema=1\nmode={mode}\ninvocations=3\nusable_images={usable}\nknown_patch_images={known}\nscene_closed=1\nscene_child_exit=0\nsame_binary=1\nfaults={faults}\nno_capture_retry=1\noriginal_oracle_replaced=0\nfull_P1_acceptance=0\n")).unwrap();
+    fs::write(root.join("summary.txt"),format!("schema=2\nmode={mode}\ninvocations=3\nusable_images={usable}\nknown_patch_images={known}\nscene_closed=1\nscene_child_exit=0\nsame_binary=1\nfaults={faults}\nno_capture_retry=1\noriginal_oracle_replaced=0\nfull_P1_acceptance=0\noriginal_invocations=3\noriginal_usable_images={original_usable}\noriginal_known_patch_images={original_known}\noriginal_first=1\noriginal_owner_closed=1\npaired_caller_results={}\n",u8::from(equal_results))).unwrap();
     // Keep capture failure observations, but require the CG metadata arm as a
     // strict positive control. Neither arm is a replacement source oracle.
     assert_eq!(faults, 0);
+    assert!(
+        equal_results,
+        "same-process original/Rust caller results differ"
+    );
+    assert_eq!(
+        original_usable, original_known,
+        "original Some result has unknown target pixels"
+    );
+    assert_eq!(usable, known, "Rust Some result has unknown target pixels");
     if mode == 1 {
         assert_eq!(
             (usable, known),
             (3, 3),
             "same-binary CG positive control failed"
         );
+        assert_eq!(
+            (original_usable, original_known),
+            (3, 3),
+            "same-process original CG positive control failed"
+        );
     }
     eprintln!(
-        "native Rust macOS same_binary mode={mode} invocations=3 usable_images={usable} known_patch_images={known} scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 recorded"
+        "native Rust macOS same_binary mode={mode} invocations=3 usable_images={usable} known_patch_images={known} scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 original_calls=3 original_first=1 caller_results_equal=1 recorded"
     );
 }

@@ -126,7 +126,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         }
         if($Name -match '^rust-macos-same-binary-([01])$') {
             $sameMode=$Matches[1]
-            $pattern="native Rust macOS same_binary mode=$sameMode invocations=3 usable_images=([0-3]) known_patch_images=([0-3]) scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 recorded"
+            $pattern="native Rust macOS same_binary mode=$sameMode invocations=3 usable_images=([0-3]) known_patch_images=([0-3]) scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 original_calls=3 original_first=1 caller_results_equal=1 recorded"
             $result=[regex]::Matches($observed,$pattern)
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or $result.Count -ne 1 -or
                 -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1')) {
@@ -137,7 +137,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 $status='failed';throw 'Same-binary CG positive control or observation counts differ'
             }
         }
-        if($Name -eq 'macos-same-binary-records' -and -not $observed.Contains('macOS same_binary arms=2 invocations=6 CG_positive_images=3 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed')) {
+        if($Name -eq 'macos-same-binary-records' -and -not $observed.Contains('macOS same_binary arms=2 invocations=12 original_calls=6 rust_calls=6 CG_positive_images=6 original_first=1 caller_results_equal=1 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed')) {
             $status='failed';throw 'Incomplete same-binary observation records'
         }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
