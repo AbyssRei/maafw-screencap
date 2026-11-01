@@ -4,6 +4,10 @@
 
 ## 本轮原生与 CI 复核
 
+确切 `ffcb3a098286b249deff88ba5c07cc57ceedf52e` 的 [Actions 41254680236](https://github.com/AbyssRei/maafw-screencap/actions/runs/41254680236) Linux job 已成功，PipeWire 组件全部 194 项、Wlr 组件全部 135 项通过。两个官方轻量 ZIP 的发布摘要、长度与全部 ZIP 条目校验通过；独立核对 PipeWire 的 43,041 个可用登记路径、Wlr 的 8,448 个可用登记路径，并以已登记的 Windows xtask 对实际下载 bytes/记录执行 17 和 7 组只读数据检查。范围包括真实七格式、MemFd、持续流、Custom、管理器/宿主以及 Wlr 协议、退出与通道持有记录；没有在 Windows 重跑 Linux 原生捕获。
+
+轻量包仍分别缺少 223 和 91 个登记输入，完整来源/依赖闭合尚待工程包复核，不能以可用文件或数据检查通过代替完整来源验收。该 run 的 Windows job 继续因四项原版 FramePool pseudo 颜色断言失败，macOS 两个原生入口仍停在正式 Xcode 缺失；Linux 组件通过不接受这些平台、整个工作流或完整 P1。新源码 `2d2898f` 的 CI 与本机排队回归另行记录，不由本批替代。
+
 FramePool 的 Rust Query/Map/Size 用例现先保存本次返回的 CPU 图像；Map/Size 同时保存 cache，再按原顺序执行状态、错误和严格像素断言。原版 C++ Map/Size 亦先保存两份 Mat，再检查标记；Query 也在断言前写出图像。捕获、转换、等待、绘制及原断言条件未改，保存失败仍使测试失败，不补齐未执行的调用行。旧 Size 标记失败及其缺图记录保持原状态，不能从新保存顺序倒推历史原因。
 
 独立 CPU 控制通过原 OpenCV Mat 和实际 Rust/native 图像 owner 检验两种合法标记、结果/cache 各自的坏标记与末像素、显式空值。Windows 归档依赖下 Debug/Release 共 32 组、16 次预期像素拒绝，64 份像素文件（含空值）均在断言后保留，两侧及两配置逐字节一致，Rust owner 最终归零。`cargo xtask upstream-trace framepool-record-control <外部矩阵> [--check-only]` 校核原始 bytes/layout、完整八行及保存报告；十组记录破坏被拒绝。实际 Step 的十六组 mock 控制通过，拒绝零测试、缺/少摘要、未释放 owner、错误截图范围及非零退出。准备脚本已接入原版、Rust 和数据三个独立步骤，轻量包收集对应目录。Rust 精确入口为 `backends::windows::frame_pool::tests::queries::preserves_image_and_cache_records_when_strict_pixels_reject_them`，显式设置全新 `MFS_FRAMEPOOL_RECORD_ARTIFACTS` 和 `MFS_GDI_PARITY_LIBRARY`。这些控制没有创建桌面窗口或截图；改动后 Query/Map/Size 的真实捕获回归及新 CI 仍待串行执行，当前 63 组合矩阵使用先前冻结程序，不替代这项验收。
