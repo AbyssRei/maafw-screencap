@@ -4,6 +4,12 @@
 
 ## 本轮原生与 CI 复核
 
+确切 `c823497` 的 [Actions 41347473179](https://github.com/AbyssRei/maafw-screencap/actions/runs/41347473179) 原生 macOS 随后通过同程序 CG/SC 两项和记录检查，组件为 127/139，既有十二项失败保留。官方轻量 ZIP 的长度 34,752,523 字节、完整 SHA-256、11,145 个可用登记路径及十三份保存报告经只读复核；独立核对 76 份矩阵文件、六次当前返回和独立 late 状态。CG 三次已知图样，十二份 raw/BGR/持帧的全图通道转换和目标像素通过；SC 三次约 5.043/5.064/5.150 秒返回 None，仍为零成功截图。该批完整输入仍缺 540 项，不能以确切 2c 的完整来源替代；缺几何分支仍未原生触发，原版失败配对继续拒绝。该结果验证 checker 修正的原生编排，不接受整体 macOS/P1。
+
+确切 `58fa6f0` 的 [Actions 41337468981](https://github.com/AbyssRei/maafw-screencap/actions/runs/41337468981) Windows 七份组件清单为 374/386，保留四项原版 FramePool pseudo、六项 manager（6/10/14/38/42/46）以及新的 source-order/records 两项失败。顺序程序实际完成 25 次调用、四个窗口关闭，正向控制为零，退出 5；日志含十二次 `AcquireNextFrame` 的 `0x887a0027`，记录检查退出 1。只取回的 35 份官方 ZIP 条目匹配 CRC，29 份亦匹配已登记 SHA-256；完整 ZIP 摘要尚未核验。25 份 BGR 中十二份为空、十二份为完整已知图样，另 `shot-9` 的 18,432 字节与旧 a5 失败 runtime 的三像素外围 ROI 逐字节相同，内部差异为零。没有据此推导原生生产者、实际时序或完整 parity。
+
+该顺序数据的 55 份文件都已登记，但旧轻量上传只带回 25 份 BGR，漏掉三十份表格/布局。因此现将 `frame-pool-context/source-order/**` 整个目录纳入既有 `always()` 上传，包括失败后的原始记录；完整工程包正在补取，尚不能核对实际逐次 phase/layout/owner 表。微软 [DXGI 错误定义](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/dxgi-error)将该值定义为等待下一帧超时，[AcquireNextFrame 说明](https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_2/nf-dxgi1_2-idxgioutputduplication-acquirenextframe)指出新帧依赖桌面或指针更新。当前自有静态场景未在每次调用前明确改变桌面，这只能作为夹具假设；未重试截图、放宽正向断言、修改等待或用它解释旧外围根因。新上传规则仍待实际托管产物验证，整批原失败不变。
+
 新增 `cargo xtask upstream-trace macos-same-binary <外部矩阵目录> [--check-only]`，核对同一实际 Rust libtest 可执行路径的消费进程和场景子进程。两个 arm 各用新父/子进程，子进程从 `current_exe()` 启动，在主线程加载独立 scene dylib，包装并调用现有 `source-context.mm` 的场景入口；现有原版捕获类、场景函数体和旧 oracle 均不改。mode 1 为现有 CoreGraphics 元数据场景，严格要求三次已知图样；mode 0 为现有 ScreenCaptureKit 元数据场景，固定三次调用，失败、空结果或错误均保存为观察，不算成功截图。每次调用有独立 raw owner 和当前选源记录，额外八秒只观察晚到 owner，不再次截图或以晚到结果补当前返回；原五秒等待保留。
 
 记录包含实际可执行文件归档、长度/FNV、真实父子 PID/窗口归属、原生选源、逐次状态和独立 late 状态、可用 raw/BGR 与窗口关闭后持帧，以及子进程协作退出。FNV 只核对这组文件关系，来源完整性另由运行清单 SHA-256 负责。scene 的一次 dlopen 引用保留到该子进程退出；关闭窗口和 request 释放均不被描述为全部原生回调排空。新 checker 拒绝路径/程序身份不符、损坏持帧、失败调用附加替代图片及强制终止；两个 arm 和记录检查独立编排，前项失败仍执行后项。`77` 单独记录为场景缺少环境，原退出码不被成功日志覆盖。
