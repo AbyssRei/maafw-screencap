@@ -37,6 +37,7 @@ $delegateNativeEvidence = ''
 $delegateFactoryEvidence = ''
 $delegateRuntimeEvidence = ''
 $delegateQueryEvidence = ''
+$delegateDestroyEvidence = ''
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
 if ($FramePoolParity -and -not $GdiParity) { throw 'FramePool parity requires the explicit shared image adapter/regression target.' }
@@ -422,6 +423,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             & $ConfigureTool upstream-delegate win32-factory $env:MFS_DELEGATE_FACTORY_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual factory construction records failed independent verification'}
+        }
+        if($Name -eq 'manager-delegate-destroy' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+               -not $observed.Contains('real delegate cleanup cases=3 consumed_units=3 reported_errors=2 first_error=7101 module_retained_after_bridge_owner=1 actual_captures=0 unknown_consumption_tested=0 passed')) {
+                throw 'Expected exactly one isolated real consumed-object cleanup-error test'
+            }
+            & $ConfigureTool upstream-delegate win32-destroy $env:MFS_DELEGATE_DESTROY_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Actual consumed-object cleanup records failed independent verification'}
         }
         if($Name -match '^manager-delegate-runtime-([1-9]|[1-5][0-9]|6[0-3])$' -and $exitCode -eq 0) {
             $runtimeMask=$Matches[1]
@@ -938,6 +948,8 @@ try {
         $env:MFS_DELEGATE_FACTORY_RECORDS=$delegateFactoryEvidence
         $delegateQueryEvidence=Join-Path $artifacts windows-delegate-queries
         $env:MFS_DELEGATE_QUERY_RECORDS=$delegateQueryEvidence
+        $delegateDestroyEvidence=Join-Path $artifacts windows-delegate-destroy
+        $env:MFS_DELEGATE_DESTROY_RECORDS=$delegateDestroyEvidence
         $delegateRuntimeEvidence=Join-Path $artifacts windows-delegate-runtime
         New-Item -ItemType Directory -Path $delegateRuntimeEvidence | Out-Null
     }
@@ -1167,11 +1179,13 @@ try {
             $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
+            $delegateDestroyCase='backends::windows::delegate_native::tests::destroy::retains_module_and_first_error_after_consumed_unit_reports_cleanup_failure'
             $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
             $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
             $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
             $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
+            $caseSelection+=@('--skip',$delegateDestroyCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
@@ -1180,6 +1194,7 @@ try {
                 @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-delegate-destroy';arguments=($parityArguments + @('--',$delegateDestroyCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-virtual-queries';arguments=($parityArguments + @('--',$managerQueryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))},
@@ -1307,6 +1322,7 @@ finally {
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateQueryEvidence -and (Test-Path -LiteralPath $delegateQueryEvidence)) {Get-ChildItem -LiteralPath $delegateQueryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
+    if($delegateDestroyEvidence -and (Test-Path -LiteralPath $delegateDestroyEvidence)) {Get-ChildItem -LiteralPath $delegateDestroyEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($metadataEvidence -and (Test-Path -LiteralPath $metadataEvidence)) {Get-ChildItem -LiteralPath $metadataEvidence -Recurse -File|ForEach-Object{Save-Input $_.FullName}}

@@ -9,6 +9,8 @@ use std::{
 };
 #[path = "../../tests/upstream-parity/windows-delegate/cases.rs"]
 mod cases;
+#[path = "windows_delegate_destroy.rs"]
+mod destroy;
 #[path = "windows_delegate_native.rs"]
 mod native;
 #[path = "windows_delegate_queries.rs"]
@@ -56,6 +58,9 @@ pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|arg| arg == "win32-destroy") {
+        return destroy::run(&args[1..]);
+    }
     if args.first().is_some_and(|arg| arg == "win32-queries") {
         return queries::run(&args[1..]);
     }

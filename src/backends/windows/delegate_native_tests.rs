@@ -11,6 +11,8 @@ use std::{
     path::PathBuf,
     sync::Arc,
 };
+#[path = "delegate_destroy_tests.rs"]
+mod destroy;
 #[path = "delegate_native_host_tests.rs"]
 mod host;
 #[path = "delegate_query_tests.rs"]
