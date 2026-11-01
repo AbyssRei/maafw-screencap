@@ -8,10 +8,15 @@ const HEADER: &str = "arm\tphase\talpha\tframe_image\tframe_known\tframe_zero\tp
 
 #[path = "frame_pool_alpha_pair.rs"]
 mod pair;
+#[path = "frame_pool_alpha_poll.rs"]
+mod poll;
 
 pub fn run(args: &[String]) -> Result<()> {
     if args.first().is_some_and(|kind| kind == "frame-pool-pair") {
-        return pair::run(&args[1..]);
+        return pair::run(&args[1..], false);
+    }
+    if args.first().is_some_and(|kind| kind == "frame-pool-poll") {
+        return pair::run(&args[1..], true);
     }
     let (path, check_only) = match args {
         [kind, path] if kind == "frame-pool" => (path, false),
@@ -79,8 +84,13 @@ pub fn run(args: &[String]) -> Result<()> {
         return Err("Alpha diagnostic owner/shutdown/positive-control summary differs".into());
     }
     artifacts.push(records::artifact(&directory, &summary)?);
-    let report = serde_json::json!({"layout_version":1,"rows":rows,"artifacts":artifacts,
+    let mut report = serde_json::json!({"layout_version":1,"rows":rows,"artifacts":artifacts,
         "scope":"Source-only alpha/content observation: ten FramePool results and ten independent PrintWindow content witnesses, two unchanged native palettes, fresh/persistent sessions, actual pre/post capture window state and shutdown/held-owner controls. Alpha255/current PrintWindow pixels are strict; alpha0 full-black or prior-scene outputs are diagnostic classifications only. Native cache branch not intercepted. Does not accept original failed pseudo colors, Rust parity, full transparency/format/cleanup, backend or P1."});
+    if directory.join("poll-branches.tsv").try_exists()? {
+        // A forwarding-observer target also uses the same pixel controls. Its
+        // sidecar is checked separately, never inferred from this file name.
+        report["scope"] = "Alpha/content record controls with a polling sidecar present. This command validates the ten source pixel/state/content/held-owner controls only; it does not validate the sidecar or infer native cache behavior. Use frame-pool-poll for the separate forwarding-observer evidence. Transparent black/prior results do not accept old failed pseudo colors, Rust parity, complete backend or P1.".into();
+    }
     let output = directory.join("alpha-validation.json");
     if check_only && output.exists() {
         let saved: serde_json::Value = records::read(&output)?;

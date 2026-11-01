@@ -4,6 +4,12 @@
 
 ## 本轮原生与 CI 复核
 
+另增独立 `mfs_framepool_alpha_poll_reference` 观察目标，明确排除于默认 native 构建；生成的 F 源码只转发两个原 `TryGetNextFrame` 表达式及超时缓存 `.clone()`，三个匹配均须恰好一次。原 clock、2ms sleep、2000ms 等待、Close、catch、转换与持帧位置保持；观察 wrapper 不保留 frame、不增加原生查询。TLS 固定大小计数记录 drain/poll 的调用数与非空返回、实际缓存 clone 和这些边界的异常计数；Rust 精确 alpha 测试同时保存已有的成功调用 evidence，不改后端。生成正文、probe 头、实际 MSBuild 项目及 compile/link 输入日志在捕获前核对/归档，托管编排保留原来的未拦截配对，另跑新的 source/Rust 进程及 `upstream-alpha frame-pool-poll <observed source directory> <Rust directory> [--check-only]`。两种派生报告不会互相纳入哈希，均可独立只读复核。
+
+该观察目标的最新连续三轮对照为 9/10、9/10、10/10，配对退出 `[1,1,0]`；18 组不透明像素全部一致，两处透明阶段差异保持失败。第 1 轮 Rust persistent/phase1 实际 drain 一帧，后续 816 次轮询全空，在 2.001320 秒后回放旧图，对应原版取得黑图；第 2 轮则是原版 persistent/phase3 drain 一帧，后续 131 次轮询全空，在 2.001496 秒后执行缓存 clone，对应 Rust 取得黑图。两侧各 29 次非空原生取帧、一次缓存 clone。这里证明的是各次被观察调用的分支；计数可能影响调度，未读取被清掉帧的内容或时间戳，也未证明旧未拦截原版分支、轮询次数差异的原因、一般帧新鲜度或历史根因，不据此改变等待/回放实现或重标任何旧失败。
+
+四路输入为零、系统输入计时/光标固定、最大采样间隔 76.663ms，监听及 writer 完成退出；没有新的物理输入正向挑战。268 份完整 BGR/BGRA 即时/持帧、60 行计数和 1,475 项捕获前冻结输入及 488 文件源码快照经独立复核；21 组损坏记录被拒绝，两组 CPU 正向数据、九组实际 Step 控制、97 项 xtask/workspace 测试、完整 Windows features Clippy、Release/fmt 通过。最初 CPU CRLF 正向控制误将已有 CRLF 写成 CRCRLF，checker 正确拒绝；旧控制材料保留，修正仅在新的控制副本。source-only 报告遇到 sidecar 时现明确其本身不校验分支，避免沿用“未拦截”的旧描述；数据复核在副本中修正表述，原生调用和原报告/退出不改写。历史未拦截批次的 `[0,1,1]` 与全部保存报告仍只读核对一致。使用归档开发依赖，尚非新在线依赖验收；新托管入口、完整资源/回调退出及 P1 仍待验收。
+
 FramePool 的原版 alpha/content 诊断现有 Rust 同序列对照：各自执行 fresh/persistent 两种会话的 255→0→255→0→255，保持相同 UI owner 图样、一次显式重绘、每阶段一次捕获及原调用/等待。原生 `mfs_framepool_alpha_reference` 额外在 capture/window/dispatcher 关闭后保存十张原有 CPU 持帧，不改固定 F 类；Rust 精确测试 `backends::windows::frame_pool::tests::alpha_sequence::records_original_alpha_sequence_pixels_and_held_owners` 单独启用 PrintWindow 当前内容见证，额外保存原转换边界的 CPU BGRA、回放/转换/clone/映射证据及关闭后的二十张 BGR 持帧。普通 FramePool 编排的 features 不变，该精确测试从通用聚合中排除；独立进程及 `upstream-alpha frame-pool-pair <source directory> <Rust directory> [--check-only]` 接入原生 CI，原有四项 pseudo 已知颜色失败不改变。
 
 最新本机连续三轮中，原版/Rust 程序各自的十阶段控制均通过，配对检查结果为 `[0,1,1]`，逐轮 10/10、9/10、9/10 相同；18 组不透明图样全部严格匹配。后两轮均在 persistent 的首个 alpha0 阶段出现差异：原版黑图，Rust 在 2.001971/2.002195 秒后回放上阶段图样，转换/原生复制为零且没有伪造 raw 样本。其余透明阶段配对一致。这个不同执行时点的观测不能确定原版内部缓存分支、帧新鲜度、一般透明度原因或迁移缺陷；不追加截图重试消除失败。检查器会保存十次完整且自身有效的像素/状态观察，在任一配对差异时仍返回失败；损坏图像、布局、状态、错误或持帧直接拒绝。

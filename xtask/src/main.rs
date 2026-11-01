@@ -206,6 +206,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-delegate win32-destroy <external records> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool-pair <source directory> <Rust directory> [--check-only]\n\n\
+                      cargo xtask upstream-alpha frame-pool-poll <observed source directory> <Rust directory> [--check-only]\n\n\
                       cargo xtask upstream-protocol <wlr|wlr-registry|wlr-failures> <external directory> [--check-only]\n\n\
                       cargo xtask upstream-context frame-pool [--offline-inputs <native run manifest>]\n\n\
                       cargo xtask upstream-context pipewire  # original source context on native Linux x64\n\n\

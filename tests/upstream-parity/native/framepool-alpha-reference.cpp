@@ -9,6 +9,9 @@
 #include <algorithm>
 #include <memory>
 #include <vector>
+#if defined(MFS_FRAMEPOOL_POLL_OBSERVER)
+#include "framepool-poll-probe.hpp"
+#endif
 
 bool matches_scene(const cv::Mat& image, bool alternative)
 {
@@ -39,6 +42,11 @@ int wmain(int argc, wchar_t** argv)
         std::vector<cv::Mat> held;
         std::vector<uint64_t> hashes;
         std::ofstream rows(root / "observations.tsv");
+#if defined(MFS_FRAMEPOOL_POLL_OBSERVER)
+        std::ofstream branches(root / "poll-branches.tsv");
+        branches.exceptions(std::ios::badbit | std::ios::failbit);
+        branches << "arm\tphase\tdrain_calls\tdrain_frames\tpoll_calls\tpoll_frames\tcache_clones\terrors\n";
+#endif
         rows.exceptions(std::ios::badbit | std::ios::failbit);
         rows << "arm\tphase\talpha\tframe_image\tframe_known\tframe_zero\tprint_image\tprint_known\tpaint_before\tpaint_after\tframe_prior\telapsed_us\n";
         bool controls = true;
@@ -79,6 +87,9 @@ int wmain(int argc, wchar_t** argv)
                 std::unique_ptr<MaaNS::CtrlUnitNs::FramePoolScreencap> fresh;
                 if (persistent && !shared) { shared = std::make_unique<MaaNS::CtrlUnitNs::FramePoolScreencap>(hwnd); }
                 if (!persistent) { fresh = std::make_unique<MaaNS::CtrlUnitNs::FramePoolScreencap>(hwnd); }
+#if defined(MFS_FRAMEPOOL_POLL_OBSERVER)
+                mfs_poll_probe::Scope observed;
+#endif
                 const auto began = std::chrono::steady_clock::now();
                 auto result = (persistent ? shared : fresh)->screencap(); // one distinct source call per phase
                 const auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-began).count();
@@ -123,6 +134,13 @@ int wmain(int argc, wchar_t** argv)
                      << known << '\t' << zero << '\t' << bool(printed) << '\t' << print_known
                      << '\t' << before[0] << '\t' << after[0] << '\t' << prior << '\t' << elapsed << '\n';
                 rows.flush();
+#if defined(MFS_FRAMEPOOL_POLL_OBSERVER)
+                const auto& counts = observed.counts;
+                branches << persistent << '\t' << phase << '\t' << counts.drain_calls << '\t'
+                         << counts.drain_frames << '\t' << counts.poll_calls << '\t' << counts.poll_frames
+                         << '\t' << counts.cache_clones << '\t' << counts.errors << '\n';
+                branches.flush();
+#endif
                 std::cout << "arm=" << persistent << " phase=" << phase << " alpha=" << alpha
                           << " image=" << bool(result) << " known=" << known << " zero=" << zero
                           << " print_known=" << print_known << " prior=" << prior << " elapsed_us=" << elapsed << std::endl;

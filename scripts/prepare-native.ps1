@@ -243,18 +243,22 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact foreground case did not execute one native test'
             }
         }
-        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss|queries|empty-client|map-boundary|size-boundary|record-control|alpha)$' -and $exitCode -eq 0) {
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss|queries|empty-client|map-boundary|size-boundary|record-control|alpha|alpha-poll)$' -and $exitCode -eq 0) {
             if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact native FramePool case did not execute one test'
             }
         }
-        if ($Name -eq 'frame-pool-rust-alpha' -and $exitCode -eq 0 -and
+        if ($Name -in @('frame-pool-rust-alpha','frame-pool-rust-alpha-poll') -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('Rust FramePool alpha phases=10 frame_images=10 print_images=10 held_images=20 closed_windows=2 positive_controls=1 source_oracle_replaced=0 capture_acceptance=0 passed')) {
             throw 'Rust alpha sequence did not complete all phases, content witnesses and retained owners'
         }
         if ($Name -eq 'frame-pool-alpha-pair-records' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('FramePool alpha paired phases=20 opaque_known=12 content_witnesses=20 retained_owners=30 bytes_verified=1 source_oracle_replaced=0 capture_acceptance=0 passed')) {
             throw 'Alpha pair records did not verify the complete original/Rust sequence'
+        }
+        if ($Name -eq 'frame-pool-alpha-poll-records' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('FramePool alpha polling phases=20 source_calls=10 rust_calls=10 source_branch_observed=1 capture_acceptance=0 passed')) {
+            throw 'Alpha polling records did not verify the forwarded original/Rust branches'
         }
         if ($Name -eq 'frame-pool-source-order' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order diagnostic shots=25 windows_closed=4 positive_controls=1 no_capture_retry=1 full_P1_acceptance=0 frame_driver=1 schema=2')) {
@@ -1046,6 +1050,32 @@ try {
             New-Item -ItemType Directory -Path $alphaEvidence|Out-Null
             Invoke-FrameCheck frame-pool-source-alpha $alphaProgram @($alphaEvidence)
             Invoke-FrameCheck frame-pool-source-alpha-records $ConfigureTool @('upstream-alpha','frame-pool',$alphaEvidence)
+            Step frame-pool-alpha-poll-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_alpha_poll_reference','--parallel','4')
+            $alphaPollProgram=Join-Path $artifacts mfs_framepool_alpha_poll_reference.exe
+            Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_alpha_poll_reference.exe) -Destination $alphaPollProgram
+            Save-Input $alphaPollProgram
+            $alphaPollEvidence=Join-Path $frameContextEvidence alpha-poll
+            New-Item -ItemType Directory -Path (Join-Path $alphaPollEvidence source) -Force|Out-Null
+            $pollOriginal=[IO.File]::ReadAllText((Join-Path $UpstreamRoot source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp)).Replace("`r`n","`n")
+            $pollExpected=$pollOriginal
+            foreach($site in @(
+                @('auto old_frame = cap_frame_pool_.TryGetNextFrame()','auto old_frame = ::mfs_poll_probe::next(cap_frame_pool_, true)'),
+                @('frame = cap_frame_pool_.TryGetNextFrame();','frame = ::mfs_poll_probe::next(cap_frame_pool_, false);'),
+                @('return cached_image_.clone();','return ::mfs_poll_probe::clone(cached_image_);')
+            )) {
+                if([regex]::Matches($pollOriginal,[regex]::Escape($site[0])).Count -ne 1) {throw 'Original FramePool polling site count differs'}
+                $pollExpected=$pollExpected.Replace($site[0],$site[1])
+            }
+            $pollExpected='#include "framepool-poll-probe.hpp"'+"`n"+$pollExpected
+            $pollGenerated=Join-Path $build framepool-poll-observed.cpp
+            if([IO.File]::ReadAllText($pollGenerated).Replace("`r`n","`n") -cne $pollExpected) {throw 'Generated FramePool polling observer differs from the three reviewed expressions'}
+            $pollInput=Join-Path $alphaPollEvidence native-input
+            New-Item -ItemType Directory -Path $pollInput|Out-Null
+            Copy-Item -LiteralPath $pollGenerated,(Join-Path $productRoot tests/upstream-parity/native/framepool-poll-probe.hpp),(Join-Path $build mfs_framepool_alpha_poll_reference.vcxproj) -Destination $pollInput
+            $pollReadLogs=@(Get-ChildItem -LiteralPath (Join-Path $build mfs_framepool_alpha_poll_reference.dir) -Recurse -File -Filter '*.read.*.tlog')
+            if($pollReadLogs.Count -lt 2) {throw 'Polling observer compile/link input logs missing'}
+            foreach($pollReadLog in $pollReadLogs) {Copy-Item -LiteralPath $pollReadLog.FullName -Destination (Join-Path $pollInput $pollReadLog.Name)}
+            Invoke-FrameCheck frame-pool-source-alpha-poll $alphaPollProgram @((Join-Path $alphaPollEvidence source))
             Step frame-pool-target-loss-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_target_loss_reference','--parallel','4')
             $targetLossProgram=Join-Path $artifacts mfs_framepool_target_loss_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_target_loss_reference.exe) -Destination $targetLossProgram
@@ -1275,6 +1305,9 @@ try {
             $env:MFS_FRAMEPOOL_ALPHA_RUST_ROOT = Join-Path $frameContextEvidence alpha-rust
             Invoke-FrameCheck frame-pool-rust-alpha cargo ($alphaArguments + @('--', $frameAlphaCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
             Invoke-FrameCheck frame-pool-alpha-pair-records $ConfigureTool @('upstream-alpha', 'frame-pool-pair', $alphaEvidence, $env:MFS_FRAMEPOOL_ALPHA_RUST_ROOT)
+            $env:MFS_FRAMEPOOL_ALPHA_RUST_ROOT = Join-Path $alphaPollEvidence rust
+            Invoke-FrameCheck frame-pool-rust-alpha-poll cargo ($alphaArguments + @('--', $frameAlphaCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck frame-pool-alpha-poll-records $ConfigureTool @('upstream-alpha', 'frame-pool-poll', (Join-Path $alphaPollEvidence source), $env:MFS_FRAMEPOOL_ALPHA_RUST_ROOT)
             $env:MFS_FRAMEPOOL_RECORD_ARTIFACTS = Join-Path $frameRecordEvidence rust
             Invoke-FrameCheck 'frame-pool-rust-record-control' cargo ($parityArguments + @('--', $frameRecordCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
             Invoke-FrameCheck 'frame-pool-record-control-records' $ConfigureTool @('upstream-trace', 'framepool-record-control', $frameRecordEvidence)

@@ -15,7 +15,10 @@ fn collect(
     for entry in fs::read_dir(folder)? {
         let entry = entry?;
         let kind = entry.file_type()?;
-        if entry.path() == output {
+        if entry.path() == output
+            || entry.path() == root.join("alpha-pair-validation.json")
+            || entry.path() == root.join("alpha-poll-validation.json")
+        {
             continue;
         }
         if kind.is_file() {
@@ -28,7 +31,7 @@ fn collect(
     }
     Ok(())
 }
-pub(super) fn run(args: &[String]) -> Result<()> {
+pub(super) fn run(args: &[String], observe_poll: bool) -> Result<()> {
     let (source_path, rust_path, check_only) = match args {
         [source,rust] => (source,rust,false),
         [source,rust,flag] if flag == "--check-only" => (source,rust,true),
@@ -223,14 +226,22 @@ pub(super) fn run(args: &[String]) -> Result<()> {
     if summary != expected {
         return Err("Alpha pair summary/owner/positive-control counts differ".into());
     }
-    let output = rust.join("alpha-pair-validation.json");
+    let output = rust.join(if observe_poll {
+        "alpha-poll-validation.json"
+    } else {
+        "alpha-pair-validation.json"
+    });
     let (mut source_inputs, mut rust_inputs) = (Vec::new(), Vec::new());
     collect(&source, &source, &output, &mut source_inputs)?;
     collect(&rust, &rust, &output, &mut rust_inputs)?;
     source_inputs.sort_by(|a, b| a.path.cmp(&b.path));
     rust_inputs.sort_by(|a, b| a.path.cmp(&b.path));
-    let report = serde_json::json!({"layout_version":1,"observations":observations,"paired_calls":paired_calls,"exact_sequence_match":paired_calls==10,"owners":owners,"summary":summary,"source_inputs":source_inputs,"rust_inputs":rust_inputs,
+    let mut report = serde_json::json!({"layout_version":1,"observations":observations,"paired_calls":paired_calls,"exact_sequence_match":paired_calls==10,"owners":owners,"summary":summary,"source_inputs":source_inputs,"rust_inputs":rust_inputs,
         "scope":"Ten fixed alpha transitions per implementation, fresh/persistent sessions, exact full target BGR comparison, independent PrintWindow current-content witnesses, raw conversion evidence and CPU bytes retained past source/window/queue closure. A complete valid record with any paired pixel/state mismatch is saved but remains a failed command. Opaque frames remain strict known-color controls; alpha0 black/prior classifications remain observations, not black-only capture acceptance. Source cache branch, frame freshness, arbitrary transparency/format/failure support, old pseudo failure reclassification and complete backend/P1 acceptance are not proved."});
+    if observe_poll {
+        report["polling_observation"] = super::poll::check(&source, &rust)?;
+        report["scope"] = "Independent forwarded original drain/poll/cache observation with the full strict alpha pair. Complete valid mismatches remain failed and are saved. Interposition can affect scheduling; it does not reinterpret unobserved old source branches, prove freshness or a historical cause, replace old failed pseudo controls, or accept complete backend/P1.".into();
+    }
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
             return Err("Saved alpha pair report differs".into());
@@ -240,6 +251,11 @@ pub(super) fn run(args: &[String]) -> Result<()> {
     }
     if paired_calls != 10 {
         return Err(format!("Alpha pair exact sequence differs: {paired_calls}/10 calls match; complete valid observations retained, original failures unchanged").into());
+    }
+    if observe_poll {
+        println!(
+            "FramePool alpha polling phases=20 source_calls=10 rust_calls=10 source_branch_observed=1 capture_acceptance=0 passed"
+        );
     }
     println!(
         "FramePool alpha paired phases=20 opaque_known=12 content_witnesses=20 retained_owners=30 bytes_verified=1 source_oracle_replaced=0 capture_acceptance=0 passed"

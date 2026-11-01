@@ -92,6 +92,11 @@ fn records_original_alpha_sequence_pixels_and_held_owners() -> Result<(), Box<dy
         "arm\tphase\talpha\tframe_image\tframe_known\tframe_zero\tprint_image\tprint_known\tpaint_before\tpaint_after\tframe_prior\telapsed_us\treplayed\tconversions\tclones\tnative_pitch\tcopied_bytes\traw_present"
     )?;
     let mut identities = fs::File::create_new(root.join("owners.tsv"))?;
+    let mut branches = fs::File::create_new(root.join("poll-branches.tsv"))?;
+    writeln!(
+        branches,
+        "arm\tphase\tdrain_calls\tdrain_frames\tpoll_calls\tpoll_frames\tcache_clones\terrors"
+    )?;
     let mut held = Vec::new();
     let mut raw_held = Vec::new();
     let mut positive_controls = true;
@@ -201,6 +206,20 @@ fn records_original_alpha_sequence_pixels_and_held_owners() -> Result<(), Box<dy
                 u8::from(directory.join("frame.raw").exists())
             )?;
             rows.flush()?;
+            writeln!(
+                branches,
+                "{arm}\t{phase}\t{}\t{}\t{}\t{}\t{}\t0",
+                result
+                    .evidence
+                    .drained_frames
+                    .checked_add(1)
+                    .ok_or("drain call overflow")?,
+                result.evidence.drained_frames,
+                result.evidence.polls,
+                u8::from(image.is_some() && !result.evidence.replayed),
+                u8::from(result.evidence.replayed)
+            )?;
+            branches.flush()?;
             if let Some(image) = image {
                 held.push((format!("{name}-frame"), image));
             }
