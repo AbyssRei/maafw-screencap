@@ -3,7 +3,11 @@
 // Screenshot-only class surface for the extracted exact function bodies.
 // Include inside the chosen private namespace after defining ScreencapBase,
 // ScreenCaptureKitScreencap and mfs_mac_input_attempt. Input=None is mandatory.
-struct InputBase { virtual ~InputBase()=default; };
+struct InputBase {
+    virtual ~InputBase()=default;
+    // Input=None must never reach this acceptance-only boundary.
+    MaaControllerFeature get_features() const { mfs_mac_input_attempt();throw std::logic_error("input query excluded"); }
+};
 struct GlobalEventInput : InputBase {
     explicit GlobalEventInput(uint32_t) { mfs_mac_input_attempt();throw std::logic_error("input excluded"); }
 };
@@ -15,6 +19,10 @@ struct MacOSControlUnitMgr {
     bool connect();
     bool connected() const;
     bool request_uuid(std::string&);
+    MaaControllerFeature get_features() const;
+#ifdef MFS_MAC_QUERY_CONSUMER
+    json::object get_info() const;
+#endif
     bool screencap(cv::Mat&);
     bool inactive();
     uint32_t window_id_ = 0;

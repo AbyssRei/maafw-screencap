@@ -43,6 +43,11 @@ impl<B> Manager<B> {
     pub const fn connected(&self) -> bool {
         self.connected
     }
+    pub const fn get_features(&self) -> u64 {
+        // The fixed source masks features from its retained input owner only.
+        // This capture-only manager has Input=None for its entire lifetime.
+        0
+    }
     pub fn get_info(&self) -> Result<String, TryReserveError> {
         let mut value = String::new();
         value.try_reserve_exact(192)?;
@@ -105,6 +110,7 @@ mod tests {
             let mut manager = Manager::<()>::new(7, method);
             let mut output = vec![99];
             assert!(!manager.connected());
+            assert_eq!(manager.get_features(), 0);
             assert!(
                 !manager
                     .capture_with(&mut output, |_| -> Result<_, ()> { panic!("no source") })
@@ -116,6 +122,7 @@ mod tests {
                     .unwrap()
             );
             assert!(manager.connected());
+            assert_eq!(manager.get_features(), 0);
             assert!(
                 !manager
                     .capture_with(&mut output, |_| -> Result<_, ()> { panic!("no source") })
@@ -162,6 +169,7 @@ mod tests {
             .unwrap();
         assert_eq!(manager.connect_with(true, |_| Err::<Unit, _>(9)), Err(9));
         assert!(!manager.connected());
+        assert_eq!(manager.get_features(), 0);
         assert_eq!(dropped.get(), 0);
         assert!(
             !manager
@@ -176,6 +184,7 @@ mod tests {
         );
         assert_eq!(output, 7);
         assert!(manager.inactive());
+        assert_eq!(manager.get_features(), 0);
         assert_eq!(dropped.get(), 0);
         manager
             .connect_with(true, |_| {
@@ -201,3 +210,14 @@ mod tests {
         }
     }
 }
+
+#[cfg(all(
+    test,
+    any(
+        all(target_os = "windows", feature = "prototype-windows"),
+        target_os = "linux",
+        all(target_os = "macos", feature = "macos-manager")
+    )
+))]
+#[path = "../../../tests/upstream-parity/macos-manager-queries/compare.rs"]
+mod query_tests;

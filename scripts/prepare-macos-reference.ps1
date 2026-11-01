@@ -43,6 +43,20 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     Step macos-reference-build cmake @('--build',$build,'--parallel','4')
     . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
     Save-ManagerMetadataReference (Join-Path $build metadata) $refInputs (Join-Path $RunRoot macos-arm64/reference-u/artifacts/manager-metadata)
+    $queryBuild=Join-Path $build manager-queries
+    $env:MFS_MAC_MANAGER_QUERY_LIBRARY=Join-Path $queryBuild libmfs_macos_manager_queries.dylib
+    $env:MFS_MAC_MANAGER_QUERY_RECORDS=Join-Path $RunRoot macos-arm64/reference-u/artifacts/manager-queries
+    foreach($name in @('libmfs_macos_manager_queries.dylib','macos-factory-source.inc','macos-manager-source.inc','macos-info-source.inc')) {
+        $saved=Join-Path $refInputs ("query-"+$name)
+        Copy-Item -LiteralPath (Join-Path $queryBuild $name) -Destination $saved;Save $saved
+    }
+    Step macos-manager-query-linkage otool @('-L',$env:MFS_MAC_MANAGER_QUERY_LIBRARY)
+    $queryIdentities=@(@('include/MaaControlUnit/ControlUnitAPI.h','include/MaaControlUnit/MacOSControlUnitAPI.h','include/MaaControlUnit/MaaControlUnitDef.h','include/MaaFramework/MaaDef.h','include/MaaFramework/MaaPort.h','source/MaaMacOSControlUnit/API/MacOSControlUnitAPI.cpp')|ForEach-Object{
+        $path=Join-Path $FixedUpstream $_
+        [ordered]@{path=$_;sha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()}
+    })
+    $queryIdentity=Join-Path $refInputs query-source-identities.json
+    Json $queryIdentity $queryIdentities;Save $queryIdentity
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('macos-manager-source.inc','macos-manager-source.inc'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $build $item[0]) -Destination $saved;Save $saved

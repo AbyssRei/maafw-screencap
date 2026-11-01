@@ -1,0 +1,13 @@
+# Exact complete ordinary Create/Destroy bodies, consumed with original headers.
+set(_mfs_factory "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit/API/MacOSControlUnitAPI.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_mfs_factory}")
+file(READ "${_mfs_factory}" _mfs_factory_source)
+string(REPLACE "\r\n" "\n" _mfs_factory_source "${_mfs_factory_source}")
+string(FIND "${_mfs_factory_source}" "    MaaMacOSControlUnitHandle\n        MaaMacOSControlUnitCreate(" _mfs_begin)
+string(FIND "${_mfs_factory_source}" "} // extern \"C\"" _mfs_end)
+if(_mfs_begin LESS 0 OR _mfs_end LESS_EQUAL _mfs_begin)
+    message(FATAL_ERROR "Missing fixed macOS factory boundaries")
+endif()
+math(EXPR _mfs_length "${_mfs_end}-${_mfs_begin}")
+string(SUBSTRING "${_mfs_factory_source}" ${_mfs_begin} ${_mfs_length} _mfs_body)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/macos-factory-source.inc" "// Exact fixed Create/Destroy bodies; LF-normalized only.\n${_mfs_body}")

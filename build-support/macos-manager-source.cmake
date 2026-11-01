@@ -25,6 +25,7 @@ mfs_mac_manager_function("MacOSControlUnitMgr::MacOSControlUnitMgr(" "bool MacOS
 mfs_mac_manager_function("bool MacOSControlUnitMgr::connect()" "bool MacOSControlUnitMgr::connected()")
 mfs_mac_manager_function("bool MacOSControlUnitMgr::connected()" "bool MacOSControlUnitMgr::request_uuid(")
 mfs_mac_manager_function("bool MacOSControlUnitMgr::request_uuid(" "MaaControllerFeature MacOSControlUnitMgr::get_features()")
+mfs_mac_manager_function("MaaControllerFeature MacOSControlUnitMgr::get_features()" "bool MacOSControlUnitMgr::start_app(")
 mfs_mac_manager_function("bool MacOSControlUnitMgr::screencap(" "bool MacOSControlUnitMgr::click(")
 mfs_mac_manager_function("bool MacOSControlUnitMgr::inactive()" "json::object MacOSControlUnitMgr::get_info()")
 foreach(_field

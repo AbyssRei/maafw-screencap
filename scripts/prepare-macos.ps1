@@ -116,6 +116,14 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             & $ConfigureTool upstream-metadata macos (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS macos) >> $log 2>&1
             if($LASTEXITCODE -ne 0){$status='failed';throw 'Metadata source/Rust artifact validation failed'}
         }
+        if($Name -eq 'rust-macos-manager-queries') {
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('macOS manager virtual queries environment=1 cases=66 factory_units=133 matrix_units=132 snapshots=528 queries=2113 retained=528 callbacks=1255 rejection_controls=6 captures=0 input_none=1 passed')) {
+                $status='failed';throw 'Expected one real native macOS original-interface query test and complete counts'
+            }
+            & $ConfigureTool upstream-macos-queries $env:MFS_MAC_MANAGER_QUERY_RECORDS >> $log 2>&1
+            if($LASTEXITCODE -ne 0){$status='failed';throw 'Actual macOS query records rejected'}
+        }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 $status='failed';throw 'Expected exactly one actual Rust macOS test, not a zero-test or ignored run'
@@ -216,6 +224,8 @@ try {
         try { Step rust-macos-manager-controls cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::tests::','--','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-macos-manager-metadata cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::tests::metadata_matches_original_signed_selectors_and_window_identity','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-macos-manager-queries cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::query_tests::consumes_original_virtual_queries_and_retains_cpu_snapshots_after_unload','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $env:MFS_P1_MACOS_MANAGER_SCRIPTS=Join-Path $referenceArtifacts manager-scripts
         try { Step rust-macos-manager-scripts cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::matches_original_manager_connect_forwarding_output_and_owner_scripts','--','--exact','--ignored','--test-threads=1','--nocapture') }
