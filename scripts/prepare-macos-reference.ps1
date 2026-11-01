@@ -1,6 +1,6 @@
 # Copyright (C) 2026 AbyssRei
 # SPDX-License-Identifier: LGPL-3.0-or-later
-# Explicit original-source/Rust acceptance, dot-sourced after formal Xcode
+# Explicit original-source/Rust acceptance, dot-sourced after identified Xcode
 # selection. Step/Artifact/Json and evidence ownership belong to the caller.
 function Prepare-MacosReference([string]$FixedUpstream) {
     $refInputs=Join-Path $inputRoot source-reference

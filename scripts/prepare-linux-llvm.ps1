@@ -4,6 +4,42 @@
 # Shared by the two native Linux probes. Loading this file performs no work;
 # initialization requires a native x64 Linux process and the caller's evidence
 # functions (Step and Save). No system compiler or global SDK is replaced.
+. (Join-Path $PSScriptRoot toolchain-policy.ps1)
+
+function Find-InstalledLinuxLlvm([switch]$BindingGenerator) {
+    $roots = @(Get-ChildItem -LiteralPath /usr/lib -Directory -Filter 'llvm-*' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+    $config = Get-Command llvm-config -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($config) { $roots += Split-Path -Parent (Split-Path -Parent $config.Source) }
+    $choices = @()
+    foreach ($prefix in @($roots | Sort-Object -Unique)) {
+        $missing = @('clang','clang++','llvm-config','ld.lld','llvm-ar','llvm-ranlib') | Where-Object { -not (Test-Path -LiteralPath (Join-Path $prefix "bin/$_") -PathType Leaf) }
+        if (@($missing).Count) { continue }
+        $probe = Invoke-ToolchainAdvisory (Join-Path $prefix bin/llvm-config) @('--version')
+        if (-not $probe.available -or $probe.output -notmatch '^(\d+\.\d+(?:\.\d+)?)(?:[^\d].*)?$') { continue }
+        $sortVersion = [version]$Matches[1]
+        $library = Get-ChildItem -LiteralPath (Join-Path $prefix lib) -File -Filter 'libclang*.so*' -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^libclang(?:-\d+)?\.so(?:\.\d+)*$' } | Sort-Object Name | Select-Object -First 1
+        if ($BindingGenerator -and -not $library) { continue }
+        $choices += [pscustomobject]@{installation=$prefix;version=$probe.output;sort_version=$sortVersion;libclang=($(if($library){$library.FullName}else{$null}))}
+    }
+    return $choices | Sort-Object sort_version -Descending | Select-Object -First 1
+}
+
+function Set-LinuxLlvmEnvironment([string]$ToolRoot, [string]$Libclang) {
+    if ($Libclang) { $env:LIBCLANG_PATH = Split-Path -Parent $Libclang }
+    $env:CC=Join-Path $ToolRoot bin/clang
+    $env:CXX=Join-Path $ToolRoot bin/clang++
+    $env:AR=Join-Path $ToolRoot bin/llvm-ar
+    $env:RANLIB=Join-Path $ToolRoot bin/llvm-ranlib
+    $env:LLVM_CONFIG_PATH=Join-Path $ToolRoot bin/llvm-config
+    $env:PATH=(Join-Path $ToolRoot bin)+':'+$env:PATH
+    $env:LDFLAGS=($env:LDFLAGS+' -fuse-ld=lld').Trim()
+    $env:CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$env:CC
+    [string[]]$flags=if($env:CARGO_ENCODED_RUSTFLAGS){@($env:CARGO_ENCODED_RUSTFLAGS.Split([char]31))}elseif($env:RUSTFLAGS){@($env:RUSTFLAGS -split '\s+'|Where-Object{$_})}else{@()}
+    $flags+=@('-C',"linker=$($env:CC)",'-C','link-arg=-fuse-ld=lld')
+    $env:CARGO_ENCODED_RUSTFLAGS=[string]::Join([char]31,[string[]]$flags)
+    return $flags
+}
 function Select-LinuxLlvmRelease($Release,[bool]$ZstdAvailable) {
     if($Release.draft -or $Release.prerelease -or $Release.tag_name -notmatch '^llvmorg-(\d+\.\d+\.\d+)$') {
         throw 'LLVM preparation requires a formal maintainer release'
@@ -22,6 +58,32 @@ function Select-LinuxLlvmRelease($Release,[bool]$ZstdAvailable) {
 function Initialize-LinuxLlvm([string]$ReferenceRoot,[string]$DepsRoot,[string]$RunRoot,[switch]$BindingGenerator) {
     if(-not $IsLinux -or [Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture -ne 'X64') {
         throw 'LLVM native preparation requires Linux x64'
+    }
+    if ((Get-ToolchainPolicy) -eq 'preinstalled') {
+        $installed = Find-InstalledLinuxLlvm -BindingGenerator:$BindingGenerator
+        if ($installed) {
+            $inputRoot = Join-Path $RunRoot inputs
+            $lookup = Invoke-ToolchainAdvisory gh @('api','repos/llvm/llvm-project/releases/latest')
+            $lookupPath = Join-Path $inputRoot llvm-release-advisory.json
+            Json $lookupPath $lookup
+            Save $lookupPath
+            $identities = @('clang','clang++','llvm-config','ld.lld','llvm-ar','llvm-ranlib') | ForEach-Object {
+                $path = Join-Path $installed.installation "bin/$_"
+                [ordered]@{path=$path;sha256=(Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()}
+            }
+            if ($BindingGenerator) { $identities += [ordered]@{path=$installed.libclang;sha256=(Get-FileHash -LiteralPath $installed.libclang).Hash.ToLowerInvariant()} }
+            $identityPath = Join-Path $inputRoot llvm-tool-identity.json
+            Json $identityPath ([ordered]@{policy='preinstalled';version=$installed.version;files=@($identities)})
+            Save $identityPath
+            $flags = @(Set-LinuxLlvmEnvironment $installed.installation ($(if($BindingGenerator){$installed.libclang}else{$null})))
+            Step llvm-compiler-identity $env:CC @('--version')
+            Step llvm-linker-identity (Join-Path $installed.installation bin/ld.lld) @('--version')
+            $configuration = Join-Path $inputRoot llvm-toolchain.json
+            Json $configuration ([ordered]@{layout_version=1;policy='preinstalled';version=$installed.version;installation=$installed.installation;tool_identity=(Artifact $identityPath);latest_advisory=(Artifact $lookupPath);binding_generator=[bool]$BindingGenerator;libclang=$installed.libclang;cc=$env:CC;cxx=$env:CXX;linker=(Join-Path $installed.installation bin/ld.lld);ldflags=$env:LDFLAGS;rustflags=$flags;scope='Identified runner-preinstalled compiler/linker and optional libclang. Latest release lookup is advisory; real generation/build/native checks remain required. Offline reproduction requires the recorded system toolchain.'})
+            Save $configuration
+            return
+        }
+        Write-Host 'Configured LLVM/linker/libclang capabilities are not installed; provisioning the required tools'
     }
     Write-Host 'Resolving the latest formal LLVM compiler and libclang ...'
     $inputRoot=Join-Path $RunRoot inputs
@@ -134,17 +196,7 @@ function Initialize-LinuxLlvm([string]$ReferenceRoot,[string]$DepsRoot,[string]$
         $libclangPath=$libclang[0].FullName
         $env:LIBCLANG_PATH=Split-Path -Parent $libclangPath
     }
-    $env:CC=Join-Path $toolRoot bin/clang
-    $env:CXX=Join-Path $toolRoot bin/clang++
-    $env:AR=Join-Path $toolRoot bin/llvm-ar
-    $env:RANLIB=Join-Path $toolRoot bin/llvm-ranlib
-    $env:LLVM_CONFIG_PATH=Join-Path $toolRoot bin/llvm-config
-    $env:PATH=(Join-Path $toolRoot bin)+':'+$env:PATH
-    $env:LDFLAGS=($env:LDFLAGS+' -fuse-ld=lld').Trim()
-    $env:CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER=$env:CC
-    [string[]]$llvmRustFlags=if($env:CARGO_ENCODED_RUSTFLAGS){@($env:CARGO_ENCODED_RUSTFLAGS.Split([char]31))}elseif($env:RUSTFLAGS){@($env:RUSTFLAGS -split '\s+'|Where-Object{$_})}else{@()}
-    $llvmRustFlags+=@('-C',"linker=$($env:CC)",'-C','link-arg=-fuse-ld=lld')
-    $env:CARGO_ENCODED_RUSTFLAGS=[string]::Join([char]31,[string[]]$llvmRustFlags)
+    $llvmRustFlags=@(Set-LinuxLlvmEnvironment $toolRoot $libclangPath)
     Step llvm-compiler-identity $env:CC @('--version')
     Step llvm-linker-identity (Join-Path $toolRoot bin/ld.lld) @('--version')
     $version=(& $env:LLVM_CONFIG_PATH --version|Out-String).Trim()

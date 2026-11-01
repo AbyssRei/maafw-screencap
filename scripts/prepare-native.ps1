@@ -23,6 +23,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference = $false
+. (Join-Path $PSScriptRoot toolchain-policy.ps1)
 $productRoot = Split-Path -Parent $PSScriptRoot
 Set-Location -LiteralPath $productRoot
 $inputsRoot = Join-Path $RunRoot inputs
@@ -577,35 +578,61 @@ try {
             }
         }
     }
-    $release = if ($offline) { Get-Content -LiteralPath (Prepared-File cmake-release.json) -Raw | ConvertFrom-Json } else { Api 'repos/Kitware/CMake/releases/latest' }
-    $asset = @($release.assets | Where-Object name -Match 'windows-x86_64.zip$')
-    if ($asset.Count -ne 1) { throw 'CMake release does not contain exactly one Windows x64 zip' }
-    $asset = $asset[0]
-    $cmakeMetadata = Join-Path $inputsRoot cmake-release.json
-    Write-NewJson $cmakeMetadata $release
-    Save-Input $cmakeMetadata
-    $downloadRoot = Join-Path $DepsRoot downloads
-    New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
-    $archive = Join-Path $downloadRoot $asset.name
-    if (-not (Test-Path -LiteralPath $archive)) {
-        if ($offline) { Copy-Item -LiteralPath (Prepared-File $asset.name) -Destination $archive }
-        else { Step 'cmake-download' curl.exe @('--fail', '--location', '--connect-timeout', '15', '--max-time', '600', '--proto', '=https', '-o', $archive, $asset.browser_download_url) }
+    $installedCmake = $null
+    if ($offline -and @($prepared.inputs | Where-Object { $_.path.EndsWith('/inputs/cmake-preinstalled.json') }).Count) {
+        $installedCmake = Get-Content -LiteralPath (Prepared-File cmake-preinstalled.json) -Raw | ConvertFrom-Json
+        if (-not (Test-Path -LiteralPath $installedCmake.program -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $installedCmake.program).Hash.ToLowerInvariant() -ne $installedCmake.sha256) {
+            throw 'Offline replay requires the archived preinstalled CMake identity; this is a frozen-input mismatch, not a latest-version gate'
+        }
+    } elseif (-not $offline -and (Get-ToolchainPolicy) -eq 'preinstalled') {
+        $installedCmake = Find-InstalledCMake 'Visual Studio 18 2026'
     }
-    $actual = 'sha256:' + (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($actual -ne $asset.digest) { throw 'CMake download digest does not match the current official release' }
-    $toolRoot = Join-Path $DepsRoot tools
-    $cmake = Join-Path $toolRoot (($asset.name -replace '\.zip$', '') + '/bin/cmake.exe')
-    if (-not (Test-Path -LiteralPath $cmake)) {
-        New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
-        Expand-Archive -LiteralPath $archive -DestinationPath $toolRoot
-    }
-    $savedCmake = Join-Path $inputsRoot $asset.name
-    Copy-Item -LiteralPath $archive -Destination $savedCmake
-    Save-Input $savedCmake
-    Step 'cmake-identity' $cmake @('--version')
-    $cmakeVersion = (& $cmake --version | Select-Object -First 1)
-    if ($LASTEXITCODE -ne 0 -or $cmakeVersion -ne "cmake version $($release.tag_name.TrimStart('v'))") {
-        throw 'Cached CMake executable does not match the latest resolved release'
+    if ($installedCmake) {
+        $cmake = $installedCmake.program
+        $actual = 'preinstalled-binary:sha256:' + $installedCmake.sha256
+        $metadata = Join-Path $inputsRoot cmake-preinstalled.json
+        Write-NewJson $metadata $installedCmake
+        Save-Input $metadata
+        if (-not $offline) {
+            $lookup = Invoke-ToolchainAdvisory gh @('api','repos/Kitware/CMake/releases/latest')
+            $lookupPath = Join-Path $inputsRoot cmake-release-advisory.json
+            Write-NewJson $lookupPath $lookup
+            Save-Input $lookupPath
+        }
+        Step 'cmake-identity' $cmake @('--version')
+        Step 'cmake-generator-capability' $cmake @('-E','capabilities')
+    } else {
+        $release = if ($offline) { Get-Content -LiteralPath (Prepared-File cmake-release.json) -Raw | ConvertFrom-Json } else { Api 'repos/Kitware/CMake/releases/latest' }
+        $asset = @($release.assets | Where-Object name -Match 'windows-x86_64.zip$')
+        if ($asset.Count -ne 1) { throw 'CMake release does not contain exactly one Windows x64 zip' }
+        $asset = $asset[0]
+        $cmakeMetadata = Join-Path $inputsRoot cmake-release.json
+        Write-NewJson $cmakeMetadata $release
+        Save-Input $cmakeMetadata
+        $downloadRoot = Join-Path $DepsRoot downloads
+        New-Item -ItemType Directory -Path $downloadRoot -Force | Out-Null
+        $archive = Join-Path $downloadRoot $asset.name
+        if (-not (Test-Path -LiteralPath $archive)) {
+            if ($offline) { Copy-Item -LiteralPath (Prepared-File $asset.name) -Destination $archive }
+            else { Step 'cmake-download' curl.exe @('--fail', '--location', '--connect-timeout', '15', '--max-time', '600', '--proto', '=https', '-o', $archive, $asset.browser_download_url) }
+        }
+        $actual = 'sha256:' + (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($actual -ne $asset.digest) { throw 'CMake download digest does not match the current official release' }
+        $toolRoot = Join-Path $DepsRoot tools
+        $cmake = Join-Path $toolRoot (($asset.name -replace '\.zip$', '') + '/bin/cmake.exe')
+        if (-not (Test-Path -LiteralPath $cmake)) {
+            New-Item -ItemType Directory -Path $toolRoot -Force | Out-Null
+            Expand-Archive -LiteralPath $archive -DestinationPath $toolRoot
+        }
+        $savedCmake = Join-Path $inputsRoot $asset.name
+        Copy-Item -LiteralPath $archive -Destination $savedCmake
+        Save-Input $savedCmake
+        Step 'cmake-identity' $cmake @('--version')
+        $cmakeVersion = (& $cmake --version | Select-Object -First 1)
+        if ($LASTEXITCODE -ne 0 -or $cmakeVersion -ne "cmake version $($release.tag_name.TrimStart('v'))") {
+            throw 'Cached CMake executable does not match the latest resolved release'
+        }
     }
 
     $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'

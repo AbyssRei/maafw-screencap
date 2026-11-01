@@ -8,6 +8,8 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $PSNativeCommandUseErrorActionPreference = $false
+. (Join-Path $PSScriptRoot toolchain-policy.ps1)
+$toolchainPolicy = Get-ToolchainPolicy
 
 function Select-WindowsSdkRelease([string]$Html) {
     $stable = [regex]::Split($Html, '(?i)<h2[^>]+id="preview-releases"')[0]
@@ -57,6 +59,13 @@ function Installed-Sdks {
         Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -match '^Windows Software Development Kit' } |
         Select-Object DisplayName,DisplayVersion)
 }
+function Usable-SdkDirectories {
+    $kits = Get-ItemProperty 'HKLM:/SOFTWARE/Microsoft/Windows Kits/Installed Roots' -ErrorAction SilentlyContinue
+    if (-not $kits -or -not $kits.PSObject.Properties['KitsRoot10']) { return @() }
+    return @(Get-ChildItem -LiteralPath (Join-Path $kits.KitsRoot10 Lib) -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' -and (Test-Path -LiteralPath (Join-Path $_.FullName 'um/x64/kernel32.lib')) } |
+        Sort-Object { [version]$_.Name } -Descending | Select-Object -ExpandProperty Name)
+}
 function Run-Installer([string]$Name, [string]$Program, [string[]]$Arguments) {
     Write-Host "Installing $Name ..."
     $info = [Diagnostics.ProcessStartInfo]::new($Program)
@@ -85,9 +94,43 @@ if (-not $IsWindows -or [Runtime.InteropServices.RuntimeInformation]::ProcessArc
 $recordDirectory = Join-Path ([IO.Path]::GetFullPath($RecordRoot)) ('windows-toolchain-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ'))
 New-Item -ItemType Directory -Path $recordDirectory | Out-Null
 Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $recordDirectory preparation-source.ps1)
-$record = [ordered]@{status='incomplete';script_sha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();install_requested=[bool]$Install;installers=[Collections.Generic.List[object]]::new();operations=[Collections.Generic.List[object]]::new()}
+$record = [ordered]@{status='incomplete';policy=$toolchainPolicy;script_sha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant();install_requested=[bool]$Install;installers=[Collections.Generic.List[object]]::new();operations=[Collections.Generic.List[object]]::new()}
 $exitCode = 1
 try {
+    $record.before = [ordered]@{vs=(Installed-Vs);sdks=(Installed-Sdks);usable_sdk_directories=@(Usable-SdkDirectories)}
+    if ($toolchainPolicy -eq 'preinstalled') {
+        $queries = [ordered]@{}
+        foreach ($item in @(@('vs18-channel.json','https://aka.ms/vs/18/stable/channel'),@('windows-sdk-downloads.html','https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads'))) {
+            $lookup = Invoke-ToolchainAdvisory curl.exe @('--fail','--location','--silent','--show-error','--proto','=https','--connect-timeout','5','--max-time','15',$item[1])
+            $lookup.output | Set-Content -LiteralPath (Join-Path $recordDirectory $item[0]) -Encoding utf8NoBOM
+            $queries[$item[0]] = [ordered]@{available=$lookup.available;exit=$lookup.exit}
+        }
+        $record.latest_lookup = $queries
+        $record.latest_is_advisory = $true
+        $record.expected = $null
+        try {
+            $latestChannel = Get-Content -LiteralPath (Join-Path $recordDirectory vs18-channel.json) -Raw | ConvertFrom-Json
+            $latestProduct = @($latestChannel.channelItems | Where-Object { $_.id -eq 'Microsoft.VisualStudio.Product.BuildTools' -and $_.type -eq 'ChannelProduct' })
+            $latestSdk = Select-WindowsSdkRelease (Get-Content -LiteralPath (Join-Path $recordDirectory windows-sdk-downloads.html) -Raw)
+            if ($latestProduct.Count -eq 1) { $record.expected = [ordered]@{vs_version=$latestProduct[0].version;sdk=$latestSdk} }
+        } catch { $record.latest_parse_error = $_.Exception.Message }
+        $readiness = Get-WindowsToolchainReadiness preinstalled $record.before.vs $record.before.sdks $record.before.usable_sdk_directories $null
+        if ($readiness.vs -and $readiness.sdk) {
+            $record.after = $record.before
+            $record.status = 'prepared_environment'
+            $exitCode = 0
+            Write-Host "CI preinstalled VS2026=$($record.before.vs.installationVersion); SDK directories=$($record.before.usable_sdk_directories -join ','); latest versions are advisory"
+            exit $exitCode
+        }
+        if (-not $Install) {
+            $record.after = $record.before
+            $record.status = 'missing_environment'
+            $record.error = 'Required VS2026/MSVC or usable x64 SDK is absent; not a latest-version mismatch'
+            $exitCode = 77
+            exit $exitCode
+        }
+        # Provision only a genuinely missing configured tool/capability below.
+    }
     $channelPath = Join-Path $recordDirectory vs18-channel.json
     Download 'https://aka.ms/vs/18/stable/channel' $channelPath
     $channel = Get-Content -LiteralPath $channelPath -Raw | ConvertFrom-Json
@@ -98,9 +141,9 @@ try {
     Download 'https://learn.microsoft.com/en-us/windows/apps/windows-sdk/downloads' $sdkPage
     $sdk = Select-WindowsSdkRelease (Get-Content -LiteralPath $sdkPage -Raw)
     $record.expected = [ordered]@{vs_version=$vsVersion;sdk=$sdk}
-    $record.before = [ordered]@{vs=(Installed-Vs);sdks=(Installed-Sdks)}
-    $vsReady = $record.before.vs -and $record.before.vs.installationVersion -eq $vsVersion
-    $sdkReady = @($record.before.sdks | Where-Object { $_.DisplayName.EndsWith('Windows '+$sdk.version) }).Count -gt 0
+    $readiness = Get-WindowsToolchainReadiness $toolchainPolicy $record.before.vs $record.before.sdks $record.before.usable_sdk_directories $record.expected
+    $vsReady = $readiness.vs
+    $sdkReady = $readiness.sdk
     $vsInstaller = if (-not $vsReady) { Signed-Installer 'https://aka.ms/vs/stable/vs_buildtools.exe' vs_BuildTools.exe } else { $null }
     $sdkInstaller = if (-not $sdkReady) { Signed-Installer $sdk.installer winsdksetup.exe } else { $null }
     if ($vsInstaller -and (Get-Item -LiteralPath $vsInstaller).VersionInfo.FileVersion -ne $vsVersion) { throw 'Build Tools bootstrapper differs from the selected VS2026 stable channel' }
@@ -124,9 +167,10 @@ try {
         }
         if ($sdkInstaller) { Run-Installer windows-sdk $sdkInstaller @('/quiet','/norestart','/ceip','off','/features','OptionId.DesktopCPPx64','OptionId.DesktopCPPx86','OptionId.UWPCPP','/log',(Join-Path $recordDirectory windows-sdk-install.log)) }
     }
-    $record.after = [ordered]@{vs=(Installed-Vs);sdks=(Installed-Sdks)}
-    $vsReady = $record.after.vs -and $record.after.vs.installationVersion -eq $vsVersion
-    $sdkReady = @($record.after.sdks | Where-Object { $_.DisplayName.EndsWith('Windows '+$sdk.version) }).Count -gt 0
+    $record.after = [ordered]@{vs=(Installed-Vs);sdks=(Installed-Sdks);usable_sdk_directories=@(Usable-SdkDirectories)}
+    $readiness = Get-WindowsToolchainReadiness $toolchainPolicy $record.after.vs $record.after.sdks $record.after.usable_sdk_directories $record.expected
+    $vsReady = $readiness.vs
+    $sdkReady = $readiness.sdk
     $record.status = if ($vsReady -and $sdkReady) { 'prepared_environment' } else { 'missing_environment' }
     $exitCode = if ($vsReady -and $sdkReady) { 0 } else { 77 }
     Write-Host "VS2026 expected=$vsVersion ready=$vsReady; SDK expected=$($sdk.version) ready=$sdkReady"

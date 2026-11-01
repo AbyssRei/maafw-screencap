@@ -115,10 +115,26 @@ fn input<'a>(run: &'a batch::Run, suffix: &str) -> Result<&'a Artifact> {
     Ok(items[0])
 }
 
+fn rust_toolchain_prepared<'a>(checks: impl Iterator<Item = (&'a str, &'a str)>) -> bool {
+    let (count, passed) = checks
+        .filter(|(name, _)| matches!(*name, "nightly-update" | "rust-toolchain-prepare"))
+        .take(2)
+        .fold((0, true), |(count, passed), (_, status)| {
+            (count + 1, passed && status == "passed")
+        });
+    count == 1 && passed
+}
+
 fn dependency_target(root: &Path, parent: &Artifact) -> Result<String> {
     let run: batch::Run = records::read(&records::verify(root, parent)?)?;
+    if !rust_toolchain_prepared(
+        run.checks
+            .iter()
+            .map(|c| (c.name.as_str(), c.status.as_str())),
+    ) {
+        return Err("configuration requires one passed Rust toolchain preparation".into());
+    }
     for name in [
-        "nightly-update",
         "dependency-update",
         "latest-major-check",
         "offline-inputs",
@@ -485,6 +501,28 @@ pub fn run_checks(args: &[String]) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn accepts_recorded_rust_preparation_and_keeps_historical_update_checks_verifiable() {
+        assert!(rust_toolchain_prepared(
+            [("nightly-update", "passed")].into_iter()
+        ));
+        assert!(rust_toolchain_prepared(
+            [("rust-toolchain-prepare", "passed")].into_iter()
+        ));
+        assert!(!rust_toolchain_prepared(
+            [("rust-toolchain-prepare", "failed")].into_iter()
+        ));
+        assert!(!rust_toolchain_prepared(
+            [("dependency-update", "passed")].into_iter()
+        ));
+        assert!(!rust_toolchain_prepared(
+            [
+                ("nightly-update", "passed"),
+                ("rust-toolchain-prepare", "passed")
+            ]
+            .into_iter()
+        ));
+    }
     #[test]
     fn never_probes_off_or_foreign_backends_and_rejects_foreign_on() {
         let mut called = Vec::new();

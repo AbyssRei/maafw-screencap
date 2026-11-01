@@ -97,17 +97,20 @@ fn run_at(args: &[String], root_override: Option<PathBuf>) -> Result<()> {
     // or native checks run must never be attributed to one coherent batch.
     let source_before = snapshot_source(&root, &inputs, &mut run)?;
     let head_before = fs::read(inputs.join("product-git-head.txt"))?;
-    // Update the toolchain before overriding CARGO_HOME in child builds.
+    // Prepare the toolchain before overriding CARGO_HOME in child builds.
+    // CI may retain its usable installed nightly; local online batches update.
+    let toolchain_script = repository().join("scripts/prepare-rust-toolchain.ps1");
+    let toolchain_script = toolchain_script.to_string_lossy();
     check(
         &root,
         &logs,
         &mut run,
-        "nightly-update",
-        "rustup",
-        &["update", "nightly", "--no-self-update"],
+        "rust-toolchain-prepare",
+        "pwsh",
+        &["-NoProfile", "-File", toolchain_script.as_ref()],
         None,
     )?;
-    if passed(&run, "nightly-update") {
+    if passed(&run, "rust-toolchain-prepare") {
         check(
             &root,
             &logs,

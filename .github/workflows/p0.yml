@@ -17,6 +17,7 @@ jobs:
     env:
       # Validate the contributor subject while compiling the normal merge tree.
       MFS_COMMIT_MESSAGE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+      MFS_TOOLCHAIN_POLICY: preinstalled
     strategy:
       fail-fast: false
       matrix:
@@ -38,8 +39,12 @@ jobs:
       - name: Check independent FramePool diagnostic sequencing
         shell: pwsh
         run: ./tests/prototypes/framepool-independent.ps1
-      - name: Update nightly before configuring Cargo caches
-        run: rustup update nightly --no-self-update
+      - name: Check installed toolchain policy controls
+        shell: pwsh
+        run: ./tests/prototypes/toolchain-policy.ps1
+      - name: Prepare usable nightly before configuring Cargo caches
+        shell: pwsh
+        run: ./scripts/prepare-rust-toolchain.ps1
       - name: Configure external cache and evidence directories
         shell: pwsh
         run: |
@@ -65,7 +70,7 @@ jobs:
       - name: Verify Windows SDK servicing cache identity
         shell: pwsh
         run: ./tests/prototypes/sdk_cache.ps1
-      - name: Prepare latest VS2026 Build Tools and Windows SDK
+      - name: Prepare available VS2026 Build Tools and Windows SDK
         if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
@@ -186,7 +191,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           # Online components resolve current native versions independently.
-          # Refresh this disposable runner if stable changed in earlier steps.
+          # Verify available native tools and record their actual identities.
           ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo xtask upstream-parity print-window

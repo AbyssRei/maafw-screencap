@@ -664,7 +664,9 @@ Custom 上游回调的补充源码审阅已纳入外部 catalog：共 101 个源
 
 Linux 原型准备先查询 LLVM 维护者的最新正式版，校验官方 Linux x64 压缩包摘要，将所需编译器、链接器、资源与包内许可材料安装到 deps 独立目录，并归档原包及逐文件身份。C/C++ 和 Rust 原生链接显式选择该工具链；只有 PipeWire 启用 libclang 生成器，Wlr 不探测生成器。缓存命中仍查询更新并复验文件。LLVM 23.1.4 的 clang/LLD、PipeWire 生成与捕获、Wlr 捕获及正常退出已通过原生 Actions，工程证据已下载并核对哈希；包内许可声明链接的完整 LLVM 许可另按正式 tag 补存外部审阅记录。Windows 最新 VS/SDK 的 Actions 原生验证也已通过；本机 VS2026 18.11.2、实际编译器 19.51.36260.0 与 SDK 10.0.28000.2957 的重新构建、受控取帧、C++/Rust 边界、独立 GDI 参考和配置/独立消费者检查也已通过；实际身份与逐项结果仍按批次外置，不将旧本机结果作为新工具链验收。
 
-macOS 原型准备查询 Apple 发布 RSS，只接受正式版标题并核对实际 `xcodebuild -version` 的版本及构建号。通过进程环境 DEVELOPER_DIR/SDKROOT 选择已安装 bundle，不修改系统 xcode-select；缺少匹配版本时保留 missing_environment。Actions 的 macOS arm64 原型使用官方 xcode-27 镜像；正式 Xcode 27.1（27A9275）与 SDK 27.0 已通过编译、链接、20 次受控窗口取帧及完成/晚到回调释放验证，高版本 RC 被排除。结果仅覆盖该原生环境的 P0 原型。
+macOS 本机默认准备查询 Apple 发布 RSS，匹配正式版版本与实际 `xcodebuild -version` 构建号。Actions 显式设置 `MFS_TOOLCHAIN_POLICY=preinstalled`，保留 runner 可用的已安装选择；最新正式版/build 不匹配或发布查询失败只进入版本记录，继续实际 SDK、编译、链接和取帧检查。预装 RC 保留其真实 build 身份。选择仍仅通过进程环境 DEVELOPER_DIR/SDKROOT 完成，不修改系统 xcode-select。历史正式 Xcode 27.1（27A9275）与 SDK 27.0 的二十次 P0 捕获/所有权验证保持原范围；旧严格版本门禁的缺环境结果也不被改写。
+
+同一 CI 策略用于 VS2026/Windows SDK、具备所需生成器的 CMake、Linux LLVM/linker/libclang 和可用 nightly。入口 [Rust 工具链准备](../../scripts/prepare-rust-toolchain.ps1)在 nightly 已可用时复用它，补齐所需组件；本机默认仍更新 nightly。项目和原生库依赖、任务自行获取的工具继续解析并验证对应输入。配置缺失、真实编译/捕获失败、零测试和回调/资源错误保留各自失败，不因版本策略变化跳过。缓存和离线重放继续使用实际版本及摘要，预装工具的原生离线重放需提供匹配的系统工具身份。完整政策见[计划 §5.6](../plans/maafw-screencap-extraction-plan.md#56-依赖选型与最新版本策略)。
 
 首次 LLVM 原生准备在包摘要校验后遇到 zstd 默认解码内存上限，失败结果已保留；第一次参数修复又暴露了 PowerShell 单项条件数组被展开为字符串、splat 按字符传参的问题，本机 argv 检查已复现。读取 zstd 包现在以显式字符串数组对清单与解压均传入 2048 MiB 上限，继续流式读取，修复后已通过原生验证。
 
