@@ -28,7 +28,15 @@ e243fee 的官方完整 Linux ZIP 随后核对长度与 SHA-256，完整 tar 恢
 
 实际 host 为 Linux 7.0.0-1017-azure。对照 [Linux 7.0 退出实现](https://github.com/torvalds/linux/blob/v7.0/kernel/exit.c)、[线程 ID 唤醒实现](https://github.com/torvalds/linux/blob/v7.0/kernel/fork.c)及 [set_tid_address 接口](https://man7.org/linux/man-pages/man2/set_tid_address.2.html)，child-TID 唤醒可以早于 `task->mm` 清零；PF_EXITING 与 proc 内存清零不是同一个阶段。官方基线来源及摘要已归档，未逐块核验 Ubuntu Azure 的补丁集。现仅修订测试观察器：在原生 stop/join/销毁完成、fd 精确匹配后，仍要求已知原先活跃任务的同一 id/name/starttime 和 PF_EXITING，允许 proc 内存字段仍有值，并继续要求 100ms 内任务集合精确恢复。未知、替换、未带退出标志的任务和未证明的读取错误仍拒绝；原有 ESRCH 与 stat/目录双 ENOENT 规则保留。
 
-本机新回归在旧判据下失败、在修订后通过；五项任务观察单测、完整工作区测试、Clippy、构建和十五个实际编排函数的 mock 子进程控制通过。C++ 控制补充三种明确标注的合成内存状态，并保持二十四项身份/读取/缺失证明反向控制，另直接拒绝仍受闸门控制的真实存活线程。独立一万次 std::thread join 观察将先记录原生 before 身份，join 后立即只读一次 stat，再做枚举和日志输出；计数区分缺失、退出且内存有值、退出且内存为零及未见退出标志。该控制会改变自身的观测时机，不与旧观察器比较发生率，也不代替原版捕获清理验收；某一类计数为零时不声称该阶段已原生触发。编排要求新控制摘要和全部迭代计数，旧程序或不完整输出不得通过。新 C++ 原生编译、控制执行和完整取帧复测仍待 Actions。
+本机新回归在旧判据下失败、在修订后通过；五项任务观察单测、完整工作区测试、Clippy、构建和十五个实际编排函数的 mock 子进程控制通过。C++ 控制补充三种明确标注的合成内存状态，并保持二十四项身份/读取/缺失证明反向控制，另直接拒绝仍受闸门控制的真实存活线程。独立一万次 std::thread join 观察先记录原生 before 身份，join 后立即只读一次 stat，再做枚举和日志输出；计数区分缺失、退出且内存有值、退出且内存为零及未见退出标志。该控制会改变自身的观测时机，不与旧观察器比较发生率，也不代替原版捕获清理验收；某一类计数为零时不声称该阶段已原生触发。编排要求新控制摘要和全部迭代计数，旧程序或不完整输出不得通过。
+
+确切 `a5cfa2e` 的 [Actions 41321269889](https://github.com/AbyssRei/maafw-screencap/actions/runs/41321269889) Linux job 随后整体通过，包含真实 C++ 编译/链接、三种合成内存状态、二十四项反向控制、实际存活路径/ESRCH/EMFILE 控制及五项 Rust 观察测试。标准线程一万次 join 的分类为：打开时已缺失 9,969，读取时退出 2，PF_EXITING 且内存字段非零 4，PF_EXITING 且内存为零 25，未见退出标志 0。首二十份标量样本中有三份内存非零，全部核对相同 TID/starttime 与退出标志；第四份计入总数但不在前二十份日志中。此控制不是 PipeWire 捕获清理验收，也不能还原旧失败判定的瞬间。
+
+新 PipeWire 194/194、Wlr 135/135 检查通过，两份官方 ZIP 的长度/摘要及完整清单内 43,092/8,449 个可用登记路径独立匹配，十七组 PipeWire、七组 Wlr 保存报告只读复核通过。七格式每侧均为 140 生命周期、420 次捕获，十四份完整调用表和完整 raw/BGR/持帧/oracle 字节均核对；原版 RGBA 单独完成二十轮、六十次捕获与持帧。完整清单仍分别缺 565/569 项输入；仅看 `native-result` 子集时是 86/90 项，不能用子集数量声称完整来源闭合。新结果不改判 `5b0e624` 原版三次调用后的失败，也不接受 Portal/GPU、完整故障矩阵或 P1。
+
+本次同时澄清既有格式统计：CLI 的 `capture_held_files=2534` 包含十四份 BGR oracle，并非全是捕获/持帧文件。报告的原版 BGR 文件 854 份等于 840 份捕获/持帧加十四份 oracle，Rust raw/BGR 为 1,680 份；实际捕获/持帧合计 2,520 份，完整 oracle 为 28 份。旧日志和报告字节保留，不将这些重叠计数相加或据此增称捕获次数。
+
+同一 `a5cfa2e` 的 macOS job 仍为 123/135 通过，十二项失败保留；工具准备和编译通过，失败步骤是原生 source context。官方轻量 ZIP 的长度/摘要、11,065 个可用登记输入和十二组保存报告独立核对通过，完整输入仍缺 531 项。CG schema2 的原版/Rust 各三次捕获与十八份 payload 通过；AppKit-consumer 原版仍只写出一份几何文件、没有图像，completion 为失败。其独立 Rust 三次捕获、十二份 raw/BGR/持帧文件、选源、已知像素、转换和 owner/窗口关闭记录亦单独校核，但配对 checker 仍拒绝原版失败状态。该次仍未触发原版几何文件缺失分支，不以重复结果证明系统故障原因或接受 P1。
 
 同一 `5b0e624` Linux 官方包的十六组 PipeWire、七组 Wlr 保存报告随后通过独立只读数据校核，报告字节未变。完整格式矩阵仍以缺少调用行拒绝：原版 RGBA 只有三次调用，Rust 独立入口有六十次，不能补入原版或接受配对。外部审阅脚本最初错误要求报错文字含 RGBA，已保留该审阅失败并按实际错误和调用表修正；没有重跑原生捕获或改判其失败。
 
@@ -555,7 +563,7 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 `upstream-context pipewire` 新增普通真实流的七格式入口（RGB、RGBA、RGBx、BGR、BGRA、BGRx、YUY2）；初版及修正版受控原生结果见下文，完整来源与 P1 验收仍单独核对。它沿用现有自有 daemon/精确路由和生产器，显式格式模式提供两种交替 raw 图样及十二字节行填充，不改变默认 P0 和原 RGB 序号模式。原完整 C++ 与 Rust 每格式各要求二十生命周期、六十张即时/关闭后持帧、两种实际图样及 native fd/线程退出；Rust 另检查真实协商后的 raw 格式/紧致行、独立 CPU owner、复制/归还配平、原转换分支和 BGR 同一存储复用。保留 raw 的测试观察会阻止 cache 存储复用，不作为默认分配量或性能对照。
 
-`cargo xtask upstream-trace pipewire-format-stream <外部目录> [--check-only]` 独立复算原始图样、行填充和 RGB/BGR/四通道转换；YUY2 使用与当前 OpenCV 一致的 BT.601 定点舍入/饱和公式。它要求十四份完整调用表、七份原版关闭后持有表、二十八份原表/OpenCV oracle 和 2,534 份即时/持帧字节，不能只比较共用转换器。Windows/OpenCV 生成的合成记录通过本机 checker，十二组缺失/重复/像素/填充/持帧/报告破坏被拒绝；这只验证夹具和记录逻辑，不是 Linux 编译、真实流或 P1 验收。Portal/GPU、动态重协商及完整故障矩阵仍未覆盖。
+`cargo xtask upstream-trace pipewire-format-stream <外部目录> [--check-only]` 独立复算原始图样、行填充和 RGB/BGR/四通道转换；YUY2 使用与当前 OpenCV 一致的 BT.601 定点舍入/饱和公式。它要求十四份完整调用表、七份原版关闭后持有表、二十八份原表/OpenCV oracle 和 2,520 份即时/持帧字节，不能只比较共用转换器。既有 CLI 的 2,534 计数另含十四份 BGR oracle，见[本轮计数澄清](#本轮原生与-ci-复核)。Windows/OpenCV 生成的合成记录通过本机 checker，十二组缺失/重复/像素/填充/持帧/报告破坏被拒绝；这只验证夹具和记录逻辑，不是 Linux 编译、真实流或 P1 验收。Portal/GPU、动态重协商及完整故障矩阵仍未覆盖。
 
 源码复核发现上述入口初版误要求原版 BGR 的早期输出始终不变：F 的 `latest_frame_.create` 加 `memcpy` 会复用同尺寸 Mat，BGR 返回的浅头共享该缓存，后续捕获会改写早期像素；其他六格式经转换得到独立 BGR。校核现分别要求原版 BGR 的三个同生命周期头地址相同、关闭后均匹配该周期最后一次输出，并保留即时与关闭后图样；Rust 则验证既有 CPU 所有权适配在仍有持帧时分配新存储，原始与 BGR 持帧不变。这是已有安全适配的显式差异，未修改产品或原版算法。实际新 C++ 验收头在 Windows/OpenCV 的自有 helper 控制中观察到 40 对缓存别名、20 次早期输出被覆写；SPA 枚举在该控制中为符号替身，没有执行 Linux 流。原生 Linux 结果及初版批次各保留自己的实际状态。
 
@@ -563,7 +571,7 @@ CPU 存储的四项 host 测试已通过，验证 stride/跨度/溢出、目标�
 
 初版同一 run 的完整官方 Linux ZIP/tar 随后核对全部十九份清单、82,123 个登记路径、十八份普通 444 文件 Git 快照、一份不可构建控制、76 个 F blob 和实际 CMake 来源。全部 43,093 个 PipeWire native 路径及原始内外清单与轻量包匹配，补齐 87 项输入；原版 BGR 持帧断言和不完整 checker 仍失败，来源核对不将其改为通过。
 
-修正版确切 `206755edd8efa4bfaa023d2b957c917bbfc08e69` 的 [Actions 41248794571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41248794571) PipeWire 组件通过全部 195 项检查；比初版多一项缓存未命中的 `source-drm-clone`，没有删除原检查。七格式原版/Rust 各完成 140 生命周期、420 次捕获；独立下载复核 43,088 个可用登记路径、2,534 份实际即时/持帧字节、28 份 oracle 和 21 份表。原版 BGR 实际记录四十对缓存别名及二十次早期持帧被覆盖；Rust 既有所有权适配保留不变 raw/BGR。轻量包当时缺少的 87 项完整来源输入已由下述完整归档补齐。同一 run 的另一个 PipeWire P0 命令在显式配置阶段失败、尚未运行其取帧；macOS 实际日志仍为正式 Xcode 27.2/27B52 缺失。组件通过不代替这些独立失败或整个 Linux job/P1 验收。
+修正版确切 `206755edd8efa4bfaa023d2b957c917bbfc08e69` 的 [Actions 41248794571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41248794571) PipeWire 组件通过全部 195 项检查；比初版多一项缓存未命中的 `source-drm-clone`，没有删除原检查。七格式原版/Rust 各完成 140 生命周期、420 次捕获；独立下载复核 43,088 个可用登记路径、2,520 份实际即时/持帧字节、28 份 oracle 和 21 份表。既有 CLI 的 2,534 计数还含十四份 BGR oracle，原报告和日志不改。原版 BGR 实际记录四十对缓存别名及二十次早期持帧被覆盖；Rust 既有所有权适配保留不变 raw/BGR。轻量包当时缺少的 87 项完整来源输入已由下述完整归档补齐。同一 run 的另一个 PipeWire P0 命令在显式配置阶段失败、尚未运行其取帧；macOS 实际日志仍为正式 Xcode 27.2/27B52 缺失。组件通过不代替这些独立失败或整个 Linux job/P1 验收。
 
 修正版同一 run 的完整官方 Linux ZIP/tar 已核对八份实际运行清单、63,289 个登记路径、八份普通 444 文件 Git 快照、76 个 F blob 和实际 CMake 来源。全部 43,175 个 PipeWire native 路径及原始内外清单与轻量包逐字节匹配，补齐全部 87 项来源输入。另两份 Rust 准备批次的最新版本检查分别因查询 `target-lexicon`、`pipewire-sys` 的 crates.io 请求发生 curl 28／10 秒连接超时而失败；P0 PipeWire、该批 Wlr 与最后配置检查继续拒绝未通过准备的输入，未执行对应捕获或配置控制场景。缺少的配置控制不记为通过，两个超时失败保留；独立准备且通过的七格式 P1 组件也不接受整个 Linux job 或 P1。
 

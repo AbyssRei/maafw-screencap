@@ -6,7 +6,7 @@ Actions 现按[计划 §5.6](plans/maafw-screencap-extraction-plan.md#56-依赖�
 
 Windows manager 的 63 个非空方法组合已全部通过本机连续三轮原生/数据测试及独立汇总，输入为零。另一次 Query/Map/Size 回归中，Map/Size 三轮通过；原版 Query 第二轮发生已卸载 GraphicsCapture.dll 的执行访问冲突，记录校核失败，保留失败。确切2d2898f的 Linux 官方产物及24组数据复核亦通过，完整来源、托管 Windows 和 P1 总体验收仍待完成。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
-`5b0e624` 的 Linux 官方轻量包现核对长度、摘要和全部可用登记输入：PipeWire 192/194 通过，Wlr 135/135 通过。原版 RGBA 资源失败保留；按内核退出顺序修订了测试判据，同代已 join 且带 PF_EXITING 的任务不再以 proc 内存字段清零作为前提。回归与编排控制通过，新原生编译/运行待验证，详见同一[复核记录](guides/development.md#本轮原生与-ci-复核)。
+`5b0e624` 的 Linux 官方轻量包现核对长度、摘要和全部可用登记输入：PipeWire 192/194 通过，Wlr 135/135 通过。原版 RGBA 资源失败保留；按内核退出顺序修订了测试判据，同代已 join 且带 PF_EXITING 的任务不再以 proc 内存字段清零作为前提。确切 `a5cfa2e` 随后通过 Linux job、194 项 PipeWire、135 项 Wlr 及 24 组独立数据检查；原版 RGBA 完成二十轮，标准线程控制实测四次退出中仍有内存字段。完整来源与 P1 仍未验收，详见同一[复核记录](guides/development.md#本轮原生与-ci-复核)。
 
 该批 Linux 的 23 组保存数据检查已独立通过，未完成的原版 RGBA 矩阵仍拒绝。`875f9b9` 与 `5710c16` 的 Windows 专用清理错误控制亦通过原生执行和下载记录复核；每次 job 的四项 FramePool、九项 manager 失败保留，部分产物不构成完整来源验收，详见上述复核记录。
 
