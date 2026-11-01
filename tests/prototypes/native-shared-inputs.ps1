@@ -103,6 +103,7 @@ try {
     [IO.File]::WriteAllText($childPath,@'
 param([string]$Configuration,[string]$Block,[string]$ArgumentsPath,[string]$Shared)
 $ErrorActionPreference='Stop'
+$PSNativeCommandUseErrorActionPreference=$true
 $config=Get-Content -LiteralPath $Configuration -Raw|ConvertFrom-Json
 $env:MFS_REFERENCE_ROOT=$config.root
 $env:MFS_WINDOWS_SHARED_NATIVE_INPUTS=$Shared
@@ -112,6 +113,9 @@ function global:cargo {
     [IO.File]::WriteAllText($ArgumentsPath,($args|ConvertTo-Json -Compress))
     if($args -contains 'print-window') {
         [IO.File]::WriteAllText((Join-Path $config.root manifest.json),(@{runs=@($config.rust,$config.producer)}|ConvertTo-Json -Depth 12))
+        # A real nonzero native child also exercises PowerShell's optional
+        # native-error preference; the workflow must retain control of exit17.
+        & (Get-Command pwsh).Source -NoProfile -Command 'exit 17'
         $global:LASTEXITCODE=$config.native_exit
     }else{$global:LASTEXITCODE=0}
 }
@@ -125,6 +129,15 @@ exit $LASTEXITCODE
     & (Get-Command pwsh).Source -NoProfile -File $childPath $mockPath $block (Join-Path $testRoot print-args.json) '' | Out-Null
     if($LASTEXITCODE -ne 17 -or !(Test-Path $environment) -or (Get-Content $environment).Trim() -cne "MFS_WINDOWS_SHARED_NATIVE_INPUTS=$producerPath") {
         throw 'Actual producer workflow block lost the native failure or explicit dependency seed'
+    }
+    $withoutPreference=(Workflow-Block 'Validate Windows GDI and PrintWindow migration and native interop').Replace('$PSNativeCommandUseErrorActionPreference = $false','')
+    $badBlock=Join-Path $testRoot workflow-native-preference-negative.ps1
+    [IO.File]::WriteAllText($badBlock,$withoutPreference)
+    Remove-Item -LiteralPath $environment
+    [void](Write-Fixture 'manifest.json' ([ordered]@{runs=@($fixedRust)}))
+    $negativeOutput=(& (Get-Command pwsh).Source -NoProfile -File $childPath $mockPath $badBlock (Join-Path $testRoot preference-negative-args.json) '' 2>&1|Out-String)
+    if($LASTEXITCODE -eq 0 -or $LASTEXITCODE -eq 17 -or (Test-Path $environment)) {
+        throw "Native-error preference negative control failed: $negativeOutput"
     }
     $commands=@(
         @('Validate partial ScreenDC migration','xtask','upstream-parity','screen-dc'),

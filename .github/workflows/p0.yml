@@ -199,6 +199,7 @@ jobs:
           ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           . ./scripts/native-shared-inputs.ps1
+          $PSNativeCommandUseErrorActionPreference = $false
           $before = @((Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT manifest.json) -Raw | ConvertFrom-Json).runs | ForEach-Object { $_.path })
           cargo xtask upstream-parity print-window
           $nativeExit = $LASTEXITCODE
