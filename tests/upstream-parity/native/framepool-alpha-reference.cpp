@@ -142,6 +142,9 @@ int wmain(int argc, wchar_t** argv)
         if (!dispatcher.close()) { return 3; }
         for (size_t index = 0; index < held.size(); ++index) {
             if (digest(held[index]) != hashes[index]) { throw std::runtime_error("held image changed during dispatcher shutdown"); }
+            const auto directory = root / ("held-frame-" + std::to_string(index));
+            std::filesystem::create_directory(directory);
+            save(held[index], directory); // CPU owner, after every native/UI/queue close.
         }
         std::cout << "positive_controls=" << controls << std::endl;
         std::ofstream summary(root / "summary.tsv");

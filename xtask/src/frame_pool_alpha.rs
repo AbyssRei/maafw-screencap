@@ -6,7 +6,13 @@ use std::{fs, path::Path};
 
 const HEADER: &str = "arm\tphase\talpha\tframe_image\tframe_known\tframe_zero\tprint_image\tprint_known\tpaint_before\tpaint_after\tframe_prior\telapsed_us";
 
+#[path = "frame_pool_alpha_pair.rs"]
+mod pair;
+
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "frame-pool-pair") {
+        return pair::run(&args[1..]);
+    }
     let (path, check_only) = match args {
         [kind, path] if kind == "frame-pool" => (path, false),
         [kind, path, flag] if kind == "frame-pool" && flag == "--check-only" => (path, true),

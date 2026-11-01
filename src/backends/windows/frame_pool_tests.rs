@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 use super::*;
 
+#[cfg(all(feature = "prototype-windows-com", feature = "windows-print-window"))]
+#[path = "frame_pool_alpha_tests.rs"]
+mod alpha_sequence;
+
 #[cfg(feature = "prototype-windows-com")]
 #[path = "frame_pool_target_loss_tests.rs"]
 mod target_loss;

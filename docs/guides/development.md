@@ -4,6 +4,12 @@
 
 ## 本轮原生与 CI 复核
 
+FramePool 的原版 alpha/content 诊断现有 Rust 同序列对照：各自执行 fresh/persistent 两种会话的 255→0→255→0→255，保持相同 UI owner 图样、一次显式重绘、每阶段一次捕获及原调用/等待。原生 `mfs_framepool_alpha_reference` 额外在 capture/window/dispatcher 关闭后保存十张原有 CPU 持帧，不改固定 F 类；Rust 精确测试 `backends::windows::frame_pool::tests::alpha_sequence::records_original_alpha_sequence_pixels_and_held_owners` 单独启用 PrintWindow 当前内容见证，额外保存原转换边界的 CPU BGRA、回放/转换/clone/映射证据及关闭后的二十张 BGR 持帧。普通 FramePool 编排的 features 不变，该精确测试从通用聚合中排除；独立进程及 `upstream-alpha frame-pool-pair <source directory> <Rust directory> [--check-only]` 接入原生 CI，原有四项 pseudo 已知颜色失败不改变。
+
+最新本机连续三轮中，原版/Rust 程序各自的十阶段控制均通过，配对检查结果为 `[0,1,1]`，逐轮 10/10、9/10、9/10 相同；18 组不透明图样全部严格匹配。后两轮均在 persistent 的首个 alpha0 阶段出现差异：原版黑图，Rust 在 2.001971/2.002195 秒后回放上阶段图样，转换/原生复制为零且没有伪造 raw 样本。其余透明阶段配对一致。这个不同执行时点的观测不能确定原版内部缓存分支、帧新鲜度、一般透明度原因或迁移缺陷；不追加截图重试消除失败。检查器会保存十次完整且自身有效的像素/状态观察，在任一配对差异时仍返回失败；损坏图像、布局、状态、错误或持帧直接拒绝。
+
+该批原始/低级鼠标键盘输入为零，系统输入计时和光标不变，最大采样间隔 77.5237ms，四路监听及日志 writer 已确认注销/退出；没有新的物理输入正向挑战。独立逐字节核对 266 份 BGR/BGRA 即时/持帧、全部 1,473 项捕获前冻结输入及 486 文件产品快照，实际两个 MSBuild target 的 F 类编译输入与 Git blob 一致。二十四组损坏数据拒绝、两组 CPU 正向数据、九组实际 Step mock 控制通过；97 项 xtask 测试、workspace 测试、完整 Windows features Clippy、Release build 和 rustfmt 通过。最初三轮的配对 checker 因 C++ CRLF/Rust LF 比较失败，原执行保留；三十份实际状态标签/数值独立核对相同，修正只比较完整行，且不回改旧退出码。此前 native 配置漏开 GDI target 的构建失败也单独保留。使用归档开发依赖，不构成新在线依赖/工具链验收；新的托管执行、完整资源/回调排空、四项 pseudo 失败和完整 P1 仍待解决。批次与独立报告保存在同级参考目录，产品不依赖其路径。
+
 确切 `88208bd` 的 [Actions 41355524703](https://github.com/AbyssRei/maafw-screencap/actions/runs/41355524703) 原生 Mac 已编译新 Objective-C++ wrapper，并通过同进程原版/Rust 的两个 mode 及记录检查。CG 场景中双方各三次得到已知图样，SC 场景中双方各三次返回 None；原版 SC 耗时约 5.034/5.067/5.141 秒，Rust 约 5.002/5.048/5.143 秒。97 份真实矩阵文件匹配登记 SHA-256，独立核对实际可执行文件长度/FNV/路径、真实父子 PID/窗口归属、原版 native caller thread、两个实际加载模块路径一致、context 清理及场景关闭。十八份当前/持帧 payload 的全图通道转换、已知目标像素和 held bytes 通过；六次 None 没有附加替代图片，也没有被计为成功截图。该结果仅覆盖原版先行的顺序；不同时间的整个显示器像素、相反顺序、实际帧时间和原生 callback/session 排空仍未证明。
 
 该批官方轻量 ZIP 的 35,125,420 字节及完整摘要、11,166 条可用登记路径和十三份保存报告只读通过；随后完整官方 ZIP 的 351,041,182 字节及完整摘要亦通过。恢复的 29,522 份文件、27,965 条登记路径、十二份清单、十一份普通 483-file 产品快照与一份故意不可构建控制均核验；76 份固定 F 源文件、U/F 的 741/744 个 Git blobs 及归档模式通过。实际新 wrapper 的编译和原生消费、五份固定 SCK 类编译项（四份无 observer）、选定 Xcode/SDK 与 MRC 配置、十三份保存数据及完整 reference checker 通过，全部恢复字节（含 Git index/config）不变。这闭合了该确切批次的 542 项轻量缺口，没有借用旧 2c 来源；结果已封存。原生组件仍为 127/139、十二项既有失败，失败原版 AppKit 配对仍被拒绝，缺几何分支仍未原生触发；宿主关联的生产者/根因与完整 P1 仍未验收。

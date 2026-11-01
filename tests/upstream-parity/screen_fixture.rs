@@ -289,6 +289,33 @@ impl Fixture {
         }
         Ok(output)
     }
+    #[cfg(feature = "windows-frame-pool")]
+    pub fn alpha_scene(&self, alternative: bool) -> Result<(), Box<dyn Error>> {
+        type Scene = unsafe extern "C" fn(*mut c_void, u32) -> i32;
+        // SAFETY: Existing print-thread.h command; the actual UI owner changes
+        // its palette synchronously, with no borrowed pointer or screenshot.
+        let scene: Scene = unsafe { self.module.symbol(c"mfs_print_thread_scene")? };
+        let code = unsafe { scene(self.span.owner, u32::from(alternative)) };
+        if code != 0 {
+            return Err(format!("alpha scene command failed: {code}").into());
+        }
+        Ok(())
+    }
+    #[cfg(feature = "windows-frame-pool")]
+    pub fn restore_alpha_scene(&self, alpha: u32) -> Result<(), Box<dyn Error>> {
+        if !matches!(alpha, 0 | 255) {
+            return Err("alpha fixture requires zero or opaque".into());
+        }
+        type Restore = unsafe extern "C" fn(*mut c_void, u32, u32) -> i32;
+        // SAFETY: Existing fixture-only command on the retained owner. Exactly
+        // matches the original diagnostic's one explicit pre-capture repaint.
+        let restore: Restore = unsafe { self.module.symbol(c"mfs_print_thread_restore_control")? };
+        let code = unsafe { restore(self.span.owner, alpha, 1) };
+        if code != 0 {
+            return Err(format!("alpha fixture restoration failed: {code}").into());
+        }
+        Ok(())
+    }
     pub fn thread_info(&self) -> Result<[u64; 4], Box<dyn Error>> {
         type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
         // SAFETY: Matching header signature; the live worker/owner is retained.
