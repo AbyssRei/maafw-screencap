@@ -18,6 +18,7 @@ mod frame_pool_alpha;
 mod framepool_empty;
 mod framepool_map;
 mod framepool_queries;
+mod framepool_record_control;
 mod framepool_size;
 mod framepool_target_loss;
 mod licenses;
@@ -212,6 +213,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace screen-pending <external directory> [--check-only]\n\
                       cargo xtask upstream-trace framepool-target-loss <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-queries <external matrix> [--check-only]\n\
+                      cargo xtask upstream-trace framepool-record-control <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-empty <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-map <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace desktop-map <external matrix> [--check-only]\n\

@@ -48,8 +48,7 @@ int map_boundary(const std::filesystem::path& root)
                     trace.active = false; observation.trace.active = false;
                     const auto evidence = observation.trace;
                     const auto name = std::to_string(cycle) + "-" + phase;
-                    save(root, name, image);
-                    if (observation.cache) { save(root, name + "-cache", std::optional<cv::Mat>(*observation.cache)); }
+                    save_pair(root, name, image, observation.cache ? std::optional<cv::Mat>(*observation.cache) : std::nullopt);
                     const uint32_t expected = fault == 1 ? 12 : fault == 2 ? 1235 : 12345;
                     if (evidence.order != expected || evidence.maps != 1 || evidence.unmaps != (fault == 1 ? 0 : 1)
                         || evidence.conversions != (fault == 1 ? 0 : 1) || evidence.cache_clones != (fault ? 0 : 1)

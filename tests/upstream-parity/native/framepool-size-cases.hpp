@@ -35,7 +35,7 @@ int size_boundary(const std::filesystem::path& root)
                       try { image = source.screencap(); outcome = image ? 1 : 0; }
                       catch (const winrt::hresult_error& failure) { error = failure.code(); outcome = 2; } }
                     const auto name = std::to_string(cycle) + "-" + phase;
-                    save(root, name, image); save(root, name + "-cache", std::optional<cv::Mat>(source.cached_image_));
+                    save_pair(root, name, image, std::optional<cv::Mat>(source.cached_image_));
                     const auto expected_outcome = !probe || mode == 0 ? 1u : mode == 1 || mode == 3 || mode == 6 || mode == 7 ? 2u : 0u;
                     if (outcome != expected_outcome || (outcome == 2 ? error != mfs_size_probe::injected : error != 0)
                         || mfs_size_probe::slots(source) != (probe ? after[mode] : 127u)

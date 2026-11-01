@@ -4,6 +4,10 @@
 
 ## 本轮原生与 CI 复核
 
+FramePool 的 Rust Query/Map/Size 用例现先保存本次返回的 CPU 图像；Map/Size 同时保存 cache，再按原顺序执行状态、错误和严格像素断言。原版 C++ Map/Size 亦先保存两份 Mat，再检查标记；Query 也在断言前写出图像。捕获、转换、等待、绘制及原断言条件未改，保存失败仍使测试失败，不补齐未执行的调用行。旧 Size 标记失败及其缺图记录保持原状态，不能从新保存顺序倒推历史原因。
+
+独立 CPU 控制通过原 OpenCV Mat 和实际 Rust/native 图像 owner 检验两种合法标记、结果/cache 各自的坏标记与末像素、显式空值。Windows 归档依赖下 Debug/Release 共 32 组、16 次预期像素拒绝，64 份像素文件（含空值）均在断言后保留，两侧及两配置逐字节一致，Rust owner 最终归零。`cargo xtask upstream-trace framepool-record-control <外部矩阵> [--check-only]` 校核原始 bytes/layout、完整八行及保存报告；十组记录破坏被拒绝。实际 Step 的十六组 mock 控制通过，拒绝零测试、缺/少摘要、未释放 owner、错误截图范围及非零退出。准备脚本已接入原版、Rust 和数据三个独立步骤，轻量包收集对应目录。Rust 精确入口为 `backends::windows::frame_pool::tests::queries::preserves_image_and_cache_records_when_strict_pixels_reject_them`，显式设置全新 `MFS_FRAMEPOOL_RECORD_ARTIFACTS` 和 `MFS_GDI_PARITY_LIBRARY`。这些控制没有创建桌面窗口或截图；改动后 Query/Map/Size 的真实捕获回归及新 CI 仍待串行执行，当前 63 组合矩阵使用先前冻结程序，不替代这项验收。
+
 Windows 原生 manager/runtime 入口现扩展至六种原方法的全部 63 个非空位组合，`upstream-parity manager` 的 CI 编排亦逐项运行 `1..63`；原来六个单方法和全选组合的限制已移除。每项仍使用独立 source/Rust 进程/自有窗口、每侧二十个完整生命周期及六十张关闭后持帧，`cargo xtask upstream-delegate win32-runtime <mask> <外部目录> [--check-only]` 逐项复算像素、实际选择、事件和持有记录。实际测速可使双方选择不同赢家，仍按各自原生选择核对窗口/完整显示器范围，不能要求两次独立墙钟测量选择相同方法，也不据此声称逐候选耗时完全相同。空 mask/未知高位不属于此取帧矩阵；既有原 manager 的 None/未知选择器语义未改。
 
 本机全量矩阵按每个 mask 连续三轮执行，首个尝试已停止：mask=1 的三轮有效通过，含双方共 120 生命周期、360 张持有图像、720 份像素文件，正式输入为零，最大间隔 83.3351ms。mask=2 的三次程序和数据检查全部通过，但 15,916 个采样中出现一次 810.3129ms 间隔，超过 500ms 上限，因此整批三轮作废；正式输入仍为零，具体缺口原因未确定，不能归因于用户操作。原始记录与完整来源已封存，鼠标/键盘监听、通知和电源请求注销均从原日志确认。随后修订观察器并用同一 EXE/DLL 的新批次补测，旧批次保持作废；完整结果仍未汇总，不将已完成前缀称为全部通过。

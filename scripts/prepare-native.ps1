@@ -241,10 +241,22 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact foreground case did not execute one native test'
             }
         }
-        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss|queries|empty-client|map-boundary|size-boundary)$' -and $exitCode -eq 0) {
+        if ($Name -match '^frame-pool-rust-(uninitialized|mta|mta-dispatcher|sta|lifecycles|pseudo|target-loss|queries|empty-client|map-boundary|size-boundary|record-control)$' -and $exitCode -eq 0) {
             if ((Get-Content -LiteralPath $logPath -Raw) -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'The exact native FramePool case did not execute one test'
             }
+        }
+        if ($Name -eq 'frame-pool-source-record-control' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('original FramePool CPU record controls cases=8 rejected=4 pixel_files=16 captures=0 passed')) {
+            throw 'Original CPU record control did not preserve the complete negative/positive matrix'
+        }
+        if ($Name -eq 'frame-pool-rust-record-control' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('FramePool CPU record controls cases=8 rejected=4 pixel_files=16 owners_released=1 captures=0 passed')) {
+            throw 'Rust CPU record control did not preserve the complete matrix and image owners'
+        }
+        if ($Name -eq 'frame-pool-record-control-records' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('FramePool CPU record controls source_cases=8 Rust_cases=8 rejected_per_side=4 pixel_files=32 captures=0 passed')) {
+            throw 'CPU record control data was not completely verified'
         }
         if ($Name -eq 'frame-pool-source-target-loss' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original FramePool target_loss cycles=20 captures=20 rejected_calls=60 retained=20 fixture_joins=20 source_destructors=20 passed')) {
@@ -982,6 +994,9 @@ try {
             $queryProgram=Join-Path $artifacts mfs_framepool_query_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_query_reference.exe) -Destination $queryProgram
             Save-Input $queryProgram
+            $frameRecordEvidence=Join-Path $frameContextEvidence record-control
+            New-Item -ItemType Directory -Path (Join-Path $frameRecordEvidence source) | Out-Null
+            Invoke-FrameCheck frame-pool-source-record-control $queryProgram @('--record-control',(Join-Path $frameRecordEvidence source))
             $frameQueryEvidence=Join-Path $frameContextEvidence queries
             New-Item -ItemType Directory -Path (Join-Path $frameQueryEvidence source) | Out-Null
             Invoke-FrameCheck frame-pool-source-queries $queryProgram @((Join-Path $frameQueryEvidence source))
@@ -1095,10 +1110,11 @@ try {
         $framePseudoCase = 'backends::windows::frame_pool_pseudo::tests::preserves_original_pseudo_wrapper_pixels_and_stop_inactive_states'
         $frameTargetLossCase = 'backends::windows::frame_pool::tests::target_loss::matches_original_repeated_target_loss_without_replaying_cached_pixels'
         $frameQueryCase = 'backends::windows::frame_pool::tests::queries::matches_original_mapped_query_failures_fallback_and_roi_clamps'
+        $frameRecordCase = 'backends::windows::frame_pool::tests::queries::preserves_image_and_cache_records_when_strict_pixels_reject_them'
         $frameEmptyCase = 'backends::windows::frame_pool::tests::empty_client::clears_warm_cache_on_real_zero_client_and_recovers_without_old_pixels'
         $frameMapCase = 'backends::windows::frame_pool::tests::map_boundary::preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion_failures'
         $frameSizeCase = 'backends::windows::frame_pool::tests::size_boundary::preserves_original_size_query_catches_partial_states_and_recovery'
-        $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase, '--skip', $frameSizeCase)
+        $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameRecordCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase, '--skip', $frameSizeCase)
         if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
         $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
         $desktopDefaultCase = 'backends::windows::desktop_dup::tests::selects_adapter_zero_output_zero_for_null_hwnd_and_retains_cpu_pixels'
@@ -1182,6 +1198,9 @@ try {
             Step 'desktop-dup-rust-conversion-boundary' cargo ($parityArguments + @('--',$desktopConversionCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
         }
         if ($FramePoolParity) {
+            $env:MFS_FRAMEPOOL_RECORD_ARTIFACTS = Join-Path $frameRecordEvidence rust
+            Invoke-FrameCheck 'frame-pool-rust-record-control' cargo ($parityArguments + @('--', $frameRecordCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
+            Invoke-FrameCheck 'frame-pool-record-control-records' $ConfigureTool @('upstream-trace', 'framepool-record-control', $frameRecordEvidence)
             $env:MFS_FRAMEPOOL_TARGET_LOSS_ROOT = $frameTargetLossEvidence
             Invoke-FrameCheck 'frame-pool-rust-target-loss' cargo ($parityArguments + @('--', $frameTargetLossCase, '--exact', '--include-ignored', '--test-threads=1', '--nocapture'))
             Invoke-FrameCheck 'frame-pool-target-loss-records' $ConfigureTool @('upstream-trace', 'framepool-target-loss', $frameTargetLossEvidence)

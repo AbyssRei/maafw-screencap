@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+FramePool Query/Map/Size 的失败记录已前移至严格像素断言之前；Map/Size 先保存结果与 cache。原版/Rust 的 Debug/Release CPU 控制、坏像素保留及记录/编排破坏控制通过，均无截图；新程序的真实捕获回归和 CI 仍待执行，旧失败不重标。范围和入口见[开发指南](guides/development.md#本轮原生与-ci-复核)。
+
 Windows 原生 manager 的方法组合入口与 CI 编排已扩展至全部 63 个非空 mask；旧 FramePool 批次因一次 810ms 监听缺口作废并封存。修订观察器后，同一原生程序的 mask 2–5 已连续三轮通过且原始输入/像素独立复核有效，连同既有 mask 1 构成当前有效前缀；后续组合仍在执行。每项保留原二十生命周期、像素与持帧断言及独立输入监测，实际边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 
 macOS 私有 Input=None features 及同 manager 的原工厂/虚接口查询消费已补齐；Windows 归档输入 Debug/Release 的受控不可用分支通过，真实 Mac 构建和执行仍待正式 Xcode runner。完整 P1 未完成，实际入口、计数及适配边界见[开发指南](guides/development.md#本轮原生与-ci-复核)。

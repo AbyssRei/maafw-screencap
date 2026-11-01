@@ -94,6 +94,13 @@ fn preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion
             let trace = guard.trace();
             drop(queries_guard);
             drop(guard);
+            let name = format!("{cycle}-{phase}");
+            queries::save_pair_raw(
+                &directory,
+                &name,
+                attempt.image.as_ref().ok(),
+                capture.cached.as_ref(),
+            )?;
             assert_eq!(
                 trace.order,
                 match fault {
@@ -186,10 +193,9 @@ fn preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion
                     warm_address = image.address();
                 }
             }
-            let name = format!("{cycle}-{phase}");
             let marker = image.as_ref().map_or(-1, queries::known);
-            queries::save(&directory, &name, image.as_ref())?;
-            queries::save(&directory, &format!("{name}-cache"), Some(cache))?;
+            queries::validate_saved(image.as_ref());
+            queries::validate_saved(Some(cache));
             held.push((name, image));
             let count = held.iter().filter(|(_, image)| image.is_some()).count();
             assert_eq!(adapter.image_owners()?, u64::try_from(count + 1)?);

@@ -181,7 +181,7 @@ int known(const cv::Mat& image)
     }
     return phase;
 }
-void save(const std::filesystem::path& root, const std::string& name, const std::optional<cv::Mat>& image)
+void save_raw(const std::filesystem::path& root, const std::string& name, const std::optional<cv::Mat>& image)
 {
     std::ofstream layout(root / (name + ".txt"), std::ios::binary);
     layout.exceptions(std::ios::badbit | std::ios::failbit);
@@ -192,7 +192,62 @@ void save(const std::filesystem::path& root, const std::string& name, const std:
     if (image->type() != CV_8UC3 || image->cols != 96 || image->rows != 64) { throw std::runtime_error("source saved image layout differs"); }
     for (int y = 0; y < 64; ++y) { pixels.write(reinterpret_cast<const char*>(image->ptr(y)), 288); }
     pixels.flush(); layout.flush();
-    known(*image); // Preserve every returned byte before the strict pixel check.
+}
+void save(const std::filesystem::path& root, const std::string& name, const std::optional<cv::Mat>& image)
+{
+    save_raw(root, name, image);
+    if (image) { known(*image); }
+}
+void save_pair(const std::filesystem::path& root, const std::string& name,
+    const std::optional<cv::Mat>& image, const std::optional<cv::Mat>& cache)
+{
+    // Retain both owned Mat observations even if the first known-color check fails.
+    save_raw(root, name, image); save_raw(root, name + "-cache", cache);
+    if (image) { known(*image); }
+    if (cache) { known(*cache); }
+}
+int record_control(const std::filesystem::path& root)
+{
+    if (!root.is_absolute() || !std::filesystem::is_directory(root) || !std::filesystem::is_empty(root)) { return 1; }
+    try {
+        auto image = [](uint32_t phase, uint32_t corrupt) {
+            cv::Mat value(64, 96, CV_8UC3);
+            for (int y = 0; y < 64; ++y) {
+                for (int x = 0; x < 96; ++x) {
+                    value.at<cv::Vec3b>(y, x) = x < 16 && y < 16
+                        ? corrupt == 1 ? cv::Vec3b(0x1f, 0x53, 0xa7)
+                            : phase == 0 ? cv::Vec3b(0x4e, 0x5f, 0x60) : cv::Vec3b(0x1a, 0x2b, 0x3c)
+                        : x < 32 ? cv::Vec3b(0x1f, 0x53, 0xa7)
+                        : y < 32 ? cv::Vec3b(0xb9, 0x4d, 0x27) : cv::Vec3b(0x3b, 0xe2, 0x81);
+                }
+            }
+            if (corrupt == 2) { value.at<cv::Vec3b>(63, 95)[2] ^= 1; }
+            return value;
+        };
+        std::ofstream rows(root / "record-control.tsv", std::ios::binary);
+        rows.exceptions(std::ios::badbit | std::ios::failbit);
+        rows << "case\trejected\timage\tcache\n";
+        for (uint32_t index = 0; index < 8; ++index) {
+            const uint32_t phase = index == 1;
+            std::optional<cv::Mat> output, cache;
+            if (index < 6) { output = image(phase, index == 2 ? 1 : index == 4 ? 2 : 0); }
+            if (index < 7) { cache = image(phase, index == 3 ? 1 : index == 5 ? 2 : 0); }
+            bool rejected = false;
+            try { save_pair(root, "control-" + std::to_string(index), output, cache); }
+            catch (const std::runtime_error& error) {
+                const std::string_view message(error.what());
+                if (message != "query source marker differs" && message != "query source full pixels differ") { throw; }
+                rejected = true;
+            }
+            if (rejected != (index >= 2 && index <= 5)) { throw std::runtime_error("record control rejection differs"); }
+            rows << index << '\t' << rejected << '\t' << output.has_value() << '\t' << cache.has_value() << '\n';
+            rows.flush();
+        }
+        std::cout << "original FramePool CPU record controls cases=8 rejected=4 pixel_files=16 captures=0 passed\n";
+        return 0;
+    }
+    catch (const std::exception& error) { std::cerr << "record control failure=" << error.what() << '\n'; }
+    return 1;
 }
 int empty_client(const std::filesystem::path& root, bool prepare_restore = false)
 {
@@ -313,6 +368,7 @@ int empty_client(const std::filesystem::path& root, bool prepare_restore = false
 #endif
 int wmain(int argc, wchar_t** argv)
 {
+    if (argc == 3 && std::wstring_view(argv[1]) == L"--record-control") { return record_control(argv[2]); }
 #if defined(MFS_FRAMEPOOL_SIZE_OBSERVER)
     if (argc == 3 && std::wstring_view(argv[1]) == L"--size-boundary") { return size_boundary(argv[2]); }
 #endif
@@ -356,6 +412,8 @@ int wmain(int argc, wchar_t** argv)
                     auto image = source.screencap(); // No capture retry.
                     trace.active = false;
                     const auto observed = trace;
+                    const auto name = std::to_string(cycle) + "-" + phase;
+                    save_raw(root, name, image);
                     const bool failure = probe && (mode == 1 || mode == 2 || mode == 4);
                     const uint32_t expected_order = current == 1 ? 1 : current == 2 ? 12 : current == 3 || current == 4 ? 1234 : 123;
                     if (observed.order != expected_order || image.has_value() == failure
@@ -366,8 +424,6 @@ int wmain(int argc, wchar_t** argv)
                     std::array<uint64_t, 3> updates {};
                     if (mfs_desktop_fixture_update_info(fixture.value.owner, updates.data(), updates.size()) != 0
                         || !updates[0] || !updates[1] || updates[2]) { throw std::runtime_error("query marker presentation failed"); }
-                    const auto name = std::to_string(cycle) + "-" + phase;
-                    save(root, name, image);
                     rows << cycle << '\t' << mode << '\t' << phase << '\t' << (image ? 1 : 0) << '\t' << observed.order
                         << '\t' << observed.win32 << '\t' << observed.dwm << '\t' << marker << '\t' << owner[1] << '\t' << owner[0] << '\t' << updates[1] << '\n';
                     rows.flush(); held.push_back({ name, std::move(image) });

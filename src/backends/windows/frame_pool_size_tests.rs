@@ -87,6 +87,13 @@ fn preserves_original_size_query_catches_partial_states_and_recovery()
             let attempt = capture.capture(&mut converter);
             let trace = guard.trace();
             drop(guard);
+            let name = format!("{cycle}-{phase}");
+            queries::save_pair_raw(
+                &directory,
+                &name,
+                attempt.image.as_ref().ok(),
+                capture.cached.as_ref(),
+            )?;
             assert!(
                 !attempt.evidence.replayed && attempt.evidence.cleanup.iter().all(Option::is_none)
             );
@@ -154,10 +161,9 @@ fn preserves_original_size_query_catches_partial_states_and_recovery()
                 assert_ne!(image.address(), cache.address());
                 assert_eq!(image.bytes(), cache.bytes());
             }
-            let name = format!("{cycle}-{phase}");
             let marker = image.as_ref().map_or(-1, queries::known);
-            queries::save(&directory, &name, image.as_ref())?;
-            queries::save(&directory, &format!("{name}-cache"), Some(cache))?;
+            queries::validate_saved(image.as_ref());
+            queries::validate_saved(Some(cache));
             writeln!(
                 rows,
                 "{cycle}\t{mode}\t{phase}\t{expected}\t{}\t{}\t{before_slots}\t{}\t{}\t{}\t{}\t1\t{marker}\t{}\t{}",

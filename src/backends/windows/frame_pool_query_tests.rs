@@ -36,6 +36,39 @@ pub(super) fn save(
     name: &str,
     image: Option<&Image>,
 ) -> Result<(), Box<dyn StdError>> {
+    save_raw(root, name, image)?;
+    validate_saved(image);
+    Ok(())
+}
+fn save_pair(
+    root: &Path,
+    name: &str,
+    image: Option<&Image>,
+    cache: Option<&Image>,
+) -> Result<(), Box<dyn StdError>> {
+    save_pair_raw(root, name, image, cache)?;
+    validate_saved(image);
+    validate_saved(cache);
+    Ok(())
+}
+pub(super) fn save_pair_raw(
+    root: &Path,
+    name: &str,
+    image: Option<&Image>,
+    cache: Option<&Image>,
+) -> Result<(), Box<dyn StdError>> {
+    // Both independently owned CPU observations must survive either strict
+    // pixel assertion. No native lease or capture operation reaches this I/O.
+    save_raw(root, name, image)?;
+    save_raw(root, &format!("{name}-cache"), cache)
+}
+pub(super) fn validate_saved(image: Option<&Image>) {
+    if let Some(image) = image {
+        known(image);
+        assert_eq!(image.stride(), 288);
+    }
+}
+fn save_raw(root: &Path, name: &str, image: Option<&Image>) -> Result<(), Box<dyn StdError>> {
     let mut layout = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -55,11 +88,130 @@ pub(super) fn save(
         pixels.write_all(image.bytes())?;
         pixels.flush()?;
         layout.flush()?;
-        known(image);
-        assert_eq!(image.stride(), 288);
     } else {
         writeln!(layout, "0\t0\t0\t0")?;
     }
+    Ok(())
+}
+
+#[test]
+#[ignore = "explicit native CPU image/record control; no desktop capture"]
+fn preserves_image_and_cache_records_when_strict_pixels_reject_them()
+-> Result<(), Box<dyn StdError>> {
+    let root = std::path::PathBuf::from(
+        std::env::var_os("MFS_FRAMEPOOL_RECORD_ARTIFACTS").ok_or("missing record control root")?,
+    );
+    std::fs::create_dir(&root)?;
+    let adapter = Adapter::load()?;
+    assert_eq!(adapter.image_owners()?, 0);
+    let image = |phase: u8, corrupt: u8| -> Result<Image, Box<dyn StdError>> {
+        let mut pixels = vec![0_u8; 96 * 64 * 4];
+        for y in 0..64 {
+            for x in 0..96 {
+                let color = if x < 16 && y < 16 {
+                    if corrupt == 1 {
+                        [0x1f, 0x53, 0xa7]
+                    } else if phase == 0 {
+                        [0x4e, 0x5f, 0x60]
+                    } else {
+                        [0x1a, 0x2b, 0x3c]
+                    }
+                } else if x < 32 {
+                    [0x1f, 0x53, 0xa7]
+                } else if y < 32 {
+                    [0xb9, 0x4d, 0x27]
+                } else {
+                    [0x3b, 0xe2, 0x81]
+                };
+                let offset = (y * 96 + x) * 4;
+                pixels[offset..offset + 3].copy_from_slice(&color);
+                pixels[offset + 3] = 255;
+            }
+        }
+        if corrupt == 2 {
+            pixels[(96 * 64 - 1) * 4 + 2] ^= 1;
+        }
+        adapter
+            .converter(0)
+            .bgra_to_bgr(BgraView {
+                pixels: &pixels,
+                width: 96,
+                height: 64,
+                stride: 384,
+            })
+            .map_err(|code| format!("record control conversion: {code}").into())
+    };
+    let mut rows = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("record-control.tsv"))?;
+    writeln!(rows, "case\trejected\timage\tcache")?;
+    for case in 0..8_u8 {
+        let phase = u8::from(case == 1);
+        let output = (case < 6)
+            .then(|| {
+                image(
+                    phase,
+                    if case == 2 {
+                        1
+                    } else {
+                        u8::from(case == 4) * 2
+                    },
+                )
+            })
+            .transpose()?;
+        let cache = (case < 7)
+            .then(|| {
+                image(
+                    phase,
+                    if case == 3 {
+                        1
+                    } else {
+                        u8::from(case == 5) * 2
+                    },
+                )
+            })
+            .transpose()?;
+        let name = format!("control-{case}");
+        let rejected = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            save_pair(&root, &name, output.as_ref(), cache.as_ref())
+        })) {
+            Ok(result) => {
+                result?;
+                false
+            }
+            Err(_) => true,
+        };
+        assert_eq!(rejected, (2..=5).contains(&case));
+        for (suffix, image) in [("", output.as_ref()), ("-cache", cache.as_ref())] {
+            assert_eq!(
+                std::fs::read(root.join(format!("{name}{suffix}.bgr")))?,
+                image.map_or(&[][..], Image::bytes)
+            );
+            assert_eq!(
+                std::fs::read_to_string(root.join(format!("{name}{suffix}.txt")))?,
+                if image.is_some() {
+                    "96\t64\t288\t18432\n"
+                } else {
+                    "0\t0\t0\t0\n"
+                }
+            );
+        }
+        writeln!(
+            rows,
+            "{case}\t{}\t{}\t{}",
+            u8::from(rejected),
+            u8::from(output.is_some()),
+            u8::from(cache.is_some())
+        )?;
+        rows.flush()?;
+        drop(output);
+        drop(cache);
+        assert_eq!(adapter.image_owners()?, 0);
+    }
+    println!(
+        "FramePool CPU record controls cases=8 rejected=4 pixel_files=16 owners_released=1 captures=0 passed"
+    );
     Ok(())
 }
 
@@ -129,6 +281,8 @@ fn matches_original_mapped_query_failures_fallback_and_roi_clamps() -> Result<()
             let attempt = capture.capture(&mut converter); // No capture retry.
             let trace = guard.trace();
             drop(guard);
+            let name = format!("{cycle}-{phase}");
+            save_raw(&directory, &name, attempt.image.as_ref().ok())?;
             let order = match current {
                 1 => 1,
                 2 => 12,
@@ -190,8 +344,7 @@ fn matches_original_mapped_query_failures_fallback_and_roi_clamps() -> Result<()
             let marker = image.as_ref().map_or(-1, known);
             let updates = fixture.desktop_update_info()?;
             assert!(updates[0] != 0 && updates[1] != 0 && updates[2] == 0);
-            let name = format!("{cycle}-{phase}");
-            save(&directory, &name, image.as_ref())?;
+            validate_saved(image.as_ref());
             writeln!(
                 rows,
                 "{cycle}\t{mode}\t{phase}\t{}\t{}\t{}\t{}\t{marker}\t{}\t{}\t{}",
