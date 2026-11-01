@@ -249,11 +249,11 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
         }
         if ($Name -eq 'frame-pool-source-order' -and $exitCode -eq 0 -and
-            -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order diagnostic shots=25 windows_closed=4 positive_controls=1 no_capture_retry=1 full_P1_acceptance=0')) {
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order diagnostic shots=25 windows_closed=4 positive_controls=1 no_capture_retry=1 full_P1_acceptance=0 frame_driver=1 schema=2')) {
             throw 'Original source order diagnostic did not complete all controls/calls'
         }
         if ($Name -eq 'frame-pool-order-records' -and $exitCode -eq 0 -and
-            -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order records calls=25 windows_closed=4 positive_controls=14 files=55 diagnostic_only=1 full_P1_acceptance=0 passed')) {
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order records calls=25 windows_closed=4 positive_controls=14 files=56 diagnostic_only=1 full_P1_acceptance=0 passed')) {
             throw 'Original source order records did not verify the complete diagnostic'
         }
         if ($Name -eq 'frame-pool-source-record-control' -and $exitCode -eq 0 -and

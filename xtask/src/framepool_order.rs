@@ -50,8 +50,12 @@ fn summary(text: &str) -> Result<BTreeMap<String, u64>> {
             return Err("Duplicate source order summary field".into());
         }
     }
+    let schema = *result.get("schema").ok_or("Missing order schema")?;
+    if !matches!(schema, 1 | 2) {
+        return Err("Unsupported source order schema".into());
+    }
     let mut expected = BTreeMap::from([
-        ("schema".into(), 1),
+        ("schema".into(), schema),
         ("shots".into(), 25),
         ("closed_windows".into(), 4),
         ("dispatcher_completed".into(), 1),
@@ -65,6 +69,9 @@ fn summary(text: &str) -> Result<BTreeMap<String, u64>> {
         ("full_P1_acceptance".into(), 0),
         ("cv_8u".into(), 0),
     ]);
+    if schema == 2 {
+        expected.insert("frame_driver".into(), 1);
+    }
     for field in ["qpc_frequency", "cv_cn_shift", "cv_8uc3"] {
         expected.insert(
             field.into(),
@@ -101,6 +108,25 @@ fn expected_pixels() -> Vec<u8> {
             })
         })
         .collect()
+}
+
+fn frame_drivers(rows: &[Vec<u64>], windows: &[Vec<u64>]) -> Result<()> {
+    for (arm, row) in rows.iter().enumerate() {
+        let window = &windows[arm];
+        if row[0] != u64::try_from(arm)?
+            || row[1] == 0
+            || row[1] == window[1]
+            || row[2] != window[2]
+            || row[3] != window[5]
+            || row[4] == 0
+            || row[5] <= row[4]
+            || row[6] != 0
+            || row[7..] != [1, 1, 1]
+        {
+            return Err("Source order frame-driver owner/progress/isolation/close differs".into());
+        }
+    }
+    Ok(())
 }
 
 pub fn run(args: &[String]) -> Result<()> {
@@ -140,6 +166,14 @@ pub fn run(args: &[String]) -> Result<()> {
             return Err("Source order target/thread/object-lifetime identity differs".into());
         }
     }
+    let drivers = if contract["schema"] == 2 {
+        let rows = numbers(std::str::from_utf8(&read("frame-drivers.tsv")?)?, 4, 10)?;
+        frame_drivers(&rows, &windows)?;
+        Some(rows)
+    } else {
+        None
+    };
+    let expected_files = 55 + usize::from(drivers.is_some());
     let shots = String::from_utf8(read("shots.tsv")?)?;
     let mut lines = shots.lines();
     if lines.next() != Some(HEADER) {
@@ -256,6 +290,7 @@ pub fn run(args: &[String]) -> Result<()> {
                 "summary.txt",
             ]
             .contains(&name.as_str())
+            || kind.is_file() && drivers.is_some() && name == "frame-drivers.tsv"
         {
             actual += 1;
         } else if kind.is_dir() && (0..25).any(|i| name == format!("shot-{i}")) {
@@ -274,14 +309,22 @@ pub fn run(args: &[String]) -> Result<()> {
             return Err("Unexpected source order root entry/link".into());
         }
     }
-    if actual != 55 || inputs.len() != 55 {
+    if actual != expected_files || inputs.len() != expected_files {
         return Err("Source order file inventory differs".into());
     }
     inputs.sort_by(|a, b| a.path.cmp(&b.path));
-    let report = serde_json::json!({"layout_version":1,"actual_source_calls":25,"owned_windows_closed":4,
+    let mut report = serde_json::json!({"layout_version":1,"actual_source_calls":25,"owned_windows_closed":4,
         "positive_control_calls":14,"native_cv_contract":contract,"windows":windows,"object_boundaries":owners,
         "window_states":states,"observations":observations,"inputs":inputs,"registered_files":55,
         "scope":"Original-only owned-window order/lifetime diagnostic with immediate extra CPU clones. Foreground/topmost and treatment pixels are observations. C++ owner destruction is not native session/callback quiescence; no manager/Rust parity, capture freshness, border cause, historical failure reclassification or full P1 acceptance."});
+    if let Some(drivers) = drivers {
+        report["layout_version"] = serde_json::json!(2);
+        report["registered_files"] = serde_json::json!(expected_files);
+        report["frame_drivers"] = serde_json::json!(drivers);
+        report["scope"] = serde_json::json!(
+            "Original-only order/lifetime diagnostic with an owned, same-output, nonoverlapping desktop marker, observed paint progress and closure. Target pixels and source calls/waits/order remain unchanged. Marker presentation is fixture work, not screenshot retry or per-call capture-freshness proof. C++ owner destruction is not native session/callback quiescence; no manager/Rust parity, border cause, historical failure reclassification or full P1 acceptance."
+        );
+    }
     let output = root.join("order-validation.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -291,7 +334,7 @@ pub fn run(args: &[String]) -> Result<()> {
         records::create_json(&output, &report)?;
     }
     println!(
-        "source order records calls=25 windows_closed=4 positive_controls=14 files=55 diagnostic_only=1 full_P1_acceptance=0 passed"
+        "source order records calls=25 windows_closed=4 positive_controls=14 files={expected_files} diagnostic_only=1 full_P1_acceptance=0 passed"
     );
     Ok(())
 }
@@ -312,5 +355,33 @@ mod tests {
         }
         assert_eq!(phases().len(), 25);
         assert_eq!(expected_pixels().len(), 18432);
+    }
+
+    #[test]
+    fn rejects_stalled_foreign_overlapping_and_unclosed_frame_drivers() {
+        let windows: Vec<Vec<u64>> = (0..4)
+            .map(|arm| vec![arm, 100 + arm, 7, 9, 7, 12])
+            .collect();
+        let rows: Vec<Vec<u64>> = (0..4)
+            .map(|arm| vec![arm, 200 + arm, 7, 12, 1, 2, 0, 1, 1, 1])
+            .collect();
+        frame_drivers(&rows, &windows).unwrap();
+        for (field, value) in [
+            (0, 1),
+            (1, 0),
+            (1, 100),
+            (2, 8),
+            (3, 13),
+            (4, 0),
+            (5, 1),
+            (6, 1),
+            (7, 0),
+            (8, 0),
+            (9, 0),
+        ] {
+            let mut invalid = rows.clone();
+            invalid[0][field] = value;
+            assert!(frame_drivers(&invalid, &windows).is_err());
+        }
     }
 }

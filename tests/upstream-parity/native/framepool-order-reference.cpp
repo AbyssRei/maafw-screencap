@@ -75,6 +75,7 @@ int wmain(int argc,wchar_t** argv) {
         std::vector<Shot> shots;shots.reserve(40);
         std::array<std::array<int64_t,2>,4> destruction{};
         std::array<std::array<uint64_t,5>,4> targets{};
+        std::array<std::array<uint64_t,10>,4> drivers{};
         unsigned closed_windows=0;
         // Arms0/3: no WGC. Arm1: DD warmup/test then WGC. Arm2: WGC first.
         // Each uses a fresh owned window and fresh source objects. No sleep or
@@ -86,6 +87,24 @@ int wmain(int argc,wchar_t** argv) {
             const auto hwnd=static_cast<HWND>(fixture.value.hwnd);
             targets[arm][0]=reinterpret_cast<uintptr_t>(hwnd);
             if(mfs_print_thread_info(fixture.value.owner,targets[arm].data()+1,4)!=0) {throw std::runtime_error("native fixture identity failed");}
+            // Desktop Duplication only produces a next frame after a desktop
+            // update. Drive the existing nonoverlapping marker from its UI
+            // owner, without changing target pixels or retrying capture. It
+            // starts before any source object and runs throughout this arm;
+            // no preparation/wait is inserted after WGC object destruction.
+            if(mfs_desktop_fixture_updates(fixture.value.owner)!=0) {throw std::runtime_error("desktop frame driver setup failed");}
+            std::array<uint64_t,3> updates{};
+            if(mfs_desktop_fixture_update_info(fixture.value.owner,updates.data(),updates.size())!=0 || !updates[0] || !updates[1] || updates[2]) {throw std::runtime_error("desktop frame driver initial state failed");}
+            const auto marker=reinterpret_cast<HWND>(static_cast<uintptr_t>(updates[0]));
+            DWORD marker_pid=0;const auto marker_thread=GetWindowThreadProcessId(marker,&marker_pid);
+            RECT marker_rect{},target_rect{},overlap{};
+            const auto marker_monitor=MonitorFromWindow(marker,MONITOR_DEFAULTTONEAREST);
+            const auto target_monitor=MonitorFromWindow(hwnd,MONITOR_DEFAULTTONEAREST);
+            if(!marker_thread || marker_thread!=targets[arm][1] || marker_pid!=targets[arm][4] || marker==hwnd ||
+                !GetWindowRect(marker,&marker_rect) || !GetWindowRect(hwnd,&target_rect) ||
+                !marker_monitor || marker_monitor!=target_monitor || IntersectRect(&overlap,&marker_rect,&target_rect)) {throw std::runtime_error("desktop frame driver owner/output/isolation failed");}
+            auto& driver=drivers[arm];
+            driver={arm,updates[0],marker_thread,marker_pid,updates[1],0,0,1,1,0};
             {
                 Dup duplicate(hwnd);std::unique_ptr<Wgc> wgc;
                 if(arm==2) {
@@ -101,14 +120,17 @@ int wmain(int argc,wchar_t** argv) {
                 destruction[arm][0]=counter();wgc.reset();destruction[arm][1]=counter();
                 for(unsigned call=0;call<3;++call) {take(shots,arm,"dd-post-object-"+std::to_string(call),duplicate,hwnd,false);}
             }
+            if(mfs_desktop_fixture_update_info(fixture.value.owner,updates.data(),updates.size())!=0 || updates[0]!=driver[1] || updates[1]<=driver[4] || updates[2]) {throw std::runtime_error("desktop frame driver progress failed");}
+            driver[5]=updates[1];driver[6]=updates[2];
             if(!fixture.close()) {return 3;}++closed_windows;
+            if(IsWindow(marker)) {throw std::runtime_error("desktop frame driver did not close");}driver[9]=1;
         }
         const bool dispatcher_within_budget=dispatcher.close();
         const bool dpi_same=AreDpiAwarenessContextsEqual(dpi,GetThreadDpiAwarenessContext());
         // Export after all source/window/dispatcher owners end. Extra property
         // queries or file IO cannot delay the first post-destruction DD call.
-        std::ofstream rows(root/"shots.tsv"),states(root/"states.tsv"),owners(root/"owners.tsv"),windows(root/"windows.tsv");
-        rows.exceptions(std::ios::badbit|std::ios::failbit);states.exceptions(std::ios::badbit|std::ios::failbit);owners.exceptions(std::ios::badbit|std::ios::failbit);windows.exceptions(std::ios::badbit|std::ios::failbit);
+        std::ofstream rows(root/"shots.tsv"),states(root/"states.tsv"),owners(root/"owners.tsv"),windows(root/"windows.tsv"),driver_rows(root/"frame-drivers.tsv");
+        rows.exceptions(std::ios::badbit|std::ios::failbit);states.exceptions(std::ios::badbit|std::ios::failbit);owners.exceptions(std::ios::badbit|std::ios::failbit);windows.exceptions(std::ios::badbit|std::ios::failbit);driver_rows.exceptions(std::ios::badbit|std::ios::failbit);
         rows<<"slot\tarm\tphase\twgc_object_alive\tbegin_qpc\tend_qpc\tengaged\twidth\theight\tknown_scene\tfnv64\n";
         bool controls=dispatcher_within_budget && dpi_same;
         for(const auto& shot:shots) {
@@ -120,11 +142,12 @@ int wmain(int argc,wchar_t** argv) {
         for(unsigned arm=0;arm<4;++arm) {
             owners<<arm<<'\t'<<destruction[arm][0]<<'\t'<<destruction[arm][1]<<'\n';
             windows<<arm;for(auto value:targets[arm]) {windows<<'\t'<<value;}windows<<'\n';
+            for(size_t i=0;i<drivers[arm].size();++i) {if(i) {driver_rows<<'\t';}driver_rows<<drivers[arm][i];}driver_rows<<'\n';
         }
-        rows.close();states.close();owners.close();windows.close();
+        rows.close();states.close();owners.close();windows.close();driver_rows.close();
         std::ofstream summary(root/"summary.txt");summary.exceptions(std::ios::badbit|std::ios::failbit);
-        summary<<"schema=1\ncv_cn_shift="<<CV_CN_SHIFT<<"\ncv_8u="<<CV_8U<<"\ncv_8uc3="<<CV_8UC3<<"\nshots="<<shots.size()<<"\nclosed_windows="<<closed_windows<<"\ndispatcher_completed=1\ndispatcher_within_budget="<<dispatcher_within_budget<<"\ncaller_dpi_preserved="<<dpi_same<<"\npositive_controls="<<controls<<"\nqpc_frequency="<<frequency.QuadPart<<"\nsource_bodies_unchanged=1\nextra_snapshot_copy=1\npost_close_calls_are_retries=0\noriginal_failure_reclassified=0\nfull_P1_acceptance=0\n";summary.close();
-        std::cout<<"source order diagnostic shots="<<shots.size()<<" windows_closed="<<closed_windows<<" positive_controls="<<controls<<" no_capture_retry=1 full_P1_acceptance=0\n";
+        summary<<"schema=2\nframe_driver=1\ncv_cn_shift="<<CV_CN_SHIFT<<"\ncv_8u="<<CV_8U<<"\ncv_8uc3="<<CV_8UC3<<"\nshots="<<shots.size()<<"\nclosed_windows="<<closed_windows<<"\ndispatcher_completed=1\ndispatcher_within_budget="<<dispatcher_within_budget<<"\ncaller_dpi_preserved="<<dpi_same<<"\npositive_controls="<<controls<<"\nqpc_frequency="<<frequency.QuadPart<<"\nsource_bodies_unchanged=1\nextra_snapshot_copy=1\npost_close_calls_are_retries=0\noriginal_failure_reclassified=0\nfull_P1_acceptance=0\n";summary.close();
+        std::cout<<"source order diagnostic shots="<<shots.size()<<" windows_closed="<<closed_windows<<" positive_controls="<<controls<<" no_capture_retry=1 full_P1_acceptance=0 frame_driver=1 schema=2\n";
         return controls?0:5;
     }catch(const winrt::hresult_error& error) {std::cerr<<"source hresult="<<error.code().value<<'\n';return 3;}
     catch(const std::exception& error) {std::cerr<<"diagnostic failure="<<error.what()<<'\n';return 3;}
