@@ -18,6 +18,7 @@ jobs:
       # Validate the contributor subject while compiling the normal merge tree.
       MFS_COMMIT_MESSAGE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
       MFS_TOOLCHAIN_POLICY: preinstalled
+      MFS_WINDOWS_SHARED_NATIVE_INPUTS: ''
     strategy:
       fail-fast: false
       matrix:
@@ -42,6 +43,9 @@ jobs:
       - name: Check installed toolchain policy controls
         shell: pwsh
         run: ./tests/prototypes/toolchain-policy.ps1
+      - name: Check explicit shared native input selection
+        shell: pwsh
+        run: ./tests/prototypes/native-shared-inputs.ps1
       - name: Prepare usable nightly before configuring Cargo caches
         shell: pwsh
         run: ./scripts/prepare-rust-toolchain.ps1
@@ -194,13 +198,20 @@ jobs:
           # Verify available native tools and record their actual identities.
           ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          . ./scripts/native-shared-inputs.ps1
+          $before = @((Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT manifest.json) -Raw | ConvertFrom-Json).runs | ForEach-Object { $_.path })
           cargo xtask upstream-parity print-window
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $nativeExit = $LASTEXITCODE
+          Publish-SharedNativeSeed $env:MFS_REFERENCE_ROOT $before $env:GITHUB_ENV
+          exit $nativeExit
       - name: Validate partial ScreenDC migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-parity screen-dc --offline-inputs $index.runs[-1].path
+          $shared = @()
+          if ($env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) { $shared = @('--offline-inputs', $env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) }
+          cargo xtask upstream-parity screen-dc @shared
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows ScreenDC diagnostics
         if: always() && runner.os == 'Windows'
@@ -216,9 +227,12 @@ jobs:
           if-no-files-found: warn
       - name: Validate partial DesktopDup and window migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-parity desktop-dup --offline-inputs $index.runs[-1].path
+          $shared = @()
+          if ($env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) { $shared = @('--offline-inputs', $env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) }
+          cargo xtask upstream-parity desktop-dup @shared
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial Custom callback and real ImageBuffer migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
@@ -245,17 +259,23 @@ jobs:
       - name: Compare portable PipeWire consumer model with exact source
         # A host control model, separate from Linux native capture acceptance.
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-model pipewire --offline-inputs $index.runs[-1].path
+          $shared = @()
+          if ($env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) { $shared = @('--offline-inputs', $env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) }
+          cargo xtask upstream-model pipewire @shared
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Validate partial FramePool migration and original caller contexts
         if: ${{ !cancelled() && runner.os == 'Windows' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Reuse this job's explicit dependency batch. Source and Rust caller
           # contexts run separately; the scoped component remains P1 incomplete.
-          $index = Get-Content -LiteralPath (Join-Path $env:MFS_REFERENCE_ROOT 'manifest.json') -Raw | ConvertFrom-Json
-          cargo xtask upstream-parity frame-pool --offline-inputs $index.runs[-1].path
+          $shared = @()
+          if ($env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) { $shared = @('--offline-inputs', $env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) }
+          cargo xtask upstream-parity frame-pool @shared
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Inventory registry licenses and verify prototype configuration
         if: ${{ !cancelled() }}
