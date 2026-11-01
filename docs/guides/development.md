@@ -1,8 +1,18 @@
 # 开发、构建与验证
 
-日期：2026-11-01。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，已有多个后端、helper 和管理器的私有切片及显式局部对照。完整来源、平台和调用链验收仍未完成；SDK 与产品能力保持各自阶段边界。
+日期：2026-11-02。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，已有多个后端、helper 和管理器的私有切片及显式局部对照。完整来源、平台和调用链验收仍未完成；SDK 与产品能力保持各自阶段边界。
 
 ## 本轮原生与 CI 复核
+
+确切 `a5cfa2e` 的 [Actions 41321269889](https://github.com/AbyssRei/maafw-screencap/actions/runs/41321269889) 已全部终态：Linux job 成功，PipeWire 194/194、Wlr 135/135；macOS 组件保持 123/135，十二项实际显示/夹具及记录失败；Windows 七组件为 373/383，FramePool 69/73、manager 101/107，保留四项原版 pseudo 与 mask 6/10/14/38/42/46 失败。预装工具准备均通过，不以版本落后于最新发布解释这些截图失败。Windows 的七份终态清单与已取回日志共 45 份文件通过 ZIP CRC，39 份另匹配登记摘要；该部分复核已封存，完整 ZIP、来源和新失败像素仍待工程包核验，不能从旧外围图像推断本批同因。
+
+同批完整 Linux/macOS 官方 ZIP 均核对长度及完整 SHA-256，安全恢复 84,316/29,300 份文件。Linux 十九份运行清单的 82,754 个唯一登记路径、macOS 十二份清单的 27,743 个路径全部匹配；分别核对十八/十一份各含 473 个跟踪文件的普通产品快照，并单列一份不可构建捕获控制。每个平台的 76 份 F 来源及整个 U/F checkout 的 741/744 个 Git blob、原 tar executable mode 均匹配；每个 checkout 的五个未初始化子模块仅核对声明，不能称为已恢复其内容。实际来源编译命令与匹配来源另经复核。Linux 完整包补齐 PipeWire/Wlr 轻量包缺少的 565/569 项全清单输入；macOS 补齐 531 项。Linux 的 24 个、macOS 的十二个保存数据入口只读复算全部通过。
+
+两份完整恢复树再通过冻结校验器的 `reference verify`，Git 长路径和 filemode 差异仅用进程参数处理，原 Git index/config 与全部 tar 文件字节均未改变。最终封存后独立读回复核通过。实际预装身份为 Linux LLVM 22.1.2、macOS Xcode 27.1/27A9275 与 SDK 27.0；不将其重标为最新正式工具，也不将版本差距设为 CI 门禁。此处闭合的是这两批完整来源与保存数据，原十二项 macOS 失败及完整 P1 状态不变。较早 `5b0e624` Windows 的部分终态复核亦已封存，保持 370/383、四项 FramePool 和九项 manager 失败；未验证该部分包的完整 ZIP 摘要。
+
+另完成原版 WGC/DesktopDupWindow 顺序实验的独立复核：四个自有静态窗口 arm 分别观察 DD 单独控制、DD 后创建 WGC、WGC 先创建，以及末尾 DD 单独控制。每个程序调用原后端 25 次，WGC 对象结束后的三次 DD 均是预定观察，不重试失败截图；每次返回后立即显式 clone CPU 图像，全部源对象、窗口及 dispatcher 结束后再导出。原 FramePool、DesktopDup 和 DesktopDupWindow 函数体未改。原 manager 的候选容器是初始化函数局部变量，只保留赢家，因此该实验不是 manager 落选对象始终存活的模型。
+
+连续三轮共 75 次调用、十二个窗口的全部像素均匹配自有图样，没有复现托管黄色/黑色外围。正式输入为零，最大间隔 82.9276ms，四路注册、注销和 writer join 经只读复核；按用户自动开始授权，没有声称新物理正向挑战。初版数据 checker 错用旧 OpenCV 数值类型，三次失败日志保留；依据捕获前已冻结的实际 OpenCV 5.0.0 头文件确认 `CV_CN_SHIFT=5`、`CV_8UC3=64` 后，仅在既有输出上更正观察器，未重拍。独立只读复算及八组损坏数据拒绝通过。五十份产品 native 文件、907 个 CL-read 依赖路径与 960 项捕获前冻结输入已核对；另识别 caret 行中的主翻译单元，补存九项此前未冻结的源码，并核对适用的 Git/F 身份。这九项是捕获后来源审阅，不能倒称已有捕获前摘要。材料与限制已封存并读回复核。实验使用归档开发依赖，显式额外 CPU 快照不作优化或性能证据；C++ 对象寿命记录不证明系统会话/回调排空，原生状态显示的 foreground/topmost 变化保留为观察。它不接受 manager/Rust parity、不证明外围原因，也不改变旧失败或完整 P1。
 
 macOS 新增独立 `display-scene-cg` 宿主控制：同一原版可执行路径继续承担场景与消费进程，场景改用 [CoreGraphics 活动显示器](https://developer.apple.com/documentation/coregraphics/cggetactivedisplaylist%28_%3A_%3A_%3A%29)和[自有窗口信息](https://developer.apple.com/documentation/coregraphics/cgwindowlistcopywindowinfo%28_%3A_%3A%29)发布几何，不在该场景代码路径显式调用 ScreenCaptureKit。它要求单活动显示器，记录两次几何查询、真实窗口/PID 和主线程关闭；权限仍用原 preflight 检查。消费端仍执行原 `display-patch` 和五秒等待，Rust 继续原捕获入口；`upstream-trace macos-display-cg-scene` 保留相同二进制/路径/权限、六次已知图样、十八份 payload、转换和所有权检查。确切 `5710c16` 的 [Actions 41307803980](https://github.com/AbyssRei/maafw-screencap/actions/runs/41307803980) 已通过新原版、Rust 和记录三项，下载后十八份完整像素及相同程序身份、原生几何/查询/关闭记录亦通过只读复核。官方 ZIP 长度/摘要和 11,012 个可用登记路径均匹配，530 项完整输入仍缺；组件保持 122/135 通过、十三项失败，未接受完整 macOS/P1。该项用于隔离生产者枚举行为，不替代旧失败 oracle，也不声称观察了框架内部调用或证明根因。
 
