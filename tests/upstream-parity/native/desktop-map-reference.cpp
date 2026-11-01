@@ -36,6 +36,10 @@ namespace {
 struct Source : MAA_CTRL_UNIT_NS::DesktopDupScreencap {
     using DesktopDupScreencap::DesktopDupScreencap;
     bool warm()const{return !output_just_initialized_ && dxgi_dup_ && readable_texture_;}
+    IDXGIOutputDuplication* duplication()const{return dxgi_dup_;}
+    ID3D11Texture2D* staging()const{return readable_texture_;}
+    uint32_t width()const{return texture_desc_.Width;}
+    uint32_t height()const{return texture_desc_.Height;}
 };
 struct Fixture {
     MfsPrintFixture value{};
@@ -68,7 +72,9 @@ cv::Mat target(const cv::Mat& desktop,HWND window) {
     return desktop(cv::Rect(static_cast<int>(x),static_cast<int>(y),96,64));
 }
 }
+#include "desktop-acquire-cases.hpp"
 int wmain(int argc,wchar_t** argv) {
+    if(argc==3 && std::wstring_view(argv[1])==L"--held-acquisition")return held_acquisition(argv[2]);
     try {
         if(argc!=2)throw std::runtime_error("usage: desktop-map EMPTY_ABSOLUTE_ROOT");
         const std::filesystem::path root(argv[1]);

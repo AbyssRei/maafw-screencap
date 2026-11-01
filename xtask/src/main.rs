@@ -11,6 +11,7 @@ mod custom_native_api;
 mod custom_raw;
 mod custom_reentry;
 mod dependencies;
+mod desktop_acquire;
 mod desktop_fullscreen;
 mod desktop_map;
 mod frame_pool_alpha;
@@ -204,6 +205,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace framepool-empty <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-map <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace desktop-map <external matrix> [--check-only]\n\
+                      cargo xtask upstream-trace desktop-acquire <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-size <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace manager-size <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace wlr-early-close-prefix <external directory> [--check-only]\n\

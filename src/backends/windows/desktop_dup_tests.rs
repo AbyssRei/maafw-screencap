@@ -6,6 +6,10 @@ use super::*;
 #[path = "desktop_dup_map_tests.rs"]
 mod native_map;
 
+#[cfg(feature = "prototype-windows")]
+#[path = "desktop_dup_acquire_tests.rs"]
+mod native_acquire;
+
 #[cfg(all(feature = "prototype-windows", feature = "windows-desktop-dup-window"))]
 #[path = "desktop_fullscreen_tests.rs"]
 mod fullscreen;

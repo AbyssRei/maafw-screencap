@@ -25,7 +25,7 @@ fn create(root: &Path, name: &str) -> std::io::Result<File> {
         .create_new(true)
         .open(root.join(name))
 }
-fn save(
+pub(super) fn save(
     root: &Path,
     name: &str,
     image: &Image,

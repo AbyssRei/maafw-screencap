@@ -142,6 +142,17 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($Name -eq 'desktop-dup-source-held-acquisition' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDup held_acquisition cycles=20 public_calls=60 observed_calls=40 native_rejections=20 caller_acquires=20 caller_releases=20 recovery=20 retained=40 full_P1_acceptance=0 passed')) {
+            throw 'Expected all original real held-acquisition rejections and caller release witnesses'
+        }
+        if ($Name -eq 'desktop-dup-rust-held-acquisition' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            if ($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('native Rust DesktopDup held_acquisition cycles=20 public_calls=60 observed_calls=40 native_rejections=20 caller_acquires=20 caller_releases=20 recovery=20 retained=40 owners_released=1 full_P1_acceptance=0 passed')) {
+                throw 'Expected one complete Rust real held-acquisition rejection/owner test'
+            }
+        }
         if ($Name -eq 'desktop-dup-source-map-boundary' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDup map_boundary cycles=20 warm=20 observed_calls=40 map_failures=7 conversion_failures=6 recovery=20 retained=47 native_forwarded=1 full_P1_acceptance=0 passed')) {
             throw 'Expected the complete original native DesktopDup Map/release/held matrix'
@@ -906,6 +917,9 @@ try {
         $desktopMapEvidence=Join-Path $desktopEvidence map-boundary
         New-Item -ItemType Directory -Path (Join-Path $desktopMapEvidence source) -Force|Out-Null
         Invoke-FrameCheck desktop-dup-source-map-boundary $desktopMapProgram @((Join-Path $desktopMapEvidence source))
+        $desktopAcquireEvidence=Join-Path $desktopEvidence held-acquisition
+        New-Item -ItemType Directory -Path (Join-Path $desktopAcquireEvidence source) -Force|Out-Null
+        Invoke-FrameCheck desktop-dup-source-held-acquisition $desktopMapProgram @('--held-acquisition',(Join-Path $desktopAcquireEvidence source))
         foreach ($modeName in @('desktop','window','default-output','window-fullscreen','window-workarea','window-geometry')) {
             $modeDirectory = Join-Path $desktopEvidence $modeName
             New-Item -ItemType Directory -Path $modeDirectory -Force | Out-Null
@@ -1076,6 +1090,8 @@ try {
         $caseSelection += @('--skip', $desktopGeometryCase)
         $desktopMapCase='backends::windows::desktop_dup::tests::native_map::unmaps_and_releases_each_real_acquisition_before_conversion_and_after_map_rejection'
         $caseSelection += @('--skip', $desktopMapCase)
+        $desktopAcquireCase='backends::windows::desktop_dup::tests::native_acquire::preserves_caller_acquisition_when_native_rejects_capture_and_recovers_after_release'
+        $caseSelection += @('--skip', $desktopAcquireCase)
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         if ($ManagerParity) {
@@ -1124,6 +1140,9 @@ try {
             $env:MFS_DESKTOP_MAP_ROOT=$desktopMapEvidence
             Invoke-FrameCheck desktop-dup-rust-map-boundary cargo ($parityArguments+@('--',$desktopMapCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-map-records $ConfigureTool @('upstream-trace','desktop-map',$desktopMapEvidence)
+            $env:MFS_DESKTOP_ACQUIRE_ROOT=$desktopAcquireEvidence
+            Invoke-FrameCheck desktop-dup-rust-held-acquisition cargo ($parityArguments+@('--',$desktopAcquireCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck desktop-dup-held-acquisition-records $ConfigureTool @('upstream-trace','desktop-acquire',$desktopAcquireEvidence)
             New-Item -ItemType Directory -Path (Join-Path $desktopEvidence 'window-fullscreen/rust') | Out-Null
             Step 'desktop-dup-rust-fullscreen' cargo ($parityArguments + @('--',$desktopFullscreenCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Step 'desktop-dup-fullscreen-records' $ConfigureTool @('upstream-trace','desktop-fullscreen',(Join-Path $desktopEvidence 'window-fullscreen'))

@@ -4,6 +4,12 @@
 
 ## 本轮原生与 CI 复核
 
+Desktop Duplication 另新增真实 held-acquisition 拒绝矩阵：夹具先在同一 duplication 上取得并持有实际帧，再沿完整原版/Rust 公开捕获调用真实 `AcquireNextFrame(2000)`，获得系统返回的 `DXGI_ERROR_INVALID_CALL`。捕获失败时没有 CopyResource、Map、Unmap、ReleaseFrame 或转换；原 staging、duplication、尺寸及 warm 状态保持。随后夹具自己的 ReleaseFrame 必须成功，再次诊断释放必须被系统拒绝，最后只调用一次正常捕获并验证已知目标像素。Rust 另断言失败样本没有 native frame、释放或 CPU 复制证据，恢复时保留既有整屏安全复制及转换位置；C++ 沿固定 F 原函数和真实接口转发，原失效映射与 Rust 独立 CPU owner 的区别仍保留。这是私有受控测试前提，不定义公共 SDK 对外部 native frame 共享的支持。
+
+新用例和既有 Map 矩阵在同一新 EXE/DLL 上连续三轮，共十八次命令、720 次公开捕获调用的预期结果全部符合。新矩阵单独包含双方 360 次调用、120 次真实拒绝、120 次夹具成功释放、120 次额外释放拒绝、120 次恢复、240 张持帧及 480 份即时/持帧 BGR；Map 回归另有 564 份 BGR。`cargo xtask upstream-trace desktop-acquire <外部矩阵> [--check-only]` 核对每轮 326 份文件，合并 Map 三轮共核对 1,044 份像素和 2,115 份矩阵文件。十二组破坏覆盖错误拒绝码、提前释放夹具帧、额外释放成功、失败时复制/释放、状态或线程改变、错 staging、缺少 CPU 复制/调用行、改变的合法持帧及失败泄露像素，均被拒绝。六组实际 Step mock 控制另拒绝零测试、不完整/缺少摘要和非零退出。
+
+该批 542 份冻结输入、453 份产品源码、九份 MSBuild 读取日志、878 个原生路径、76 个 F blob 与生成绑定均核对。正式原始/低级鼠标键盘输入为零，系统输入计时和光标不变，最大采样间隔 77.917ms，全部监听及电源请求已注销；没有新的人工正向控制声明。默认 workspace 118 项通过、6 项忽略，显式 Windows 模型 53 项通过、67 项忽略，新原生用例在本批另行实际执行；Clippy、格式及 DesktopDupWindow 核心 Release 构建通过。依赖与匹配 nightly 沿显式离线开发输入复验；在线工具链、托管 CI、自然设备/访问丢失、超时、完整 GPU 计数和 P1 继续待验收，历史旧程序结果不变。
+
 Desktop Duplication 新增原版/Rust 的真实 Map/Unmap/ReleaseFrame 边界矩阵。C++ 独立进程直接编译固定 F 的原 header/cpp，以非拥有表达式视图转发相同 context/duplication 调用；诊断日志只解开视图打印原生地址，不替换 COM 对象、vtable 或源码语句。Rust 观察仅在 `test + prototype-windows` 编译，默认映射仍使用原参数。每生命周期先以正常公开捕获建立 warm 状态，再对一次公开调用施加实际 `UINT_MAX` subresource Map 拒绝、原转换位置的受控异常/错误或无故障控制，随后只取一次恢复帧。断言真实 acquire/copy/map/unmap/release/convert 顺序、相同原生对象和调用线程、2000ms 原等待、失败 Map 不消费输出及不 Unmap、成功 Map 恰好一次 Unmap、转换前已 ReleaseFrame，以及后续恢复和关闭后的持帧。原版失效 mapped Mat 与 Rust 既有整屏 BGRA 安全复制仍是明确不同的所有权路径，不宣称消除了复制或修复原版。
 
 本机连续三轮共九次原生/记录命令全部通过：双方合计 360 次公开捕获调用、240 次直接观察调用、42 次原生 Map 拒绝、36 次受控转换失败、120 次恢复和 282 张持帧。`cargo xtask upstream-trace desktop-map <外部矩阵> [--check-only]` 独立复算每轮 188 份目标 BGR 和 379 份文件；三轮共 564 份像素、1,137 份矩阵文件，保留整屏 BGR Mat 的实际 ROI 行距，不误写为紧密目标行距。十组破坏覆盖 Unmap 计数、释放/转换顺序、错误 subresource/HRESULT、缺少安全复制、失败泄露像素、线程、步长、缺行和合法但改变的持帧图样，均被拒绝。六组实际 Step 控制另拒绝零测试、不完整/缺少摘要和非零子退出；它们是 mock 编排控制，没有再取帧。
