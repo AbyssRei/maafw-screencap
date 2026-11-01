@@ -1,6 +1,8 @@
 # 文档导航与维护约定
 
-确切 ffcb3a0 的 Actions 41254680236 已通过 PipeWire 194 项和 Wlr 135 项组件检查；官方 ZIP、51,489 个可用登记路径及 24 组下载后数据检查独立复核通过。轻量包仍缺完整来源输入，Windows 四项原版 FramePool pseudo 失败及 macOS 正式 Xcode 门禁保持实际状态；不接受完整 P1。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
+确切 ffcb3a0 的 Actions 41254680236 已通过 PipeWire 194 项和 Wlr 135 项组件检查；官方 ZIP、51,625 个可用登记路径及 24 组下载后数据检查独立复核通过。已用 Windows 长路径修正 136 项误记缺失，轻量包仍缺完整来源输入；Windows 四项原版 FramePool pseudo 失败及 macOS 正式 Xcode 门禁保持实际状态，不接受完整 P1。范围见[开发指南](guides/development.md#本轮原生与-ci-复核)。
+
+同批 Windows 官方轻量包的 16,283 个可用登记路径及 31 组数据检查亦通过独立复核；七组件保持 304/308 通过，四项原版 pseudo 失败图像仍为黑图，604 个唯一来源输入尚待工程包补齐。完整 Windows job 和 P1 仍未通过，实际边界见上述开发指南。
 
 FramePool Query/Map/Size 的失败记录已前移至严格像素断言之前；Map/Size 先保存结果与 cache。原版/Rust 的 Debug/Release CPU 控制、坏像素保留及记录/编排破坏控制通过，均无截图；新程序的真实捕获回归和 CI 仍待执行，旧失败不重标。范围和入口见[开发指南](guides/development.md#本轮原生与-ci-复核)。
 

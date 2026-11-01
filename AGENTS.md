@@ -2,7 +2,9 @@
 
 ## Actual State and Reading Order
 
-Exact ffcb3a0 Actions 41254680236 passes all 194 PipeWire and 135 Wlr component checks. Independent official-ZIP/input verification and 24 downloaded-data checks pass across 51,489 available registered paths; the lightweight artifacts still omit 223 PipeWire and 91 Wlr inputs. Native Linux execution remains the hosted result, with full source closure and P1 pending. Its Windows job retains four original FramePool pseudo failures; macOS remains behind the formal-Xcode gate.
+Exact ffcb3a0 Actions 41254680236 passes all 194 PipeWire and 135 Wlr component checks. Independent official-ZIP/input verification and 24 downloaded-data checks pass across 51,625 available registered paths; the lightweight artifacts still omit 87 PipeWire and 91 Wlr inputs. Extended Windows paths correct 136 earlier false missing-input lookups with unchanged bytes. Native Linux execution remains the hosted result, with full source closure and P1 pending. Its Windows job retains four original FramePool pseudo failures; macOS remains behind the formal-Xcode gate.
+
+The same ffcb3a0 Windows lightweight ZIP now independently verifies 16,283 registered paths and 31 data checks across seven components, retaining 304/308 native passes and four original black pseudo images. There are 604 unique missing source/dependency inputs. The historical runtime checker preserves its original report identity; its GDI counts are observations, without zero-delta/source resource parity. This closes downloaded-data review only, not full source, the whole Windows job or P1.
 
 FramePool Query/Map/Size acceptance now records returned CPU pixels before assertions, and Map/Size records both output and cache before either strict pixel check. Original/Rust Debug/Release CPU controls preserve all valid, corrupt and missing-value files; ten data corruptions and sixteen actual Step mock controls pass. These controls perform zero captures. Native capture/presentation/wait algorithms and frozen running programs are unchanged; new Query/Map/Size capture regressions and hosted CI remain pending. Historical failures retain their original status.
 

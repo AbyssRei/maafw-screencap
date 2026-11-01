@@ -4,9 +4,11 @@
 
 ## 本轮原生与 CI 复核
 
-确切 `ffcb3a098286b249deff88ba5c07cc57ceedf52e` 的 [Actions 41254680236](https://github.com/AbyssRei/maafw-screencap/actions/runs/41254680236) Linux job 已成功，PipeWire 组件全部 194 项、Wlr 组件全部 135 项通过。两个官方轻量 ZIP 的发布摘要、长度与全部 ZIP 条目校验通过；独立核对 PipeWire 的 43,041 个可用登记路径、Wlr 的 8,448 个可用登记路径，并以已登记的 Windows xtask 对实际下载 bytes/记录执行 17 和 7 组只读数据检查。范围包括真实七格式、MemFd、持续流、Custom、管理器/宿主以及 Wlr 协议、退出与通道持有记录；没有在 Windows 重跑 Linux 原生捕获。
+确切 `ffcb3a098286b249deff88ba5c07cc57ceedf52e` 的 [Actions 41254680236](https://github.com/AbyssRei/maafw-screencap/actions/runs/41254680236) Linux job 已成功，PipeWire 组件全部 194 项、Wlr 组件全部 135 项通过。两个官方轻量 ZIP 的发布摘要、长度与全部 ZIP 条目校验通过；独立核对 PipeWire 的 43,177 个可用登记路径、Wlr 的 8,448 个可用登记路径，并以已登记的 Windows xtask 对实际下载 bytes/记录执行 17 和 7 组只读数据检查。范围包括真实七格式、MemFd、持续流、Custom、管理器/宿主以及 Wlr 协议、退出与通道持有记录；没有在 Windows 重跑 Linux 原生捕获。
 
-轻量包仍分别缺少 223 和 91 个登记输入，完整来源/依赖闭合尚待工程包复核，不能以可用文件或数据检查通过代替完整来源验收。该 run 的 Windows job 继续因四项原版 FramePool pseudo 颜色断言失败，macOS 两个原生入口仍停在正式 Xcode 缺失；Linux 组件通过不接受这些平台、整个工作流或完整 P1。新源码 `2d2898f` 的 CI 与本机排队回归另行记录，不由本批替代。
+初版只读脚本在 Windows 下未使用扩展路径，将 136 份实际存在的 PipeWire 输入误记缺失；修正版独立确认这些字节与原登记摘要一致，旧审阅及其错误数量保留在外部。轻量包实际仍分别缺少 87 和 91 个登记输入，完整来源/依赖闭合尚待工程包复核，不能以可用文件或数据检查通过代替完整来源验收。该 run 的 Windows job 继续因四项原版 FramePool pseudo 颜色断言失败，macOS 两个原生入口仍停在正式 Xcode 缺失；Linux 组件通过不接受这些平台、整个工作流或完整 P1。新源码 `2d2898f` 的 CI 与本机排队回归另行记录，不由本批替代。
+
+同一 ffcb3a0 run 的 Windows 官方轻量 ZIP 已完整取回，95,910,014 字节及发布摘要、ZIP CRC 均独立核对。七组件共 304/308 项原生检查通过；16,283 个可用登记路径和 31 组下载后只读数据检查通过，涵盖 Custom、DesktopDup 几何、FramePool 六组、manager/delegate 及 ScreenDC 几何/异步首帧。七个运行 mask 的 checker 使用已归档工具，保留当时报告的文字身份；其 Rust GDI 前后计数仍只作观察，不宣称零差或源码资源对照。四个原版 pseudo 失败文件均为 96×64、18,432 字节全黑 BGR，原退出 5 与失败断言保持不变，不从新夹具或后续通过倒推原因。轻量包仍有 604 个唯一来源/依赖输入未提供，完整工程来源、Windows job 及 P1 继续待验收。
 
 FramePool 的 Rust Query/Map/Size 用例现先保存本次返回的 CPU 图像；Map/Size 同时保存 cache，再按原顺序执行状态、错误和严格像素断言。原版 C++ Map/Size 亦先保存两份 Mat，再检查标记；Query 也在断言前写出图像。捕获、转换、等待、绘制及原断言条件未改，保存失败仍使测试失败，不补齐未执行的调用行。旧 Size 标记失败及其缺图记录保持原状态，不能从新保存顺序倒推历史原因。
 
