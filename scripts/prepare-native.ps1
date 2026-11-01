@@ -248,6 +248,14 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'The exact native FramePool case did not execute one test'
             }
         }
+        if ($Name -eq 'frame-pool-source-order' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order diagnostic shots=25 windows_closed=4 positive_controls=1 no_capture_retry=1 full_P1_acceptance=0')) {
+            throw 'Original source order diagnostic did not complete all controls/calls'
+        }
+        if ($Name -eq 'frame-pool-order-records' -and $exitCode -eq 0 -and
+            -not (Get-Content -LiteralPath $logPath -Raw).Contains('source order records calls=25 windows_closed=4 positive_controls=14 files=55 diagnostic_only=1 full_P1_acceptance=0 passed')) {
+            throw 'Original source order records did not verify the complete diagnostic'
+        }
         if ($Name -eq 'frame-pool-source-record-control' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original FramePool CPU record controls cases=8 rejected=4 pixel_files=16 captures=0 passed')) {
             throw 'Original CPU record control did not preserve the complete negative/positive matrix'
@@ -1006,6 +1014,14 @@ try {
         $frameContextEvidence = Join-Path $artifacts frame-pool-context
         New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
         if($FramePoolParity) {
+            Step frame-pool-order-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_order_reference','--parallel','4')
+            $orderProgram=Join-Path $artifacts mfs_framepool_order_reference.exe
+            Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_order_reference.exe) -Destination $orderProgram
+            Save-Input $orderProgram
+            $orderEvidence=Join-Path $frameContextEvidence source-order
+            New-Item -ItemType Directory -Path $orderEvidence|Out-Null
+            Invoke-FrameCheck frame-pool-source-order $orderProgram @($orderEvidence)
+            Invoke-FrameCheck frame-pool-order-records $ConfigureTool @('upstream-trace','framepool-order',$orderEvidence)
             Step render-marker-control-build $cmake @('--build',$build,'--config','Release','--target','mfs_render_marker_control','--parallel','4')
             $markerControl=Join-Path $artifacts mfs_render_marker_control.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_render_marker_control.exe) -Destination $markerControl
