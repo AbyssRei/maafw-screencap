@@ -75,11 +75,12 @@ function Initialize-LinuxLlvm([string]$ReferenceRoot,[string]$DepsRoot,[string]$
             $identityPath = Join-Path $inputRoot llvm-tool-identity.json
             Json $identityPath ([ordered]@{policy='preinstalled';version=$installed.version;files=@($identities)})
             Save $identityPath
-            $flags = @(Set-LinuxLlvmEnvironment $installed.installation ($(if($BindingGenerator){$installed.libclang}else{$null})))
+            $activeLibclang = if($BindingGenerator){$installed.libclang}else{$null}
+            $flags = @(Set-LinuxLlvmEnvironment $installed.installation $activeLibclang)
             Step llvm-compiler-identity $env:CC @('--version')
             Step llvm-linker-identity (Join-Path $installed.installation bin/ld.lld) @('--version')
             $configuration = Join-Path $inputRoot llvm-toolchain.json
-            Json $configuration ([ordered]@{layout_version=1;policy='preinstalled';version=$installed.version;installation=$installed.installation;tool_identity=(Artifact $identityPath);latest_advisory=(Artifact $lookupPath);binding_generator=[bool]$BindingGenerator;libclang=$installed.libclang;cc=$env:CC;cxx=$env:CXX;linker=(Join-Path $installed.installation bin/ld.lld);ldflags=$env:LDFLAGS;rustflags=$flags;scope='Identified runner-preinstalled compiler/linker and optional libclang. Latest release lookup is advisory; real generation/build/native checks remain required. Offline reproduction requires the recorded system toolchain.'})
+            Json $configuration ([ordered]@{layout_version=1;policy='preinstalled';version=$installed.version;installation=$installed.installation;tool_identity=(Artifact $identityPath);latest_advisory=(Artifact $lookupPath);binding_generator=[bool]$BindingGenerator;libclang=$activeLibclang;cc=$env:CC;cxx=$env:CXX;linker=(Join-Path $installed.installation bin/ld.lld);ldflags=$env:LDFLAGS;rustflags=$flags;scope='Identified runner-preinstalled compiler/linker and optional libclang. Latest release lookup is advisory; real generation/build/native checks remain required. Offline reproduction requires the recorded system toolchain.'})
             Save $configuration
             return
         }
