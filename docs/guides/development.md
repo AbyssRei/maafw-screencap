@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`NoneScreencap.h` 的默认构造、默认虚析构和内联 `screencap` 新增三项对应。Rust 仍由原 manager owner 保存 `Unit::None`，不创建 PipeWire/Wlr 原生资源；捕获返回 false，不赋值调用方图像、不进入 converter、不轮询或标记 replay。输入构造失败后 retained None 与 connected=false 并存的状态保留；drop 仅保存私有标量 trace。Box/Arc 的可失败分配及 trace 是明确的 Rust 适配，不代表原类 ABI、任意析构故障或进程终止式 OOM 可恢复。
+
+实际 `reference function-map` 只读核对三项、两个库内 Rust 位置族及一个旧 `a5` Linux 检查；其日志确有四项测试通过，覆盖 None 输出不变、零 converter 调用和失败输入后的保留。两份库源码、真实 Rust 测试与原 manager model 共四份来源匹配已登记原生输入，显式核算 CRLF。原 model 的 None 是脚本替身，不能据此声称执行了确切原版头文件；基类继承方法、宏/虚表及完整原生等价性仍待验收。累计 32 份固定来源、223 项，没有新编译、截图或输入监听，不改变既有本机连续多轮结论。
+
+同批另审阅 Wlr/KWin 两个兼容创建函数：Wlr 只拒绝 null，空或首字节 NUL 仍构造；KWin 拒绝空设备或非正尺寸，保留来源方法/输入元数据与 create→open→fd→node→destroy 顺序、失败 open 的 helper 残留。它们仍是已有 Config/宿主边界，无真实 Portal 授权或输入动作。两个原版 GetVersion 返回 `MAA_VERSION`，两个 Destroy 各保留自身 null 分支并 delete 原 handle；当前没有对应 Rust 对外版本/销毁 ABI。本批单独保存这个未完成边界，不将这两份来源、四个 ABI 函数计为全文件迁移，不借用无关构造函数或排除输入标签填补对应。完整 SDK ABI 按后续阶段定案；完整 P1 仍未通过。
+
 `MacOSControlUnitMgr.cpp/.h` 新增 22 项对应，包含默认析构声明：九项捕获/生命周期/元数据边界、十三项排除的应用/输入动作。Rust 范围明确为 `Input=None`，没有接收非 None 输入后改写为零。连接先清 connected，精确 ScreenCaptureKit selector 通过真实 macOS 14 可用性检查后才构造；新 owner 构造完成后替换旧 owner，不可用或构造失败仍保留旧对象。None/未知截图 selector 继续原日志后成功连接。截图转发只要求现存 owner，不检查 connected；None/错误保留调用方图像，engaged empty 也照常替换。inactive 仍直接返回 true，不调用后端或改变状态；UUID 保留 u32 十进制，features 在 None 输入下为零，metadata 保留 window_id 与 screenshot selector 的 signed64 解释。默认析构按源成员顺序先释放截图 owner，None 输入没有动作或输入 owner；不据此推导原生 callback 已排空。
 
 实际 `reference function-map` 只读核对全部 22 项/排除 13 项，并绑定完整的十项既有 `bc90d12` manager 构建、依赖、控制、查询、元数据、脚本、原版/Rust 捕获及场景退出检查；这些通过状态均为历史结果。本批两份库内 Rust 与十一份真实测试/适配上下文共十三份源码匹配已登记原生输入，显式核算 CRLF，测试文件不充当库实现位置。源 CPP 唯一的 `__builtin_available(macOS 14.0, *)` 参数超出所用 C++ grammar；独立索引输入使用同长度占位并保存全部替换字节、原错误和解析输入，原函数边界/行号/摘要逐项不变，实际来源和运行时条件没有改写。这是封存 parser 的语法索引重放，未进行编译器预处理，也不授予完整 Objective-C++/宏解析或语义验收。累计 31 份固定来源、220 项；内层 ScreenCaptureKit、非 None 输入、完整框架/ABI、既有像素失败和完整 P1 仍待处理。本批没有新捕获，不改变本机无输入多轮结论。
