@@ -11,6 +11,9 @@ use std::{collections::BTreeSet, fs, path::Path};
 #[serde(deny_unknown_fields)]
 struct View {
     schema: u32,
+    destination_srgb: Option<u32>,
+    prepared_before_draw: Option<u32>,
+    source_initialized: Option<u32>,
     slot: u32,
     pid: u32,
     main_thread: u32,
@@ -33,6 +36,7 @@ struct View {
 #[serde(deny_unknown_fields)]
 struct Census {
     schema: u32,
+    selection: Option<String>,
     slot: u32,
     pid: u32,
     main_thread: u32,
@@ -47,7 +51,7 @@ struct Window {
     id: u32,
     pid: u32,
     layer: i32,
-    onscreen: bool,
+    onscreen: Option<bool>,
     bounds: [f64; 4],
     owner_name: Option<String>,
     name: Option<String>,
@@ -168,7 +172,28 @@ pub fn validate(
         }
         let view_path = scene.join(format!("view-{slot}.json"));
         let view: View = records::read(&view_path)?;
-        if view.schema != 1
+        let prepared = match view.schema {
+            1 => {
+                view.destination_srgb.is_none()
+                    && view.prepared_before_draw.is_none()
+                    && view.source_initialized.is_none()
+                    && view.origin == "NSView_cacheDisplay_semantic_NSColor"
+            }
+            2 => {
+                view.destination_srgb == Some(1)
+                    && view.prepared_before_draw == Some(1)
+                    && view.source_initialized == Some(1)
+                    && view.source_bits_per_sample == 8
+                    && view.source_bits_per_pixel == 32
+                    && view.source_samples_per_pixel == 4
+                    && view.source_bitmap_format == 0
+                    && view.source_has_alpha
+                    && !view.source_planar
+                    && view.origin == "NSView_cacheDisplay_sRGB_getPixel"
+            }
+            _ => false,
+        };
+        if !prepared
             || view.slot as usize != slot
             || view.pid != g.pid
             || view.main_thread != 1
@@ -181,7 +206,6 @@ pub fn validate(
             || view.canonical_format != "BGRA8_sRGB"
             || view.canonical_stride != g.width.checked_mul(4).ok_or("view stride overflow")?
             || view.top_left_origin != 1
-            || view.origin != "NSView_cacheDisplay_semantic_NSColor"
         {
             return Err("native CPU view identity/layout differs".into());
         }
@@ -189,7 +213,12 @@ pub fn validate(
         g.pixels(&pixels, 4)?; // Strict known pixels apply to every CPU-view pixel.
         let census_path = scene.join(format!("census-{slot}.json"));
         let census: Census = records::read(&census_path)?;
-        if census.schema != 1
+        let selected = match census.schema {
+            1 => census.selection.is_none(),
+            2 => census.selection.as_deref() == Some("kCGWindowListOptionOnScreenOnly"),
+            _ => false,
+        };
+        if !selected
             || census.slot as usize != slot
             || census.pid != g.pid
             || census.main_thread != 1
@@ -206,7 +235,7 @@ pub fn validate(
             if window.rank != rank
                 || window.id == 0
                 || !unique.insert(window.id)
-                || !window.onscreen
+                || census.schema == 1 && window.onscreen != Some(true)
                 || window.bounds.iter().any(|v| !v.is_finite())
                 || window.bounds[2] < 0.0
                 || window.bounds[3] < 0.0
@@ -216,6 +245,7 @@ pub fn validate(
             if window.id == g.window {
                 own += 1;
                 if window.pid != g.pid
+                    || window.onscreen == Some(false)
                     || i64::from(window.layer) != i64::try_from(level)?
                     || window.bounds[..2] != origin
                     || window.bounds[2] != g.width as f64
