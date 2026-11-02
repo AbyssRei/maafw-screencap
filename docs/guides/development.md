@@ -40,6 +40,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `71237c7` 的 [Actions 41438918273](https://github.com/AbyssRei/maafw-screencap/actions/runs/41438918273) Linux job 已终态成功。其 P0 PipeWire 原生组件的 27 项检查全部通过：实际观察 `1.6.11`、完成源码准备/构建、五项捕获测试、consumer 与行所有权控制、Clippy，以及二十次流生命周期；逐轮均有 32 次 dequeue/queue、独立 callback/owner 线程和 native buffer 重用记录。自有 source 与 daemon 的退出均为 exit0、非意外、未强制终止。这里只读检查已有原生日志，没有重复运行捕获，也没有改写旧 `d868936` 的解析失败。
+
+官方轻量 ZIP（89,911 字节）长度、摘要和 CRC 通过，33 份归档文件及 32 个可用登记路径核对；仍有 529 项完整输入缺口，包含原始 release 响应与 `pipewire-source-identity.json`。因此本批成功只说明修正后原生构建/该受控取帧路径完成，尚不能确认 CI 是否实际遇到 null commit 并执行同 tag 查询。该分支仍保留前述本机实际准备分支控制的明确范围；完整元数据/源码闭包、P1 PipeWire 全部对照及完整 P1 继续待验收。预装工具按能力与实际身份记录，版本不是严格最新仍不构成 CI 门禁。
+
 确切 `d139b85` 的 [Actions 41435720011](https://github.com/AbyssRei/maafw-screencap/actions/runs/41435720011) Linux job 已终态成功，Wlr 组件列出的 151 项全部通过，包括原生 Clippy、真实 memfd 范围控制及两类资源故障。原 C++/Rust 对 memfd EMFILE、ftruncate EFBIG 各完成二十轮：失败 owner/fd、原输出、精确限制及信号恢复、正常取帧和关闭后持帧逐行核对，280 份像素与二十行 Rust syscall 范围数据独立通过。独立原生控制实际观察到零 NOFILE 下单项 poll 的 EINVAL、真实 EMFILE、两次未启用探针时正常调用及被捕获展开后的限制恢复；其故意 panic 消息属于通过的展开控制，退出为零。该独立控制不追写旧 `d868936` 未直接记录的 poll errno。新 memfd schema2、原 ftruncate schema1 与 mmap 保存报告只读检查通过，原数据未改。
 
 检查数从 `d868936` 的 155 变为 151，差异逐项核对为五个按需 clone 步骤没有重复执行，新增一个原生范围控制；相应 tag 分页/正式 release 查询和 source archive 全部仍通过，未省去任何旧原生用例。初次外部 reader 误把查询名统一写成 `-latest`，在写结论前拒绝；实际名称为 `-tags-N`/`-releases`，旧程序和失败保留，随后按现有真实分组核对，native 状态未改。官方轻量 ZIP（3,885,312 字节）的摘要、CRC、9,034 份文件和 9,033 个登记路径通过，仍有 597 项当前完整输入缺口。完整工程包传输尚在进行，本项只授予上述局部原生证据，不构成完整当前来源、其余失败组合、平台或 P1 验收。

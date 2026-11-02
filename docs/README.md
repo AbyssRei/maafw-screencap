@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+确切 `71237c7` 的 Linux job 成功；P0 PipeWire 轻量包的 27 项检查、二十次真实流生命周期及 source/daemon 正常退出已核对。529 项完整输入仍缺原始 release/来源身份元数据，不能据此断定 CI 走过 nullable tag 查询分支或授予完整 P1，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 PseudoMinimizeHelper 及 PrintWindow/FramePool 伪最小化包装新增四份固定来源、十九项对应，覆盖恢复顺序、工作线程和析构所有权。只读核对保留九项历史检查中的五项通过、四项失败，没有新截图；累计二十二份来源、140 项，仍不代表完整 P1，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 确切 `d139b85` 的 Linux 原生 job 成功，Wlr 151/151：memfd 的真实 syscall 范围及 poll/展开恢复控制通过，两类故障的原版/Rust 各二十轮与 280 份像素独立核对。旧失败保留；597 项轻量输入缺口尚待完整工程包补核，不代表完整后端或 P1 通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
