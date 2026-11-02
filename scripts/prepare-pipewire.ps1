@@ -119,6 +119,19 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'rust-pipewire-row-ownership' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 0 ignored;') {
             throw 'Expected four checked row/storage tests, separate from native stream capture'
         }
+        if ($Name -eq 'linux-none-original-caller') {
+            $observed=[IO.File]::ReadAllText($log)
+            if ([regex]::Matches($observed,'(?m)^original NoneScreencap cases=4 virtual_init=4 false_calls=8 inactive=4 virtual_deletes=4 caller_checks=12 held_callers=4 source_bodies_unchanged=1 native_captures=0 full_P1_acceptance=0 passed\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^original NoneScreencap .*').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^original None caller .*').Count -ne 4) {
+                throw 'Expected the actual original None header/base and complete native caller preservation matrix'
+            }
+            for ($shape=0;$shape -lt 4;$shape++) {
+                if ([regex]::Matches($observed,"(?m)^original None caller shape=$shape false_calls=2 header_and_full_pixels=unchanged held_after_virtual_delete=1\r?$").Count -ne 1) {
+                    throw 'Missing or repeated original None caller shape'
+                }
+            }
+        }
         if ($Name -eq 'original-pipewire-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire source cycles=20 captures=60 retained=60 passed') {
             throw 'Expected twenty original PipeWire source lifecycles and sixty retained images'
         }
@@ -583,6 +596,8 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
         New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
+        try { Step linux-none-original-caller $env:MFS_P1_LINUX_NONE_REFERENCE @() }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         . (Join-Path $PSScriptRoot prepare-custom-unix-reference.ps1)
         try { Test-CustomUnixReference $UpstreamRoot $referenceArtifacts }
         catch { $failed=$true;Write-Host $_.Exception.Message }

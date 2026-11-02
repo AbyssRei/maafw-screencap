@@ -57,6 +57,18 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath (Join-Path $refBuild linux-manager/linux-manager-config.inc) -Destination $saved;Save $saved
     Step linux-manager-model-linkage ldd @($manager)
     $env:MFS_P1_LINUX_MANAGER_MODEL=$manager
+    $none=Join-Path $refBuild linux-manager/mfs_linux_none_reference
+    $saved=Join-Path $refInputs mfs_linux_none_reference
+    Copy-Item -LiteralPath $none -Destination $saved;Save $saved
+    $env:MFS_P1_LINUX_NONE_REFERENCE=$none
+    foreach($item in @(
+        @((Join-Path $FixedUpstream source/MaaLinuxControlUnit/Screencap/NoneScreencap.h),'none-original-header.h'),
+        @((Join-Path $refBuild linux-manager/overlay/Base/UnitBase.h),'none-screenshot-base.h'),
+        @((Join-Path $productRoot tests/upstream-parity/linux-manager/none-overlay/Common/Conf.h),'none-private-conf.h')
+    )) {
+        $saved=Join-Path $refInputs $item[1]
+        Copy-Item -LiteralPath $item[0] -Destination $saved;Save $saved
+    }
     foreach($item in @(@('CMakeCache.txt','reference-CMakeCache.txt'),@('compile_commands.json','reference-compile-commands.json'),@('overlay/Base/UnitBase.h','source-screenshot-base.h'),@('source-context-scope.txt','source-context-scope.txt'))){
         $saved=Join-Path $refInputs $item[1]
         Copy-Item -LiteralPath (Join-Path $refBuild $item[0]) -Destination $saved

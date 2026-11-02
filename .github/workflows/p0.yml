@@ -4,15 +4,22 @@ on:
   push:
     branches: ['**']
     paths-ignore: ['**.md']
-  # PR and manual validation retain the complete native gate, including docs PRs.
+  # PR and default manual validation retain the complete native matrix.
   pull_request:
   workflow_dispatch:
+    inputs:
+      framepool_only:
+        description: Run the FramePool component on a fresh Windows runner
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   prepare-and-validate:
+    if: ${{ !inputs.framepool_only }}
     name: Native checks (${{ matrix.os }})
     env:
       # Validate the contributor subject while compiling the normal merge tree.
@@ -157,6 +164,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/compat/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/kwin-native-abi-source/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/linux-manager-info.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/none-*.h
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/config-oracle-sources/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-*.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-pipewire-context-linux-*/inputs/source-reference/meojson-LICENSE
@@ -369,4 +377,80 @@ jobs:
         with:
           name: p0-evidence-${{ matrix.os }}
           path: ${{ env.MFS_EVIDENCE_ARCHIVE }}
+          if-no-files-found: error
+  framepool-only:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.framepool_only }}
+    name: Independent FramePool component (windows-latest)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      MFS_COMMIT_MESSAGE_REF: ${{ github.sha }}
+      MFS_TOOLCHAIN_POLICY: preinstalled
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+      - name: Prepare usable nightly before configuring Cargo caches
+        run: ./scripts/prepare-rust-toolchain.ps1
+      - name: Configure external cache and evidence directories
+        run: |
+          $siblingRoot = Split-Path -Parent $env:GITHUB_WORKSPACE
+          "CARGO_HOME=$(Join-Path $siblingRoot 'maafw-screencap-deps/cargo-home')" >> $env:GITHUB_ENV
+          "CARGO_TARGET_DIR=$(Join-Path $siblingRoot 'maafw-screencap-deps/target')" >> $env:GITHUB_ENV
+          "MFS_REFERENCE_ROOT=$(Join-Path $siblingRoot 'maafw-screencap-reference')" >> $env:GITHUB_ENV
+      - name: Verify native runner and preparation controls
+        run: |
+          if ((rustc -vV | Out-String) -notmatch '(?m)^host: x86_64-pc-windows-msvc\r?$') {
+            throw 'Independent FramePool requires the native Windows x64 target'
+          }
+          ./tests/prototypes/framepool-independent.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tests/prototypes/toolchain-policy.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tests/prototypes/sdk_cache.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Resolve current dependencies and archive fixed sources
+        run: |
+          cargo xtask reference prepare
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo xtask reference prepare-fork --revision client-confirmed-4140ac96 --head 4140ac9674a9fde174212c895c8c37ff3acf1ef8
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Prepare available VS2026 Build Tools and Windows SDK
+        run: ./scripts/prepare-windows-toolchain.ps1 -Install -RecordRoot (Join-Path $env:MFS_REFERENCE_ROOT local)
+      - name: Validate FramePool source and Rust component on the independent desktop
+        run: |
+          cargo xtask upstream-parity frame-pool
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify archived inputs and results
+        if: always()
+        run: cargo xtask reference verify
+      - name: Upload independent FramePool component diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-independent-framepool-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-frame-pool*-windows-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-frame-pool*-windows-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-frame-pool*-windows-*/inputs/framepool-device-only.inc
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-frame-pool*-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-frame-pool*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/**
+          if-no-files-found: warn
+      - name: Archive engineering evidence
+        if: always()
+        run: |
+          $packageRoot = Join-Path (Split-Path -Parent $env:CARGO_HOME) 'evidence'
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          $archive = Join-Path $packageRoot 'framepool-evidence.tar'
+          "MFS_FRAMEPOOL_EVIDENCE_ARCHIVE=$archive" >> $env:GITHUB_ENV
+          ./scripts/archive-evidence.ps1 -ReferenceRoot $env:MFS_REFERENCE_ROOT -ArchivePath $archive -RestoreRoot (Join-Path $packageRoot restored)
+      - name: Upload engineering evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-independent-framepool-evidence
+          path: ${{ env.MFS_FRAMEPOOL_EVIDENCE_ARCHIVE }}
           if-no-files-found: error

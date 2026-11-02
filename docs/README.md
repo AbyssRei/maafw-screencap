@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+真实 `NoneScreencap` 头文件的原生虚调用与 Mat 调用方保留测试已通过本机 Debug/Release，Linux 原生执行待 CI。新增手动 `framepool_only` 入口可在新 Windows runner 上先执行同一 FramePool 组件；默认三平台门禁继续执行，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `adc14e8` 原生 macOS 的 154 项状态仍为 133 通过、21 失败；官方包、全部可用输入/日志与十项 AST 输出已核对，580 项完整输入缺口保留。历史 Windows 外圈差异另已量化为 624 个外两像素亮点及 300 个内一像素暗点，仍未证明生产者，见[本轮复核](guides/development.md#本轮原生与-ci-复核)与[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 `MaaBuffer` 的五项 raw/resize/encoded 函数已补独立原生保留边界审阅，生成片段、十二份当前相关源码与两组实际数据只读核对通过；Rust 对应仍为 40 份来源、281 项，其余 40 个 buffer 函数没有因此验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。

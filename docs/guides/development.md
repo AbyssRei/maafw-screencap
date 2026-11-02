@@ -108,6 +108,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+`mfs_linux_none_reference` 新增固定 F 的真实 `NoneScreencap.h` 调用方测试，使用既有生成器提取的完整 `ScreencapBase` 声明/函数体和明确的测试命名空间；原类/函数体未改写。经真实基类虚调用执行 init、两次 false screencap、inactive 及 delete，覆盖默认空图、release 后保留类型的空图、packed BGR 和非连续 ROI。C++ 内比较 data/start/end/limit、u、flags、dims/尺寸、两项 step、type/refcount/submatrix，以及完整可见像素和 ROI 全底图；source 销毁后同一调用方再检查一次。无 daemon、输入操作或桌面取帧，成功汇总明确 `native_captures=0`。
+
+本机 VS2026/MSBuild 的 Debug 和 Release 各通过四种形状、八次 false 调用、十二次保留检查、四次虚析构及四个 source 关闭后的调用方。六份真实 CL/link 读取日志证明使用确切 F 头文件与所提取基类，244 项编译/链接输入已外部归档；生成文件的 Windows CRLF 与 LF 原片段分别记录摘要，初版 reader 因忽略该差别的拒收也保留。该批使用显式归档原生依赖，证明的是本机 C++ 原版 header/base 调用边界；Linux 原生执行、该实际原版类与既有 Rust native controls 的关联复核、整个 manager/ABI 和完整 P1 仍待各自验证，既有脚本化 manager 模型未被改写成这次真实类的执行证明。
+
+原生 PipeWire 来源准备现编译并归档该独立程序、原 None 头文件、生成基类和私有 Conf，单列 `linux-none-original-caller` 步骤；精确核验四种 shape、八次 false、完整头部/像素保留和销毁汇总。十三项实际 `Step` 子进程控制验证完整成功、缺项/重复/额外形状、错误计数、伪称完整验收、原生失败和缺环境，原失败退出保留。输入准备或该检查失败不被改称取帧成功，独立后续检查仍按既有规则执行；轻量 CI 包加入三个来源头文件。参考目录 `local/current-none-native-development-path.txt` 指向本批证据，Rust 函数对应计数仍为 40 份来源、281 项。
+
+工作流的 `framepool_only` 是显式手动专项：`gh workflow run p0.yml --ref <分支> -f framepool_only=true` 在新的 Windows runner 上准备 nightly、实际可用的 VS2026/SDK、当次依赖和确切 F，然后执行既有 `cargo xtask upstream-parity frame-pool` 的 source/Rust 全部现有检查、记录验证和完整工程归档；工具年龄继续按 `preinstalled` 记录。此模式不先运行长时间的 63 组 manager 用例，因此可以较早观察尚未受该 manager 批次影响的属性/设备对照。默认 push、PR 和不勾选该参数的手动运行继续选三平台矩阵。专项的 runner/执行顺序与整批不同，其结果独立标识，不能重命名旧失败、证明排空/生产者或作为完整 P1。工作流八段实际脚本文本在十九个隔离 PowerShell 子进程中验证成功和十一种非零失败，参数/退出及归档路径保留；这些显式 mock 不安装工具、不取帧，也不代替新的托管执行。
+
 确切 `adc14e8` 的 [Actions 41533760567](https://github.com/AbyssRei/maafw-screencap/actions/runs/41533760567) macOS job 已终态失败，组件仍为 133/154，全部 154 项状态与 `b178154` 相同，原 21 个失败保留。官方 40,055,490 字节即时 ZIP 的发布摘要、CRC 和 11,941 份文件核对；12,366 个不同登记路径中 11,786 个实际可用输入、全部 154 份日志及完整十份 AST 输出逐一匹配摘要。清单另含 9,308 次相同摘要的重复登记，已显式计数，不接受冲突摘要；580 项完整输入仍缺，未称来源闭包。实际编译器为 Xcode 27.1 路径内的 Apple Clang 21.0.0，预装工具年龄不作门禁。AST 的编译命令变换、确切 F 的 .h/.mm、三个 namespace 根和四个 block 也独立复核；没有在 Windows 重跑 macOS 捕获、解释像素生产者或扩大全 P1 验收。原始下载/两次因 reader 额外路径/唯一性假设中止的版本均保留，最终 reader 只读使用同一下载记录真实缺项及相同摘要重复项，原生状态未改。完整记录由参考目录 `local/current-adc14e8-macos-native-review-path.txt` 指向。
 
 新增独立原版 FramePool 属性/设备诊断 `mfs_framepool_border_reference`，保留 F 类/头文件/原生函数体，在原 caller MTA/current-thread dispatcher 上观察真实 session。四组各有新窗口：原始默认 WGC、默认 WGC 后额外设置 `IsBorderRequired(true)`、仅执行原版 D3D 设备/swapchain 片段、最终无 WGC 控制。仅设备片段由确切 F 的描述符到一次 `D3D11CreateDeviceAndSwapChain` 调用提取，输出存档并独立核对；没有添加 false setter、修改授权、隐藏指示器或修改产品后端。临时 PMv2 caller DPI 正常恢复，非重叠同输出的更新 marker 保留自己的 UI owner。固定 27 次调用包含 13 项已知场景/取帧控制，销毁后的三次观察次数预先固定；没有按像素结果重试。
