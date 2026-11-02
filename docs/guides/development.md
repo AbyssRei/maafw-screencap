@@ -16,6 +16,10 @@ P1 的职责盘点已进入函数层级。首批按固定 F 的 `Win32ControlUni
 
 该头文件只有声明、没有函数体；校验器现允许它作为独立的零函数来源，并照常核对 F 字节、blob 和 namespace 标记，但整份清单仍须至少包含一个函数体。真实 Linux 26 项和旧 Windows 36 项均通过只读入口，六组损坏记录被拒绝，涵盖整份无函数体、重复/错误解析的声明头、重算摘要后的头文件替换、漏掉运行时检查和改作排除。Workspace 的 102 项 xtask 测试、Windows feature Clippy、格式与文档检查通过；仍使用前批封存的 Cargo/vendor 输入。两个 manager 家族共审阅四份来源、62 个函数/闭包；其余来源家族、宏/Objective-C++ 解析限制和既有原生失败继续待处理。
 
+WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录，含九个 registry/frame 闭包、两条 deleted 复制声明及一个 default 析构。28 项归入捕获/生命周期/元数据边界，三个只供输入使用的 getter 单独排除；捕获默认仍绑定并保留原来必需的虚拟键盘/指针全局对象。记录逐项覆盖原路径比较及 NUL 语义、原 prerequisites 的 AND 判定、最后公告输出与构造快照、忽略 global_remove、回调内递归 roundtrip、六种转换、原 packed step/忽略 YInvert、Buffer 到达即 Copy、Ready/Failed 及转换结束前帧保活。deleted 声明对应 Rust Client 所有权类型和显式 Arc 分享点，属于声明审阅。
+
+两份 Rust 主体与已封存 `a5cfa2e` 原生批次及当前 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录逐项保留失败 mmap fd 寿命待测、旧缓冲清理失败叠加新分配失败尚未验证、共享快照下原版立即断开未验收，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。累计八份来源、93 项函数/闭包及声明对应已登记；其余来源家族、原生失败、语义与完整 P1 继续待完成。
+
 ## 本轮原生与 CI 复核
 
 Wlr 逐函数审阅发现一处尚待原生复现的失败资源寿命差异：固定 F 的 `MemfdBuffer` 在 `mmap` 失败后保留已创建的 fd，直到失败缓冲对象被替换或销毁；当前 Rust 路径在该错误返回时释放局部 File。新增独立 `allocation` IPC/SHM 用例仅在自有测试进程中，把 `RLIMIT_AS` 临时下调到实际 VmSize 加 32 MiB，用 256 MiB 稀疏缓冲请求触发内核映射失败，再恢复原限制并恢复普通取帧。原版 `mmap/mmap64` 观察器逐次原参数转发、保留返回值/errno，记录真实 MAP_FAILED；两侧检查失败 fd 的数量/大小/inode、替换后新 inode、调用方旧图像和关闭后持帧。协议端 Failed 只用于结束 F 原来的等待，不能把它误作额外恢复策略。
