@@ -1,12 +1,12 @@
 # 文档导航与维护约定
 
-真实 `NoneScreencap` 头文件的原生虚调用与 Mat 调用方保留测试已通过本机 Debug/Release，Linux 原生执行待 CI。新增手动 `framepool_only` 入口可在新 Windows runner 上先执行同一 FramePool 组件；默认三平台门禁继续执行，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `8c1369c` 的独立 Windows FramePool 为 98/102，四个原版伪最小化黑图失败保留；新诊断三张外圈图与六张历史异常目标逐字节相同，仍未认定生产者。完整官方包的三个运行清单输入已核对。Linux PipeWire 为 202/202，包含真实 `NoneScreencap` 的虚调用与 Mat 保留测试；完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `adc14e8` 原生 macOS 的 154 项状态仍为 133 通过、21 失败；官方包、全部可用输入/日志与十项 AST 输出已核对，580 项完整输入缺口保留。历史 Windows 外圈差异另已量化为 624 个外两像素亮点及 300 个内一像素暗点，仍未证明生产者，见[本轮复核](guides/development.md#本轮原生与-ci-复核)与[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 `MaaBuffer` 的五项 raw/resize/encoded 函数已补独立原生保留边界审阅，生成片段、十二份当前相关源码与两组实际数据只读核对通过；Rust 对应仍为 40 份来源、281 项，其余 40 个 buffer 函数没有因此验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
-独立原版 FramePool 属性/设备四组诊断已通过本机三轮无输入执行，81 张图像逐字节符合场景；原生 getter 的 false→true 并未在本机复现历史外圈差异，原因仍未证明。CI 已接入，托管执行待验证；已有失败和完整 P1 状态不变，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+独立原版 FramePool 属性/设备四组诊断的本机三轮无输入执行保留 81 张已知场景图；该批 getter 的 false→true 未复现历史外圈差异。后续独立托管结果见本节开头，两种环境各保留实际身份和结果，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 Gamepad 的 Win32 截图委托补十一项对应，完整保留所选 66 项历史检查的 60 通过、六失败；外层输入/元数据与 API 未伪称迁移。累计选定 40 份来源、281 项，完整 P1 仍未验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 

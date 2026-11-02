@@ -108,9 +108,17 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `8c1369c` 的独立 Windows [Actions 41542384071](https://github.com/AbyssRei/maafw-screencap/actions/runs/41542384071) 已终态失败，实际组件为 98/102。四项失败仍是原版 `pseudo-stop`、`pseudo-inactive`、`pseudo-layered-stop` 和 `pseudo-layered-inactive` 的已知内部像素断言：各返回 96×64 BGR 图像，6,144 个像素全黑，程序退出 5；source/window 关闭后的 CPU 图像保留检查通过，不据此改判像素成功。其余 98 项保持原生 passed 状态，包括现有 Rust、Size、Map、查询和记录入口；这是独立新 runner 上的既有组件范围，不替代长批次的旧结果或完整 P1。
+
+同次原版四组属性/设备诊断的 27 次固定调用全部完成：24 张符合场景，slot `3/10/11`（两次默认 WGC 存活及一次额外要求边框后的 Desktop Duplication）各有 924 个外三像素差异。三张完整 BGR 与历史六张所选异常目标逐字节相同，不仅是差异数量相同；外两像素 624 点/内一像素 300 点的既有描述因此适用于这些相同字节。实际默认 getter 在该 runner 为 true，额外 true setter 后仍为 true；本机原三轮的默认 false 结果保持自身身份。仅原版设备/swapchain 存活、所有固定销毁后观察与最终无 WGC 控制均符合场景。这是在本次有限执行中出现的对象状态与像素关联，没有确认系统指示器或其他具体生产者，没有证明原生 session/callback 排空，也不把历史六个 mixed mask 或四个伪最小化失败改判为通过。
+
+该专项官方即时 ZIP 与 319,731,055 字节完整 ZIP 的发布摘要及 CRC 均核对；完整 tar 安全恢复 11,900 份文件，三个运行清单的全部登记输入/日志及 F 的 744 个 Git blob 核对通过，关闭的是本次专项的来源登记缺口。原始 tar 保持不变；读取校验引起 U/F 两个 Git index 的文件状态缓存刷新，前后版本另存，暂存条目完全一致，其他恢复文件未变。原版设备片段逐字节匹配 F，六份关键测试/校验器/库源码与原生 product snapshot 的 CRLF 差别明确核算；61 项 border 输入的独立 `--check-only` 验证通过且原目录 62 份数据/报告摘要不变。读取器早期的长路径、目录布局、非 native 配置清单及 canonical 路径假设拒收另行保留，不涉及原生重跑或状态放宽。来源登记闭合不代表完整系统依赖离线重建、回调正确性或 P1。
+
+确切 `8c1369c` 的常规三平台 [Actions 41542383770](https://github.com/AbyssRei/maafw-screencap/actions/runs/41542383770) Linux job 成功：PipeWire 202/202，Wlr 151/151。实际 `linux-none-original-caller` 在 Linux 执行未改 F 头文件和精确提取基类，通过四种 Mat 形状、八次 false、十二次调用方检查、四次虚析构及四份持有调用方；没有桌面捕获。保存的原头文件/基类及六份匹配原生登记摘要的 canonical 来源补件核对，既有四项 Rust native manager controls 也实际通过；脚本化 manager 模型仍是另一范围，不改称原类执行。两个即时包的官方摘要/CRC、全部可用登记输入和 202/151 份日志核对；仍分别缺 615/617 项完整输入，未授予 Linux 全来源闭包或新增完整后端验收。以上专项与 Linux 复核由参考目录 `local/current-8c-native-framepool-and-none-review-path.txt` 指向；预装工具年龄继续只记录，真实像素/构建失败继续保留，P1 未完成。
+
 `mfs_linux_none_reference` 新增固定 F 的真实 `NoneScreencap.h` 调用方测试，使用既有生成器提取的完整 `ScreencapBase` 声明/函数体和明确的测试命名空间；原类/函数体未改写。经真实基类虚调用执行 init、两次 false screencap、inactive 及 delete，覆盖默认空图、release 后保留类型的空图、packed BGR 和非连续 ROI。C++ 内比较 data/start/end/limit、u、flags、dims/尺寸、两项 step、type/refcount/submatrix，以及完整可见像素和 ROI 全底图；source 销毁后同一调用方再检查一次。无 daemon、输入操作或桌面取帧，成功汇总明确 `native_captures=0`。
 
-本机 VS2026/MSBuild 的 Debug 和 Release 各通过四种形状、八次 false 调用、十二次保留检查、四次虚析构及四个 source 关闭后的调用方。六份真实 CL/link 读取日志证明使用确切 F 头文件与所提取基类，244 项编译/链接输入已外部归档；生成文件的 Windows CRLF 与 LF 原片段分别记录摘要，初版 reader 因忽略该差别的拒收也保留。该批使用显式归档原生依赖，证明的是本机 C++ 原版 header/base 调用边界；Linux 原生执行、该实际原版类与既有 Rust native controls 的关联复核、整个 manager/ABI 和完整 P1 仍待各自验证，既有脚本化 manager 模型未被改写成这次真实类的执行证明。
+本机 VS2026/MSBuild 的 Debug 和 Release 各通过四种形状、八次 false 调用、十二次保留检查、四次虚析构及四个 source 关闭后的调用方。六份真实 CL/link 读取日志证明使用确切 F 头文件与所提取基类，244 项编译/链接输入已外部归档；生成文件的 Windows CRLF 与 LF 原片段分别记录摘要，初版 reader 因忽略该差别的拒收也保留。该开发批次使用显式归档原生依赖，证明本机 C++ 原版 header/base 调用边界；后续 Linux 实际执行和同批 Rust native controls 的复核见本节开头。整个 manager/ABI 和完整 P1 仍待验证，既有脚本化 manager 模型未被改写成真实类的执行证明。
 
 原生 PipeWire 来源准备现编译并归档该独立程序、原 None 头文件、生成基类和私有 Conf，单列 `linux-none-original-caller` 步骤；精确核验四种 shape、八次 false、完整头部/像素保留和销毁汇总。十三项实际 `Step` 子进程控制验证完整成功、缺项/重复/额外形状、错误计数、伪称完整验收、原生失败和缺环境，原失败退出保留。输入准备或该检查失败不被改称取帧成功，独立后续检查仍按既有规则执行；轻量 CI 包加入三个来源头文件。参考目录 `local/current-none-native-development-path.txt` 指向本批证据，Rust 函数对应计数仍为 40 份来源、281 项。
 
