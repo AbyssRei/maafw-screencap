@@ -4,6 +4,8 @@
 
 ## 本轮原生与 CI 复核
 
+确切 `5b8ef7a` 的 [Actions 41361736663](https://github.com/AbyssRei/maafw-screencap/actions/runs/41361736663) macOS job 已结束，组件保持 127/139：五个独立原版 display 场景均在约五秒等待后返回 nullopt，五个配对检查拒绝通过；同路径 observer 的原版与记录检查也失败，共十二项。实际失败日志已逐项核对，不能从较早批次代入结果。新的同进程原版先行 CG/SC 两组及记录检查原生通过，97 份登记文件与十八份当前/持帧另经独立复核；CG 双方各三张已知图样，SC 双方各三次 None，None 不属于成功截图。完整官方 ZIP/tar 摘要、29,546 个恢复文件、27,989 条登记路径及十二份清单、十一份 485 文件普通产品快照与一份受控不可构建快照、76 份 F 和 U/F 的 741/744 个 Git blob/归档 mode 全部匹配。实际五个原类编译条目、同进程 wrapper 消费和十三组保存报告已只读核验，全部 544 项轻量输入缺口闭合，完整 `reference verify` 通过且恢复字节（含 Git index/config）不变，材料已封存。这里的工具身份按预装政策记录，不是最新版本门禁；Windows 上的只读复核不替代原生 Mac 执行。旧失败、完整显示器像素、相反顺序、原生回调排空、根因与 P1 总体验收仍未通过。
+
 另增独立 `mfs_framepool_alpha_poll_reference` 观察目标，明确排除于默认 native 构建；生成的 F 源码只转发两个原 `TryGetNextFrame` 表达式及超时缓存 `.clone()`，三个匹配均须恰好一次。原 clock、2ms sleep、2000ms 等待、Close、catch、转换与持帧位置保持；观察 wrapper 不保留 frame、不增加原生查询。TLS 固定大小计数记录 drain/poll 的调用数与非空返回、实际缓存 clone 和这些边界的异常计数；Rust 精确 alpha 测试同时保存已有的成功调用 evidence，不改后端。生成正文、probe 头、实际 MSBuild 项目及 compile/link 输入日志在捕获前核对/归档，托管编排保留原来的未拦截配对，另跑新的 source/Rust 进程及 `upstream-alpha frame-pool-poll <observed source directory> <Rust directory> [--check-only]`。两种派生报告不会互相纳入哈希，均可独立只读复核。
 
 该观察目标的最新连续三轮对照为 9/10、9/10、10/10，配对退出 `[1,1,0]`；18 组不透明像素全部一致，两处透明阶段差异保持失败。第 1 轮 Rust persistent/phase1 实际 drain 一帧，后续 816 次轮询全空，在 2.001320 秒后回放旧图，对应原版取得黑图；第 2 轮则是原版 persistent/phase3 drain 一帧，后续 131 次轮询全空，在 2.001496 秒后执行缓存 clone，对应 Rust 取得黑图。两侧各 29 次非空原生取帧、一次缓存 clone。这里证明的是各次被观察调用的分支；计数可能影响调度，未读取被清掉帧的内容或时间戳，也未证明旧未拦截原版分支、轮询次数差异的原因、一般帧新鲜度或历史根因，不据此改变等待/回放实现或重标任何旧失败。
