@@ -80,6 +80,23 @@ fn rejects_missing_reclassified_or_falsely_accepted_function_correspondence() {
 }
 
 #[test]
+fn accepts_declaration_only_files_beside_reviewed_bodies_but_rejects_empty_work() {
+    let (map, mut census) = fixture();
+    let mut header = census["sources"][0].clone();
+    header["path"] = "source.h".into();
+    header["functions"] = json!([]);
+    census["sources"]
+        .as_array_mut()
+        .unwrap()
+        .push(header.clone());
+    assert_eq!(check(map.clone(), census.clone()).unwrap(), 1);
+    let mut empty = map;
+    empty["functions"] = json!([]);
+    census["sources"] = json!([header]);
+    assert!(check(empty, census).is_err());
+}
+
+#[test]
 fn rejects_wrong_source_line_hash_and_out_of_bounds_spans() {
     let data = b"alpha\nbeta\n";
     let beta = "f44e64e75f3948e9f73f8dfa94721c4ce8cbb4f265c4790c702b2d41cfbf2753";

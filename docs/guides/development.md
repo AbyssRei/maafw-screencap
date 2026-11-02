@@ -12,6 +12,10 @@ P1 的职责盘点已进入函数层级。首批按固定 F 的 `Win32ControlUni
 
 真实 36 项映射及 29 组损坏数据控制通过，其中包括缺失目录不创建、错误 fork 基线、重复 namespace 标记、错误字节/行、闭包父项缺失或不包围、路径逃逸、伪造语义/原生通过及原生失败状态替换。独立 runtime 分组还强制保留所有实际检查，拒绝省略失败或整个运行时清单、重叠分组与没有匹配的前缀；闭包必须有严格包围它的父项。Workspace（含 xtask 101 项）、Windows 完整 feature Clippy、Release 核心和格式检查通过；沿归档 Cargo 解析开发，官方 nightly 更新检查确认现有版本。初次镜像 DNS 失败及归档配置未传入子命令时的 registry 优先级失败均保留，显式传入配置后通过。既有本机无输入多轮结论、原生像素失败和 P1 顺序门禁保持原样。
 
+随后核对固定 F 的 `LinuxControlUnitMgr.cpp/.h`：26 个函数中，12 项属于捕获、元数据、生命周期及输入构造边界，14 项属于排除的输入或应用操作。Rust 对应位置覆盖连接时先清理 capture/input、失败 client 保留、capture 先于 input 构造与初始化、PipeWire 的 `fd<0 && node==0` 判定、原 UUID/config 字节与宽度、无 connected 检查的输出转发，以及 client/capture/input 释放顺序。None 原生工厂和显式宿主输入构造不代表输入动作迁移，ExtImage 在 F 中仍不能创建捕获器。原 Wlr/PipeWire 和模型的 16 项既有通过检查按原 manifest/log 引用，没有新截图、完整 manager 或 P1 验收。
+
+该头文件只有声明、没有函数体；校验器现允许它作为独立的零函数来源，并照常核对 F 字节、blob 和 namespace 标记，但整份清单仍须至少包含一个函数体。真实 Linux 26 项和旧 Windows 36 项均通过只读入口，六组损坏记录被拒绝，涵盖整份无函数体、重复/错误解析的声明头、重算摘要后的头文件替换、漏掉运行时检查和改作排除。Workspace 的 102 项 xtask 测试、Windows feature Clippy、格式与文档检查通过；仍使用前批封存的 Cargo/vendor 输入。两个 manager 家族共审阅四份来源、62 个函数/闭包；其余来源家族、宏/Objective-C++ 解析限制和既有原生失败继续待处理。
+
 ## 本轮原生与 CI 复核
 
 确切 `4ebd7cb` 的 [Actions 41380793132](https://github.com/AbyssRei/maafw-screencap/actions/runs/41380793132) 已原生编译并执行修正后的缓存路径：十四张完整 CPU view 均严格匹配三色图样，schema2 的 sRGB 绘制前配置、初始化、布局及十四组窗口清单核验通过，诊断记录入口通过。两种调用顺序的原版/Rust 六组配对字节全部相同，但十二张显示器图像各有 52 个偏差像素，均在 `[1012,1020)×[4,12)`；两个严格原生入口继续失败，组件保持 128/145、十七项失败。两扇 Window Server `StatusIndicator`（PID164，layer2147483630，bounds `(1002,-6,28,28)`）在十四次清单中均高于目标窗口，CPU view 没有这些像素；这是分离的视图、捕获和元数据证据，仍不证明同时的像素归因、动态新鲜度或回调排空。实际清单均提供 IsOnscreen，null 分支仅有人工控制。完整轻量 ZIP、200 份矩阵文件、36 份当前/持帧及十四份保存报告已独立核对；完整官方 ZIP/tar 的 29,935 份恢复文件、28,378 项注册路径、十一份普通 490 文件快照及一份受控快照、76 份 F 源码和 U/F 741/744 Git blobs/模式均核对通过，549 项轻量输入缺口全部闭合；十四份保存报告与完整 reference 验证只读通过，恢复字节及 Git 元数据未变，复核已封存。实际预装 Xcode 27.1/27A9275、SDK 27.0 仅作身份记录，不设最新版本门禁。`capture_parity_accepted=false`、原版/严格整屏失败和 P1 阶段状态均保持不变。

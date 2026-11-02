@@ -226,8 +226,8 @@ fn graph(map: &Map, census: &Census) -> Result<usize> {
     let mut expected = BTreeSet::new();
     let mut paths = BTreeSet::new();
     for source in &census.sources {
-        if !paths.insert(&source.path) || source.parse_has_error || source.functions.is_empty() {
-            return Err("function census has duplicate/unreviewed/empty source scope".into());
+        if !paths.insert(&source.path) || source.parse_has_error {
+            return Err("function census has duplicate or unreviewed source scope".into());
         }
         for function in &source.functions {
             nonempty(&function.name)?;
@@ -258,6 +258,9 @@ fn graph(map: &Map, census: &Census) -> Result<usize> {
                 }
             }
         }
+    }
+    if expected.is_empty() {
+        return Err("function census must include at least one reviewed body".into());
     }
     let mut actual = BTreeSet::new();
     let mut excluded = 0;
