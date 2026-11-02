@@ -145,6 +145,22 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($Name -eq 'frame-pool-source-border') {
+            $observed = [IO.File]::ReadAllText($logPath)
+            if ($exitCode -eq 77 -and $observed -match '(?m)^border environment missing before_capture=1 property_unavailable=1\r?$') {
+                $status = 'missing_environment'
+                $script:nativeMissingEnvironment = $true
+                $pending.Add('Original-only border property/device diagnostic requires IsBorderRequired. Its API preflight stopped before capture; no border or capture acceptance is claimed.')
+                throw 'Native IsBorderRequired property is unavailable before capture'
+            }
+            if ($exitCode -eq 0 -and [regex]::Matches($observed, '(?m)^source border diagnostic shots=27 windows_closed=4 positive_controls=1 required_true_setters=1 added_false_setters=0 source_bodies_unchanged=1 full_P1_acceptance=0\r?$').Count -ne 1) {
+                throw 'Expected all four original-only border/device arms, 27 fixed calls and actual native positive controls'
+            }
+        }
+        if ($Name -eq 'frame-pool-border-records' -and $exitCode -eq 0 -and
+            [regex]::Matches([IO.File]::ReadAllText($logPath), '(?m)^source border records calls=27 windows_closed=4 positive_controls=13 files=61 producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed\r?$').Count -ne 1) {
+            throw 'Expected the complete border native property/owner/pixel records, without producer or capture acceptance'
+        }
         if ($Name -eq 'desktop-dup-source-held-acquisition' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDup held_acquisition cycles=20 public_calls=60 observed_calls=40 native_rejections=20 caller_acquires=20 caller_releases=20 recovery=20 retained=40 full_P1_acceptance=0 passed')) {
             throw 'Expected all original real held-acquisition rejections and caller release witnesses'
@@ -1026,6 +1042,27 @@ try {
         $frameContextEvidence = Join-Path $artifacts frame-pool-context
         New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
         if($FramePoolParity) {
+            $borderEvidence=Join-Path $frameContextEvidence source-border
+            New-Item -ItemType Directory -Path $borderEvidence|Out-Null
+            try {
+                Step frame-pool-border-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_border_reference','--parallel','4')
+                $borderProgram=Join-Path $artifacts mfs_framepool_border_reference.exe
+                Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_border_reference.exe) -Destination $borderProgram
+                Save-Input $borderProgram
+                Invoke-FrameCheck frame-pool-source-border $borderProgram @($borderEvidence)
+                if ($checks[-1].status -ne 'missing_environment') {
+                    Invoke-FrameCheck frame-pool-border-records $ConfigureTool @('upstream-trace','framepool-border',$borderEvidence)
+                }
+            } catch { $script:failed=$true; Write-Host $_.Exception.Message }
+            finally {
+                $borderFragment=Join-Path $build framepool-device-only.inc
+                if (Test-Path -LiteralPath $borderFragment) {
+                    $saved=Join-Path $inputsRoot framepool-device-only.inc
+                    Copy-Item -LiteralPath $borderFragment -Destination $saved
+                    Save-Input $saved
+                }
+                Get-ChildItem -LiteralPath $borderEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName }
+            }
             Step frame-pool-order-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_order_reference','--parallel','4')
             $orderProgram=Join-Path $artifacts mfs_framepool_order_reference.exe
             Copy-Item -LiteralPath (Join-Path $build Release/mfs_framepool_order_reference.exe) -Destination $orderProgram

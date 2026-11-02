@@ -100,6 +100,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+新增独立原版 FramePool 属性/设备诊断 `mfs_framepool_border_reference`，保留 F 类/头文件/原生函数体，在原 caller MTA/current-thread dispatcher 上观察真实 session。四组各有新窗口：原始默认 WGC、默认 WGC 后额外设置 `IsBorderRequired(true)`、仅执行原版 D3D 设备/swapchain 片段、最终无 WGC 控制。仅设备片段由确切 F 的描述符到一次 `D3D11CreateDeviceAndSwapChain` 调用提取，输出存档并独立核对；没有添加 false setter、修改授权、隐藏指示器或修改产品后端。临时 PMv2 caller DPI 正常恢复，非重叠同输出的更新 marker 保留自己的 UI owner。固定 27 次调用包含 13 项已知场景/取帧控制，销毁后的三次观察次数预先固定；没有按像素结果重试。
+
+`cargo xtask upstream-trace framepool-border <外部观察目录> [--check-only]` 核验完整 61 份原生输入：27 份布局和完整 BGR、原生 OpenCV type/shift、FNV、属性 HRESULT/值/诊断额外 getter/setter 次数（不重计 F 自身的 false 请求）、目标/捕获/UI 线程、窗口状态、对象销毁 QPC、marker 进展/隔离/关闭和完整文件清单。目录须已存在，只读检查不创建拼错的路径；成功的记录生成另添一份 `border-validation.json`。处理组可以保留空帧或不同像素观察，但正控制不能降级；报告始终明确 producer/capture/full P1 均未验收。属性返回 false 不能证明系统边框已消失，额外设置 true 且回读 true 也不能单独证明指示器已经显示或被这次截图采到，见 [Microsoft 属性说明](https://learn.microsoft.com/en-us/uwp/api/windows.graphics.capture.graphicscapturesession.isborderrequired)。C++ owner 析构不代替原生 session/callback 排空证据。
+
+本机 VS2026/MSBuild 实际编译通过；冻结 1,513 份输入（含 CL/link 首要及依赖、确切 F 源码、SDK、生成片段、程序和监听脚本）后按用户已授权的自动启动规则连续三轮。共 81 次捕获、12 个窗口、39 项正控制，81 份完整 CPU 图像均独立匹配 96×64 已知场景；每轮实际默认 getter=false，额外 true setter 成功且 getter=true。四路 Raw Input/低级 hook 鼠标键盘监听零输入，最大采样间隔 78.573 ms，小于 500 ms，桌面前提和注销完成；未声称新的物理输入正控制。本机仍未复现历史外三像素的 924 点差异，不能据此改写 manager 六项失败、证明其生产者或宣告完整 P1。
+
+本批使用显式归档依赖重放；更新后的 nightly、120 项 xtask/工作区测试、Release、Clippy 和格式检查通过，不视为新在线依赖验收。校验器 29 次人工数据调用包含 24 次拒收，另外真实 `Step` 的 12 项控制/24 个子进程核验成功、非零失败、缺环境、完整记录以及失败后继续独立案例；最初不递增的人工 post-call 时钟和外部 harness 的 LF/CRLF 比较失败均保留，另建修正记录。prepare-native 单独保留构建/捕获/记录步骤及失败输入、缺 API 时在捕获前明确标记 `missing_environment`，其他案例继续；即时 CI 包加入 `source-border/**`。新的托管 Windows 执行尚待验证，预装工具仍按 `preinstalled` 政策记录实际身份，工具年龄不阻断 CI。完整证据位于参考目录 `local/current-framepool-border-development-path.txt` 所指批次。
+
 确切 `b178154` 的 [Actions 41520653914](https://github.com/AbyssRei/maafw-screencap/actions/runs/41520653914) 已验证即时上传修正：官方 40,071,377 字节 ZIP 的整体摘要及全部 CRC 通过，11,941 份文件中完整包含十项登记 AST 输出。实际源码摘要、编译命令变换、退出码、三个 namespace 根和四个 block 节点数均独立核对；组件仍为 133/154，全部状态与 `1469603` 一致、21 个失败不变。本复核只关闭新增 AST 的即时上传缺口；原生编译器身份继续按预装策略记录，版本新旧不作门禁，实际编译/链接/测试要求不降低，完整来源、严格像素及 P1 仍未验收。
 
 确切 `1469603` macOS 的官方完整工程 ZIP（359,275,006 字节）及其中 tar 的身份/CRC/摘要现已核对，并仅取回十四项选定输入，补齐全部十项 AST 输出。编译数据库、普通未插桩入口、仅移除 `-c`/object 输出的参数变换、编译器版本、退出码、两份 F 来源、1,967,302 字节原始 AST 与节点计数分别复核；实际 Xcode 27.1 身份继续按预装策略记录，不设置严格最新版门禁。该选取不表示整个批次的来源/依赖已完整恢复。六项普通 callable 和四个嵌套 block 的原始源位置已核对，并用于上述十项 Rust 对应；原 153 项检查状态不变，新增 AST 观察通过，组件仍保留 21 个失败。
