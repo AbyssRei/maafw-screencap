@@ -400,12 +400,13 @@ fn moves_complete_capture_between_live_callers_and_unwinds_before_foreign_close(
             );
             for (call, frame) in closed.frames.into_iter().enumerate() {
                 assert_eq!(marker(&frame.raw), frame.serial);
+                let (rgb, rgb_remainder) = frame.raw.pixels().as_chunks::<3>();
+                let (bgr, bgr_remainder) = frame.bgr.as_chunks::<3>();
+                assert!(rgb_remainder.is_empty() && bgr_remainder.is_empty());
+                assert_eq!(rgb.len(), bgr.len());
                 assert!(
-                    frame
-                        .raw
-                        .pixels()
-                        .chunks_exact(3)
-                        .zip(frame.bgr.chunks_exact(3))
+                    rgb.iter()
+                        .zip(bgr)
                         .all(|(rgb, bgr)| rgb[0] == bgr[2] && rgb[1] == bgr[1] && rgb[2] == bgr[0])
                 );
                 fs::write(

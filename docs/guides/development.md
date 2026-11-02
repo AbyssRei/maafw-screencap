@@ -72,6 +72,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `b0b1b84` 的 Linux libtest 已编译，四项 portable consumer、四项 row ownership 和五项真实 P0 捕获测试均通过；随后原生 Clippy 在新 `thread_mobility_tests.rs` 的两处 `chunks_exact(3)` 报 `chunks_exact_to_as_chunks`。P0 保持 26 项通过、两项失败，包括真实 Clippy 和其外层准备失败，不能把测试已编译或 P0 捕获通过写成新完整 owner 的线程交接已运行。新修正只将这段测试比较改为标准库 `as_chunks::<3>()`，并显式要求两侧 remainder 为空、像素组数量相等；不禁用 lint，不改生产代码、捕获次数、断言目标或编排门禁。实际修正后 Linux Clippy/新线程回归仍待下一次 Actions。
+
+独立复核官方 91,321 字节轻量 ZIP 的整体摘要、CRC、全部 34 份恢复文件与 33 个可用登记路径，保存五项通过测试的日志和两个确切失败。轻量包仍缺 544 项完整输入；修复前新测试源码只在确切 Git 字节匹配 native 登记摘要后另存，不伪装成已下载的完整来源。原编译失败 `f6df469`、本批 Clippy 失败与后续结果分别保留，没有重跑本机捕获或改写历史无输入多轮结论，完整 P1 未验收。
+
 确切 `f6df469` P0 PipeWire 原生准备为 19 项通过、两项失败：真实 Linux 编译在 `manager_native_offer_tests.rs:158` 报 `E0433`，旧 warm-init 控制使用的 `Native` 原先经 manager 的 `super::*` 引入，而 manager 现已正确改用完整 `Capture`。libtest 尚未运行，捕获和线程交接用例均未执行；不能将此编译失败写成线程、像素或 Send 运行结果。独立复核官方 57,758 字节 ZIP 的摘要/CRC/23 份恢复文件、22 个可用登记路径及两个确切失败日志，轻量包仍缺 542 项完整输入，原失败保持封存。
 
 修正仅在 offer 测试模块显式导入 `crate::backends::linux::pipewire::native::Native`，保留它独立 warm raw-global-init/deinit 的用途；没有换成 product Capture、修改断言、放宽编排或更改生产 owner/锁行为。已检查该测试族其他 `Native` 使用和确切单行差异，本机格式、文档校验不代表 Linux 编译通过；实际重新编译、原版/Rust 线程交接仍待新 Actions。原本 116 项 xtask 等开发检查只保留其原验证范围，完整 P1 尚未通过。

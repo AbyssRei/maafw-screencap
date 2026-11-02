@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+确切 `b0b1b84` 已通过 Linux 编译及 P0 五项真实捕获测试，随后 Clippy 因线程测试两处固定 chunk 写法失败，保持 26 项通过、两项失败。测试现改用 `as_chunks::<3>()` 并核对完整性，生产代码与门禁未改；新线程交接仍待原生验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `f6df469` 的 P0 PipeWire 在 Linux 编译时报旧 offer 测试缺少 `Native` 导入，尚未执行测试/捕获；19 项通过、两项失败与原包保留。测试模块已补显式导入，完整 owner/断言不变，实际重编译和线程交接仍待 Actions，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 PipeWire 新增完整私有 owner，封装 driver/consumer 并接入既有 manager；仅完整独占调用间迁移，原生映射与裸锁不外露，未增加 Sync 或 SDK 调度。原版/Rust 的三调用线程、异线程关闭、持帧与 Rust 展开回归已准备；116 项 xtask 和本机数据/编排控制通过，实际 Linux 编译执行仍待 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
