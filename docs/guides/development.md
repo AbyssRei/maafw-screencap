@@ -4,6 +4,14 @@
 
 ## 逐函数对应审阅
 
+`PipeWireScreencap.cpp/.h` 新增 36 项对应：34 项 CPP helper/方法/谓词和两项头文件声明，合计含六项删除的复制构造/赋值及两个等待谓词。库内位置覆盖实际 consumer、native、POD、CPU buffer、resources、MemFd 和 DMA 七份 Rust；其当前字节均匹配旧 `a5` 登记原生输入，显式核算 CRLF。实际 `reference function-map` 保留完整所选 101 项历史通过检查与确切日志，未把旧正常格式通过扩大为新分支、任意故障或完整后端验收；累计 34 份固定来源、259 项。
+
+审阅保留实际 loop 锁及 guard 退出、相对整秒等待/三秒预算、原谓词及错误后重查；捕获激活流、设置 wanted，超时先查断连、计数、空缓存，再判断大于三次，前三次回放。快照/格式在锁内取得，OpenCV 转换仍在解锁后，BGR 保留无转换入口。初始化保留 daemon/显式 unsafe FD、成功 core 后清 FD、先启动 loop 后锁内 connect 和三份 POD 顺序；后续重建按原 daemon 状态走，不新增恢复。process 排空保留最新、及时归还前项，仅 wanted 时复制，先结束 map 再清 wanted/signal/归还；core/state 回调不增加新唤醒或自动重连。
+
+映射同时单列差异：布局/FD/fstat/mapoffset/READABLE/单 plane 验证、可失败分配、稳定 Box callback/hook、panic 边界及错误标量均为安全适配。MemFd 保留 private/offset0，DMA 保留 shared/stride×height、一次 START/END 及 START 失败仍保留已映射地址的来源行为，不提前实施 P3 重试或宣称失败同步后的 CPU 一致性。Rust 仅在独占 Arc 存储时复用，源 Mat 可能覆盖共享 BGR 输出的别名差异明确保留；独立 CPU 拷贝不冒称消除了转换/分配。stop 必须在锁外，随后按 stream hook/stream、core hook/core、context、loop 清理，再清状态；timeout counter 位于单独 Consumer，由组合 owner 配对 reset，不能把单独 `Native::close` 写成已重置整个源类状态。原每构造 raw `pw_init` 的未配对全局引用没有顺便修复，fixture 回收另作边界。
+
+CPP grammar 对 `SPA_POD_OBJECT_FOREACH` 的一处宏循环不能直接索引；仅在独立 parser 输入中用同字节长度的循环占位，保存全部替换字节、原错误、原函数/闭包范围和摘要，实际 F 来源及可执行程序未改，不声称编译器展开或宏语义验收。头文件明确允许捕获线程与 init/close 线程不同、但由调用方串行化；当前 Rust `Resources` 的 `PhantomData<Rc<()>>` 及 `Native` 可持有的裸 lock 状态尚不满足这个迁移边界。稳定地址、调用串行及旧原生通过都不能证明 Send，本批不加 unsafe Send。新八例分支夹具的首例错误前提及独立修正见[本轮复核](#本轮原生与-ci-复核)，生产解析器未改，完整八例仍待新 CI。两次外部 reader/图校验拒收分别保留，最终只纠正真实 adapter 路径和静态函数回调的类型标签，没有放宽校验器。本批没有新捕获或改变既有本机无输入多轮结论，完整 P1 仍未通过。
+
 `NoneScreencap.h` 的默认构造、默认虚析构和内联 `screencap` 新增三项对应。Rust 仍由原 manager owner 保存 `Unit::None`，不创建 PipeWire/Wlr 原生资源；捕获返回 false，不赋值调用方图像、不进入 converter、不轮询或标记 replay。输入构造失败后 retained None 与 connected=false 并存的状态保留；drop 仅保存私有标量 trace。Box/Arc 的可失败分配及 trace 是明确的 Rust 适配，不代表原类 ABI、任意析构故障或进程终止式 OOM 可恢复。
 
 实际 `reference function-map` 只读核对三项、两个库内 Rust 位置族及一个旧 `a5` Linux 检查；其日志确有四项测试通过，覆盖 None 输出不变、零 converter 调用和失败输入后的保留。两份库源码、真实 Rust 测试与原 manager model 共四份来源匹配已登记原生输入，显式核算 CRLF。原 model 的 None 是脚本替身，不能据此声称执行了确切原版头文件；基类继承方法、宏/虚表及完整原生等价性仍待验收。累计 32 份固定来源、223 项，没有新编译、截图或输入监听，不改变既有本机连续多轮结论。
