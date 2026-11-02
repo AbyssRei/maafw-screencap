@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`DesktopDupScreencap.cpp/.h` 与 `DesktopDupWindowScreencap.cpp/.h` 新增二十四项对应，包含六个清理闭包、两个构造和一个默认派生析构。保留默认硬件 device 后建原 `IDXGIFactory`、nonnull HWND 的 nearest-monitor 查找、找不到时 adapter0/output0 回退，以及使用原 device 的 `DuplicateOutput`；没有为跨 adapter 成功而换设备。每次外层捕获仍检查输出，首用至多三次仅检查末像素 alpha 的预热，此后必须另取一帧返回；三次预热都失败时仍保留初始化标记，没有增加缓存、回放或最终失败后的重试。`AcquireNextFrame` 仍等待 2000ms；access-lost 只清 duplication/staging 和 monitor，输出切换、完整 uninit 的释放顺序与残留状态分别保留，未合成一个新恢复事务。
+
+六个闭包逐项对应枚举 adapter/output 的局部释放、primary 临时 output 的 QI 引用，以及 Unmap、raw texture Release、ReleaseFrame、desktop resource Release。成功 Acquire 才建立 ReleaseFrame 责任，成功 Map 才建立 Unmap 责任；失败时不释放别的调用拥有的帧。原版返回借用已 Unmap 内存的 Mat；Rust 在 Map 有效时复制独立 BGRA 行，仍等原清理结束后才转换 BGR，明确保留增加的整幅复制工作。窗口包装仍先完成整屏转换，再查询 client/origin/output 与检查 ROI；原共享 BGR ROI 改为隔离目标 BGR 复制，是额外的所有权安全适配，不称作消除转换/复制。后续 descriptor 兼容性、布局/stride/checked 算术、null-success 拒收和 caller-thread owner 同样保留其安全适配身份，不宣称无效 native 行为等价。
+
+实际 `reference function-map` 只读通过四份固定 F 来源、二十四项及完整旧 `58fa6f0` 的二十三项 `desktop-dup-*` 检查身份。四份库内 Rust 与原生登记快照匹配并显式核算 checkout CRLF；生成声明入口、真实 `SystemWindow` 转发、转换/裁剪桥和生成输入另存 Git 摘要作为边界上下文。没有新编译、截图或输入监听，也不改变本机无输入多轮结论。累计二十九份来源、198 项；其余十五份原 partial 来源、生成 COM/SDK/宏展开、任意 device/access-loss、多 adapter/显示器变化、原生失败及完整 P1 仍未验收。
+
 `CustomControlUnitMgr.cpp/.h` 新增二十四项对应，其中十项涵盖截图、连接/退出边界、UUID/features/info 与默认析构，十四项应用启动/停止、输入动作和 shell 明确排除。保留当前借用的 callback 表与 user argument、缺 connect 为 false、缺 connected/inactive 为 true、缺 features 为零，以及无 connected gate 的截图/查询。截图和 UUID 使用真实 C++ 栈缓冲：缺回调不构造，false/错误保留调用方输出，true 包括 empty 在缓冲结束前发布真实 Mat/string owner。UUID 保留完整字节与 u64 features；metadata 保留先建默认对象、在 StringBuffer 内调用实际 native JSON parser/as_object 拷贝、退出 helper 缓冲后再覆盖 type=custom 的顺序。没有给核心增加 OpenCV/JSON 依赖或冻结 provider/JSON/能力 ABI；适配中的额外 owner head、独立字节复制、分配/异常安全适配仍按原范围记录。
 
 实际 `reference function-map` 核对二十四项（排除十四项）及完整旧 `58fa6f0` 的十八项 `custom-*` 通过身份，没有新截图。库内对应只指向 `src/backends/custom.rs`；四份真正调用 native 的 Rust 验收模块、五份 C++/声明/构建上下文单独保存边界跨度、Git 摘要和十项已恢复原生登记来源，显式核算 CRLF。初次将测试适配器写进库实现 site，被现有门禁拒绝；原数据/日志保留，新数据集改为独立边界记录，未放宽校验器。记录追到实际 ImageBuffer/StringBuffer、Mat/string/JSON owner 和 C++ 调用方发布，不以 generic trait 或 mock 代替 native 证明；适配器本身仍没有完整逐函数/ABI 验收。累计二十五份来源、174 项；任意并发改表、线程迁移、销毁/重入和全部分配故障、其余来源/宏及完整 P1 仍未验收。
