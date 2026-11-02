@@ -2,11 +2,11 @@
 
 `FramePoolScreencap.cpp` 新增十项函数/清理闭包对应，核对原初始化、等待/缓存、Map/Unmap、窗口裁剪及退出顺序，保留所选历史分组的 39 项通过、六项失败。累计二十三份来源、150 项；头文件条件分支、完整 native/callback 与 P1 仍未验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
-确切 `71237c7` 的 Linux job 成功；P0 PipeWire 轻量包的 27 项检查、二十次真实流生命周期及 source/daemon 正常退出已核对。529 项完整输入仍缺原始 release/来源身份元数据，不能据此断定 CI 走过 nullable tag 查询分支或授予完整 P1，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `71237c7` 的 Linux job 成功；P0 PipeWire 的 27 项检查、二十次真实流生命周期及正常退出已核对。独立按 CI 登记摘要恢复的身份文件确认走普通 `release.commit` 分支；null 分支仍只有明确的控制测试范围。原始 release 等 528 项完整输入尚缺，不授予完整 P1，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 PseudoMinimizeHelper 及 PrintWindow/FramePool 伪最小化包装新增四份固定来源、十九项对应，覆盖恢复顺序、工作线程和析构所有权。只读核对保留九项历史检查中的五项通过、四项失败，没有新截图；累计二十二份来源、140 项，仍不代表完整 P1，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
-确切 `d139b85` 的 Linux 原生 job 成功，Wlr 151/151：memfd 的真实 syscall 范围及 poll/展开恢复控制通过，两类故障的原版/Rust 各二十轮与 280 份像素独立核对。旧失败保留；597 项轻量输入缺口尚待完整工程包补核，不代表完整后端或 P1 通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `d139b85` 的 Linux 原生 job 成功，Wlr 151/151：真实 syscall 控制、两类故障的原版/Rust 各二十轮及 280 份像素通过。完整工程包现已补齐全部 597 项轻量缺口，核对 9,630 个登记路径、501 个产品 Git blob/mode、十五份 F 文件及实际编译输入。旧失败保留；此选择性输入闭包不代表完整后端或 P1 通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 PipeWire 已修正实际出现的 `release.commit:null` 解析失败：只补查同一正式发布 tag 的 commit，保存身份来源，并继续核对真实 Git checkout。27 组元数据、8 组编排分支控制及真实 Tag API/Git ref 核对通过；不以旧缓存替代查询失败，新原生构建和取帧仍待 CI。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
