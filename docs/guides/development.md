@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+`CustomControlUnitMgr.cpp/.h` 新增二十四项对应，其中十项涵盖截图、连接/退出边界、UUID/features/info 与默认析构，十四项应用启动/停止、输入动作和 shell 明确排除。保留当前借用的 callback 表与 user argument、缺 connect 为 false、缺 connected/inactive 为 true、缺 features 为零，以及无 connected gate 的截图/查询。截图和 UUID 使用真实 C++ 栈缓冲：缺回调不构造，false/错误保留调用方输出，true 包括 empty 在缓冲结束前发布真实 Mat/string owner。UUID 保留完整字节与 u64 features；metadata 保留先建默认对象、在 StringBuffer 内调用实际 native JSON parser/as_object 拷贝、退出 helper 缓冲后再覆盖 type=custom 的顺序。没有给核心增加 OpenCV/JSON 依赖或冻结 provider/JSON/能力 ABI；适配中的额外 owner head、独立字节复制、分配/异常安全适配仍按原范围记录。
+
+实际 `reference function-map` 核对二十四项（排除十四项）及完整旧 `58fa6f0` 的十八项 `custom-*` 通过身份，没有新截图。库内对应只指向 `src/backends/custom.rs`；四份真正调用 native 的 Rust 验收模块、五份 C++/声明/构建上下文单独保存边界跨度、Git 摘要和十项已恢复原生登记来源，显式核算 CRLF。初次将测试适配器写进库实现 site，被现有门禁拒绝；原数据/日志保留，新数据集改为独立边界记录，未放宽校验器。记录追到实际 ImageBuffer/StringBuffer、Mat/string/JSON owner 和 C++ 调用方发布，不以 generic trait 或 mock 代替 native 证明；适配器本身仍没有完整逐函数/ABI 验收。累计二十五份来源、174 项；任意并发改表、线程迁移、销毁/重入和全部分配故障、其余来源/宏及完整 P1 仍未验收。
+
 `FramePoolScreencap.cpp` 新增十项函数/清理闭包对应，直接连接当前 `frame_pool.rs`、`wgc.rs` 与 `wgc_factory.rs`。保留首用硬件 device/swapchain 初始化、原 `Create`（BGRA、一个 buffer）、三次初始 Size 查询及各自 catch 边界、border/cursor/secondary 顺序、StartCapture 后最后记录尺寸；没有改成 CreateFreeThreaded。取帧仍先 Close 排空旧帧，再以两秒 steady-clock 预算按 2ms 睡眠轮询，超时按原位置 clone 缓存；当前帧只按源引用寿命释放。Map 后保持客户区、原点、DWM bounds/GetWindowRect 回退和夹取顺序，转换及缓存 clone 均先于 Unmap。Rust 的 checked ROI/stride/ContentSize 拒收与独立目标像素复制为明确的安全适配，空 ROI 清缓存并以内部 EmptySample 表达；不把无效来源行为写作等价，也不把复制或转换写作消除工作。
 
 清理保留 session Close、pool Close、texture/item/尺寸清空顺序，uninit 仍保留 cache/device/context/swapchain；尺寸变更重建失败后的部分状态留给下次调用，没有加回滚。原 border 五秒等待用独立 event/delegate 状态适配，晚到回调只持有 event/status/error；超时不表示取消、注销或排空。实际只读 `reference function-map` 校核十项与完整 `58fa6f0` 的 `frame-pool-*` 分组，保留 39 项通过及六项失败；三份当前 Rust 与已恢复原生快照的登记身份匹配并显式核算 CRLF，显式 C++/OpenCV 转换桥源码另作摘要绑定，没有新编译或截图。累计二十三份来源、150 项。本批只覆盖 cpp 的可用实现，头文件构造/旧 SDK stub 四个条件函数体及完整 SDK inline/宏展开尚未纳入清单；原生像素、callback 排空、并发/故障与完整 P1 仍未验收。

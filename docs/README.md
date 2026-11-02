@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Custom manager 的两份固定来源新增 24 项对应：10 项截图/元数据/生命周期、14 项排除的应用/输入/shell。十八项历史检查与十项原生来源身份已核对，测试适配器另列边界记录；累计二十五份来源、174 项，完整 P1 仍未验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
+
 macOS 已准备独立的自有窗口最高标准层级对照，记录真实 API 层级、窗口 owner/census 和关闭状态，保留两种调用顺序及整幅 RGB 断言。新 schema5 只校核诊断记录；110 项 xtask、Rust 类型/Clippy 和记录/编排控制通过，Objective-C++ 编译与实际取帧仍待原生 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 `FramePoolScreencap.cpp` 新增十项函数/清理闭包对应，核对原初始化、等待/缓存、Map/Unmap、窗口裁剪及退出顺序，保留所选历史分组的 39 项通过、六项失败。累计二十三份来源、150 项；头文件条件分支、完整 native/callback 与 P1 仍未验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
