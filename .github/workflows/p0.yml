@@ -97,6 +97,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/*-info-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/reference-compile-commands.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/original-source-identities.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/clang-ast/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/source-context-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/scene-executable-identity.json
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-macos-context-*/inputs/source-reference/meojson-*.json

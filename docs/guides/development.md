@@ -80,6 +80,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `e987a99` 的 [Actions 41514949183](https://github.com/AbyssRei/maafw-screencap/actions/runs/41514949183) PipeWire 原生组件通过全部 201 项检查，原 197 项状态不变，新增两个原版 daemon/FD 交接、一个 Rust 交接及一个记录检查均通过。实际矩阵有 80 个生命周期、240 次返回图像和另加 40 次 Rust raw/converter 展开：每对象三个同时存活的调用线程依次创建/初始化、捕获/停用、捕获/异线程关闭，原生 loop 身份/启动代次不变，最终 task ID 集合及 FD 回到各自基线。独立 Python 复算全部 720 份即时/持帧 BGR/RGB、标记、已知目标像素及逐对象任务记录，归档的独立 checker 只读核对 schema1 报告亦通过；opaque Mat/loader 始终留在各自调用线程。
+
+该次官方 39,816,782 字节 ZIP 的整体摘要/CRC、44,114 份文件和 44,113 个可用登记路径均核对通过。轻量包仍缺 609 项完整来源/依赖输入；另有十一份选定产品源码只在确切 Git 字节匹配原生登记摘要后作为独立 supplement 保存，未伪装成包内下载来源。本结论接受有限 daemon/成功唯一 FD offer 的完整 owner 串行交接回归，不接受任意并发、其他 setup/cleanup 故障、SDK Send/Sync、完整来源闭合或 P1。较早编译/lint 失败及无输入本机结论保持原身份。
+
+确切 `1469603` 的 [Actions 41518392492](https://github.com/AbyssRei/maafw-screencap/actions/runs/41518392492) macOS 已实际通过新增 Clang AST 步骤，日志记录三个过滤 namespace 根、1,967,302 字节原始 JSON stream。组件为 133/154，旧 21 项失败名称不变；这不是截图或函数 census 验收。首次即时诊断包未收新增 `clang-ast/` 目录，现已补 `clang-ast/**` 上传范围；本次原始字节及十项输出登记仍待从完整工程包复核，不从日志长度推断函数/回调语义。
+
 确切 `e987a992ddbee75d6571de8da1cbdf96898f1b8e` 的 [Actions 41514949183](https://github.com/AbyssRei/maafw-screencap/actions/runs/41514949183) P0 PipeWire 通过全部 27 项检查：四项 consumer、四项 row、五项实际捕获和原生 Clippy 均通过，source/daemon 正常退出。独立复核官方 90,569 字节 ZIP 的摘要/CRC、33 份文件及 32 项可用登记路径，轻量包仍缺 544 项完整输入。相较 `b0`，仅 Clippy 改为通过、外层准备失败消失，其他检查未改；本结果不接受新完整 owner 的跨线程运行，旧编译/lint 失败和完整 P1 状态保持原身份。
 
 确切 `b0b1b84` 的 Linux libtest 已编译，四项 portable consumer、四项 row ownership 和五项真实 P0 捕获测试均通过；随后原生 Clippy 在新 `thread_mobility_tests.rs` 的两处 `chunks_exact(3)` 报 `chunks_exact_to_as_chunks`。P0 保持 26 项通过、两项失败，包括真实 Clippy 和其外层准备失败，不能把测试已编译或 P0 捕获通过写成新完整 owner 的线程交接已运行。新修正只将这段测试比较改为标准库 `as_chunks::<3>()`，并显式要求两侧 remainder 为空、像素组数量相等；不禁用 lint，不改生产代码、捕获次数、断言目标或编排门禁。实际修正后 Linux Clippy/新线程回归仍待下一次 Actions。
