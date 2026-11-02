@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+`FramePoolScreencap.cpp` 新增十项函数/清理闭包对应，直接连接当前 `frame_pool.rs`、`wgc.rs` 与 `wgc_factory.rs`。保留首用硬件 device/swapchain 初始化、原 `Create`（BGRA、一个 buffer）、三次初始 Size 查询及各自 catch 边界、border/cursor/secondary 顺序、StartCapture 后最后记录尺寸；没有改成 CreateFreeThreaded。取帧仍先 Close 排空旧帧，再以两秒 steady-clock 预算按 2ms 睡眠轮询，超时按原位置 clone 缓存；当前帧只按源引用寿命释放。Map 后保持客户区、原点、DWM bounds/GetWindowRect 回退和夹取顺序，转换及缓存 clone 均先于 Unmap。Rust 的 checked ROI/stride/ContentSize 拒收与独立目标像素复制为明确的安全适配，空 ROI 清缓存并以内部 EmptySample 表达；不把无效来源行为写作等价，也不把复制或转换写作消除工作。
+
+清理保留 session Close、pool Close、texture/item/尺寸清空顺序，uninit 仍保留 cache/device/context/swapchain；尺寸变更重建失败后的部分状态留给下次调用，没有加回滚。原 border 五秒等待用独立 event/delegate 状态适配，晚到回调只持有 event/status/error；超时不表示取消、注销或排空。实际只读 `reference function-map` 校核十项与完整 `58fa6f0` 的 `frame-pool-*` 分组，保留 39 项通过及六项失败；三份当前 Rust 与已恢复原生快照的登记身份匹配并显式核算 CRLF，显式 C++/OpenCV 转换桥源码另作摘要绑定，没有新编译或截图。累计二十三份来源、150 项。本批只覆盖 cpp 的可用实现，头文件构造/旧 SDK stub 四个条件函数体及完整 SDK inline/宏展开尚未纳入清单；原生像素、callback 排空、并发/故障与完整 P1 仍未验收。
+
 `PseudoMinimizeHelper.cpp/.h`、`PrintWindowWithPseudoMinimizeScreencap.h` 和 `FramePoolWithPseudoMinimizeScreencap.h` 新增十九项对应，含两条 deleted 复制声明和两条 default 析构。保留原 HWND 非拥有身份、style 的零值/last-error 区分、仅原 layered 窗口查询 alpha 与 255 回退、running 置位后启动线程，以及同步 IsWindow/IsIconic 后再 apply。apply 仍按读取/添加 LAYERED|TRANSPARENT、alpha0、SW_SHOWNOACTIVATE、pseudo=true 的顺序执行；中途失败不回滚先前副作用。revert 先恢复完整原 style，再按原 layered 标志恢复 alpha，任一步失败仍继续并清 pseudo；原 color key/flags 仍不恢复，两侧均使用 key0/LWA_ALPHA。
 
 工作线程保留 100ms 周期、目标失效时只清 pseudo 不清 running，以及只在同一 HWND 成为前台时恢复的行为；stop 先清 running、等待 join 完成，再恢复及按需 SW_MINIMIZE。inactive 只恢复，不重新最小化或停止内层捕获。两种包装保留构造顺序、捕获前 helper 调用及 helper 先于 inner 的析构边界，FramePool 显式 take/drop helper 后才释放 pool/session/device/cache。Rust 的单一 !Send/!Sync owner、私有 Arc、短 Mutex、fallible allocation、线程创建错误、poison 恢复及固定错误/worker-panic 证据属于明确的安全适配，不宣称等价于源异常、进程中止 OOM 或强制取消。没有增加画面就绪等待或跨窗口协调器。
