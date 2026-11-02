@@ -72,6 +72,18 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+PipeWire 新增私有 `native::Capture`，在同一实现中拥有原 `Native` 与 `Consumer`，并替换 manager 中分离的两个 owner。对外只给完整 init/capture/inactive/close 与标量观察，不实现 Driver、Deref，不返回裸 driver/锁/回调/映射。完整调用的真实 loop guard 在返回和展开时结束，转换在解锁后调用且不保存在 owner；稳定 Box 回调/hook 地址不随 owner 移动，缓存只有独立 CPU Arc，没有未结束 map/buffer lease。局部 unsafe Send 依这些源码不变量及固定 F 头文件允许串行异线程调用的契约建立；没有 Sync、并发调用、SDK Session/worker、绝对等待或恢复策略。底层 Native/Resources 和原生 map 保留既有线程限制，不能由新完整 owner 的 Send 推导它们也能直接移动。完整 close 同步重置 consumer counter；未连接 init 的 stale-state 清理也重置，已连接 early success 不重置，保留来源行为。原 raw global init 政策不变，测试清理单独配平。
+
+新增原版模式直接执行未改写的 F 完整类；daemon 和成功 FD 各二十对象，三个同时存活的调用线程依次构造/init、两次 capture/inactive、一次 capture/close/destruction。以实际 TID、同一个 loop 的 start generation、四份 live task 记录及最终 baseline IDs 核对，不能因线程 ID 已复用而冒充交接。Rust 使用同样三线程/两模式，各线程自己的 Mat/loader 在交接前结束，只传完整 Capture 和独立 CPU 数据；另在第二线程故意展开一次真实 raw-copy 后的 converter，捕获展开后交给仍不同的第三线程取锁/恢复并关闭。展开是 Rust 独立安全控制，不声称对应原版转换异常；正常返回图像共 240 次，另有四十次 Rust 展开取样。资源检查在实际 join/stop/destruction 后执行；仅允许已有严格观察器识别的已知代次 kernel retirement，不为活动线程或捕获失败重试。
+
+`cargo xtask upstream-trace pipewire-thread-mobility <外部矩阵> [--check-only]` 要求两侧/两模式共八十生命周期、每对象三个不同且不属于 baseline 的调用 TID、同一原生 loop 代次、FD/task 配平、成功 offer 已关闭、Rust 四次 raw copy/dequeue/queue 与零原生错误、四十次展开记录，以及 720 份完整 current/held BGR/RGB 数据。图样由 producer marker 解码全目标核对，来源/Rust 独立取样不强求不同时间 marker 相同。不透明 Mat/loader 的跨线程能力、任意错误/并发与最终 SDK 仍未验收。四个编排步骤独立保留原版两模式、Rust 与记录失败，零测试、忽略、非零退出和部分汇总不能通过；fixture 超时不冒称原生可取消。
+
+本机沿明确封存 Cargo/vendor 图通过 Workspace（含 116 项 xtask）、Release、Clippy 与格式检查；新 C++ helper 仅经封存 grammar 语法解析，尚无本机 Linux 编译/执行。一个完整人工矩阵完成十六次实际 CLI 控制，十四类坏记录被拒绝；十四个真实 pwsh 子进程验证五项通过、九项拒绝和失败后继续。这些是数据/编排开发验证，不是原生交接、Send 证明或完整 P1。确切旧 native/thread-loop 来源与官方锁/停机规则另存外部记录；新的原版 C++、Linux Rust 测试及上述线程边界运行仍待 Actions。本批旧 function-map 保持其 fd41 快照，未将变更后的 owner/manager 自动重标为完整当前对应，没有运行本机桌面捕获或改写既有无输入多轮结论。
+
+确切 `f7fc1fe` 的 Linux job 现已成功，PipeWire 为 197/197：原先三项 parser-fixture 失败对应的新检查全部通过，检查清单与旧 `1d0855a` 无增删，其余通过身份保留。八例 media/raw parser 的保存返回码均为 `2`；标准 raw 观察首属性，未改写的 F helper 经原 `==0` 前置条件进入手动回退并保留最后属性，五项接受、三项拒绝，Rust 全部相同。生产 `native_pod.rs` 仍为原摘要，先前怀疑的生产解析器缺陷未复现；旧 194/197 和全部失败继续封存，不能重命名为成功。
+
+官方轻量包 38,342,335 字节长度、整体摘要、CRC、43,228 份恢复文件及 43,227 个可用登记路径独立核对。另逐字节解析全部八份真实 POD 的 object、媒体/格式/尺寸 key、属性顺序、类型/长度/填充和 Choice(None) child，与实际来源/Rust 记录一致；使用此前独立封存 schema2 validator 的只读报告检查通过，数据未改。轻量包仍缺 605 项完整来源/依赖输入，本批不宣称完整闭包；八例通过只关闭该局部回归，不接受上文新增线程 owner、所有 PipeWire 或完整 P1。新的线程开发验证也没有替代这批 native 结果。
+
 确切 `1d0855a` 的原生 PipeWire 组件为 194/197：新增原版分支夹具、Rust 一致性及记录三项均失败。实际首例 raw SPA parser 返回 `2`，尺寸 8×3、首格式 BGRA 正确；夹具误要求 `code==0`，保存第一份 POD/来源行后即停止。该例原版/Rust 相同，另外七例没有执行；Rust 的八例数量断言及记录完整性拒收均保留为失败。此前提出的不支持标准格式触发回退差异没有复现，不能据此修改生产解析器。原有 28 项格式/转换的原版和 Rust 检查均通过，其他 194 项保持实际身份。
 
 官方轻量 ZIP 的 38,330,617 字节长度、整体摘要、CRC 和全部 43,216 份恢复文件核对通过，43,215 个可用登记路径匹配；仍缺 605 项完整输入。生产 `native_pod.rs` 不在轻量包中：只在确切 Git 字节匹配原生登记摘要后，另存单文件重建及其来源说明，不伪装成已下载字节或闭合其他输入。初次 reader 错误要求轻量包含该文件而停止，其脚本、拒收与部分复核数据保留；修正后的新目录完成上述检查。当前记录仅有 raw parser 的实际返回码，media parser 的返回码由下轮新增观察取得；完整来源、八例一致性和 P1 尚未验收。

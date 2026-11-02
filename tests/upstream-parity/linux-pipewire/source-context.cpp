@@ -14,6 +14,7 @@
 #include <cerrno>
 #include <charconv>
 #include <chrono>
+#include <condition_variable>
 #include <cstddef>
 #include <cstring>
 #include <cstdlib>
@@ -25,7 +26,9 @@
 #include <latch>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <semaphore>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -768,6 +771,7 @@ void save_format_fixtures(const std::filesystem::path& directory) {
     std::cout<<"original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved\n";
 }
 #include "format-branch-fixtures.hpp"
+#include "thread-mobility.hpp"
 struct MemFile {
     int fd;
     explicit MemFile(int value):fd(value) { require(fd>=0,"memfd fixture creation failed"); }
@@ -995,6 +999,13 @@ int main(int argc,char** argv) {
         require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid native KWin node");
         manager_kwin_native_context(argv[2],node,argv[4]);return 0;
 #else
+        if(argc==6 && std::string_view(argv[1])=="--thread-mobility") {
+            uint32_t node=0;const std::string_view id=argv[3],mode=argv[4];
+            const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
+            require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size() && (mode=="0" || mode=="1"),
+                "invalid thread-mobility node/mode");
+            thread_mobility_context(argv[2],node,mode=="1",argv[5]);return 0;
+        }
         if(argc==3 && std::string_view(argv[1])=="--manager-host-offer") {
             manager_host_offer_context(argv[2]);return 0;
         }

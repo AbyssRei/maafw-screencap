@@ -48,6 +48,7 @@ mod pipewire_host;
 mod pipewire_host_api;
 mod pipewire_host_offer;
 mod pipewire_memfd_stream;
+mod pipewire_thread_mobility;
 mod pipewire_trace;
 mod quality;
 mod records;
@@ -226,6 +227,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
                       cargo xtask upstream-trace pipewire-format-branches <external matrix> [--check-only]\n\
+                      cargo xtask upstream-trace pipewire-thread-mobility <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace screen-geometry <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-pending <external directory> [--check-only]\n\
                       cargo xtask upstream-trace framepool-target-loss <external matrix> [--check-only]\n\

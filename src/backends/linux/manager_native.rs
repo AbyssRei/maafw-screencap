@@ -3,7 +3,7 @@
 //! Native factories over the SAME private Wlr/PipeWire implementations. No
 //! recovery, new scheduling, alternate capture backend or SDK FD API.
 #[cfg(feature = "linux-pipewire")]
-use super::super::pipewire::{self, RawFrame, native::Native};
+use super::super::pipewire::{self, RawFrame, native::Capture};
 #[cfg(feature = "linux-pipewire")]
 use super::PIPEWIRE;
 use super::{Config, Factory, NONE, WLR};
@@ -25,8 +25,7 @@ pub(in crate::backends::linux) enum Unit {
     Wlr(wlr::Capture),
     #[cfg(feature = "linux-pipewire")]
     PipeWire {
-        driver: Native,
-        consumer: pipewire::Consumer,
+        capture: Capture,
         node: u32,
     },
 }
@@ -52,7 +51,7 @@ pub(in crate::backends::linux) struct Backend {
 impl Drop for Backend {
     fn drop(&mut self) {
         // Stop/drain first, then retain scalar evidence without allocation or
-        // a native owner. Embedded driver Drop is idempotent after this close.
+        // a native owner. Embedded capture Drop is idempotent after this close.
         let evidence = match &mut self.unit {
             Unit::None => Evidence::None,
             #[cfg(feature = "linux-wlr")]
@@ -61,12 +60,9 @@ impl Drop for Backend {
                 Evidence::Wlr(capture.evidence())
             }
             #[cfg(feature = "linux-pipewire")]
-            Unit::PipeWire {
-                driver, consumer, ..
-            } => {
-                driver.close();
-                consumer.reset_after_close();
-                Evidence::PipeWire(driver.evidence())
+            Unit::PipeWire { capture, .. } => {
+                capture.close();
+                Evidence::PipeWire(capture.evidence())
             }
         };
         *self.trace.closed.lock().unwrap_or_else(|p| p.into_inner()) = Some(evidence);
@@ -167,17 +163,17 @@ impl Factory for NativeFactory {
             ),
             #[cfg(feature = "linux-pipewire")]
             PIPEWIRE => {
-                let driver = if config.pipewire_fd < 0 {
-                    Native::new().map_err(|_| Error::Allocation)?
+                let capture = if config.pipewire_fd < 0 {
+                    Capture::new().map_err(|_| Error::Allocation)?
                 } else {
                     // SAFETY: The only non-None permission is a stack-local
                     // factory in connect_source_native. That unsafe caller
                     // proves this exact pending offer for this immediate call.
-                    unsafe { Native::with_fd(config.pipewire_fd) }.map_err(|_| Error::Allocation)?
+                    unsafe { Capture::with_fd(config.pipewire_fd) }
+                        .map_err(|_| Error::Allocation)?
                 };
                 Unit::PipeWire {
-                    driver,
-                    consumer: pipewire::Consumer::default(),
+                    capture,
                     node: config.pipewire_node,
                 }
             }
@@ -205,16 +201,16 @@ impl Factory for NativeFactory {
             #[cfg(feature = "linux-wlr")]
             Unit::Wlr(_) => Ok(true), // Source inherited ScreencapBase::init.
             #[cfg(feature = "linux-pipewire")]
-            Unit::PipeWire { driver, node, .. } => {
-                let result = if let Some(fd) = driver.pending_source_fd() {
+            Unit::PipeWire { capture, node } => {
+                let result = if let Some(fd) = capture.pending_source_fd() {
                     if self.offered_fd != Some(fd) {
                         return Err(Error::UnprovenFdOffer);
                     }
                     // SAFETY: Same immediate unsafe caller proof, no owner or
                     // descriptor reuse can intervene between construction/init.
-                    unsafe { driver.init_source(*node) }
+                    unsafe { capture.init_source(*node) }
                 } else {
-                    driver.init_daemon(*node)
+                    capture.init_daemon(*node)
                 };
                 match result {
                     Ok(()) => Ok(true),
@@ -238,9 +234,7 @@ impl Factory for NativeFactory {
             #[cfg(feature = "linux-wlr")]
             Unit::Wlr(capture) => capture.inactive(),
             #[cfg(feature = "linux-pipewire")]
-            Unit::PipeWire {
-                driver, consumer, ..
-            } => consumer.inactive(driver),
+            Unit::PipeWire { capture, .. } => capture.inactive(),
         }
     }
     fn inactive_input(_: &mut Arc<NoneInput>) {}
@@ -363,10 +357,8 @@ impl<F: Factory<Unit = Box<Backend>>> super::Manager<F> {
                 Ok(true)
             }
             #[cfg(feature = "linux-pipewire")]
-            Unit::PipeWire {
-                driver, consumer, ..
-            } => {
-                let result = consumer.capture(driver, &mut PipeConverter(converter));
+            Unit::PipeWire { capture, .. } => {
+                let result = capture.capture(&mut PipeConverter(converter));
                 replayed = Some(result.replayed);
                 let image = match result.image {
                     Ok(Some(image)) => image,
@@ -392,7 +384,7 @@ impl<F: Factory<Unit = Box<Backend>>> super::Manager<F> {
             #[cfg(feature = "linux-wlr")]
             Some(Unit::Wlr(capture)) => Evidence::Wlr(capture.evidence()),
             #[cfg(feature = "linux-pipewire")]
-            Some(Unit::PipeWire { driver, .. }) => Evidence::PipeWire(driver.evidence()),
+            Some(Unit::PipeWire { capture, .. }) => Evidence::PipeWire(capture.evidence()),
         }
     }
 }

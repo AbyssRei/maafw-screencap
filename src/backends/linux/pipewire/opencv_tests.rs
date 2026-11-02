@@ -28,6 +28,9 @@ mod sustained;
 #[path = "format_stream_tests.rs"]
 mod format_stream;
 
+#[path = "thread_mobility_tests.rs"]
+mod thread_mobility;
+
 #[repr(C)]
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 struct View {

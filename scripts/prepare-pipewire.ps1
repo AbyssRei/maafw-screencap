@@ -198,6 +198,21 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'pipewire-format-branch-records' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'PipeWire parser branch records cases=8 source_rust_differences=[0-8] diagnostic_only=1 capture=0 full_P1_acceptance=0 verified') {
             throw 'Expected complete actual parser branch diagnostic records; native Rust parity stays a separate gate'
         }
+        if($Name -in @('original-pipewire-thread-mobility-0','original-pipewire-thread-mobility-1')) {
+            $mode=$Name.Substring($Name.Length-1)
+            if(-not (Get-Content -LiteralPath $log -Raw).Contains("original PipeWire thread mobility mode=$mode objects=20 callers=3 captures=60 retained=60 fd_tasks_balanced=20 passed")) {
+                throw 'Expected twenty original native lifecycles with three distinct live callers'
+            }
+        }
+        if($Name -eq 'rust-pipewire-thread-mobility') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('native PipeWire thread mobility objects=40 callers=3 captures=120 retained=120 controlled_unwinds=40 fd_tasks_balanced=40 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'Expected one actual native Rust mobility test, forty lifecycles and controlled unwinds'
+            }
+        }
+        if($Name -eq 'pipewire-thread-mobility-records' -and -not (Get-Content -LiteralPath $log -Raw).Contains('PipeWire thread mobility records lifecycles=80 captures=240 payloads=720 rust_unwinds=40 full_P1_acceptance=0 verified')) {
+            throw 'Expected complete source/Rust caller/native generation, resource and pixel records'
+        }
         if ($Name -eq 'pipewire-source-memfd-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed') {
             throw 'Expected real original MemFd helper mappings, FD preservation and retained BGR owners'
         }
@@ -793,6 +808,16 @@ try {
         try { Step rust-kwin-native-host timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::host_manager::retains_real_capture_after_host_init_false_or_error_and_closes_native_before_host_owner','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step kwin-native-api-records $ConfigureTool @('upstream-trace','pipewire-host-api',$apiMatrix) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        $mobilityMatrix=Join-Path $referenceArtifacts thread-mobility
+        $env:MFS_P1_PIPEWIRE_THREAD_MOBILITY=$mobilityMatrix
+        foreach($mode in 0,1) {
+            try { Step "original-pipewire-thread-mobility-$mode" timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--thread-mobility',$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,"$mode",(Join-Path $mobilityMatrix "source/mode-$mode")) }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+        }
+        try { Step rust-pipewire-thread-mobility timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::thread_mobility::moves_complete_capture_between_live_callers_and_unwinds_before_foreign_close','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
+        try { Step pipewire-thread-mobility-records $ConfigureTool @('upstream-trace','pipewire-thread-mobility',$mobilityMatrix) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step original-pipewire-sustained timeout @('--signal=TERM','--kill-after=5s','180s',$sourceExecutable,'--sustained-manager',$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $referenceArtifacts sustained)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }

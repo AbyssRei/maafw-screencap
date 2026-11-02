@@ -646,6 +646,10 @@ impl Driver for Native {
     }
 }
 
+#[path = "native_capture.rs"]
+mod capture;
+pub(in crate::backends::linux) use capture::Capture;
+
 #[cfg(test)]
 #[path = "native_tests.rs"]
 mod tests;
