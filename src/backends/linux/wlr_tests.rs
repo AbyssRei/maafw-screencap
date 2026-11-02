@@ -629,15 +629,13 @@ fn retains_shared_client_after_caller_and_first_capture_release() {
         ));
         // Only an idle, Ready-completed map is overwritten. All previously
         // returned raw and BGR owners must remain independent of either buffer.
-        second
-            .context
-            .state()
-            .unwrap()
-            .buffer
-            .as_mut()
-            .unwrap()
-            .map
-            .fill(0);
+        {
+            let mut state = second.context.state().unwrap();
+            let ShmMemory::Mapped { map, .. } = &mut *state.buffer.as_mut().unwrap().memory else {
+                panic!("Ready-completed capture must retain its mapping");
+            };
+            map.fill(0);
+        }
         assert_eq!(counts.frames.load(Ordering::Acquire), 3);
         assert_eq!(second.evidence().fault, 0);
         assert_eq!(second.evidence().buffer_error, 0);
@@ -909,15 +907,14 @@ fn captures_source_scene_with_recursive_roundtrip_and_retained_outputs() {
             held_bgr.push(image);
             // SAFETY PREMISE: Ready completed this Copy; no next Copy has been
             // requested. Only owned idle SHM is overwritten, not a live sample.
-            capture
-                .context
-                .state()
-                .unwrap()
-                .buffer
-                .as_mut()
-                .unwrap()
-                .map
-                .fill(0);
+            {
+                let mut state = capture.context.state().unwrap();
+                let ShmMemory::Mapped { map, .. } = &mut *state.buffer.as_mut().unwrap().memory
+                else {
+                    panic!("Ready-completed capture must retain its mapping");
+                };
+                map.fill(0);
+            }
             for sample in &held_raw {
                 raw(sample);
             }

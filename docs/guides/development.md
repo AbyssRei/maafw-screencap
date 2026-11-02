@@ -22,6 +22,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+随后确切 `f261cbf` 的 [Actions 41405431881](https://github.com/AbyssRei/maafw-screencap/actions/runs/41405431881) Linux Wlr 组件为 107/140、33 项失败。两个旧用例的空闲 SHM 覆写仍访问已移除的 `Buffer.map`，Rust libtest 在编译时报告 E0609；因此新的失败 mmap 回归没有执行，不能据此判断 owner 修复是否通过。原 C++ allocation 二十轮及其服务端关闭通过。现仅把这两处测试访问改为显式匹配 `ShmMemory::Mapped` 后原样 `fill(0)`；持帧/像素断言、allocation 回归、生产 owner 与原 C++/协议夹具均不改。新的原生编译与回归仍待验证，本批编译失败及更早 `c564306` 的实际 fd 断言失败分别保留。工具准备通过，不把失败归因于预装工具版本。
+
 Wlr 失败映射寿命差异已由确切 `c564306` 的 [Actions 41398197470](https://github.com/AbyssRei/maafw-screencap/actions/runs/41398197470) 原生复现：固定 F 的 C++ 用例二十轮均实际得到 MAP_FAILED/ENOMEM，保留失败 fd，恢复原限制后正常替换并取帧；Rust 第一轮的 buffer errno 也是 12，但 fd 数保持 8，未达到应有的 9，没有留下失败 memfd。旧图像字节不变，未发布 raw 或恢复图，Rust 以 101 退出。Wlr 组件保持 137/140，失败的 Rust 用例、Rust 服务端不完整计数和记录检查共三项均保留。
 
 独立 `allocation` IPC/SHM 用例仅在自有测试进程中，把 `RLIMIT_AS` 临时下调到实际 VmSize 加 32 MiB，用 256 MiB 稀疏缓冲请求触发内核映射失败，再恢复原限制并恢复普通取帧。原版 `mmap/mmap64` 观察器逐次原参数转发、保留返回值/errno；协议端 Failed 只结束 F 原来的等待。官方轻量 ZIP 长度/摘要与 CRC、8,545 项可用登记路径、原版 60 份实际 payload 及二十组限额/fd/inode/替换记录已独立核对；Rust 的空表、首轮 fd 缺失及 105 字节旧图像也已核对，实际不完整矩阵仍被只读 checker 拒绝。完整来源/编译输入闭合另行处理，不能将轻量数据审阅等同于完整来源验收。
