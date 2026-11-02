@@ -72,6 +72,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `f6df469` P0 PipeWire 原生准备为 19 项通过、两项失败：真实 Linux 编译在 `manager_native_offer_tests.rs:158` 报 `E0433`，旧 warm-init 控制使用的 `Native` 原先经 manager 的 `super::*` 引入，而 manager 现已正确改用完整 `Capture`。libtest 尚未运行，捕获和线程交接用例均未执行；不能将此编译失败写成线程、像素或 Send 运行结果。独立复核官方 57,758 字节 ZIP 的摘要/CRC/23 份恢复文件、22 个可用登记路径及两个确切失败日志，轻量包仍缺 542 项完整输入，原失败保持封存。
+
+修正仅在 offer 测试模块显式导入 `crate::backends::linux::pipewire::native::Native`，保留它独立 warm raw-global-init/deinit 的用途；没有换成 product Capture、修改断言、放宽编排或更改生产 owner/锁行为。已检查该测试族其他 `Native` 使用和确切单行差异，本机格式、文档校验不代表 Linux 编译通过；实际重新编译、原版/Rust 线程交接仍待新 Actions。原本 116 项 xtask 等开发检查只保留其原验证范围，完整 P1 尚未通过。
+
 PipeWire 新增私有 `native::Capture`，在同一实现中拥有原 `Native` 与 `Consumer`，并替换 manager 中分离的两个 owner。对外只给完整 init/capture/inactive/close 与标量观察，不实现 Driver、Deref，不返回裸 driver/锁/回调/映射。完整调用的真实 loop guard 在返回和展开时结束，转换在解锁后调用且不保存在 owner；稳定 Box 回调/hook 地址不随 owner 移动，缓存只有独立 CPU Arc，没有未结束 map/buffer lease。局部 unsafe Send 依这些源码不变量及固定 F 头文件允许串行异线程调用的契约建立；没有 Sync、并发调用、SDK Session/worker、绝对等待或恢复策略。底层 Native/Resources 和原生 map 保留既有线程限制，不能由新完整 owner 的 Send 推导它们也能直接移动。完整 close 同步重置 consumer counter；未连接 init 的 stale-state 清理也重置，已连接 early success 不重置，保留来源行为。原 raw global init 政策不变，测试清理单独配平。
 
 新增原版模式直接执行未改写的 F 完整类；daemon 和成功 FD 各二十对象，三个同时存活的调用线程依次构造/init、两次 capture/inactive、一次 capture/close/destruction。以实际 TID、同一个 loop 的 start generation、四份 live task 记录及最终 baseline IDs 核对，不能因线程 ID 已复用而冒充交接。Rust 使用同样三线程/两模式，各线程自己的 Mat/loader 在交接前结束，只传完整 Capture 和独立 CPU 数据；另在第二线程故意展开一次真实 raw-copy 后的 converter，捕获展开后交给仍不同的第三线程取锁/恢复并关闭。展开是 Rust 独立安全控制，不声称对应原版转换异常；正常返回图像共 240 次，另有四十次 Rust 展开取样。资源检查在实际 join/stop/destruction 后执行；仅允许已有严格观察器识别的已知代次 kernel retirement，不为活动线程或捕获失败重试。

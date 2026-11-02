@@ -6,6 +6,7 @@ use super::super::{
     host::{InputOwner, InputProvider},
 };
 use super::*;
+use crate::backends::linux::pipewire::native::Native;
 use crate::backends::task_observer::task_ids;
 use crate::platform::linux::pipewire::sys;
 use std::{
