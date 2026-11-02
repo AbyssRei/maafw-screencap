@@ -186,7 +186,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-source-format-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved') {
             throw 'Expected twenty-eight original native POD/parser/conversion fixtures'
         }
-        if($Name -eq 'pipewire-source-format-branches' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original PipeWire parser branches cases=8 native_first_property=8 accepted=5 unsupported_no_fallback=3 unknown_fallback=2 capture=0 saved')) {
+        if($Name -eq 'pipewire-source-format-branches' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original PipeWire parser branches cases=8 positive_media=8 positive_raw=8 fallback_last_property=8 accepted=5 unsupported=3 capture=0 saved')) {
             throw 'Expected eight actual original parser branch observations'
         }
         if($Name -eq 'rust-pipewire-format-branches') {

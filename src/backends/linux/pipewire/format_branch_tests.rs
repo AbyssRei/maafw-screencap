@@ -17,25 +17,27 @@ fn matches_original_standard_result_and_fallback_selection() {
     assert_eq!(
         ids,
         format!(
-            "bgra\tnv12\tunknown\n{}\t{}\t{}\n",
+            "bgra\tnv12\tunknown\tvideo\traw\n{}\t{}\t{}\t{}\t{}\n",
             spa::sys::SPA_VIDEO_FORMAT_BGRA,
             spa::sys::SPA_VIDEO_FORMAT_NV12,
-            spa::sys::SPA_VIDEO_FORMAT_UNKNOWN
+            spa::sys::SPA_VIDEO_FORMAT_UNKNOWN,
+            spa::sys::SPA_MEDIA_TYPE_video,
+            spa::sys::SPA_MEDIA_SUBTYPE_raw
         )
     );
     let records = fs::read_to_string(source.join("cases.tsv")).unwrap();
     let mut lines = records.lines();
     assert_eq!(
         lines.next().unwrap(),
-        "index\tfirst\thas_second\tsecond\tsecond_choice\tnative_result\tnative_width\tnative_height\tnative_format\tsource_width\tsource_height\tsource_format\tsource_accepted"
+        "index\tfirst\thas_second\tsecond\tsecond_choice\tmedia_result\tmedia_type\tmedia_subtype\tnative_result\tnative_width\tnative_height\tnative_format\tsource_width\tsource_height\tsource_format\tsource_accepted"
     );
     let mut output = String::from("index\trust_accepted\trust_width\trust_height\trust_format\n");
     let (mut cases, mut differences) = (0, 0);
     for line in lines {
         let values: Vec<i64> = line.split('\t').map(|v| v.parse().unwrap()).collect();
-        assert_eq!(values.len(), 13);
+        assert_eq!(values.len(), 16);
         assert_eq!(values[0], cases);
-        assert!(matches!(values[12], 0 | 1));
+        assert!(matches!(values[15], 0 | 1));
         let encoded = fs::read(source.join(format!("case-{cases}.pod"))).unwrap();
         assert!((8..=4096).contains(&encoded.len()));
         assert_eq!(
@@ -53,11 +55,11 @@ fn matches_original_standard_result_and_fallback_selection() {
             bytes[..encoded.len()].copy_from_slice(&encoded);
             pod::parse(storage.as_ptr().cast())
         };
-        let expected = (values[12] == 1).then(|| {
+        let expected = (values[15] == 1).then(|| {
             (
-                u32::try_from(values[9]).unwrap(),
-                u32::try_from(values[10]).unwrap(),
-                pod::to_format(u32::try_from(values[11]).unwrap()),
+                u32::try_from(values[12]).unwrap(),
+                u32::try_from(values[13]).unwrap(),
+                pod::to_format(u32::try_from(values[14]).unwrap()),
             )
         });
         let (accepted, width, height, format) = match parsed {
