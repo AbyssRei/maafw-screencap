@@ -30,6 +30,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `7b82fe8` 的 [Actions 41408697160](https://github.com/AbyssRei/maafw-screencap/actions/runs/41408697160) macOS 原生组件仍为 128/145，17 项失败逐项保留。官方轻量 ZIP 的 37,490,128 字节、SHA-256 和 CRC 已核验；200 份 witness 登记文件、36 份当前/持帧像素及十四张完整 sRGB CPU 视图经独立复核。十二张显示器 BGR 图像均在 `[1012,4,1020,12]` 范围各偏差 52 个像素，但六组原版/Rust 配对仅两组逐字节相同；更早确切 `4ebd7cb` 的六组全相同保持为独立批次，不据此推断本批或旧批像素生产者。两种调用顺序、真实程序/进程/模块身份、关闭后持帧和十四份窗口清单继续记录；诊断记录校验通过，严格整屏捕获断言仍失败，不屏蔽该区域或授予回调排空/P1 验收。
+
+本次只读下载复核没有重拍截图，完整工程输入仍有 555 项轻量包缺口。复核程序完成全部数据检查和报告后，在最后复制自身的归档步骤触发 `SameFileError`；初始脚本与错误说明保留，仅为该步骤补同文件判断，未重跑 writer 覆盖报告。已完成的像素/身份核对和原生 17 项失败分别记录，产物及复核另行封存；预装工具版本仍按实际身份记录，不设严格最新门禁。
+
 随后确切 `f261cbf` 的 [Actions 41405431881](https://github.com/AbyssRei/maafw-screencap/actions/runs/41405431881) Linux Wlr 组件为 107/140、33 项失败。两个旧用例的空闲 SHM 覆写仍访问已移除的 `Buffer.map`，Rust libtest 在编译时报告 E0609；因此新的失败 mmap 回归没有执行，不能据此判断 owner 修复是否通过。原 C++ allocation 二十轮及其服务端关闭通过。现仅把这两处测试访问改为显式匹配 `ShmMemory::Mapped` 后原样 `fill(0)`；持帧/像素断言、allocation 回归、生产 owner 与原 C++/协议夹具均不改。新的原生编译与回归仍待验证，本批编译失败及更早 `c564306` 的实际 fd 断言失败分别保留。工具准备通过，不把失败归因于预装工具版本。
 
 Wlr 失败映射寿命差异已由确切 `c564306` 的 [Actions 41398197470](https://github.com/AbyssRei/maafw-screencap/actions/runs/41398197470) 原生复现：固定 F 的 C++ 用例二十轮均实际得到 MAP_FAILED/ENOMEM，保留失败 fd，恢复原限制后正常替换并取帧；Rust 第一轮的 buffer errno 也是 12，但 fd 数保持 8，未达到应有的 9，没有留下失败 memfd。旧图像字节不变，未发布 raw 或恢复图，Rust 以 101 退出。Wlr 组件保持 137/140，失败的 Rust 用例、Rust 服务端不完整计数和记录检查共三项均保留。
