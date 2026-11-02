@@ -41,7 +41,22 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-same-binary-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display)-[01]$') {
+            # Cargo wraps an exact test process exit77 as exit101. Classify it
+            # only with this fresh fixture's explicit pre-capture evidence.
+            $sceneRoot=$env:MFS_P1_MACOS_SAME_BINARY_ROOT
+            if($sceneRoot) {
+                $missing=Join-Path $sceneRoot missing-environment.txt
+                if((Test-Path -LiteralPath $missing) -and
+                    [IO.File]::ReadAllText($missing) -ceq "scene_exit=77`nno_capture_attempted=1`n" -and
+                    -not (Test-Path -LiteralPath (Join-Path $sceneRoot calls.tsv)) -and
+                    -not (Test-Path -LiteralPath (Join-Path $sceneRoot original-module.txt)) -and
+                    -not (Test-Path -LiteralPath (Join-Path $sceneRoot original-call-0.tsv))) {
+                    $status='missing_environment'
+                }
+            }
+        }
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(same-binary|full-display)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -139,6 +154,16 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         }
         if($Name -eq 'macos-same-binary-records' -and -not $observed.Contains('macOS same_binary arms=2 invocations=12 original_calls=6 rust_calls=6 CG_positive_images=6 original_first=1 caller_results_equal=1 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed')) {
             $status='failed';throw 'Incomplete same-binary observation records'
+        }
+        if($Name -match '^rust-macos-full-display-([01])$') {
+            $order=$Matches[1];$originalFirst=if($order -eq '0'){1}else{0}
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains("native Rust macOS full_display mode=$order original_first=$originalFirst calls=6 known_full_images=6 held_after_scene_close=6 full_rgb=1 no_capture_retry=1 full_P1_acceptance=0 passed")) {
+                $status='failed';throw 'Expected the complete full-display RGB source/Rust order arm'
+            }
+        }
+        if($Name -eq 'macos-full-display-records' -and -not $observed.Contains('macOS full_display arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 source_oracle_replaced=0 full_P1_acceptance=0 passed')) {
+            $status='failed';throw 'Incomplete full-display RGB paired pixel/order records'
         }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -267,6 +292,7 @@ try {
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
         Run-MacosSameBinaryProbes $rustArtifacts
+        Run-MacosFullDisplayProbes $rustArtifacts
         try {Run-ObservedMacosSamePathProbe $rustArtifacts}
         catch {$failed=$true;Write-Host $_.Exception.Message}
     }else{

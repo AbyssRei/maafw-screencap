@@ -11,8 +11,15 @@ pub(crate) struct Geometry {
     pub pid: u32,
     pub display: u32,
     pub region: [usize; 4],
+    full_rgb: bool,
 }
 pub(crate) fn parse(text: &str) -> Result<Geometry> {
+    parse_kind(text, false)
+}
+pub(crate) fn parse_full(text: &str) -> Result<Geometry> {
+    parse_kind(text, true)
+}
+fn parse_kind(text: &str, full: bool) -> Result<Geometry> {
     let lines = text.lines().collect::<Vec<_>>();
     if lines.len() != 1 {
         return Err("expected one native first-display geometry row".into());
@@ -46,7 +53,7 @@ pub(crate) fn parse(text: &str) -> Result<Geometry> {
         || width > i32::MAX as usize
         || height > i32::MAX as usize
         || integer(14)? != 1
-        || integer(15)? != 2
+        || integer(15)? != if full { 0 } else { 2 }
     {
         return Err("invalid native display identity/configuration/visibility".into());
     }
@@ -58,8 +65,29 @@ pub(crate) fn parse(text: &str) -> Result<Geometry> {
         }
     }
     let [dx, dy, dw, dh, wx, wy, ww, wh] = point;
-    if dw <= 0.0 || dh <= 0.0 || ww != 47.0 || wh != 31.0 {
+    if dw <= 0.0 || dh <= 0.0 || !full && (ww != 47.0 || wh != 31.0) {
         return Err("owned display patch point extent differs".into());
+    }
+    if full {
+        if count != 1
+            || width < 3
+            || height < 2
+            || dw != width as f64
+            || dh != height as f64
+            || [wx, wy, ww, wh] != [dx, dy, dw, dh]
+        {
+            return Err("full-display RGB requires exact 1:1 full-window geometry".into());
+        }
+        return Ok(Geometry {
+            count,
+            width,
+            height,
+            window,
+            pid,
+            display,
+            region: [0, 0, width, height],
+            full_rgb: true,
+        });
     }
     // Use actual original configured dimensions. Do not reinterpret SCDisplay
     // width/height (documented points) as physical pixels or change U's config.
@@ -89,6 +117,7 @@ pub(crate) fn parse(text: &str) -> Result<Geometry> {
         pid,
         display,
         region,
+        full_rgb: false,
     })
 }
 impl Geometry {
@@ -105,7 +134,15 @@ impl Geometry {
         for y in self.region[1]..self.region[3] {
             for x in self.region[0]..self.region[2] {
                 let offset = (y * self.width + x) * channels;
-                if bytes[offset..offset + 3] != [0, 255, 0]
+                let expected =
+                    if !self.full_rgb || x >= self.width / 3 && y < self.height - self.height / 2 {
+                        [0, 255, 0]
+                    } else if x < self.width / 3 {
+                        [0, 0, 255]
+                    } else {
+                        [255, 0, 0]
+                    };
+                if bytes[offset..offset + 3] != expected
                     || channels == 4 && bytes[offset + 3] != 255
                 {
                     return Err("native first-display owned green patch differs".into());
@@ -118,6 +155,30 @@ impl Geometry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn checks_full_rgb_edges_without_accepting_patch_or_scaled_geometry() {
+        let row = "1\t17\t3\t2\t-3\t0\t3\t2\t91\t7\t-3\t0\t3\t2\t1\t0\n";
+        let g = parse_full(row).unwrap();
+        let pixels = [
+            0, 0, 255, 0, 255, 0, 0, 255, 0, 0, 0, 255, 255, 0, 0, 255, 0, 0,
+        ];
+        g.pixels(&pixels, 3).unwrap();
+        assert!(parse(row).is_err());
+        for bad in [
+            row.replace("\t1\t0\n", "\t1\t2\n"),
+            row.replace("-3\t0\t3\t2\t1", "-2\t0\t3\t2\t1"),
+            row.replace("\t3\t2\t91", "\t6\t2\t91"),
+            row.replacen("1\t17", "2\t17", 1),
+        ] {
+            assert!(parse_full(&bad).is_err());
+        }
+        for position in [0, 2, 3, 8, 9, 14, 17] {
+            let mut bad = pixels;
+            bad[position] ^= 1;
+            assert!(g.pixels(&bad, 3).is_err());
+        }
+        assert!(g.pixels(&pixels[..17], 3).is_err());
+    }
     #[test]
     fn rejects_offscreen_replaced_targets_nonfinite_extents_and_wrong_pixels() {
         let row = "1\t17\t640\t480\t-640\t0\t640\t480\t91\t7\t-500\t100\t47\t31\t1\t2\n";

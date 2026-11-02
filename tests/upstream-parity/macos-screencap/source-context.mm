@@ -241,6 +241,7 @@ void display(const std::filesystem::path& directory) {
     std::cout<<"original macOS display captures=1 retained=1 known_pixels=not_asserted passed\n";
 }
 #include "display-context.hpp"
+#include "full-display-scene.hpp"
 void scene(NSApplication* app,const std::filesystem::path& directory) {
     {
     Window window(app,0);
@@ -309,6 +310,7 @@ int main(int argc,char** argv) {
             else if(mode=="scene") { scene(app,directory); }
             else if(mode=="display-scene" || appkit_scene) { display_patch_scene(app,directory); }
             else if(mode=="display-scene-cg") { display_patch_cg_scene(app,directory); }
+            else if(mode=="display-scene-cg-full") { full_display_cg_scene(app,directory); }
             else if(mode=="display-patch" && argc==4) { display_patch(directory,argv[3]); }
             else if(mode=="display-patch-host-premise" && argc==5) { display_patch_host_premise(directory,argv[3],argv[4]); }
             else if(foundation_consumer && argc==4) { display_patch_foundation_consumer(directory,argv[3]); }

@@ -61,6 +61,47 @@ impl Drop for Scene {
 #[test]
 #[ignore = "requires a native single-display Mac, prepared scene module and explicit diagnostic mode"]
 fn records_first_display_with_same_executable_scene_host() {
+    record(false);
+}
+#[test]
+#[ignore = "requires a native single-display 1:1 Mac, full RGB scene and explicit call order"]
+fn records_all_display_pixels_in_both_implementation_orders() {
+    record(true);
+}
+struct Timeline {
+    start: Instant,
+    rows: fs::File,
+    rank: u32,
+}
+impl Timeline {
+    fn now(&self) -> u64 {
+        u64::try_from(self.start.elapsed().as_nanos())
+            .unwrap()
+            .checked_add(1)
+            .unwrap()
+    }
+    fn append(&mut self, side: u32, call: u32, begin: u64) {
+        use std::io::Write;
+        let end = self.now();
+        writeln!(self.rows, "{}\t{side}\t{call}\t{begin}\t{end}", self.rank).unwrap();
+        self.rows.flush().unwrap();
+        self.rank = self.rank.checked_add(1).unwrap();
+    }
+}
+fn original_calls(
+    original: &original_host::Original,
+    root: &Path,
+    sequence: &mut Option<Timeline>,
+) {
+    for call in 0..3 {
+        let begin = sequence.as_ref().map(Timeline::now);
+        original.capture(call, root);
+        if let Some(sequence) = sequence {
+            sequence.append(0, call, begin.unwrap());
+        }
+    }
+}
+fn record(full: bool) {
     use std::io::Write;
     let root = PathBuf::from(env::var_os("MFS_P1_MACOS_SAME_BINARY_ROOT").unwrap());
     let mode = env::var("MFS_P1_MACOS_SAME_BINARY_MODE")
@@ -100,7 +141,13 @@ fn records_first_display_with_same_executable_scene_host() {
     }
     let scene_root = root.join("scene");
     fs::create_dir(&scene_root).unwrap();
-    let child = Command::new(&executable)
+    let mut command = Command::new(&executable);
+    if full {
+        command.env("MFS_P1_MACOS_SAME_BINARY_FULL", "1");
+    } else {
+        command.env_remove("MFS_P1_MACOS_SAME_BINARY_FULL");
+    }
+    let child = command
         .env("MFS_P1_MACOS_SAME_BINARY_CHILD", "1")
         .env("MFS_P1_MACOS_SAME_BINARY_SCENE_ROOT", &scene_root)
         .env("MFS_P1_MACOS_SAME_BINARY_MODE", mode.to_string())
@@ -164,7 +211,12 @@ fn records_first_display_with_same_executable_scene_host() {
     assert_ne!(consumer["pid"], producer["pid"]);
     let geometry_bytes = fs::read(scene.root.join("display-geometry.tsv")).unwrap();
     fs::write(root.join("consumer-expected-geometry.tsv"), &geometry_bytes).unwrap();
-    let geometry = display_geometry::parse(std::str::from_utf8(&geometry_bytes).unwrap()).unwrap();
+    let geometry = if full {
+        display_geometry::parse_full(std::str::from_utf8(&geometry_bytes).unwrap())
+    } else {
+        display_geometry::parse(std::str::from_utf8(&geometry_bytes).unwrap())
+    }
+    .unwrap();
     assert_eq!(
         geometry.count, 1,
         "same-binary diagnostic requires one display"
@@ -179,10 +231,22 @@ fn records_first_display_with_same_executable_scene_host() {
     let mut usable = 0;
     let mut known = 0;
     // Same parent process, executable identity, worker and still-live scene.
-    // Original-first is explicit; this is not an order-independent proof.
+    // Legacy arms stay original-first. Full RGB arms declare both call orders.
     let original = original_host::Original::open(&root);
-    for call in 0..3 {
-        original.capture(call, &root);
+    let mut sequence = if full {
+        let mut rows = fs::File::create_new(root.join("sequence.tsv")).unwrap();
+        writeln!(rows, "rank\timplementation\tcall\tbegin_ns\tend_ns").unwrap();
+        Some(Timeline {
+            start: Instant::now(),
+            rows,
+            rank: 0,
+        })
+    } else {
+        None
+    };
+    let original_first = !full || mode == 0;
+    if original_first {
+        original_calls(&original, &root, &mut sequence);
     }
     let mut caller_results = Vec::new();
     let capture = Capture::new(0);
@@ -191,6 +255,7 @@ fn records_first_display_with_same_executable_scene_host() {
         // being relabeled as this call's current result.
         let trace = trace();
         let samples = held();
+        let begin = sequence.as_ref().map(Timeline::now);
         let start = Instant::now();
         let result = capture.invoke(
             converter(&adapter, &trace, &samples, false, Duration::ZERO),
@@ -198,6 +263,9 @@ fn records_first_display_with_same_executable_scene_host() {
         );
         let elapsed = start.elapsed().as_nanos();
         let selection = *trace.display_selection.lock().unwrap();
+        if let Some(sequence) = &mut sequence {
+            sequence.append(1, u32::try_from(call).unwrap(), begin.unwrap());
+        }
         let status = match &result {
             Ok(Some(image)) if !image.pixels().is_empty() => 1,
             Ok(Some(_)) => 3,
@@ -223,17 +291,17 @@ fn records_first_display_with_same_executable_scene_host() {
             assert_eq!(sample.len(), 1);
             let raw = &sample[0];
             let image = result.as_ref().unwrap().as_ref().unwrap();
-            assert_eq!((raw.width, raw.height), (geometry.width, geometry.height));
-            let selection = selection.expect("successful native call has no actual selection");
-            assert_eq!(
-                (
-                    selection.display_count,
-                    selection.display_id,
-                    selection.width,
-                    selection.height
-                ),
-                (1, geometry.display, geometry.width, geometry.height)
-            );
+            let dimensions_match = (raw.width, raw.height) == (geometry.width, geometry.height);
+            let selection_matches = selection.is_some_and(|s| {
+                (s.display_count, s.display_id, s.width, s.height)
+                    == (1, geometry.display, geometry.width, geometry.height)
+            });
+            if !full {
+                assert!(dimensions_match, "successful native dimensions differ");
+                assert!(selection_matches, "successful native selection differs");
+            }
+            // Full-display failures keep their actual returned CPU bytes and
+            // native layout before any final known-pixel/selection assertion.
             fs::write(root.join(format!("call-{call}.raw")), raw.pixels()).unwrap();
             fs::write(root.join(format!("call-{call}.bgr")), image.pixels()).unwrap();
             fs::write(
@@ -241,7 +309,9 @@ fn records_first_display_with_same_executable_scene_host() {
                 format!("{}\t{}\t{}\n", raw.width, raw.height, raw.native_stride),
             )
             .unwrap();
-            correct = geometry.pixels(raw.pixels(), 4).is_ok()
+            correct = dimensions_match
+                && selection_matches
+                && geometry.pixels(raw.pixels(), 4).is_ok()
                 && geometry.pixels(image.pixels(), 3).is_ok();
             usable += 1;
             known += usize::from(correct);
@@ -252,7 +322,13 @@ fn records_first_display_with_same_executable_scene_host() {
         pending.push((call, trace, samples));
         images.push(result.ok().flatten());
     }
-    // This observation budget follows all three original five-second waits.
+    if !original_first {
+        original_calls(&original, &root, &mut sequence);
+    }
+    if let Some(sequence) = &sequence {
+        assert_eq!(sequence.rank, 6);
+    }
+    // This observation budget follows all six calls, in the declared order.
     // It never resubmits a capture or converts a late frame into a caller result.
     let until = Instant::now() + Duration::from_secs(8);
     while pending
@@ -312,7 +388,8 @@ fn records_first_display_with_same_executable_scene_host() {
             fs::write(root.join(format!("held-{call}.raw")), samples[0].pixels()).unwrap();
         }
     }
-    fs::write(root.join("summary.txt"),format!("schema=2\nmode={mode}\ninvocations=3\nusable_images={usable}\nknown_patch_images={known}\nscene_closed=1\nscene_child_exit=0\nsame_binary=1\nfaults={faults}\nno_capture_retry=1\noriginal_oracle_replaced=0\nfull_P1_acceptance=0\noriginal_invocations=3\noriginal_usable_images={original_usable}\noriginal_known_patch_images={original_known}\noriginal_first=1\noriginal_owner_closed=1\npaired_caller_results={}\n",u8::from(equal_results))).unwrap();
+    let schema = if full { 3 } else { 2 };
+    fs::write(root.join("summary.txt"),format!("schema={schema}\nmode={mode}\ninvocations=3\nusable_images={usable}\nknown_patch_images={known}\nscene_closed=1\nscene_child_exit=0\nsame_binary=1\nfaults={faults}\nno_capture_retry=1\noriginal_oracle_replaced=0\nfull_P1_acceptance=0\noriginal_invocations=3\noriginal_usable_images={original_usable}\noriginal_known_patch_images={original_known}\noriginal_first={}\noriginal_owner_closed=1\npaired_caller_results={}\n{}",u8::from(original_first),u8::from(equal_results),if full {"full_display=1\n"} else {""})).unwrap();
     // Keep capture failure observations, but require the CG metadata arm as a
     // strict positive control. Neither arm is a replacement source oracle.
     assert_eq!(faults, 0);
@@ -325,7 +402,7 @@ fn records_first_display_with_same_executable_scene_host() {
         "original Some result has unknown target pixels"
     );
     assert_eq!(usable, known, "Rust Some result has unknown target pixels");
-    if mode == 1 {
+    if mode == 1 || full {
         assert_eq!(
             (usable, known),
             (3, 3),
@@ -337,7 +414,15 @@ fn records_first_display_with_same_executable_scene_host() {
             "same-process original CG positive control failed"
         );
     }
-    eprintln!(
-        "native Rust macOS same_binary mode={mode} invocations=3 usable_images={usable} known_patch_images={known} scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 original_calls=3 original_first=1 caller_results_equal=1 recorded"
-    );
+    if full {
+        eprintln!(
+            "native Rust macOS full_display mode={mode} original_first={} calls=6 known_full_images=6 held_after_scene_close=6 full_rgb=1 no_capture_retry=1 full_P1_acceptance=0 passed",
+            u8::from(original_first)
+        );
+    }
+    if !full {
+        eprintln!(
+            "native Rust macOS same_binary mode={mode} invocations=3 usable_images={usable} known_patch_images={known} scene_closed=1 diagnostic_only=1 no_capture_retry=1 full_P1_acceptance=0 original_calls=3 original_first=1 caller_results_equal=1 recorded"
+        );
+    }
 }

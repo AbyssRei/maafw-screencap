@@ -191,6 +191,12 @@ fn original_call(
     )
 }
 pub fn run(args: &[String]) -> Result<()> {
+    run_kind(args, false)
+}
+pub fn run_full(args: &[String]) -> Result<()> {
+    run_kind(args, true)
+}
+fn run_kind(args: &[String], full: bool) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
@@ -211,8 +217,12 @@ pub fn run(args: &[String]) -> Result<()> {
     let mut common_path = None;
     let mut common_schema = None;
     let mut originals = Vec::new();
+    let mut order_records = Vec::new();
     for mode in 0..=1 {
         let arm = root.join(format!("mode-{mode}"));
+        if full && arm.join("missing-environment.txt").exists() {
+            return Err("missing native environment cannot accept full-display captures".into());
+        }
         let read = |name: &str| -> Result<Vec<u8>> { Ok(fs::read(arm.join(name))?) };
         let text = |name: &str| -> Result<String> { Ok(String::from_utf8(read(name)?)?) };
         let consumer = fields(&text("consumer-host.txt")?)?;
@@ -259,13 +269,17 @@ pub fn run(args: &[String]) -> Result<()> {
         if expected != text("scene/display-geometry.tsv")? {
             return Err("same-binary expected geometry was changed".into());
         }
-        let g = geometry::parse(&expected)?;
+        let g = if full {
+            geometry::parse_full(&expected)
+        } else {
+            geometry::parse(&expected)
+        }?;
         if g.count != 1 || u64::from(g.pid) != number(&producer, "pid")? {
             return Err("same-binary native window owner/single display differs".into());
         }
-        if mode == 1 {
+        if mode == 1 || full {
             let cg = fields(&text("scene/cg-scene-state.txt")?)?;
-            if cg.len() != 8
+            if cg.len() != if full { 12 } else { 8 }
                 || cg.get("geometry_origin").map(String::as_str) != Some("core_graphics")
             {
                 return Err("same-binary CG producer metadata origin differs".into());
@@ -281,11 +295,48 @@ pub fn run(args: &[String]) -> Result<()> {
             ] {
                 expect(&cg, key, value)?;
             }
+            if full {
+                for (key, value) in [
+                    ("full_display_rgb", 1),
+                    ("pixel_inset", 0),
+                    ("backing_scale", 1),
+                ] {
+                    expect(&cg, key, value)?;
+                }
+                if number(&cg, "window_level")? == 0
+                    || number(&cg, "window_level")? > i32::MAX as u64
+                {
+                    return Err("full-display fixture level differs".into());
+                }
+                if !text("scene-stdout.txt")?.contains("owned macOS full_display_rgb=1 inset=0 single_display_1to1=1 window_closed=1 passed") {
+                    return Err("full-display producer did not finish its declared scene".into());
+                }
+                let ready: serde_json::Value = serde_json::from_slice(&read("scene/ready.json")?)?;
+                if ready.as_object().is_none_or(|v| v.len() != 5)
+                    || ready["window_id"] != g.window
+                    || ready["owner_pid"] != g.pid
+                    || ready["width"] != g.width
+                    || ready["height"] != g.height
+                    || ready["full_display_rgb"] != 1
+                {
+                    return Err("full-display ready identity differs".into());
+                }
+            }
         }
         let summary = fields(&text("summary.txt")?)?;
         let schema = number(&summary, "schema")?;
-        if !matches!(schema, 1 | 2)
-            || summary.len() != if schema == 1 { 12 } else { 18 }
+        if (if full {
+            schema != 3
+        } else {
+            !matches!(schema, 1 | 2)
+        }) || summary.len()
+            != if schema == 1 {
+                12
+            } else if full {
+                19
+            } else {
+                18
+            }
             || common_schema.is_some_and(|s| s != schema)
         {
             return Err("same-binary summary fields differ".into());
@@ -305,10 +356,13 @@ pub fn run(args: &[String]) -> Result<()> {
         ] {
             expect(&summary, key, value)?;
         }
-        let original_finish = if schema == 2 {
+        let original_finish = if schema >= 2 {
             for (key, value) in [
                 ("original_invocations", 3),
-                ("original_first", 1),
+                (
+                    "original_first",
+                    if full { u64::from(mode == 0) } else { 1 },
+                ),
                 ("original_owner_closed", 1),
                 ("paired_caller_results", 1),
             ] {
@@ -348,6 +402,37 @@ pub fn run(args: &[String]) -> Result<()> {
             }
             None
         };
+        let sequence = if full {
+            expect(&summary, "full_display", 1)?;
+            let data = text("sequence.tsv")?;
+            let mut lines = data.lines();
+            if lines.next() != Some("rank\timplementation\tcall\tbegin_ns\tend_ns") {
+                return Err("full-display sequence header differs".into());
+            }
+            let values = rows(&lines.collect::<Vec<_>>().join("\n"), 5)?;
+            if values.len() != 6 {
+                return Err("full-display sequence requires six actual calls".into());
+            }
+            for (rank, row) in values.iter().enumerate() {
+                let side = if rank < 3 { mode } else { 1 - mode };
+                if row[0] != rank as u64
+                    || row[1] != side
+                    || row[2] != (rank % 3) as u64
+                    || row[3] == 0
+                    || row[4] <= row[3]
+                    || rank > 0 && row[3] < values[rank - 1][4]
+                {
+                    return Err(
+                        "full-display source/Rust order or synchronous call interval differs"
+                            .into(),
+                    );
+                }
+            }
+            order_records.push(serde_json::json!({"mode":mode,"calls":values}));
+            Some(values)
+        } else {
+            None
+        };
         let table = text("calls.tsv")?;
         let mut lines = table.lines();
         if lines.next() != Some("call\tresult\tknown_patch\telapsed_ns") {
@@ -369,6 +454,14 @@ pub fn run(args: &[String]) -> Result<()> {
             }
             for (key, value) in [("schema", 1), ("result", row[1]), ("fault", 0)] {
                 expect(&state, key, value)?;
+            }
+            if full {
+                expect(&state, "source_failure", 0)?;
+                if state["native_error"] != "0"
+                    || read(&format!("call-{call}-error.txt"))? != b"None\n"
+                {
+                    return Err("full-display capture retains a native/conversion error".into());
+                }
             }
             // This flag marks Inputs::release_initial inside the sample
             // callback, not every way its retained fields can be destroyed.
@@ -473,6 +566,21 @@ pub fn run(args: &[String]) -> Result<()> {
                     );
                 }
                 let mut original = original_call(&arm, call, row[1], &g, &consumer, finish)?;
+                if let Some(sequence) = &sequence {
+                    let original_rank = if mode == 0 { call } else { call + 3 };
+                    let rust_rank = if mode == 0 { call + 3 } else { call };
+                    let native = rows(&text(&format!("original-call-{call}.tsv"))?, 5)?;
+                    if native[0][2] > sequence[original_rank][4] - sequence[original_rank][3]
+                        || row[3] > sequence[rust_rank][4] - sequence[rust_rank][3]
+                        || read(&format!("original-call-{call}.bgr"))?
+                            != read(&format!("call-{call}.bgr"))?
+                    {
+                        return Err(
+                            "full-display paired bytes or enclosing call intervals differ".into(),
+                        );
+                    }
+                    original["full_display_pixels_paired"] = true.into();
+                }
                 original_usable += u64::from(original["usable_image"] == true);
                 original_known += u64::from(original["known_patch"] == true);
                 original["mode"] = serde_json::json!(mode);
@@ -538,7 +646,7 @@ pub fn run(args: &[String]) -> Result<()> {
                 }
             }
         }
-        if mode == 1 && (usable, known) != (3, 3) {
+        if (mode == 1 || full) && (usable, known) != (3, 3) {
             return Err("same-binary CG metadata positive control failed".into());
         }
         arms.push(serde_json::json!({"mode":mode,"consumer":consumer,"producer":producer,"usable_images":usable,"known_patch_images":known,"scene_closed":true,"scene_module_explicitly_unloaded":false}));
@@ -547,7 +655,9 @@ pub fn run(args: &[String]) -> Result<()> {
         for entry in fs::read_dir(folder)? {
             let entry = entry?;
             let kind = entry.file_type()?;
-            if entry.path() == root.join("same-binary-validation.json") {
+            if entry.path() == root.join("same-binary-validation.json")
+                || entry.path() == root.join("full-display-validation.json")
+            {
                 continue;
             }
             if kind.is_file() {
@@ -564,7 +674,7 @@ pub fn run(args: &[String]) -> Result<()> {
     artifacts.sort_by(|a, b| a.path.cmp(&b.path));
     let mut report = serde_json::json!({"layout_version":1,"arms":arms,"call_observations":calls,"actual_invocations":6,"inputs":artifacts,
         "scope":"Fresh Rust consumer/scene pairs with the same actual executable path, archived arm64 executable bytes and observed child/window identity. CG metadata is a strict three-image positive control; SC metadata results, including None/error/empty, are observations. Original five-second waits unchanged; no capture retry, source oracle substitution, late-frame recovery, callback-quiescence claim, border/broker cause or full P1 acceptance. The child retains its separate scene module until process exit."});
-    if common_schema == Some(2) {
+    if matches!(common_schema, Some(2 | 3)) {
         report["layout_version"] = serde_json::json!(2);
         report["actual_invocations"] = serde_json::json!(12);
         report["actual_original_invocations"] = serde_json::json!(6);
@@ -575,7 +685,18 @@ pub fn run(args: &[String]) -> Result<()> {
             "Same-executable scene and same-process original/Rust display callers, with three unchanged original calls before three Rust calls on the same worker. Original/Rust None/empty/image results must match; Some images require exact known target pixels and unchanged held CPU bytes. CG is a strict three-image control per implementation. SC failures remain failed capture observations. Full display pixels, opposite invocation order, atomic timing, native callback drainage, prior failed oracle reclassification, root cause and complete P1 acceptance are not proved. Both explicit native module references remain loaded until process exit."
         );
     }
-    let output = root.join("same-binary-validation.json");
+    if full {
+        report["layout_version"] = 3.into();
+        report["orders"] = serde_json::json!(order_records);
+        report["original_first"] = serde_json::json!([true, false]);
+        report["full_target_rgb_images"] = 12.into();
+        report["scope"]="Same-executable full-display RGB fixture on a single 1:1 display; both implementations run on one caller worker in original-first and Rust-first arms. All twelve returned images, paired full bytes, actual native display selection and CPU owners after scene/source closure are strict. Sequence intervals enclose synchronous fixture/API calls, not hardware frame timestamps or callback quiescence. Static content, not changing-display freshness or general scaling/occlusion support. Old source oracles and failures remain unchanged; no full backend/P1 acceptance.".into();
+    }
+    let output = root.join(if full {
+        "full-display-validation.json"
+    } else {
+        "same-binary-validation.json"
+    });
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
             return Err("saved same-binary observation report differs".into());
@@ -583,7 +704,11 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if common_schema == Some(2) {
+    if full {
+        println!(
+            "macOS full_display arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 source_oracle_replaced=0 full_P1_acceptance=0 passed"
+        );
+    } else if common_schema == Some(2) {
         println!(
             "macOS same_binary arms=2 invocations=12 original_calls=6 rust_calls=6 CG_positive_images=6 original_first=1 caller_results_equal=1 source_oracle_replaced=0 late_used_as_current=0 diagnostic_only=1 full_P1_acceptance=0 passed"
         );

@@ -128,6 +128,23 @@ function Run-MacosSameBinaryProbes([string]$Artifacts) {
     catch {$script:failed=$true;Write-Host $_.Exception.Message}
 }
 
+function Run-MacosFullDisplayProbes([string]$Artifacts) {
+    $root=Join-Path $Artifacts full-display-rgb
+    New-Item -ItemType Directory -Path $root|Out-Null
+    $test='backends::macos::screen_capture_kit::tests::same_binary::records_all_display_pixels_in_both_implementation_orders'
+    foreach($order in @(0,1)) {
+        $directory=Join-Path $root "mode-$order"
+        New-Item -ItemType Directory -Path $directory|Out-Null
+        $env:MFS_P1_MACOS_SAME_BINARY_ROOT=$directory
+        $env:MFS_P1_MACOS_SAME_BINARY_MODE=[string]$order
+        $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
+        try {Step "rust-macos-full-display-$order" cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$test,'--','--exact','--ignored','--test-threads=1','--nocapture')}
+        catch {$script:failed=$true;Write-Host $_.Exception.Message}
+    }
+    try {Step macos-full-display-records $ConfigureTool @('upstream-trace','macos-full-display',$root)}
+    catch {$script:failed=$true;Write-Host $_.Exception.Message}
+}
+
 function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[string]$Artifacts) {
     $directory=Join-Path $Artifacts $Name
     $scene=Join-Path $directory scene

@@ -14,6 +14,12 @@ pub fn run(args: &[String]) -> Result<()> {
     if args.first().is_some_and(|kind| kind == "macos-same-binary") {
         return crate::macos_same_binary::run(&args[1..]);
     }
+    if args
+        .first()
+        .is_some_and(|kind| kind == "macos-full-display")
+    {
+        return crate::macos_same_binary::run_full(&args[1..]);
+    }
     if args.first().is_some_and(|kind| kind == "framepool-order") {
         return crate::framepool_order::run(&args[1..]);
     }

@@ -23,6 +23,7 @@ pub(crate) fn run() -> ! {
         .parse::<u32>()
         .unwrap();
     assert!(mode <= 1);
+    let full = std::env::var("MFS_P1_MACOS_SAME_BINARY_FULL").as_deref() == Ok("1");
     let root = PathBuf::from(std::env::var_os("MFS_P1_MACOS_SAME_BINARY_SCENE_ROOT").unwrap());
     let library = PathBuf::from(std::env::var_os("MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE").unwrap());
     assert!(root.is_absolute() && library.is_absolute() && root.is_dir());
@@ -34,12 +35,23 @@ pub(crate) fn run() -> ! {
     // Fixture query completion is not proof every native block has returned.
     // No callback can later execute in an explicitly unloaded scene image.
     let version = unsafe {
-        symbol::<unsafe extern "C" fn() -> u32>(handle, c"mfs_mac_same_binary_scene_version")
+        symbol::<unsafe extern "C" fn() -> u32>(
+            handle,
+            if full {
+                c"mfs_mac_full_display_scene_version"
+            } else {
+                c"mfs_mac_same_binary_scene_version"
+            },
+        )
     };
     let run = unsafe {
         symbol::<unsafe extern "C" fn(u32, *const c_char, *const c_char) -> i32>(
             handle,
-            c"mfs_mac_same_binary_scene_run",
+            if full {
+                c"mfs_mac_full_display_scene_run"
+            } else {
+                c"mfs_mac_same_binary_scene_run"
+            },
         )
     };
     // SAFETY: Exact private header version getter from the retained image.
