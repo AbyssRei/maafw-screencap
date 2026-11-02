@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+`MacOSControlUnitMgr.cpp/.h` 新增 22 项对应，包含默认析构声明：九项捕获/生命周期/元数据边界、十三项排除的应用/输入动作。Rust 范围明确为 `Input=None`，没有接收非 None 输入后改写为零。连接先清 connected，精确 ScreenCaptureKit selector 通过真实 macOS 14 可用性检查后才构造；新 owner 构造完成后替换旧 owner，不可用或构造失败仍保留旧对象。None/未知截图 selector 继续原日志后成功连接。截图转发只要求现存 owner，不检查 connected；None/错误保留调用方图像，engaged empty 也照常替换。inactive 仍直接返回 true，不调用后端或改变状态；UUID 保留 u32 十进制，features 在 None 输入下为零，metadata 保留 window_id 与 screenshot selector 的 signed64 解释。默认析构按源成员顺序先释放截图 owner，None 输入没有动作或输入 owner；不据此推导原生 callback 已排空。
+
+实际 `reference function-map` 只读核对全部 22 项/排除 13 项，并绑定完整的十项既有 `bc90d12` manager 构建、依赖、控制、查询、元数据、脚本、原版/Rust 捕获及场景退出检查；这些通过状态均为历史结果。本批两份库内 Rust 与十一份真实测试/适配上下文共十三份源码匹配已登记原生输入，显式核算 CRLF，测试文件不充当库实现位置。源 CPP 唯一的 `__builtin_available(macOS 14.0, *)` 参数超出所用 C++ grammar；独立索引输入使用同长度占位并保存全部替换字节、原错误和解析输入，原函数边界/行号/摘要逐项不变，实际来源和运行时条件没有改写。这是封存 parser 的语法索引重放，未进行编译器预处理，也不授予完整 Objective-C++/宏解析或语义验收。累计 31 份固定来源、220 项；内层 ScreenCaptureKit、非 None 输入、完整框架/ABI、既有像素失败和完整 P1 仍待处理。本批没有新捕获，不改变本机无输入多轮结论。
+
 `DesktopDupScreencap.cpp/.h` 与 `DesktopDupWindowScreencap.cpp/.h` 新增二十四项对应，包含六个清理闭包、两个构造和一个默认派生析构。保留默认硬件 device 后建原 `IDXGIFactory`、nonnull HWND 的 nearest-monitor 查找、找不到时 adapter0/output0 回退，以及使用原 device 的 `DuplicateOutput`；没有为跨 adapter 成功而换设备。每次外层捕获仍检查输出，首用至多三次仅检查末像素 alpha 的预热，此后必须另取一帧返回；三次预热都失败时仍保留初始化标记，没有增加缓存、回放或最终失败后的重试。`AcquireNextFrame` 仍等待 2000ms；access-lost 只清 duplication/staging 和 monitor，输出切换、完整 uninit 的释放顺序与残留状态分别保留，未合成一个新恢复事务。
 
 六个闭包逐项对应枚举 adapter/output 的局部释放、primary 临时 output 的 QI 引用，以及 Unmap、raw texture Release、ReleaseFrame、desktop resource Release。成功 Acquire 才建立 ReleaseFrame 责任，成功 Map 才建立 Unmap 责任；失败时不释放别的调用拥有的帧。原版返回借用已 Unmap 内存的 Mat；Rust 在 Map 有效时复制独立 BGRA 行，仍等原清理结束后才转换 BGR，明确保留增加的整幅复制工作。窗口包装仍先完成整屏转换，再查询 client/origin/output 与检查 ROI；原共享 BGR ROI 改为隔离目标 BGR 复制，是额外的所有权安全适配，不称作消除转换/复制。后续 descriptor 兼容性、布局/stride/checked 算术、null-success 拒收和 caller-thread owner 同样保留其安全适配身份，不宣称无效 native 行为等价。
