@@ -18,13 +18,17 @@ P1 的职责盘点已进入函数层级。首批按固定 F 的 `Win32ControlUni
 
 WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录，含九个 registry/frame 闭包、两条 deleted 复制声明及一个 default 析构。28 项归入捕获/生命周期/元数据边界，三个只供输入使用的 getter 单独排除；捕获默认仍绑定并保留原来必需的虚拟键盘/指针全局对象。记录逐项覆盖原路径比较及 NUL 语义、原 prerequisites 的 AND 判定、最后公告输出与构造快照、忽略 global_remove、回调内递归 roundtrip、六种转换、原 packed step/忽略 YInvert、Buffer 到达即 Copy、Ready/Failed 及转换结束前帧保活。deleted 声明对应 Rust Client 所有权类型和显式 Arc 分享点，属于声明审阅。
 
-两份 Rust 主体与已封存 `a5cfa2e` 原生批次及当前 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录逐项保留失败 mmap fd 寿命待测、旧缓冲清理失败叠加新分配失败尚未验证、共享快照下原版立即断开未验收，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。累计八份来源、93 项函数/闭包及声明对应已登记；其余来源家族、原生失败、语义与完整 P1 继续待完成。
+该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
 
-Wlr 逐函数审阅发现一处尚待原生复现的失败资源寿命差异：固定 F 的 `MemfdBuffer` 在 `mmap` 失败后保留已创建的 fd，直到失败缓冲对象被替换或销毁；当前 Rust 路径在该错误返回时释放局部 File。新增独立 `allocation` IPC/SHM 用例仅在自有测试进程中，把 `RLIMIT_AS` 临时下调到实际 VmSize 加 32 MiB，用 256 MiB 稀疏缓冲请求触发内核映射失败，再恢复原限制并恢复普通取帧。原版 `mmap/mmap64` 观察器逐次原参数转发、保留返回值/errno，记录真实 MAP_FAILED；两侧检查失败 fd 的数量/大小/inode、替换后新 inode、调用方旧图像和关闭后持帧。协议端 Failed 只用于结束 F 原来的等待，不能把它误作额外恢复策略。
+Wlr 失败映射寿命差异已由确切 `c564306` 的 [Actions 41398197470](https://github.com/AbyssRei/maafw-screencap/actions/runs/41398197470) 原生复现：固定 F 的 C++ 用例二十轮均实际得到 MAP_FAILED/ENOMEM，保留失败 fd，恢复原限制后正常替换并取帧；Rust 第一轮的 buffer errno 也是 12，但 fd 数保持 8，未达到应有的 9，没有留下失败 memfd。旧图像字节不变，未发布 raw 或恢复图，Rust 以 101 退出。Wlr 组件保持 137/140，失败的 Rust 用例、Rust 服务端不完整计数和记录检查共三项均保留。
 
-该测试与 `cargo xtask upstream-protocol wlr-allocation <外部矩阵目录> [--check-only]` 已接入原生 Wlr 编排，各侧计划二十轮失败及恢复。十四组损坏记录和九组实际 Step 编排控制在本机通过；人工完整数据只验证 checker，未产生截图。Workspace 的 104 项 xtask 测试、Windows feature Clippy、格式及脚本解析通过，沿用封存 Cargo/vendor 输入；Linux 测试体及 C/C++ 仍待原生 Actions 编译执行。捕获实现尚未改动，不据源码推断或人工数据宣称差异已复现、已修复或 P1 通过；既有失败仍保留。
+独立 `allocation` IPC/SHM 用例仅在自有测试进程中，把 `RLIMIT_AS` 临时下调到实际 VmSize 加 32 MiB，用 256 MiB 稀疏缓冲请求触发内核映射失败，再恢复原限制并恢复普通取帧。原版 `mmap/mmap64` 观察器逐次原参数转发、保留返回值/errno；协议端 Failed 只结束 F 原来的等待。官方轻量 ZIP 长度/摘要与 CRC、8,545 项可用登记路径、原版 60 份实际 payload 及二十组限额/fd/inode/替换记录已独立核对；Rust 的空表、首轮 fd 缺失及 105 字节旧图像也已核对，实际不完整矩阵仍被只读 checker 拒绝。完整来源/编译输入闭合另行处理，不能将轻量数据审阅等同于完整来源验收。
+
+Rust 现用内部三态 owner 表示“不可用”“fd 已创建但未映射”“映射与 fd 均有效”，按 F 的构造顺序先保存对象，再返回原生准备错误。`mmap` 失败保留 fd 到下一次替换/关闭；`memfd_create` 失败保留空对象，`ftruncate` 失败先关闭 fd；映射成功仍先销毁协议代理/池，再 unmap、close，原 fd=0 残留边界保留。原 `check_buffer` 的对象存在性与元数据判定也保留，不以缺代理为由静默重新分配；缺失映射或代理以安全错误拒绝。捕获等待、Failed、Copy、转换和既有回归断言未放宽。旧共享/FD0 用例只调整私有字段访问，`allocation` 回归函数与 C++/协议夹具未改。
+
+该测试及 `cargo xtask upstream-protocol wlr-allocation <外部矩阵目录> [--check-only]` 先前已通过十四组坏数据拒绝和九组 Step 编排控制；人工数据没有截图证明。本次 workspace 的 104 项 xtask 测试、Windows feature Clippy 与格式通过，沿用封存 Cargo/vendor 输入；这些本机检查不编译 Linux owner 路径。修正后的 Linux 编译、二十轮原生回归及其余 Wlr 场景仍待新 Actions。`memfd_create/ftruncate` 及组合失败的新状态目前只有源码对应，未据此声称原生穷尽或完整 P1 通过；旧失败、旧快照及对应关系保留原身份，当前 Rust 位置需要随新结果更新。
 
 确切 `4ebd7cb` 的 [Actions 41380793132](https://github.com/AbyssRei/maafw-screencap/actions/runs/41380793132) 已原生编译并执行修正后的缓存路径：十四张完整 CPU view 均严格匹配三色图样，schema2 的 sRGB 绘制前配置、初始化、布局及十四组窗口清单核验通过，诊断记录入口通过。两种调用顺序的原版/Rust 六组配对字节全部相同，但十二张显示器图像各有 52 个偏差像素，均在 `[1012,1020)×[4,12)`；两个严格原生入口继续失败，组件保持 128/145、十七项失败。两扇 Window Server `StatusIndicator`（PID164，layer2147483630，bounds `(1002,-6,28,28)`）在十四次清单中均高于目标窗口，CPU view 没有这些像素；这是分离的视图、捕获和元数据证据，仍不证明同时的像素归因、动态新鲜度或回调排空。实际清单均提供 IsOnscreen，null 分支仅有人工控制。完整轻量 ZIP、200 份矩阵文件、36 份当前/持帧及十四份保存报告已独立核对；完整官方 ZIP/tar 的 29,935 份恢复文件、28,378 项注册路径、十一份普通 490 文件快照及一份受控快照、76 份 F 源码和 U/F 741/744 Git blobs/模式均核对通过，549 项轻量输入缺口全部闭合；十四份保存报告与完整 reference 验证只读通过，恢复字节及 Git 元数据未变，复核已封存。实际预装 Xcode 27.1/27A9275、SDK 27.0 仅作身份记录，不设最新版本门禁。`capture_parity_accepted=false`、原版/严格整屏失败和 P1 阶段状态均保持不变。
 

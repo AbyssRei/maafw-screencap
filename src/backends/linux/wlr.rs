@@ -166,13 +166,70 @@ struct Globals {
     pointer: Option<Owned<pointer::ZwlrVirtualPointerManagerV1>>,
     keyboard: Option<Owned<keyboard::ZwpVirtualKeyboardManagerV1>>,
 }
+enum ShmMemory {
+    // Source construction still returns an unavailable MemfdBuffer after a
+    // native failure. No invalid File/Mmap is manufactured for fd=-1/null.
+    Unavailable,
+    Unmapped(File),
+    // Field order preserves source unmap-before-close on ordinary destruction.
+    Mapped { map: MmapMut, file: File },
+}
+impl ShmMemory {
+    fn file(&self) -> Option<&File> {
+        match self {
+            Self::Unavailable => None,
+            Self::Unmapped(file) | Self::Mapped { file, .. } => Some(file),
+        }
+    }
+    fn mapping(&self) -> Option<&MmapMut> {
+        match self {
+            Self::Mapped { map, .. } => Some(map),
+            Self::Unavailable | Self::Unmapped(_) => None,
+        }
+    }
+    fn allocate(size: usize) -> Result<(Self, Option<Error>), Error> {
+        let length = u64::try_from(size)
+            .map_err(|_| Error::new("Wlr file size", rustix::io::Errno::OVERFLOW.raw_os_error()))?;
+        // UUID construction errors precede native construction, just as a
+        // throwing source constructor cannot replace the old buffer owner.
+        let name = buffer_name()?;
+        let name = std::ffi::CStr::from_bytes_with_nul(&name)
+            .map_err(|_| Error::new("Wlr UUID name", rustix::io::Errno::INVAL.raw_os_error()))?;
+        let file = match rustix::fs::memfd_create(name, rustix::fs::MemfdFlags::empty()) {
+            Ok(file) => File::from(file),
+            Err(error) => {
+                return Ok((
+                    Self::Unavailable,
+                    Some(Error::new("Wlr memfd_create", error.raw_os_error())),
+                ));
+            }
+        };
+        // A failed ftruncate closes its fd in F before returning the unavailable
+        // object. It must not be treated like the retained fd on mmap failure.
+        if let Err(error) = rustix::fs::ftruncate(&file, length) {
+            drop(file);
+            return Ok((
+                Self::Unavailable,
+                Some(Error::new("Wlr ftruncate", error.raw_os_error())),
+            ));
+        }
+        // SAFETY: Sole owned correctly sized shared file. No Rust pixel borrow
+        // exists while the producer writes; access begins only after Ready.
+        match unsafe { MmapOptions::new().len(size).map_mut(&file) } {
+            Ok(map) => Ok((Self::Mapped { map, file }, None)),
+            Err(error) => Ok((
+                Self::Unmapped(file),
+                Some(Error::new("Wlr mmap", error.raw_os_error().unwrap_or(-1))),
+            )),
+        }
+    }
+}
 struct Buffer {
     // Mapping is independent of the Wayland proxy owner; close_buffer retains
     // it until after the original destruction roundtrip, including failure.
     // Explicit drop keeps source unmap-before-close after proxy/pool release;
     // its observed FD-zero residual is retained separately below.
-    map: ManuallyDrop<MmapMut>,
-    file: ManuallyDrop<File>,
+    memory: ManuallyDrop<ShmMemory>,
     pool: Option<Owned<wl_shm_pool::WlShmPool>>,
     proxy: Option<Owned<wl_buffer::WlBuffer>>,
     counts: Arc<Counts>,
@@ -181,22 +238,21 @@ impl Drop for Buffer {
     fn drop(&mut self) {
         drop(self.proxy.take());
         drop(self.pool.take());
-        if self.file.as_raw_fd() == 0 {
+        if self.memory.file().is_some_and(|file| file.as_raw_fd() == 0) {
             // U's fixed MemfdBuffer destructor returns immediately for !fd_.
-            // Preserve BOTH native residuals, as observed by the isolated
-            // original FD-zero probe. This is not successful product cleanup;
+            // Preserve the native fd and any existing mapping, as observed by
+            // the original FD-zero probe. This is not successful product cleanup;
             // P3 corrects ownership after U/P freeze. A fixture may reclaim
             // them only after buffer/proxy/callback/native access has ended.
             self.counts.increment(&self.counts.source_fd_zero_retained);
             return;
         }
-        // SAFETY: These are the sole initialized owners. Protocol owners have
-        // ended above, no pixel borrow escapes, and each manual owner is dropped
-        // exactly once here, in source unmap-before-close order. ManuallyDrop's
-        // field destruction does not release either owner a second time.
+        // SAFETY: This is the sole initialized native-memory owner. Protocol
+        // owners ended above and no pixel borrow escapes. Drop it exactly once;
+        // the mapped variant's field order unmaps before closing the file.
+        // ManuallyDrop field destruction cannot release it a second time.
         unsafe {
-            ManuallyDrop::drop(&mut self.map);
-            ManuallyDrop::drop(&mut self.file);
+            ManuallyDrop::drop(&mut self.memory);
         }
     }
 }
@@ -401,7 +457,10 @@ fn prepare_buffer(
 ) -> Result<(), Error> {
     let same = {
         let s = ctx.state()?;
-        s.layout == Some(layout) && s.buffer.as_ref().is_some_and(|b| b.proxy.is_some())
+        // F checks only that buffer_obj_ and buffer_ are not BOTH null before
+        // comparing metadata; an unavailable constructed buffer still exists.
+        // Preserve that choice instead of silently recreating on its behalf.
+        s.layout == Some(layout) && s.buffer.is_some()
     };
     if !same {
         let old = {
@@ -419,35 +478,22 @@ fn prepare_buffer(
             }
         }
         let size = layout.size()?;
-        // ftruncate provides defined zero-filled backing, including native
-        // padding; no Rust references exist while the compositor writes it.
-        let name = buffer_name()?;
-        let name = std::ffi::CStr::from_bytes_with_nul(&name)
-            .map_err(|_| Error::new("Wlr UUID name", rustix::io::Errno::INVAL.raw_os_error()))?;
-        let file = File::from(
-            rustix::fs::memfd_create(name, rustix::fs::MemfdFlags::empty())
-                .map_err(|e| Error::new("Wlr memfd_create", e.raw_os_error()))?,
-        );
-        rustix::fs::ftruncate(
-            &file,
-            u64::try_from(size).map_err(|_| {
-                Error::new("Wlr file size", rustix::io::Errno::OVERFLOW.raw_os_error())
-            })?,
-        )
-        .map_err(|e| Error::new("Wlr ftruncate", e.raw_os_error()))?;
-        // SAFETY: Owned correctly sized shared file. Server only writes a
-        // requested frame; Rust borrows pixels after Ready and before next Copy.
-        let map = unsafe { MmapOptions::new().len(size).map_mut(&file) }
-            .map_err(|e| Error::new("Wlr mmap", e.raw_os_error().unwrap_or(-1)))?;
+        let (memory, failure) = ShmMemory::allocate(size)?;
+        let buffer = Buffer {
+            memory: ManuallyDrop::new(memory),
+            pool: None,
+            proxy: None,
+            counts: ctx.counts.clone(),
+        };
         let shm = {
             let mut s = ctx.state()?;
-            s.buffer = Some(Buffer {
-                map: ManuallyDrop::new(map),
-                file: ManuallyDrop::new(file),
-                pool: None,
-                proxy: None,
-                counts: ctx.counts.clone(),
-            });
+            // Source assigns the constructed MemfdBuffer BEFORE available().
+            // Even a native failure replaces the old owner; mmap failure's fd
+            // lives until the next replacement/close, never as a local temporary.
+            s.buffer = Some(buffer);
+            if let Some(error) = failure {
+                return Err(error);
+            }
             s.layout = Some(layout);
             s.shm.clone().ok_or(Error::new(
                 "Wlr retained shm",
@@ -456,10 +502,18 @@ fn prepare_buffer(
         };
         let pool = {
             let s = ctx.state()?;
+            let file = s
+                .buffer
+                .as_ref()
+                .and_then(|buffer| buffer.memory.file())
+                .ok_or(Error::new(
+                    "Wlr unavailable pool file",
+                    rustix::io::Errno::INVAL.raw_os_error(),
+                ))?;
             shm.proxy
                 .send_constructor::<wl_shm_pool::WlShmPool>(
                     wl_shm::Request::CreatePool {
-                        fd: s.buffer.as_ref().unwrap().file.as_fd(),
+                        fd: file.as_fd(),
                         size: i32::try_from(size).unwrap(),
                     },
                     data(ctx, Kind::Ignore)?,
@@ -1015,7 +1069,11 @@ impl Capture {
                 "Wlr missing mapping",
                 rustix::io::Errno::INVAL.raw_os_error(),
             ))?;
-            let pixels = buffer.map.get(..size).ok_or(Error::new(
+            let mapping = buffer.memory.mapping().ok_or(Error::new(
+                "Wlr unavailable mapping",
+                rustix::io::Errno::INVAL.raw_os_error(),
+            ))?;
+            let pixels = mapping.get(..size).ok_or(Error::new(
                 "Wlr short mapping",
                 rustix::io::Errno::INVAL.raw_os_error(),
             ))?;

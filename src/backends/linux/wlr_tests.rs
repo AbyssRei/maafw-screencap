@@ -600,8 +600,20 @@ fn retains_shared_client_after_caller_and_first_capture_release() {
             let a = first.context.state().unwrap();
             let b = second.context.state().unwrap();
             assert_ne!(
-                a.buffer.as_ref().unwrap().file.as_raw_fd(),
-                b.buffer.as_ref().unwrap().file.as_raw_fd()
+                a.buffer
+                    .as_ref()
+                    .unwrap()
+                    .memory
+                    .file()
+                    .unwrap()
+                    .as_raw_fd(),
+                b.buffer
+                    .as_ref()
+                    .unwrap()
+                    .memory
+                    .file()
+                    .unwrap()
+                    .as_raw_fd()
             );
         }
         drop(first);
@@ -1025,9 +1037,9 @@ fn retains_original_fd_zero_residual_and_cpu_outputs_until_fixture_reclaim() {
                 {
                     let state = context.state().unwrap();
                     let buffer = state.buffer.as_ref().unwrap();
-                    assert_eq!(buffer.file.as_raw_fd(), 0);
-                    pointer = buffer.map.as_ptr().cast_mut();
-                    length = buffer.map.len();
+                    assert_eq!(buffer.memory.file().unwrap().as_raw_fd(), 0);
+                    pointer = buffer.memory.mapping().unwrap().as_ptr().cast_mut();
+                    length = buffer.memory.mapping().unwrap().len();
                 }
                 raw_owners.push(sample.clone());
                 adapter.convert(sample, 0)
