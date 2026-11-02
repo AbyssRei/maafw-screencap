@@ -108,6 +108,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+手动原生 workflow 现接受 `gh workflow run p0.yml --ref <分支> -f macos_runner=macos-26`，以完全相同的准备、原版/Rust 捕获和记录门禁执行另一个原生 Mac 环境；`macos_runner` 仅允许 `xcode-27` 与 `macos-26`，push/PR 和手动默认仍选前者。`framepool_only=true` 的专项选择不变。GitHub 的[标准 runner 清单](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)包含这两个 arm64 标签；实际 OS/Xcode/SDK/编译器和当前依赖仍随运行归档，预装工具年龄只作参考。新增选择不改变测试/断言/步骤、工具能力要求、资产路径或历史结论；去除新增输入并还原唯一 matrix 表达式后，整个 YAML 结构与父提交完全相等。五个事件/选项组合的模型检查通过，尚不证明托管路由、macOS 26 编译或取帧。开发证据由参考目录 `local/current-macos-runner-selection-path.txt` 指向；该额外环境的结果不能替代 macOS 27 结果或完整 P1。
+
+确切 `8c1369c` 原生 macOS 的官方即时 ZIP（40,032,711 字节）摘要、CRC、11,941 份文件、11,786 个实际可用登记路径、全部 154 份日志与十项 AST 输出另已核对，仍保留 582 项完整输入缺口。全部状态与之前批次相同：133 通过、21 失败；相同状态不表示失败发生在相同位置。本次单独的 same-path 观察入口完成 content 回调/转发并提交 1024×768 sample 请求，原五秒等待超时，后续十五秒仍没有 sample callback 或 semaphore signal；`sample_enter` 仅为提交标记，不能写成进入 sample completion。另一个 Foundation consumer 在截图前的几何查询即超时；其他失败原 oracle 的 nullopt 与整屏像素断言各保留原边界，不统称为角落图形或同一种问题。观察器仅在 stderr 的单行输出期间持锁，完成后才调用原 completion；没有据日志认定观察器锁、Apple 服务或像素生产者为原因。参考目录 `local/current-8c-macos-native-review-path.txt` 指向该只读复核，当前失败及完整 P1 状态不变。
+
 确切 `8c1369c` 的独立 Windows [Actions 41542384071](https://github.com/AbyssRei/maafw-screencap/actions/runs/41542384071) 已终态失败，实际组件为 98/102。四项失败仍是原版 `pseudo-stop`、`pseudo-inactive`、`pseudo-layered-stop` 和 `pseudo-layered-inactive` 的已知内部像素断言：各返回 96×64 BGR 图像，6,144 个像素全黑，程序退出 5；source/window 关闭后的 CPU 图像保留检查通过，不据此改判像素成功。其余 98 项保持原生 passed 状态，包括现有 Rust、Size、Map、查询和记录入口；这是独立新 runner 上的既有组件范围，不替代长批次的旧结果或完整 P1。
 
 同次原版四组属性/设备诊断的 27 次固定调用全部完成：24 张符合场景，slot `3/10/11`（两次默认 WGC 存活及一次额外要求边框后的 Desktop Duplication）各有 924 个外三像素差异。三张完整 BGR 与历史六张所选异常目标逐字节相同，不仅是差异数量相同；外两像素 624 点/内一像素 300 点的既有描述因此适用于这些相同字节。实际默认 getter 在该 runner 为 true，额外 true setter 后仍为 true；本机原三轮的默认 false 结果保持自身身份。仅原版设备/swapchain 存活、所有固定销毁后观察与最终无 WGC 控制均符合场景。这是在本次有限执行中出现的对象状态与像素关联，没有确认系统指示器或其他具体生产者，没有证明原生 session/callback 排空，也不把历史六个 mixed mask 或四个伪最小化失败改判为通过。
