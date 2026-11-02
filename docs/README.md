@@ -1,5 +1,9 @@
 # 文档导航与维护约定
 
+macOS 新接入普通、未插桩 F 编译入口的原生 Clang AST 归档，保留实际选项、编译器和原始输出，供后续嵌套回调范围审阅。本机归档依赖检查通过，Apple 原生执行及完整函数对应仍待验证，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
+
+确切 `e987a99` 的 Linux P0 PipeWire 已通过全部 27 项检查，含五项真实捕获及 Clippy；轻量包摘要和 32 项可用登记路径独立核对通过。新跨线程交接仍待执行结果，旧失败保留，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `b0b1b84` 已通过 Linux 编译及 P0 五项真实捕获测试，随后 Clippy 因线程测试两处固定 chunk 写法失败，保持 26 项通过、两项失败。测试现改用 `as_chunks::<3>()` 并核对完整性，生产代码与门禁未改；新线程交接仍待原生验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `f6df469` 的 P0 PipeWire 在 Linux 编译时报旧 offer 测试缺少 `Native` 导入，尚未执行测试/捕获；19 项通过、两项失败与原包保留。测试模块已补显式导入，完整 owner/断言不变，实际重编译和线程交接仍待 Actions，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

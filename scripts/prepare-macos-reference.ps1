@@ -67,6 +67,15 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     })
     $identityFile=Join-Path $refInputs original-source-identities.json
     Json $identityFile $identities;Save $identityFile
+    # Observe the compiler view of the ordinary uninstrumented source separately.
+    # A failed syntax/schema observation stays failed without suppressing capture.
+    $astRoot=Join-Path $refInputs clang-ast
+    try {
+        Step macos-original-clang-ast $ConfigureTool @('reference','macos-ast',(Join-Path $build compile_commands.json),$FixedUpstream,$astRoot)
+    }catch { Write-Host $_.Exception.Message }
+    finally {
+        if(Test-Path -LiteralPath $astRoot){Get-ChildItem -LiteralPath $astRoot -File|ForEach-Object{Save $_.FullName}}
+    }
     $executable=Join-Path $build mfs_macos_source_context
     $saved=Join-Path $refInputs mfs_macos_source_context
     Copy-Item -LiteralPath $executable -Destination $saved;Save $saved

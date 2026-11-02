@@ -37,6 +37,7 @@ mod macos_native_sample;
 mod macos_same_binary;
 mod macos_sample_cases;
 mod macos_sample_matrix;
+mod macos_source_ast;
 mod manager_metadata;
 mod manager_size;
 mod native;
@@ -155,6 +156,9 @@ fn run() -> Result<()> {
     if argv.starts_with(&["reference".into(), "function-map".into()]) {
         return function_map::run(&argv[2..]);
     }
+    if argv.starts_with(&["reference".into(), "macos-ast".into()]) {
+        return macos_source_ast::run(&argv[2..]);
+    }
     if argv.starts_with(&["reference".into(), "verify-run".into()]) {
         return batch::verify_run(&argv[2..]);
     }
@@ -193,6 +197,7 @@ fn run() -> Result<()> {
                       cargo xtask reference verify-run <reference-relative run manifest>\n\n\
                       cargo xtask reference catalog <reference-relative input> [--root <external directory>]\n\n\
                       cargo xtask reference function-map <reference-relative mapping> [--root <external directory>]\n\n\
+                      cargo xtask reference macos-ast <compile_commands.json> <fixed F root> <new external output>\n\n\
                       cargo xtask reference licenses <Rust batch manifest> [--root <external directory>]\n\n\
                       cargo xtask check [--message-file <commit message file>]\n\
                       cargo xtask batch [--desktop | --prepare-only]\n\n\

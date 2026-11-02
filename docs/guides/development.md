@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+macOS 的普通 C++ grammar 虽已找到四个 `.mm` 方法，却不能可靠索引 Objective-C++ 消息及四个嵌套 block。新增 `cargo xtask reference macos-ast <compile_commands.json> <fixed F root> <new external output>`：仅在原生 macOS arm64 运行，从实际 CMake 数据库唯一选取 `mfs_macos_source_context` 对确切 F `.mm` 的普通编译，核对头文件/源码完整摘要及已选择的 Xcode compiler。保留 compiler、SDK、宏、include、架构和部署目标，只移除 `-c` 与 `-o`/object，增加 syntax-only/JSON AST/filter 参数；结构化调用不经过 shell，并拒收 response file、额外输出、歧义编译及需 shell 展开的命令。
+
+该观察在原生来源准备中独立运行，原始 AST、stderr、退出码、完整命令、compiler 版本/摘要、编译数据库及两份未改来源均立即外置登记。观察失败仍保留 failed 检查并继续独立捕获，不把缺失 AST 或成功语法编译计为像素/回调排空通过。JSON AST 随实际 compiler 归档；过滤根及 block 节点数只是版本相关的语法观察，含声明/重复引用的计数不能作为完整函数 census。后续仍须逐项核对真实 token/函数体范围、默认析构及嵌套 block 的源字节与 Rust 职责；当前累计对应数量不增加。归档依赖重放通过 workspace（118 项 xtask）、Release、Clippy、参数保留/拒收及 Windows 主机拒收控制；三个真实 Step 子进程另验证成功、输出前失败和输出后失败均继续编排，失败输出完整登记。初轮外部驱动的路径拼接错误单独保留。Windows Clang 的十项合成 callable/block 语法控制仅验证语法形态，实际 Apple/F AST 执行仍待 Actions。
+
 `PipeWireScreencap.cpp/.h` 新增 36 项对应：34 项 CPP helper/方法/谓词和两项头文件声明，合计含六项删除的复制构造/赋值及两个等待谓词。库内位置覆盖实际 consumer、native、POD、CPU buffer、resources、MemFd 和 DMA 七份 Rust；其当前字节均匹配旧 `a5` 登记原生输入，显式核算 CRLF。实际 `reference function-map` 保留完整所选 101 项历史通过检查与确切日志，未把旧正常格式通过扩大为新分支、任意故障或完整后端验收；累计 34 份固定来源、259 项。
 
 审阅保留实际 loop 锁及 guard 退出、相对整秒等待/三秒预算、原谓词及错误后重查；捕获激活流、设置 wanted，超时先查断连、计数、空缓存，再判断大于三次，前三次回放。快照/格式在锁内取得，OpenCV 转换仍在解锁后，BGR 保留无转换入口。初始化保留 daemon/显式 unsafe FD、成功 core 后清 FD、先启动 loop 后锁内 connect 和三份 POD 顺序；后续重建按原 daemon 状态走，不新增恢复。process 排空保留最新、及时归还前项，仅 wanted 时复制，先结束 map 再清 wanted/signal/归还；core/state 回调不增加新唤醒或自动重连。
@@ -71,6 +75,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+确切 `e987a992ddbee75d6571de8da1cbdf96898f1b8e` 的 [Actions 41514949183](https://github.com/AbyssRei/maafw-screencap/actions/runs/41514949183) P0 PipeWire 通过全部 27 项检查：四项 consumer、四项 row、五项实际捕获和原生 Clippy 均通过，source/daemon 正常退出。独立复核官方 90,569 字节 ZIP 的摘要/CRC、33 份文件及 32 项可用登记路径，轻量包仍缺 544 项完整输入。相较 `b0`，仅 Clippy 改为通过、外层准备失败消失，其他检查未改；本结果不接受新完整 owner 的跨线程运行，旧编译/lint 失败和完整 P1 状态保持原身份。
 
 确切 `b0b1b84` 的 Linux libtest 已编译，四项 portable consumer、四项 row ownership 和五项真实 P0 捕获测试均通过；随后原生 Clippy 在新 `thread_mobility_tests.rs` 的两处 `chunks_exact(3)` 报 `chunks_exact_to_as_chunks`。P0 保持 26 项通过、两项失败，包括真实 Clippy 和其外层准备失败，不能把测试已编译或 P0 捕获通过写成新完整 owner 的线程交接已运行。新修正只将这段测试比较改为标准库 `as_chunks::<3>()`，并显式要求两侧 remainder 为空、像素组数量相等；不禁用 lint，不改生产代码、捕获次数、断言目标或编排门禁。实际修正后 Linux Clippy/新线程回归仍待下一次 Actions。
 
