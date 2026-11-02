@@ -42,6 +42,48 @@ function Artifact([string]$Path) {
     return [ordered]@{path=$relative; sha256=(Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()}
 }
 function Save([string]$Path) { $inputs.Add((Artifact $Path)) }
+function Read-PipeWireReleaseIdentity([object]$Release,[object]$Tag=$null) {
+    if($Release -isnot [pscustomobject]){throw 'PipeWire release must be a JSON object'}
+    $name=$Release.PSObject.Properties['tag_name']
+    $upcoming=$Release.PSObject.Properties['upcoming_release']
+    if($null -eq $name -or $name.Value -isnot [string] -or [string]::IsNullOrWhiteSpace($name.Value)){
+        throw 'PipeWire release tag is missing or invalid'
+    }
+    if($null -eq $upcoming -or $upcoming.Value -isnot [bool] -or $upcoming.Value){
+        throw 'PipeWire release metadata must identify an already released version'
+    }
+    $releaseCommit=$null
+    $commitProperty=$Release.PSObject.Properties['commit']
+    if($null -ne $commitProperty -and $null -ne $commitProperty.Value){
+        if($commitProperty.Value -isnot [pscustomobject]){throw 'PipeWire release commit is malformed'}
+        $id=$commitProperty.Value.PSObject.Properties['id']
+        if($null -eq $id -or $id.Value -isnot [string] -or $id.Value -cnotmatch '^[0-9a-fA-F]{40}$'){
+            throw 'PipeWire release commit must contain a complete Git identity'
+        }
+        $releaseCommit=$id.Value.ToLowerInvariant()
+    }
+    $commit=$releaseCommit
+    $source='release.commit'
+    if($null -ne $Tag){
+        if($Tag -isnot [pscustomobject]){throw 'PipeWire repository tag must be a JSON object'}
+        $tagName=$Tag.PSObject.Properties['name']
+        $tagCommit=$Tag.PSObject.Properties['commit']
+        if($null -eq $tagName -or $tagName.Value -isnot [string] -or $tagName.Value -cne $name.Value -or $null -eq $tagCommit -or $tagCommit.Value -isnot [pscustomobject]){
+            throw 'PipeWire repository tag differs from the selected release'
+        }
+        $id=$tagCommit.Value.PSObject.Properties['id']
+        if($null -eq $id -or $id.Value -isnot [string] -or $id.Value -cnotmatch '^[0-9a-fA-F]{40}$'){
+            throw 'PipeWire repository tag has no complete commit identity'
+        }
+        $tagIdentity=$id.Value.ToLowerInvariant()
+        if($null -ne $releaseCommit -and $releaseCommit -cne $tagIdentity){
+            throw 'PipeWire release and repository tag commits differ'
+        }
+        $commit=$tagIdentity
+        $source='repository.tag.commit'
+    }
+    return [pscustomobject]@{tag=$name.Value;commit=$commit;source=$source;release_commit=$releaseCommit;needs_tag=($null -eq $commit)}
+}
 function Json([string]$Path, [object]$Value) {
     $stream = [IO.File]::Open($Path,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write)
     try { $stream.Write([Text.Encoding]::UTF8.GetBytes(($Value | ConvertTo-Json -Depth 40)+"`n")) } finally { $stream.Dispose() }
@@ -426,8 +468,19 @@ try {
     Step pipewire-latest curl @('--fail','--location','--silent','--show-error','--connect-timeout','15','--max-time','60','-o',$releasePath,'https://gitlab.freedesktop.org/api/v4/projects/pipewire%2Fpipewire/releases/permalink/latest')
     Save $releasePath
     $release = Get-Content -LiteralPath $releasePath -Raw | ConvertFrom-Json
-    if ($release.upcoming_release) { throw 'PipeWire latest release is not yet released' }
-    $commit = $release.commit.id
+    $identity=Read-PipeWireReleaseIdentity $release
+    if($identity.needs_tag){
+        $tagPath=Join-Path $inputRoot pipewire-release-tag.json
+        $tagName=[uri]::EscapeDataString($identity.tag)
+        Step pipewire-release-tag curl @('--fail','--location','--silent','--show-error','--connect-timeout','15','--max-time','60','-o',$tagPath,"https://gitlab.freedesktop.org/api/v4/projects/pipewire%2Fpipewire/repository/tags/$tagName")
+        Save $tagPath
+        $identity=Read-PipeWireReleaseIdentity $release (Get-Content -LiteralPath $tagPath -Raw | ConvertFrom-Json)
+    }
+    if($identity.needs_tag){throw 'Latest PipeWire release tag did not resolve a complete commit'}
+    $commit=$identity.commit
+    $identityPath=Join-Path $inputRoot pipewire-source-identity.json
+    Json $identityPath ([ordered]@{release_tag=$identity.tag;commit=$commit;commit_source=$identity.source;release_commit=$identity.release_commit;scope='Same latest released tag; no older release or cached commit fallback. Git checkout still must match this exact resolved commit.'})
+    Save $identityPath
     $source = Join-Path $DepsRoot "native-sources/PipeWire-$commit"
     if (-not(Test-Path -LiteralPath $source)) {
         Step pipewire-source git @('-c','core.autocrlf=false','clone','--depth=1','--branch',$release.tag_name,'https://gitlab.freedesktop.org/pipewire/pipewire.git',$source)

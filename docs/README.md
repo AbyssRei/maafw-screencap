@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+PipeWire 已修正实际出现的 `release.commit:null` 解析失败：只补查同一正式发布 tag 的 commit，保存身份来源，并继续核对真实 Git checkout。27 组元数据、8 组编排分支控制及真实 Tag API/Git ref 核对通过；不以旧缓存替代查询失败，新原生构建和取帧仍待 CI。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `d868936` 已原生编译，Wlr 为 152/155、三项失败：`ftruncate` 原版/Rust 各二十轮通过；Rust `memfd` 在覆盖整个捕获调用的 NOFILE 限制期间，于 Buffer 回调前退出，未触发目标故障。现将测试限制缩到真实 syscall 边界，新增严格范围记录和原生控制；108 项 xtask、记录/编排与独立 Linux 类型检查通过，新原生结果待验证。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `b563069` 的 Wlr 原生批次保留 111/150 及 39 项失败：新测试的类型错误使 Rust 未能编译，原 C++ 两个资源故障用例各完成二十轮。120 份原版像素、完整包中的 596 项轻量输入缺口及编译来源已独立核对；已提交修正的原生结果仍待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

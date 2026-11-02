@@ -34,6 +34,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+PipeWire 准备现处理实际下载响应的 `commit:null`：发布字段仍须含已发布状态与有效 tag；缺少 commit 时通过 [GitLab 单 tag API](https://docs.gitlab.com/api/tags/#retrieve-a-single-repository-tag) 查询同一 tag，严格校核名称、完整 Git 身份及可用时的 release/tag 一致性，统一十六进制大小写。两份原始响应和新增 `pipewire-source-identity.json` 均登记摘要；已有 checkout 的 HEAD、dirty 检查保持，不在查 tag 失败时选旧版本或缓存 commit。完整工程包的失败 P0 组件已核对 531 个登记路径、全部 516 项轻量输入缺口及另一份 500 文件的产品 Git blob/mode；首次只恢复组件前缀，reader 因缺少单独的 Rust 父 manifest 拒绝完整结论，随后从官方 tar 补回确切登记的这一项并核验摘要，原恢复文件和 native 状态未改。其父输入图未因此扩大验收。
+
+本机直接重现旧 `commit.id` 访问异常；同一 `1.6.11` 的真实 Tag API 与 Git 远端 ref 均为 `4287f31510771fc999f8a58a024c81ca10b8d55f`，只作为本批证据，不写成未来版本约束。27 组元数据控制包含 19 组缺失、错误类型、未发布、标签/commit 不符拒收，以及待查询状态和完整身份；八次直接执行实际准备分支，只有 HTTP 传输被 mock，核对正常 release 不多查询、空/缺失 commit 的同 tag 查询、URI 编码、保存摘要及四种失败均停在源码选择前。这些检查没有执行 Linux 源码构建或取帧。资源探针修正已独立提交 `d139b85` 并启动原生 CI；此解析修正继续单独提交，不重跑或改写旧失败，也不改变预装工具的能力门禁政策。
+
 确切 `d868936` 的 [Actions 41427067904](https://github.com/AbyssRei/maafw-screencap/actions/runs/41427067904) 原生 Wlr 编译及 Clippy 通过，组件保留 152/155、三项失败。`ftruncate` 的原 C++ 与 Rust 各完成二十轮真实 EFBIG、新待处理 SIGXFSZ 的消费、精确限制/mask/handler 恢复、失败 fd 关闭、恢复及关闭后持帧；140 份配对像素独立核对，原 schema1 报告只读检查通过。原版 `memfd` 的二十轮及 60 份像素也通过；Rust 首轮却在 Buffer 回调前以 `wl_display_roundtrip/-1` 退出，记录为 `buffer_error=0`、未构造 buffer、转换零次，producer 仅一份 offer、没有 Copy。该 Rust 入口、未完成的服务计数与配对记录三项继续失败，没有实际 EMFILE 或恢复验收；旧 mmap 的保存报告另只读通过。
 
 针对这份实际失败，只把 libtest 的 NOFILE 压力缩到 UUID 已构造后的真实 `memfd_create` 调用，返回原 syscall 的 Result，并在继续 callback 前恢复原软/硬限制；普通库构建不包含探针，原 native 参数、调用、错误、owner、输出和恢复断言保持。归档的 `wayland-client` 在 blocking_read 中使用一个 poll 项；按 [Linux poll 契约](https://man7.org/linux/man-pages/man2/poll.2.html)，nfds 超过 NOFILE 限制会得到 EINVAL，因此整个捕获期间设零会干扰等待。这是源码/契约推断，旧批没有直接记录 poll errno；新增独立原生控制会实际检查忽略 fd 的零时限 poll、真实 EMFILE、未启用时正常调用及展开后的限制恢复，尚待 Actions，不能把推断写作旧批直接观测。
