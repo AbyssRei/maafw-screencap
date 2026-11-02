@@ -101,6 +101,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             if(-not $observed.Contains($summary) -or ($parts[0] -eq 'rust' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')){
                 throw 'Expected20 actual kernel resource errors/recovery and one exact Rust test'
             }
+            if($Name -eq 'rust-wlr-memfd' -and -not $observed.Contains('Rust Wlr memfd syscall scopes=20 returned_EMFILE=20 limited_soft_zero=20 restored_before_callback_return=20 passed')){
+                throw 'Expected twenty actual Rust memfd syscall scopes, returned EMFILE and restoration before callback return'
+            }
+        }
+        if($Name -eq 'rust-wlr-resource-scope-controls'){
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('native Wlr syscall scope controls real_EMFILE=1 poll_nofile_EINVAL=1 unarmed_native=2 unwind_restored=1 capture=0 passed') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
+                throw 'Expected actual unarmed/EMFILE/unwind native syscall scope controls and one exact Rust test'
+            }
         }
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
@@ -387,6 +396,8 @@ try{
         if($managerOracles.Count -ne 60){$failed=$true;Write-Host 'Original manager oracle is incomplete; retain failures without retry'}
         Json (Join-Path $env:MFS_P1_WLR_RUST_ARTIFACTS geometry.json) ([ordered]@{width=64;height=48;bgr_stride=192;raw_format='per-image metadata';scope='Private Rust Wlr migration: preserved recursive callback, frame alive through conversion, one added raw CPU copy; no full Wlr/P1 or public SDK acceptance.'})
         try { Step rust-wlr-layout-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::rejects_overflowing_native_layouts_and_unsupported_source_conversions','--','--exact','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-wlr-resource-scope-controls timeout @('--signal=TERM','--kill-after=5s','30s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::resource_probe::restores_real_memfd_scope_and_leaves_unarmed_calls_unchanged','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-manager-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::manager::native::tests::','--','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }

@@ -105,6 +105,26 @@ fn attempt(text: &str, side: &str, kind: Kind, row: &[u64]) -> Result<()> {
     }
     Ok(())
 }
+fn syscall_scopes(text: &str, captures: &[Vec<u64>]) -> Result<()> {
+    for (index, (scope, capture)) in table(text, 9, 20)?.iter().zip(captures).enumerate() {
+        if scope.as_slice()
+            != [
+                u64::try_from(index)?,
+                1,
+                1,
+                24,
+                capture[7],
+                capture[8],
+                0,
+                capture[9],
+                capture[10],
+            ]
+        {
+            return Err("Rust memfd syscall scope/result/limit restoration differs".into());
+        }
+    }
+    Ok(())
+}
 pub fn run(args: &[String]) -> Result<()> {
     let (name,path,check_only) = match args {
         [name,path] => (name,path,false),
@@ -119,6 +139,11 @@ pub fn run(args: &[String]) -> Result<()> {
         let path = directory.join(format!("{side}-resource.tsv"));
         let data = observations(&fs::read_to_string(&path)?, kind)?;
         artifacts.push(records::artifact(&root, &path)?);
+        if kind == Kind::Memfd && side == "rust" {
+            let path = directory.join("rust-memfd-syscalls.tsv");
+            syscall_scopes(&fs::read_to_string(&path)?, &data)?;
+            artifacts.push(records::artifact(&root, &path)?);
+        }
         let path = directory.join("producer/allocation-requests.tsv");
         for (index, row) in table(&fs::read_to_string(&path)?, 5, 40)?
             .iter()
@@ -181,10 +206,18 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         artifacts.push(records::artifact(&root, &path)?);
     }
-    let report = serde_json::json!({"layout_version":1,"kind":name,"errno":kind.errno(),"cycles_per_side":20,
+    let mut report = serde_json::json!({"layout_version":if kind == Kind::Memfd {2} else {1},"kind":name,"errno":kind.errno(),"cycles_per_side":20,
         "kernel_failures_per_side":20,"retained_failed_fds":0,"recovery_per_side":20,"limits_and_signal_state_restored":true,
         "artifacts":artifacts,"full_P1_accepted":false,
         "scope":"Isolated native test-process kernel resource failures with caller sentinel, unavailable owner, fd release, original limit/signal state, recovery and held pixels. Source syscall wrappers observe actual arguments/results under temporary limits after UUID; Rust uses an owned outer limit. No arbitrary exhaustion, combined failures or complete Wlr/P1 acceptance."});
+    if kind == Kind::Memfd {
+        report["rust_memfd_limit_scope"] = serde_json::json!(
+            "Libtest-only TLS scope at the real memfd call after UUID; limits restore before callback handling resumes, with native returned errno and exact limits recorded per cycle."
+        );
+        report["scope"] = serde_json::json!(
+            "Isolated real EMFILE in the owned native syscall scope, strict owner/unchanged output/recovery/held pixels. Source wrapper and Rust libtest hook forward the original memfd arguments and result; NOFILE soft zero is restored before returning to capture. No whole-call transport exhaustion, arbitrary allocation/combined failures or full Wlr/P1 acceptance."
+        );
+    }
     let path = root.join("resource-error-report.json");
     if check_only {
         let saved: serde_json::Value = records::read(&path)?;
@@ -332,5 +365,33 @@ mod tests {
         }
         assert!(attempt("27\t0\t0\t0\t0\t1\t1\t1\t1", "rust", kind, &good).is_err());
         assert!(Kind::parse("mmap").is_err());
+    }
+    #[test]
+    fn rejects_unreached_or_unrestored_memfd_syscall_scopes() {
+        let captures: Vec<_> = (0..20).map(|i| row(i, Kind::Memfd)).collect();
+        let good: Vec<_> = captures
+            .iter()
+            .map(|c| vec![c[0], 1, 1, 24, c[7], c[8], 0, c[9], c[10]])
+            .collect();
+        assert!(syscall_scopes(&text(&good), &captures).is_ok());
+        assert!(syscall_scopes(&text(&good[..19]), &captures).is_err());
+        for (column, value) in [
+            (0, 18),
+            (1, 0),
+            (2, 0),
+            (3, 0),
+            (4, 0),
+            (5, 0),
+            (6, 1),
+            (7, 0),
+            (8, 0),
+        ] {
+            let mut wrong = good.clone();
+            wrong[3][column] = value;
+            assert!(
+                syscall_scopes(&text(&wrong), &captures).is_err(),
+                "column {column}"
+            );
+        }
     }
 }

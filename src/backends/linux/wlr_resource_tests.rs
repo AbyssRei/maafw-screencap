@@ -90,12 +90,14 @@ struct Limit {
     active: bool,
     masked: bool,
     may_consume_new_signal: bool,
+    memfd: Option<resource_probe::Arm>,
 }
 struct Observation {
     after: libc::rlimit,
     mask_before: i32,
     new_pending: i32,
     consumed: i32,
+    memfd: Option<resource_probe::Observation>,
 }
 impl Limit {
     fn new(kind: Fault) -> Self {
@@ -117,7 +119,12 @@ impl Limit {
             active: false,
             masked: false,
             may_consume_new_signal: false,
+            memfd: None,
         };
+        if kind == Fault::Memfd {
+            guard.memfd = Some(resource_probe::arm(before));
+            return guard;
+        }
         if kind == Fault::Truncate {
             // SAFETY: Only this test thread is changed; no handler is installed.
             assert_eq!(
@@ -141,7 +148,10 @@ impl Limit {
         guard
     }
     fn restore(&mut self) -> Observation {
-        assert!(self.kind.set(&self.before));
+        let memfd = self.memfd.take().map(resource_probe::Arm::finish);
+        if self.active {
+            assert!(self.kind.set(&self.before));
+        }
         self.active = false;
         let after = self.kind.limit();
         assert_eq!(
@@ -187,6 +197,7 @@ impl Limit {
             mask_before: member(&self.original_mask, libc::SIGXFSZ),
             new_pending,
             consumed,
+            memfd,
         }
     }
 }
@@ -251,6 +262,8 @@ fn run(kind: Fault) {
     let adapter = Adapter::open();
     warm(&adapter);
     let mut rows = fs::File::create(directory.join("rust-resource.tsv")).unwrap();
+    let mut syscall_rows = (kind == Fault::Memfd)
+        .then(|| fs::File::create(directory.join("rust-memfd-syscalls.tsv")).unwrap());
     let baseline = fds();
     let baseline_tasks = tasks();
     let mut held = Vec::new();
@@ -285,6 +298,23 @@ fn run(kind: Fault) {
                 Ok(())
             });
             observed = limit.restore();
+            if let Some(value) = observed.memfd {
+                let file = syscall_rows.as_mut().unwrap();
+                writeln!(
+                    file,
+                    "{cycle}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+                    value.scopes,
+                    u8::from(value.returned),
+                    value.error,
+                    value.before.rlim_cur,
+                    value.before.rlim_max,
+                    value.limited,
+                    value.after.rlim_cur,
+                    value.after.rlim_max
+                )
+                .unwrap();
+                file.flush().unwrap();
+            }
             let evidence = capture.evidence();
             failed = fds();
             let constructed = capture.context.state().unwrap().buffer.is_some();
@@ -303,6 +333,20 @@ fn run(kind: Fault) {
                 ),
             )
             .unwrap();
+            if let Some(value) = observed.memfd {
+                assert_eq!(
+                    (value.scopes, value.returned, value.error, value.limited),
+                    (1, true, libc::EMFILE, 0)
+                );
+                assert_eq!(
+                    (value.before.rlim_cur, value.before.rlim_max),
+                    (before.rlim_cur, before.rlim_max)
+                );
+                assert_eq!(
+                    (value.after.rlim_cur, value.after.rlim_max),
+                    (before.rlim_cur, before.rlim_max)
+                );
+            }
             let error = result.unwrap_err();
             assert_eq!(
                 (error.operation, error.code),
@@ -364,6 +408,11 @@ fn run(kind: Fault) {
         "Rust Wlr resource kind={} cycles=20 kernel_failures=20 failed_fds_retained=0 recovery=20 held=20 limits_signals_restored=20 passed",
         kind.name()
     );
+    if kind == Fault::Memfd {
+        println!(
+            "Rust Wlr memfd syscall scopes=20 returned_EMFILE=20 limited_soft_zero=20 restored_before_callback_return=20 passed"
+        );
+    }
 }
 #[test]
 #[ignore = "requires native allocation IPC and isolated RLIMIT_NOFILE zero with original source oracle"]

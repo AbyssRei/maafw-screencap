@@ -34,6 +34,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d868936` 的 [Actions 41427067904](https://github.com/AbyssRei/maafw-screencap/actions/runs/41427067904) 原生 Wlr 编译及 Clippy 通过，组件保留 152/155、三项失败。`ftruncate` 的原 C++ 与 Rust 各完成二十轮真实 EFBIG、新待处理 SIGXFSZ 的消费、精确限制/mask/handler 恢复、失败 fd 关闭、恢复及关闭后持帧；140 份配对像素独立核对，原 schema1 报告只读检查通过。原版 `memfd` 的二十轮及 60 份像素也通过；Rust 首轮却在 Buffer 回调前以 `wl_display_roundtrip/-1` 退出，记录为 `buffer_error=0`、未构造 buffer、转换零次，producer 仅一份 offer、没有 Copy。该 Rust 入口、未完成的服务计数与配对记录三项继续失败，没有实际 EMFILE 或恢复验收；旧 mmap 的保存报告另只读通过。
+
+针对这份实际失败，只把 libtest 的 NOFILE 压力缩到 UUID 已构造后的真实 `memfd_create` 调用，返回原 syscall 的 Result，并在继续 callback 前恢复原软/硬限制；普通库构建不包含探针，原 native 参数、调用、错误、owner、输出和恢复断言保持。归档的 `wayland-client` 在 blocking_read 中使用一个 poll 项；按 [Linux poll 契约](https://man7.org/linux/man-pages/man2/poll.2.html)，nfds 超过 NOFILE 限制会得到 EINVAL，因此整个捕获期间设零会干扰等待。这是源码/契约推断，旧批没有直接记录 poll errno；新增独立原生控制会实际检查忽略 fd 的零时限 poll、真实 EMFILE、未启用时正常调用及展开后的限制恢复，尚待 Actions，不能把推断写作旧批直接观测。
+
+新 `memfd` 报告显式为 schema2，额外要求二十行 `rust-memfd-syscalls.tsv`，逐次匹配范围进入/实际返回、EMFILE、限制前/零/恢复后的精确值；未进入 callback、错误位置或恢复不完整均拒收。已有 `ftruncate` schema1 字节和只读回放不变；旧 memfd 人工记录仍按其归档校验器和身份保存，不充作新范围验收。Workspace 含 108 项 xtask、Windows Clippy、格式、PowerShell 语法、一份人工完整矩阵/只读检查、十二组范围损坏数据拒收和二十八个真实 Step 子进程 mock 通过。初次人工控制捕获到调用旧 `xtask.exe` 仍生成 schema1，原程序/记录保留；显式重建当前 CLI 后新目录验证通过。另在独立外部诊断 crate 用真实 Linux std/libc/rustix 类型检查单个测试模块及 Clippy 通过，没有 mock native 声明；它没有编译完整捕获 crate、链接或运行 Linux 二进制。沿归档依赖开发，nightly 检查未变，新增 native 控制与修正后捕获仍待原生执行，原版源码、mmap 和 ftruncate 断言未放宽。
+
+本批轻量 ZIP（3,847,238 字节）、完整 ZIP（561,351,096 字节）的官方长度、摘要和 CRC 通过；完整包遍历 84,402 项，选择恢复 16,737 份 Wlr/F/直接父输入及失败 P0 PipeWire 输入。9,532 个 Wlr 唯一登记路径、596 项轻量输入缺口、500 个产品 Git blob/mode、十五份原 F blob/mode 和八条原版编译记录通过，未授予其余归档组件或 P1 验收。完整包同时取回当时的 PipeWire 响应，确认 `commit:null`、tag 为 `1.6.11`；后续有效响应不替代它。此源码身份解析缺口将独立修正，不改为预装工具版本门禁或旧依赖回退。
+
 确切 `b563069` 的 [Actions 41424109770](https://github.com/AbyssRei/maafw-screencap/actions/runs/41424109770) Linux job 已终态失败，Wlr 组件保留 111/150、39 项失败。二十二项日志均记录新测试在 `wlr_resource_tests.rs:279` 的 `usize`/`rlim_t` E0308；Rust libtest 未能编译，mmap 及两个新资源回归均未运行，后续配对记录和未消费的服务端也保留真实失败。前述 `d868936` 在观察本批结果前已修正比较类型，其原生运行另作判定，不能据此改写本批状态。
 
 同批原 C++ 的 `memfd`、`ftruncate` 各二十轮实际通过：真实 EMFILE/EFBIG、构造后的失败对象不留 memfd、截断失败的确切 fd 已关闭、原输出未变、原软/硬限制和线程 mask/handler 恢复、正常恢复与关闭后持帧均逐行核对。独立校验 120 份原版 sentinel、持帧与 producer 像素，两份原版服务各完整结束二十个 client、四十个 frame、二十次 Copy/Failed。轻量 ZIP（1,461,081 字节）及完整 ZIP（632,130,386 字节）通过官方长度、摘要与 CRC；完整包遍历 87,807 项，选定 10,549 份 Wlr/F/直接父输入，核对 3,875 个唯一登记路径、全部 596 项轻量输入缺口、500 个产品 Git blob/mode、十五份原 F blob/mode 和八条原版编译记录。初次 reader 对两个记录文件的全字节相等、scope 字面拼写作了错误假设，失败程序与恢复字节保留；随后按共同检查字段、扩展输入集合与实际 scope 验证，并将全部恢复文件再次只读对照原 tar，没有重捕获或改写原生状态。原版局部成功不表示 Rust、完整归档其余组件或 P1 通过。

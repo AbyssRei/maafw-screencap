@@ -195,7 +195,13 @@ impl ShmMemory {
         let name = buffer_name()?;
         let name = std::ffi::CStr::from_bytes_with_nul(&name)
             .map_err(|_| Error::new("Wlr UUID name", rustix::io::Errno::INVAL.raw_os_error()))?;
-        let file = match rustix::fs::memfd_create(name, rustix::fs::MemfdFlags::empty()) {
+        #[cfg(test)]
+        let created = resource_probe::at_memfd(|| {
+            rustix::fs::memfd_create(name, rustix::fs::MemfdFlags::empty())
+        });
+        #[cfg(not(test))]
+        let created = rustix::fs::memfd_create(name, rustix::fs::MemfdFlags::empty());
+        let file = match created {
             Ok(file) => File::from(file),
             Err(error) => {
                 return Ok((
@@ -1152,6 +1158,9 @@ impl Drop for Capture {
     }
 }
 
+#[cfg(test)]
+#[path = "wlr_resource_probe.rs"]
+mod resource_probe;
 #[cfg(test)]
 #[path = "wlr_tests.rs"]
 mod tests;
