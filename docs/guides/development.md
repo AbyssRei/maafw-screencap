@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+`ForegroundUtils.h`、`HwndUtils.hpp` 的七个函数体已逐项审阅，累计十八份固定 F 来源、121 项。前台路径保留跨窗口共享的 5000ms DWORD 冷却、零哨兵、回绕减法、先更新再请求，以及 TOP/前台/TOPMOST/NOTOPMOST 调用和 5/10/5ms 等待顺序。Rust `AtomicU32` 消除原共享静态变量的数据竞争，没有把整个 native 请求序列串行化。几何路径保留默认 `GetDpiForWindow/96.0`、查询失败的零尺寸、仅检查 WS_POPUP 的辅助判据、rcMonitor 精确客户区匹配后的一次复核、变化后刷新几何、右下再左上的 rcWork 校正及原异步 flags；`SetWindowPos` 成功仍只是请求已提交，不表示 UI 队列已消费或外国窗口快照原子化。
+
+实际只读 `reference function-map` 通过七项与十一项既有 `58fa6f0` 检查身份，四份当前 Rust 与两个原生产品快照共八项登记来源摘要匹配，显式核算 Windows checkout CRLF；没有新编译或截图。映射追到 `SystemWindow` 的真实 Win32 转发。坐标/尺寸 checked 算术属于既有安全拒收，未宣称等价于原有溢出行为；`MAA_WIN32_COMPATIBLE` 的备用缩放编译分支未实现或验证。`bgra_to_bgr` 的非空路径仍在原时点进入显式 C++/OpenCV 验收适配，Rust 桥接、native 转换与独立 owner 的源码另作摘要绑定；原工具的空 Mat 分支没有独立 Rust 工具等价性或直接空输入验收。初次外部 reader 误引用不存在的 owner 文件，在完成前停止；旧输入和错误保留，随后引用实际包含 owner 的适配文件与头，产品和原生记录未改。Pseudo-minimize、其余来源与宏、历史无输入多轮失败及完整 P1 仍保留各自未完成范围。
+
 窗口 GDI、PrintWindow 与 ScreenDC 的六份 `.cpp/.h` 现审阅十三个函数、闭包和默认析构声明，其中三个清理闭包、三个默认析构单列。对应表追到实际 `SystemGdi` 转发，涵盖 DC/bitmap 获取与释放、`BitBlt`、`GetBitmapBits`、`PrintWindow`、`GetDIBits` 及 popup 查询。保留转换先于清理、旧选中对象恢复顺序、主图/popup 两次捕获后再查询原点和叠加、普通 popup 原生失败保留主图，以及 ScreenDC 的非致命前台/窗口调整、未消费的窗口矩形查询和空 HWND 拒绝。checked layout/完整读回拒收及 GetDIBits 的临时取消选中/恢复选中明确为既有安全适配，不宣称无效来源行为等价或提前现代化为 P3 DIB 路径。
 
 真实只读 `reference function-map` 校核十三项与完整选定运行时分组，通过的十一项均为旧 `58fa6f0` 原生记录，没有新截图；已有本机无输入多轮和其他组件失败不改。九份当前 Rust Git 源码与两个已恢复原生产品快照的登记摘要另作核对。初次直接字节比较在 `foreground.rs` 因 Windows checkout CRLF 失败，随后仅显式核算 CRLF/LF，并分别保存实际与 canonical 摘要，恢复文件未改；文件存在不代表所有 cfg/分支已执行。调用到的 foreground/HwndUtils/pseudo-minimize 等 helper 函数体仍需各自审阅。累计十六份来源、114 项不构成完整语义、原生、宏展开或 P1 验收。
