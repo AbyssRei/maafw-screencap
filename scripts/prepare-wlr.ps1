@@ -83,6 +83,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected actual Failed/SHM/EOF operations and full owner checks, not a zero-test or partial run'
             }
         }
+        if($Name -in @('original-wlr-allocation','rust-wlr-allocation')){
+            $observed=Get-Content -LiteralPath $log -Raw
+            $summary=if($Name -eq 'original-wlr-allocation'){
+                'original Wlr allocation cycles=20 failed_mmap=20 fd_retained=20 recovery=20 held=20 limits_restored=20 passed'
+            }else{
+                'Rust Wlr allocation cycles=20 failed_mmap=20 fd_retained=20 recovery=20 held=20 limits_restored=20 passed'
+            }
+            if(-not $observed.Contains($summary) -or ($Name -eq 'rust-wlr-allocation' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')){
+                throw 'Expected20 native failed mmap/retained FD/recovery observations and one exact Rust test'
+            }
+        }
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
@@ -411,7 +422,7 @@ try{
         try{Test-WlrProtocolMatrix $sourceExecutable $library $runtime $referenceArtifacts}
         catch{$failed=$true;Write-Host $_.Exception.Message}
         . (Join-Path $PSScriptRoot validate-wlr-context.ps1)
-        foreach($mode in @('registry','failures')){
+        foreach($mode in @('registry','failures','allocation')){
             try{Test-WlrProtocolContext $sourceExecutable $library $runtime $referenceArtifacts $mode}
             catch{$failed=$true;Write-Host $_.Exception.Message}
         }

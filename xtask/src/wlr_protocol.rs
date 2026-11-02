@@ -7,6 +7,9 @@ use std::{fs, path::Path};
 pub(super) mod cases;
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|kind| kind == "wlr-allocation") {
+        return crate::wlr_allocation::run(&args[1..]);
+    }
     if args.first().is_some_and(|kind| kind == "wlr-failures") {
         return crate::wlr_failures::run(&args[1..]);
     }

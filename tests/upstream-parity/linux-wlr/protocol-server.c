@@ -39,6 +39,7 @@ struct server {
     bool stopped;
     bool registry;
     bool failures;
+    bool allocation;
     struct registry_output outputs[22];
     unsigned output_globals, output_removed, output_binds, output_destroys;
     FILE* registry_rows;
@@ -143,6 +144,11 @@ static void copy(struct wl_client* client, struct wl_resource* resource, struct 
         return;
     }
     f->copied = true;
+    if (f->server->allocation) {
+        if (f->phase != 1 || fprintf(f->server->failure_rows,"%u\t%u\t%u\t%u\t1\n",
+            f->cycle,f->phase,wl_resource_get_id(resource),wl_resource_get_id(buffer)) < 0
+            || fflush(f->server->failure_rows) != 0) { failure(f->server,"allocation recovery Copy differs"); return; }
+    }
     if (f->server->failures) {
         const uint32_t buffer_id = wl_resource_get_id(buffer);
         if (f->cycle >= 20) { failure(f->server,"invalid failure frame cycle"); return; }
@@ -157,9 +163,9 @@ static void copy(struct wl_client* client, struct wl_resource* resource, struct 
     wl_shm_buffer_begin_access(shm);
     uint8_t* bytes = wl_shm_buffer_get_data(shm);
     mfs_protocol_fill(f->input,bytes);
-    if (f->server->failures || f->server->registry || f->server->copies < 24) {
+    if (f->server->failures || f->server->allocation || f->server->registry || f->server->copies < 24) {
         char name[4096];
-        int length = f->server->failures
+        int length = (f->server->failures || f->server->allocation)
             ? snprintf(name,sizeof name,"%s/case-%u-%u.shm",f->server->directory,f->cycle,f->phase)
             : snprintf(name,sizeof name,"%s/case-%u.shm",f->server->directory,
                 f->server->registry ? f->server->copies : f->input.index);
@@ -187,9 +193,15 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
 {
     struct manager* m = wl_resource_get_user_data(resource);
     struct server* s = m->server;
-    if (m->next >= (s->failures ? 5u : s->registry ? 80u : 24u) || overlay_cursor != 0 || !output) { failure(s,"unexpected capture request"); return; }
+    if (m->next >= (s->allocation ? 2u : s->failures ? 5u : s->registry ? 80u : 24u) || overlay_cursor != 0 || !output) { failure(s,"unexpected capture request"); return; }
     const unsigned position = m->next++;
     unsigned input = position;
+    if (s->allocation) {
+        if (m->cycle >= 20) { failure(s,"too many allocation clients"); return; }
+        input = 0;
+        if (position == 0 && (fprintf(s->failure_rows,"%u\t0\t%u\t0\t0\n",m->cycle,id) < 0
+            || fflush(s->failure_rows) != 0)) { failure(s,"save allocation request"); return; }
+    }
     if (s->failures) {
         if (m->cycle >= 20) { failure(s,"too many failure clients"); return; }
         if (position == 0 || position == 4) {
@@ -227,6 +239,14 @@ static void capture(struct wl_client* client, struct wl_resource* resource, uint
     if (!frame) { free(f); wl_client_post_no_memory(client); failure(m->server,"frame resource"); return; }
     ++m->server->frames_created;
     wl_resource_set_implementation(frame,&frame_requests,f,frame_destroyed);
+    if (s->allocation && position == 0) {
+        // Real client-side RLIMIT_AS makes this sparse256MiB map fail. No Copy
+        // is accepted for this offer; Failed ends the original unbounded wait.
+        zwlr_screencopy_frame_v1_send_buffer(frame,f->input.format,16384,4096,65536);
+        ++s->failed_frames;
+        zwlr_screencopy_frame_v1_send_failed(frame);
+        return;
+    }
     if (s->failures && position == 0) {
         ++s->failed_frames;
         zwlr_screencopy_frame_v1_send_failed(frame);
@@ -417,7 +437,7 @@ static bool disconnect_control(struct server* s)
 }
 int main(int argc, char** argv)
 {
-    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0 && strcmp(argv[4],"--failures") != 0 && strcmp(argv[4],"--disconnect-control") != 0)
+    if ((argc != 4 && argc != 5) || (argc == 5 && strcmp(argv[4],"--registry") != 0 && strcmp(argv[4],"--failures") != 0 && strcmp(argv[4],"--allocation") != 0 && strcmp(argv[4],"--disconnect-control") != 0)
         || strlen(argv[1]) != 1 || argv[1][0] < '1' || argv[1][0] > '3') { return 64; }
     Dl_info owner;
     char actual[PATH_MAX],expected[PATH_MAX];
@@ -429,7 +449,8 @@ int main(int argc, char** argv)
     printf("native protocol server library=%s\n",actual);
     struct server s = {.directory = argv[2], .version = (unsigned)(argv[1][0] - '0'),
         .registry = argc == 5 && strcmp(argv[4],"--registry") == 0,
-        .failures = argc == 5 && strcmp(argv[4],"--failures") == 0};
+        .failures = argc == 5 && strcmp(argv[4],"--failures") == 0,
+        .allocation = argc == 5 && strcmp(argv[4],"--allocation") == 0};
     s.display = wl_display_create();
     if (!s.display) { return 1; }
     if (argc == 5 && strcmp(argv[4],"--disconnect-control") == 0) {
@@ -446,9 +467,9 @@ int main(int argc, char** argv)
     for (uint32_t kind = 2; kind < 6; ++kind) {
         if (!wl_display_add_shm_format(s.display,mfs_protocol_case(kind * 4).format)) { s.error = 1; goto cleanup; }
     }
-    if (s.failures) {
+    if (s.failures || s.allocation) {
         char name[4096];
-        int length = snprintf(name,sizeof name,"%s/failure-requests.tsv",s.directory);
+        int length = snprintf(name,sizeof name,"%s/%s-requests.tsv",s.directory,s.allocation ? "allocation" : "failure");
         s.failure_rows = length > 0 && (size_t)length < sizeof name ? fopen(name,"wx") : NULL;
         if (!s.failure_rows) { s.error = 1; goto cleanup; }
     }
@@ -462,7 +483,8 @@ int main(int argc, char** argv)
         || !wl_global_create(s.display,&zwp_virtual_keyboard_manager_v1_interface,1,&s,bind_keyboard)
         || !wl_global_create(s.display,&zwlr_screencopy_manager_v1_interface,(int)s.version,&s,bind_manager)
         || wl_display_add_socket(s.display,"mfs-p1-protocol") != 0) { s.error = 1; goto cleanup; }
-    if (s.failures) { printf("failures ready cycles=20 operations=100 scripted_failed=40 disconnects=20 compositor=0\n"); }
+    if (s.allocation) { printf("allocation ready cycles=20 operations=40 sparse_span=268435456 compositor=0\n"); }
+    else if (s.failures) { printf("failures ready cycles=20 operations=100 scripted_failed=40 disconnects=20 compositor=0\n"); }
     else if (s.registry) { printf("registry ready rounds=20 captures=80 initial_outputs=2 compositor=0\n"); }
     else { printf("protocol ready version=%u formats=6 cases=24 native_shm=1 compositor=0\n",s.version); }
     fflush(stdout);
@@ -474,10 +496,15 @@ cleanup:
     wl_display_destroy(s.display);
     if (s.registry_rows && fclose(s.registry_rows) != 0) { s.error = 1; }
     if (s.failure_rows && fclose(s.failure_rows) != 0) { s.error = 1; }
-    const unsigned managers = s.failures ? 20 : s.registry ? 1 : 40;
-    const unsigned frames = s.failures || s.registry ? 80 : 960, copies = s.failures ? 60 : frames;
+    const unsigned managers = s.allocation || s.failures ? 20 : s.registry ? 1 : 40;
+    const unsigned frames = s.allocation ? 40 : s.failures || s.registry ? 80 : 960, copies = s.allocation ? 20 : s.failures ? 60 : frames;
     if (!s.stopped || s.error || s.managers_created != managers || s.managers_destroyed != managers
         || s.frames_created != frames || s.frames_destroyed != frames || s.copies != copies) { s.error = 1; }
+    if (s.allocation) {
+        if (s.failed_frames != 20) { s.error = 1; }
+        printf("allocation stopped clients=%u/%u frames=%u/%u copies=%u failed=%u graceful=%d error=%d\n",
+            s.managers_created,s.managers_destroyed,s.frames_created,s.frames_destroyed,s.copies,s.failed_frames,s.stopped,s.error);
+    }
     if (s.failures) {
         if (s.failed_frames != 40 || s.disconnected_clients != 20 || s.disconnect_scheduled != 20
             || s.disconnect_executed != 20 || s.disconnect_cancelled != 0 || s.disconnect_pending != 0) { s.error = 1; }

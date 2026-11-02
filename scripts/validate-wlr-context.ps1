@@ -1,7 +1,7 @@
 # Copyright (C) 2026 AbyssRei
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Dot-sourced only by the explicit native Linux source-context batch.
-function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[string]$Runtime,[string]$Artifacts,[ValidateSet('registry','failures')][string]$Mode){
+function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[string]$Runtime,[string]$Artifacts,[ValidateSet('registry','failures','allocation')][string]$Mode){
     $matrix=Join-Path $Artifacts $Mode
     New-Item -ItemType Directory -Path $matrix|Out-Null
     $errors=[Collections.Generic.List[string]]::new()
@@ -41,6 +41,8 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
                 [Environment]::SetEnvironmentVariable("MFS_P1_WLR_$($key)_SOURCE",(Join-Path $matrix source))
                 $test=if($Mode -eq 'registry'){
                     'registry::preserves_last_output_and_existing_snapshots_through_global_removal'
+                }elseif($Mode -eq 'allocation'){
+                    'allocation::retains_the_failed_mmap_fd_until_buffer_replacement'
                 }else{
                     'failures::preserves_failed_outputs_and_buffer_reuse_before_native_disconnect'
                 }
@@ -63,6 +65,8 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
                 "premature=$premature exit=$($process.ExitCode)"|Set-Content -LiteralPath $log -Encoding utf8
                 $required=if($Mode -eq 'registry'){
                     'registry stopped rounds=20 globals=22 removed=21 outputs=22/22 frames=80/80 copies=80 graceful=1 error=0'
+                }elseif($Mode -eq 'allocation'){
+                    'allocation stopped clients=20/20 frames=40/40 copies=20 failed=20 graceful=1 error=0'
                 }else{
                     'failures stopped clients=20/20 frames=80/80 copies=60 failed=40 disconnected=20 graceful=1 error=0'
                 }

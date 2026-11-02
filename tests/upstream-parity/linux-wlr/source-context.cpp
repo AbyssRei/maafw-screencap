@@ -21,12 +21,15 @@
 #include <stdexcept>
 #include <sys/random.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/un.h>
 #include <thread>
 #include <utility>
 #include <unistd.h>
 #include <vector>
 #include "protocol-pattern.h"
+#include "allocation-observer.hpp"
 
 extern "C" void __real_wl_display_disconnect(wl_display*);
 
@@ -75,6 +78,7 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
 #include "protocol-context.hpp"
 #include "registry-context.hpp"
 #include "failure-context.hpp"
+#include "allocation-context.hpp"
 #include "early-close-context.hpp"
 void shared_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
     const auto baseline_fds=count("/proc/self/fd");
@@ -290,6 +294,7 @@ int main(int argc,char** argv) {
             else if(mode=="path-names") { path_names(argv[1],directory); }
             else if(mode=="registry") { registry_context(argv[1],directory); }
             else if(mode=="failures") { failure_context(argv[1],directory); }
+            else if(mode=="allocation") { allocation_context(argv[1],directory); }
             else if(mode=="protocol-1" || mode=="protocol-2" || mode=="protocol-3") {
                 protocol_context(argv[1],directory,static_cast<unsigned>(mode.back()-'0'));
             }

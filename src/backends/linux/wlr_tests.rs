@@ -9,6 +9,8 @@ use std::{
     ptr::NonNull,
 };
 
+#[path = "wlr_allocation_tests.rs"]
+mod allocation;
 #[path = "wlr_early_close_tests.rs"]
 mod early_close;
 #[path = "wlr_host_tests.rs"]
