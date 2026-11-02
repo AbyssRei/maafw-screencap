@@ -17,6 +17,9 @@
 #include <stdexcept>
 #include <string>
 #include <unistd.h>
+#ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
+#include "native-sample-observer.hpp"
+#endif
 
 namespace {
 std::atomic<uint64_t> owners=0;
@@ -31,6 +34,9 @@ struct Original {
     bool finished=false;
     std::unique_ptr<MfsOriginalMac::ScreenCaptureKitScreencap> source=std::make_unique<MfsOriginalMac::ScreenCaptureKitScreencap>(0);
     std::array<std::optional<cv::Mat>,3> images;
+#ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
+    std::array<std::shared_ptr<MfsMacSample::Observation>,3> observed;
+#endif
     Original() {++owners;}
     ~Original() {--owners;}
 };
@@ -58,8 +64,16 @@ int32_t mfs_mac_same_binary_original_capture(void* pointer,uint32_t call,const c
         auto& owner=*static_cast<Original*>(pointer);
         if(owner.thread!=thread_id() || owner.finished || call!=owner.calls || call>=3) {return 1;}
         ++owner.calls; // A failing call cannot be silently resubmitted.
+#ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
+        auto observation=MfsMacSample::begin(call);owner.observed[call]=observation;
+#endif
         const auto begin=std::chrono::steady_clock::now();
-        @autoreleasepool {owner.images[call]=owner.source->screencap();}
+        {
+#ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
+            MfsMacSample::Scope association(observation);
+#endif
+            @autoreleasepool {owner.images[call]=owner.source->screencap();}
+        }
         const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-begin).count();
         const auto& image=owner.images[call];
         const int result=!image ? 0 : image->empty() ? 3 : 1;
@@ -72,6 +86,9 @@ int32_t mfs_mac_same_binary_original_capture(void* pointer,uint32_t call,const c
             std::ofstream layout(root/("original-call-"+std::to_string(call)+"-layout.tsv"));layout.exceptions(std::ios::badbit|std::ios::failbit);
             layout<<image->cols<<'\t'<<image->rows<<'\t'<<image->step[0]<<'\t'<<image->type()<<'\t'<<CV_8UC3<<'\n';layout.close();
         }
+#ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
+        MfsMacSample::write(observation,root);
+#endif
         return 0;
     }catch(...) {return 2;}
 }

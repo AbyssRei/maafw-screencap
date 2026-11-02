@@ -106,6 +106,14 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $sceneModule -Destination $saved;Save $saved
     Step macos-same-binary-scene-linkage otool @('-L',$sceneModule)
     $env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE=$sceneModule
+    $script:MacosNativeSampleModule=Join-Path $build libmfs_macos_native_sample_scene.dylib
+    $saved=Join-Path $refInputs libmfs_macos_native_sample_scene.dylib
+    Copy-Item -LiteralPath $script:MacosNativeSampleModule -Destination $saved;Save $saved
+    Step macos-native-sample-scene-linkage otool @('-L',$script:MacosNativeSampleModule)
+    $association=Join-Path $build mfs_macos_sample_association_control
+    $saved=Join-Path $refInputs mfs_macos_sample_association_control
+    Copy-Item -LiteralPath $association -Destination $saved;Save $saved
+    Step macos-native-sample-association-control $association @()
     return $executable
 }
 
@@ -177,6 +185,30 @@ function Run-MacosMaximumLevelProbes([string]$Artifacts) {
     }
     try {Step macos-maximum-level-records $ConfigureTool @('upstream-trace','macos-maximum-level',$root)}
     catch {$script:failed=$true;Write-Host $_.Exception.Message}
+}
+
+function Run-MacosNativeSampleProbes([string]$Artifacts) {
+    $root=Join-Path $Artifacts native-sample-display
+    New-Item -ItemType Directory -Path $root|Out-Null
+    $test='backends::macos::screen_capture_kit::tests::same_binary::records_original_native_samples_before_and_after_source_conversion'
+    $previous=$env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE
+    try {
+        $env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE=$script:MacosNativeSampleModule
+        foreach($order in @(0,1)) {
+            $directory=Join-Path $root "mode-$order"
+            New-Item -ItemType Directory -Path $directory|Out-Null
+            $env:MFS_P1_MACOS_SAME_BINARY_ROOT=$directory
+            $env:MFS_P1_MACOS_SAME_BINARY_MODE=[string]$order
+            $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
+            try {Step "rust-macos-native-sample-$order" cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$test,'--','--exact','--ignored','--test-threads=1','--nocapture')}
+            catch {$script:failed=$true;Write-Host $_.Exception.Message}
+        }
+        try {Step macos-native-sample-records $ConfigureTool @('upstream-trace','macos-native-sample',$root)}
+        catch {$script:failed=$true;Write-Host $_.Exception.Message}
+    } finally {
+        if($null -eq $previous) {Remove-Item Env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE -ErrorAction SilentlyContinue}
+        else {$env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE=$previous}
+    }
 }
 
 function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[string]$Artifacts) {

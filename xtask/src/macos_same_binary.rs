@@ -188,18 +188,27 @@ fn original_call(
     )
 }
 pub fn run(args: &[String]) -> Result<()> {
-    run_kind(args, false, false, false)
+    run_kind(args, false, false, false, false)
 }
 pub fn run_full(args: &[String]) -> Result<()> {
-    run_kind(args, true, false, false)
+    run_kind(args, true, false, false, false)
 }
 pub fn run_full_witness(args: &[String]) -> Result<()> {
-    run_kind(args, true, true, false)
+    run_kind(args, true, true, false, false)
 }
 pub fn run_maximum_level(args: &[String]) -> Result<()> {
-    run_kind(args, true, true, true)
+    run_kind(args, true, true, true, false)
 }
-fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result<()> {
+pub fn run_native_sample(args: &[String]) -> Result<()> {
+    run_kind(args, true, true, false, true)
+}
+fn run_kind(
+    args: &[String],
+    full: bool,
+    witness: bool,
+    maximum: bool,
+    native_sample: bool,
+) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
@@ -223,8 +232,21 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
     let mut order_records = Vec::new();
     let mut witness_records = Vec::new();
     let mut level_records = Vec::new();
+    let mut native_records = Vec::new();
     for mode in 0..=1 {
         let arm = root.join(format!("mode-{mode}"));
+        if !native_sample
+            && (arm.join("native-sample-observer-enabled.txt").exists()
+                || arm.join("original-native-observer-module.txt").exists())
+        {
+            return Err("native sample observer requires its separate diagnostic validator".into());
+        }
+        if native_sample
+            && fs::read(arm.join("native-sample-observer-enabled.txt"))?
+                != b"schema=1\noriginal_native_sample_observer=1\n"
+        {
+            return Err("native sample observer was not explicitly selected".into());
+        }
         if !maximum
             && (arm.join("maximum-level-enabled.txt").exists()
                 || arm.join("scene/maximum-level-control.txt").exists())
@@ -392,6 +414,25 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
             }
             expect(&module, "schema", 1)?;
             expect(&module, "module_retained_until_process_exit", 1)?;
+            if native_sample {
+                let observed = fields(&text("original-native-observer-module.txt")?)?;
+                if observed.len() != 5
+                    || observed.get("module_path") != module.get("module_path")
+                    || observed.get("alias_scope").map(String::as_str)
+                        != Some("original_class_only")
+                {
+                    return Err(
+                        "native observer module/scope differs from real source caller".into(),
+                    );
+                }
+                for (key, value) in [
+                    ("schema", 1),
+                    ("version", 1),
+                    ("module_retained_until_process_exit", 1),
+                ] {
+                    expect(&observed, key, value)?;
+                }
+            }
             if read("original-owner-closed.txt")?
                 != b"context_owners=0\nsource_callbacks_drained=0\n"
             {
@@ -628,6 +669,16 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
                                 4,
                             )?;
                     }
+                    if native_sample {
+                        native_records.push(crate::macos_native_sample::validate(
+                            &arm,
+                            mode,
+                            call,
+                            &g,
+                            number(&consumer, "pid")?,
+                            native[0][3],
+                        )?);
+                    }
                 }
                 original_usable += u64::from(original["usable_image"] == true);
                 original_known += u64::from(original["known_patch"] == true);
@@ -672,23 +723,33 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
                 let entry = entry?;
                 let name = entry.file_name();
                 let name = name.to_string_lossy();
-                if name.starts_with("original-")
-                    && (!entry.file_type()?.is_file()
-                        || ![
-                            "original-module.txt",
-                            "original-finish.txt",
-                            "original-owner-closed.txt",
+                let ordinary = [
+                    "original-module.txt",
+                    "original-finish.txt",
+                    "original-owner-closed.txt",
+                ]
+                .contains(&name.as_ref())
+                    || (0..3).any(|call| {
+                        [
+                            format!("original-call-{call}.tsv"),
+                            format!("original-call-{call}.bgr"),
+                            format!("original-call-{call}-layout.tsv"),
+                            format!("original-held-{call}.bgr"),
                         ]
-                        .contains(&name.as_ref())
-                            && !(0..3).any(|call| {
-                                [
-                                    format!("original-call-{call}.tsv"),
-                                    format!("original-call-{call}.bgr"),
-                                    format!("original-call-{call}-layout.tsv"),
-                                    format!("original-held-{call}.bgr"),
-                                ]
-                                .contains(&name.to_string())
-                            }))
+                        .contains(&name.to_string())
+                    });
+                let observed = native_sample
+                    && (name == "original-native-observer-module.txt"
+                        || (0..3).any(|call| {
+                            [
+                                format!("original-native-{call}.json"),
+                                format!("original-native-{call}-before.bgra"),
+                                format!("original-native-{call}-after.bgra"),
+                            ]
+                            .contains(&name.to_string())
+                        }));
+                if name.starts_with("original-")
+                    && (!entry.file_type()?.is_file() || !(ordinary || observed))
                 {
                     return Err("unexpected original call/context record".into());
                 }
@@ -702,6 +763,11 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
         }
         arms.push(serde_json::json!({"mode":mode,"consumer":consumer,"producer":producer,"usable_images":usable,"known_patch_images":known,"scene_closed":true,"scene_module_explicitly_unloaded":false}));
     }
+    if native_sample && native_records.len() != 6 {
+        return Err(
+            "native sample diagnostic requires six complete original callback records".into(),
+        );
+    }
     fn inventory(root: &Path, folder: &Path, out: &mut Vec<records::Artifact>) -> Result<()> {
         for entry in fs::read_dir(folder)? {
             let entry = entry?;
@@ -710,6 +776,7 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
                 || entry.path() == root.join("full-display-validation.json")
                 || entry.path() == root.join("full-display-witness-validation.json")
                 || entry.path() == root.join("maximum-level-validation.json")
+                || entry.path() == root.join("native-sample-validation.json")
             {
                 continue;
             }
@@ -763,7 +830,15 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
         report["maximum_window_level_fixture"] = true.into();
         report["scope"] = "Independent owned NSWindow maximum-level fixture with the original strict native full-RGB oracle and both implementation orders. Public CGWindowLevelForKey queries, applied NSWindow level, seven actual window censuses/view redraws per arm and all twelve returned/held images are required. Only owned fixture window state is changed. Diagnostic records do not waive native pixel failures, attribute historical pixels, prove callback drainage or accept full P1.".into();
     }
-    let output = root.join(if maximum {
+    if native_sample {
+        report["layout_version"] = 6.into();
+        report["original_native_sample_observer"] = true.into();
+        report["native_sample_observations"] = serde_json::json!(native_records);
+        report["scope"] = "Separate original-class selector observation with per-call owned state propagated through real native completions. Twelve before/after CPU copies of six native sample buffers must agree and reproduce every returned original BGR pixel. Added read locks/copies and a post-return observation wait affect timing; they do not replace source return values, native RGB assertions, identify compositor pixel production, prove callback drainage or accept P1. Rust/ordinary source/scenes remain uninstrumented.".into();
+    }
+    let output = root.join(if native_sample {
+        "native-sample-validation.json"
+    } else if maximum {
         "maximum-level-validation.json"
     } else if witness {
         "full-display-witness-validation.json"
@@ -779,7 +854,11 @@ fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if maximum {
+    if native_sample {
+        println!(
+            "macOS original_native_sample arms=2 invocations=12 original_native_samples=6 before_after_copies=12 full_native_bgr_equal=6 strict_native_rgb_assertions=1 diagnostic_only=1 full_P1_acceptance=0 observations_verified"
+        );
+    } else if maximum {
         println!(
             "macOS maximum_level_fixture arms=2 invocations=12 view_images=14 window_censuses=14 held_images=12 owned_scene_only=1 strict_native_rgb_assertions=1 diagnostic_only=1 full_P1_acceptance=0 observations_verified"
         );

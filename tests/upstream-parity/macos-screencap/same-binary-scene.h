@@ -41,6 +41,8 @@ __attribute__((visibility("default"))) int32_t mfs_mac_same_binary_original_capt
 __attribute__((visibility("default"))) int32_t mfs_mac_same_binary_original_finish(void*, const char* directory) MFS_SCENE_NOEXCEPT;
 __attribute__((visibility("default"))) int32_t mfs_mac_same_binary_original_destroy(void*) MFS_SCENE_NOEXCEPT;
 __attribute__((visibility("default"))) uint64_t mfs_mac_same_binary_original_owners(void) MFS_SCENE_NOEXCEPT;
+// Present only in the independently instrumented sample-observation module.
+__attribute__((visibility("default"))) uint32_t mfs_mac_native_sample_observer_version(void) MFS_SCENE_NOEXCEPT;
 #ifdef __cplusplus
 }
 #endif

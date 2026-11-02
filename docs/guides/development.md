@@ -1,6 +1,6 @@
 # 开发、构建与验证
 
-日期：2026-11-02。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，已有多个后端、helper 和管理器的私有切片及显式局部对照。完整来源、平台和调用链验收仍未完成；SDK 与产品能力保持各自阶段边界。
+日期：2026-11-03。状态：P0 准备阶段已按计划第 16 节验收，P1 实施中，已有多个后端、helper 和管理器的私有切片及显式局部对照。完整来源、平台和调用链验收仍未完成；SDK 与产品能力保持各自阶段边界。
 
 ## 逐函数对应审阅
 
@@ -53,6 +53,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+新增独立 `mfs_macos_native_sample_scene` 和原类 object target，只有该 object 的固定 F `ScreenCaptureKitScreencap.mm` 编译时获得私有 selector 别名；普通原版、Rust 与场景查询保持原入口，不做运行时 swizzle。每次原版调用创建独立 shared owner，原 `SCShareableContent` 回调捕获该 owner，在同步转发期间用 thread-local scope 将它传至 sample 提交，再由真正 sample 回调持有；不通过可被下次调用覆盖的全局 current-call 指针关联晚到结果。记录真实首次显示器的数量/id/尺寸、原 filter/config 的存在、BGRA/sRGB/cursor 配置和实际线程。原 sample 回调前、原 completion 返回后各在成功 read lock 内验证格式/布局、复制初始化目标行并 Unlock，CPU 数据独立保存，不暴露 padding 或跨回调保留原生 sample/像素借用。
+
+同程序新增 `records_original_native_samples_before_and_after_source_conversion`，仍用两个 fresh parent/scene 组运行 original-first、Rust-first，各六次捕获及七次 CPU-view/census。原返回和 elapsed 在额外观察等待前保存；最长两秒只等待本观察器的 post-forward CPU copy，不再次截图、不使用晚到图像替换返回，也不证明 framework block 已释放/注销。新 `cargo xtask upstream-trace macos-native-sample <外部矩阵> [--check-only]` 使用独立 schema6：六份原生输入的前后快照必须逐字节相同，并复算全部原版 BGR 像素；真实选源/配置与场景、调用/线程/模块身份也须一致。它保留完整 RGB 偏差记录和 `capture_parity_accepted=false`。额外锁、复制、getter 和等待会影响诊断时序，不能反推历史帧的像素生产者；原五秒等待、最终严格 RGB 断言、旧场景/模块/失败及完整 P1 门禁均保留。编排只在新批次临时选择观察模块，所有成功/失败路径都恢复此前存在或缺失的模块环境。
+
+本机沿封存 Cargo/vendor 图执行 Workspace（含 112 项 xtask）、host Clippy、Release 核心和 Apple 目标 Rust 类型/Clippy；这些没有在 Windows 链接 Apple SDK 或运行 Mac 程序。VS2026/MSBuild 真实编译了共用关联模板的两个 C++ translation unit，三条线程验证旧 content 晚到、反向 sample、嵌套 scope 恢复和最终 CPU owner 释放，没有调用捕获 API。两份人工矩阵、二十二类坏记录拒收、四个旧命令拒收新 profile、三个真实历史保存报告只读、三十三次 Step 子进程 mock 及八组模块环境/失败继续控制通过。人工 native 输入与输出相同但偏离场景的用例只通过诊断，未获得捕获验收。首轮 Clippy 拒绝固定尺寸 `chunks_exact`，改用 `as_chunks`；首轮 Step 控制捕获新入口漏列 fresh missing-environment 分类，补入后在新目录通过全部控制，初版源码/失败日志保留。旧捕获/像素 helper、场景绘制和严格断言尾部另经源码比较，三份历史报告摘要不变；实际 Objective-C++ 编译、动态链接、selector 转发、CV 锁和真实 sample/BGR 对照仍须原生 Mac Actions，不能由上述本机检查授予验收。
 
 确切 `bc90d12` 的 [Actions 41456456292](https://github.com/AbyssRei/maafw-screencap/actions/runs/41456456292) Linux job 已终态成功。当前 Wlr 151 项全部通过，包括 Clippy、真实 syscall 范围控制、memfd EMFILE 与 ftruncate EFBIG。独立读者核对双方各二十轮的错误、未覆盖调用方图像、失败资源状态、精确限制/信号恢复、正常恢复取帧与关闭后持帧；280 份实际像素、二十行 Rust memfd 范围记录、正常 producer 计数/退出均一致。单独原生控制仍实际观察零 NOFILE 下单项 poll EINVAL、真实 EMFILE、两次普通调用及故意展开后的限制恢复；这些当前记录不追写旧失败的未观测分支或 errno。
 

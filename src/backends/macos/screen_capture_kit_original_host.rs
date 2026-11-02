@@ -20,7 +20,7 @@ pub(super) struct Original {
     owners: Owners,
 }
 impl Original {
-    pub(super) fn open(root: &Path) -> Self {
+    pub(super) fn open(root: &Path, native_sample: bool) -> Self {
         let library = PathBuf::from(env::var_os("MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE").unwrap());
         assert!(library.is_absolute());
         let native = CString::new(library.as_os_str().as_bytes()).unwrap();
@@ -39,6 +39,15 @@ impl Original {
         let owners = unsafe { symbol::<Owners>(module, c"mfs_mac_same_binary_original_owners") };
         // SAFETY: Exact private-header getters in the retained fixture image.
         assert_eq!(unsafe { version() }, 1);
+        if native_sample {
+            let observed = unsafe {
+                symbol::<unsafe extern "C" fn() -> u32>(
+                    module,
+                    c"mfs_mac_native_sample_observer_version",
+                )
+            };
+            assert_eq!(unsafe { observed() }, 1);
+        }
         assert_eq!(unsafe { owners() }, 0);
         let mut info = unsafe { std::mem::zeroed::<libc::Dl_info>() };
         // SAFETY: Live function symbol; dladdr filename stays valid with image.
@@ -61,6 +70,16 @@ impl Original {
             ),
         )
         .unwrap();
+        if native_sample {
+            fs::write(
+                root.join("original-native-observer-module.txt"),
+                format!(
+                    "schema=1\nmodule_path={}\nversion=1\nalias_scope=original_class_only\nmodule_retained_until_process_exit=1\n",
+                    loaded.to_str().unwrap()
+                ),
+            )
+            .unwrap();
+        }
         let mut pointer = std::ptr::null_mut();
         // SAFETY: Writable empty output; created context stays on this thread.
         assert_eq!(unsafe { create(&mut pointer) }, 0);

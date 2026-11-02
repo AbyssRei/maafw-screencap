@@ -41,7 +41,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level)-[01]$') {
+        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$') {
             # Cargo wraps an exact test process exit77 as exit101. Classify it
             # only with this fresh fixture's explicit pre-capture evidence.
             $sceneRoot=$env:MFS_P1_MACOS_SAME_BINARY_ROOT
@@ -56,7 +56,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 }
             }
         }
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -190,6 +190,23 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'macos-maximum-level-records' -and -not $observed.Contains('macOS maximum_level_fixture arms=2 invocations=12 view_images=14 window_censuses=14 held_images=12 owned_scene_only=1 strict_native_rgb_assertions=1 diagnostic_only=1 full_P1_acceptance=0 observations_verified')) {
             $status='failed';throw 'Incomplete owned maximum-level fixture observations'
         }
+        if($Name -match '^rust-macos-native-sample-([01])$') {
+            $order=$Matches[1];$originalFirst=if($order -eq '0'){'1'}else{'0'}
+            $marker="native Rust macOS original_native_sample mode=$order calls=6 native_samples=3 before_after_copies=6 strict_full_rgb_oracle=1 recorded"
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1') -or
+                [regex]::Matches($observed,[regex]::Escape($marker)).Count -ne 1 -or
+                -not $observed.Contains("native Rust macOS full_display_witness mode=$order requests=7 captures=6 held=6 strict_full_rgb_oracle=1 recorded") -or
+                -not $observed.Contains("native Rust macOS full_display mode=$order original_first=$originalFirst calls=6 known_full_images=6 held_after_scene_close=6 full_rgb=1 no_capture_retry=1 full_P1_acceptance=0 passed")) {
+                $status='failed';throw 'Original native-sample observation did not pass its unchanged strict RGB oracle'
+            }
+        }
+        if($Name -eq 'macos-native-sample-records' -and -not $observed.Contains('macOS original_native_sample arms=2 invocations=12 original_native_samples=6 before_after_copies=12 full_native_bgr_equal=6 strict_native_rgb_assertions=1 diagnostic_only=1 full_P1_acceptance=0 observations_verified')) {
+            $status='failed';throw 'Incomplete original native callback sample observations'
+        }
+        if($Name -eq 'macos-native-sample-association-control' -and -not $observed.Contains('native sample association_control threads=3 late_content=1 reverse_sample=1 cross_translation_unit=1 nested_restore=1 cpu_owners_released=1 capture=0 passed')) {
+            $status='failed';throw 'Incomplete cross-thread native observer association control'
+        }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
                 $status='failed';throw 'Expected exactly one actual Rust macOS test, not a zero-test or ignored run'
@@ -320,6 +337,7 @@ try {
         Run-MacosFullDisplayProbes $rustArtifacts
         Run-MacosFullDisplayWitnessProbes $rustArtifacts
         Run-MacosMaximumLevelProbes $rustArtifacts
+        Run-MacosNativeSampleProbes $rustArtifacts
         try {Run-ObservedMacosSamePathProbe $rustArtifacts}
         catch {$failed=$true;Write-Host $_.Exception.Message}
     }else{

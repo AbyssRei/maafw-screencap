@@ -78,6 +78,11 @@ fn records_full_display_native_witnesses_in_both_orders() {
 fn records_full_display_with_owned_maximum_level_scene_in_both_orders() {
     record_config(true, true, true);
 }
+#[test]
+#[ignore = "requires a native Mac and separate original native-sample observation module"]
+fn records_original_native_samples_before_and_after_source_conversion() {
+    record_observed_config(true, true, false, true);
+}
 struct Timeline {
     start: Instant,
     rows: fs::File,
@@ -165,14 +170,25 @@ fn record_mode(full: bool, observe: bool) {
     record_config(full, observe, false);
 }
 fn record_config(full: bool, observe: bool, maximum: bool) {
+    record_observed_config(full, observe, maximum, false);
+}
+fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sample: bool) {
     use std::io::Write;
     assert!(!maximum || (full && observe));
+    assert!(!native_sample || (full && observe && !maximum));
     let root = PathBuf::from(env::var_os("MFS_P1_MACOS_SAME_BINARY_ROOT").unwrap());
     let mode = env::var("MFS_P1_MACOS_SAME_BINARY_MODE")
         .unwrap()
         .parse::<u32>()
         .unwrap();
     assert!(mode <= 1 && root.is_absolute() && root.is_dir());
+    if native_sample {
+        fs::write(
+            root.join("native-sample-observer-enabled.txt"),
+            b"schema=1\noriginal_native_sample_observer=1\n",
+        )
+        .unwrap();
+    }
     assert_eq!(
         env::var("MFS_P1_MACOS_MAIN_THREAD_HOST").as_deref(),
         Ok("1")
@@ -311,7 +327,7 @@ fn record_config(full: bool, observe: bool, maximum: bool) {
     let mut known = 0;
     // Same parent process, executable identity, worker and still-live scene.
     // Legacy arms stay original-first. Full RGB arms declare both call orders.
-    let original = original_host::Original::open(&root);
+    let original = original_host::Original::open(&root, native_sample);
     let mut sequence = if full {
         let mut rows = fs::File::create_new(root.join("sequence.tsv")).unwrap();
         writeln!(rows, "rank\timplementation\tcall\tbegin_ns\tend_ns").unwrap();
@@ -506,6 +522,11 @@ fn record_config(full: bool, observe: bool, maximum: bool) {
     if maximum {
         eprintln!(
             "native Rust macOS maximum_level_fixture mode={mode} calls=6 witness_requests=7 owned_scene_only=1 strict_full_rgb_oracle=1 recorded"
+        );
+    }
+    if native_sample {
+        eprintln!(
+            "native Rust macOS original_native_sample mode={mode} calls=6 native_samples=3 before_after_copies=6 strict_full_rgb_oracle=1 recorded"
         );
     }
     assert_eq!(faults, 0);
