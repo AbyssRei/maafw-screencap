@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`PseudoMinimizeHelper.cpp/.h`、`PrintWindowWithPseudoMinimizeScreencap.h` 和 `FramePoolWithPseudoMinimizeScreencap.h` 新增十九项对应，含两条 deleted 复制声明和两条 default 析构。保留原 HWND 非拥有身份、style 的零值/last-error 区分、仅原 layered 窗口查询 alpha 与 255 回退、running 置位后启动线程，以及同步 IsWindow/IsIconic 后再 apply。apply 仍按读取/添加 LAYERED|TRANSPARENT、alpha0、SW_SHOWNOACTIVATE、pseudo=true 的顺序执行；中途失败不回滚先前副作用。revert 先恢复完整原 style，再按原 layered 标志恢复 alpha，任一步失败仍继续并清 pseudo；原 color key/flags 仍不恢复，两侧均使用 key0/LWA_ALPHA。
+
+工作线程保留 100ms 周期、目标失效时只清 pseudo 不清 running，以及只在同一 HWND 成为前台时恢复的行为；stop 先清 running、等待 join 完成，再恢复及按需 SW_MINIMIZE。inactive 只恢复，不重新最小化或停止内层捕获。两种包装保留构造顺序、捕获前 helper 调用及 helper 先于 inner 的析构边界，FramePool 显式 take/drop helper 后才释放 pool/session/device/cache。Rust 的单一 !Send/!Sync owner、私有 Arc、短 Mutex、fallible allocation、线程创建错误、poison 恢复及固定错误/worker-panic 证据属于明确的安全适配，不宣称等价于源异常、进程中止 OOM 或强制取消。没有增加画面就绪等待或跨窗口协调器。
+
+实际 `reference function-map` 只读核对十九项、三份当前 Rust、两个已恢复原生快照中的六项登记来源身份，显式核算 CRLF；完整选定分组保留五项通过及四项 FramePool 原版 pseudo stop/inactive/layered 失败，没有重跑捕获或改写本机无输入多轮结论。累计二十二份固定来源、140 项；本批只审阅 helper/包装，未验收内层 FramePool 捕获、并发恢复、callback 排空、其余来源/宏或完整 P1。
+
 `ForegroundUtils.h`、`HwndUtils.hpp` 的七个函数体已逐项审阅，累计十八份固定 F 来源、121 项。前台路径保留跨窗口共享的 5000ms DWORD 冷却、零哨兵、回绕减法、先更新再请求，以及 TOP/前台/TOPMOST/NOTOPMOST 调用和 5/10/5ms 等待顺序。Rust `AtomicU32` 消除原共享静态变量的数据竞争，没有把整个 native 请求序列串行化。几何路径保留默认 `GetDpiForWindow/96.0`、查询失败的零尺寸、仅检查 WS_POPUP 的辅助判据、rcMonitor 精确客户区匹配后的一次复核、变化后刷新几何、右下再左上的 rcWork 校正及原异步 flags；`SetWindowPos` 成功仍只是请求已提交，不表示 UI 队列已消费或外国窗口快照原子化。
 
 实际只读 `reference function-map` 通过七项与十一项既有 `58fa6f0` 检查身份，四份当前 Rust 与两个原生产品快照共八项登记来源摘要匹配，显式核算 Windows checkout CRLF；没有新编译或截图。映射追到 `SystemWindow` 的真实 Win32 转发。坐标/尺寸 checked 算术属于既有安全拒收，未宣称等价于原有溢出行为；`MAA_WIN32_COMPATIBLE` 的备用缩放编译分支未实现或验证。`bgra_to_bgr` 的非空路径仍在原时点进入显式 C++/OpenCV 验收适配，Rust 桥接、native 转换与独立 owner 的源码另作摘要绑定；原工具的空 Mat 分支没有独立 Rust 工具等价性或直接空输入验收。初次外部 reader 误引用不存在的 owner 文件，在完成前停止；旧输入和错误保留，随后引用实际包含 owner 的适配文件与头，产品和原生记录未改。Pseudo-minimize、其余来源与宏、历史无输入多轮失败及完整 P1 仍保留各自未完成范围。
