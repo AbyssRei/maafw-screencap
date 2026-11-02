@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+窗口 GDI、PrintWindow 与 ScreenDC 的六份 `.cpp/.h` 现审阅十三个函数、闭包和默认析构声明，其中三个清理闭包、三个默认析构单列。对应表追到实际 `SystemGdi` 转发，涵盖 DC/bitmap 获取与释放、`BitBlt`、`GetBitmapBits`、`PrintWindow`、`GetDIBits` 及 popup 查询。保留转换先于清理、旧选中对象恢复顺序、主图/popup 两次捕获后再查询原点和叠加、普通 popup 原生失败保留主图，以及 ScreenDC 的非致命前台/窗口调整、未消费的窗口矩形查询和空 HWND 拒绝。checked layout/完整读回拒收及 GetDIBits 的临时取消选中/恢复选中明确为既有安全适配，不宣称无效来源行为等价或提前现代化为 P3 DIB 路径。
+
+真实只读 `reference function-map` 校核十三项与完整选定运行时分组，通过的十一项均为旧 `58fa6f0` 原生记录，没有新截图；已有本机无输入多轮和其他组件失败不改。九份当前 Rust Git 源码与两个已恢复原生产品快照的登记摘要另作核对。初次直接字节比较在 `foreground.rs` 因 Windows checkout CRLF 失败，随后仅显式核算 CRLF/LF，并分别保存实际与 canonical 摘要，恢复文件未改；文件存在不代表所有 cfg/分支已执行。调用到的 foreground/HwndUtils/pseudo-minimize 等 helper 函数体仍需各自审阅。累计十六份来源、114 项不构成完整语义、原生、宏展开或 P1 验收。
+
 `MemfdBuffer.cpp/.h` 现新增八项对应：七项覆盖捕获构造、创建、析构、指针/长度/fd/可用性访问；单参数构造函数在固定 F 中仅供 `WlrInput` 的两份 keymap 使用，依据完整 Git 调用点列为排除，未迁移输入行为。捕获路径使用三参数构造，当前 Rust 对应 `ShmMemory` 三态、checked layout、私有访问器、失败对象的保存及代理/映射/fd 释放顺序；映射失败与截断失败的资源差别、fd=0 残留和 UUID 构造前失败均单列。无效指针/fd 不在 Rust 中伪造，原 `close(-1)` 的 errno 副作用也未宣称等价。对应源码在 `f261cbf` 与测试修正后的 `7b82fe8` 中相同；新原生回归、其他分配错误与组合失败仍待验证。
 
 八项清单经实际 `reference function-map` 只读校验，绑定两个精确 F 文件、当前 Rust 字节范围和旧 `c564306` 的 60 项检查身份，保留 57 项通过及三项真实失败，没有新捕获。首次路径错误把不含 `runs/` 的轻量包根用于完整日志身份，旧输入与错误日志已保留；随后改为已封存的完整选择性恢复根，源字节、状态和像素未改，校验通过。此批未修改校验器或重复通用坏数据测试。连同既有 manager、Wayland/Wlr 审阅，共十份来源、101 项；旧四文件对应仍绑定修复前快照，这份补充只覆盖当前内存 owner，不扩大为完整当前后端、宏展开或 P1 验收。
