@@ -2,8 +2,13 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // A separate all-pixel control. Existing small-patch scenes stay unchanged.
 #include "full-display-witness.hpp"
-void full_display_cg_scene(NSApplication* app,const std::filesystem::path& directory,bool witnesses=false) {
+enum class FullDisplayLevel { ScreenSaver, Maximum };
+void full_display_cg_scene(NSApplication* app,const std::filesystem::path& directory,bool witnesses=false,
+    FullDisplayLevel level=FullDisplayLevel::ScreenSaver) {
     uint64_t queries=0;DisplayGeometry geometry;int64_t window_level=0;uint32_t observed=0;
+    int32_t screen_saver_level=0,maximum_level=0;
+    const bool maximum=level==FullDisplayLevel::Maximum;
+    require(!maximum || witnesses,"maximum-level fixture requires independent witnesses");
     {
         const auto first=cg_scene_geometry(0,queries);NSScreen* selected=nil;
         for(NSScreen* screen in [NSScreen screens]) {
@@ -16,9 +21,16 @@ void full_display_cg_scene(NSApplication* app,const std::filesystem::path& direc
             throw CgSceneUnavailable("full-display RGB control requires single-display 1:1 native geometry");
         }
         Window window(app,0);
-        [window.value setLevel:CGWindowLevelForKey(kCGScreenSaverWindowLevelKey)];
+        screen_saver_level=CGWindowLevelForKey(kCGScreenSaverWindowLevelKey);
+        if(maximum) {
+            maximum_level=CGWindowLevelForKey(kCGMaximumWindowLevelKey);
+            require(maximum_level>screen_saver_level && screen_saver_level>0,
+                "maximum-level fixture API ordering unavailable");
+        }
+        [window.value setLevel:(maximum ? maximum_level : screen_saver_level)];
         [window.value setFrame:[selected frame] display:YES];
         window_level=[window.value level];require(window_level>0,"full-display level unavailable");
+        require(!maximum || window_level==maximum_level,"owned maximum-level request was not applied");
         const CGFloat wide=first.width,high=first.height,cut=first.width/3,middle=first.height/2;
         struct ImageOwner {NSImage* value;~ImageOwner(){[value release];}} image{
             [[NSImage imageWithSize:NSMakeSize(wide,high) flipped:NO drawingHandler:^BOOL(NSRect rectangle) {
@@ -74,6 +86,14 @@ void full_display_cg_scene(NSApplication* app,const std::filesystem::path& direc
          <<"\ndisplay_id="<<geometry.id<<"\nscene_pid="<<geometry.pid<<"\nwindow_id="<<geometry.window
          <<"\nmain_thread="<<[NSThread isMainThread]<<"\nwindow_closed=1\nfull_display_rgb=1\npixel_inset=0\nbacking_scale=1\nwindow_level="<<window_level<<'\n';
     state.close();require(state.good() && queries==2,"cannot record full-display scene closure");
+    if(maximum) {
+        std::ofstream control(directory/"maximum-level-control.txt",std::ios::binary);
+        control<<"schema=1\nlevel_source=CGWindowLevelForKey\nkey=kCGMaximumWindowLevelKey\nlevel_queries=2"
+               <<"\nscreen_saver_level="<<screen_saver_level<<"\nmaximum_level="<<maximum_level
+               <<"\nrequested_level="<<maximum_level<<"\nobserved_level="<<window_level
+               <<"\nmain_thread=1\nowner_pid="<<geometry.pid<<"\nwindow_id="<<geometry.window<<"\nwindow_closed=1\n";
+        control.close();require(control.good(),"cannot record owned maximum-level control");
+    }
     if(witnesses) {
         std::ofstream state(directory/"witness-summary.txt",std::ios::binary);
         state<<"schema=1\nrequests="<<observed<<"\nview_draws="<<observed<<"\ncensus_queries="<<observed

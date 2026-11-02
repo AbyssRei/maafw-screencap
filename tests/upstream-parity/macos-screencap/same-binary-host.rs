@@ -25,7 +25,9 @@ pub(crate) fn run() -> ! {
     assert!(mode <= 1);
     let full = std::env::var("MFS_P1_MACOS_SAME_BINARY_FULL").as_deref() == Ok("1");
     let witness = std::env::var("MFS_P1_MACOS_SAME_BINARY_WITNESS").as_deref() == Ok("1");
+    let maximum = std::env::var("MFS_P1_MACOS_MAXIMUM_LEVEL_FIXTURE").as_deref() == Ok("1");
     assert!(!witness || full);
+    assert!(!maximum || (full && witness));
     let root = PathBuf::from(std::env::var_os("MFS_P1_MACOS_SAME_BINARY_SCENE_ROOT").unwrap());
     let library = PathBuf::from(std::env::var_os("MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE").unwrap());
     assert!(root.is_absolute() && library.is_absolute() && root.is_dir());
@@ -39,7 +41,9 @@ pub(crate) fn run() -> ! {
     let version = unsafe {
         symbol::<unsafe extern "C" fn() -> u32>(
             handle,
-            if witness {
+            if maximum {
+                c"mfs_mac_maximum_level_scene_version"
+            } else if witness {
                 c"mfs_mac_full_display_witness_version"
             } else if full {
                 c"mfs_mac_full_display_scene_version"
@@ -51,7 +55,9 @@ pub(crate) fn run() -> ! {
     let run = unsafe {
         symbol::<unsafe extern "C" fn(u32, *const c_char, *const c_char) -> i32>(
             handle,
-            if witness {
+            if maximum {
+                c"mfs_mac_maximum_level_scene_run"
+            } else if witness {
                 c"mfs_mac_full_display_witness_run"
             } else if full {
                 c"mfs_mac_full_display_scene_run"

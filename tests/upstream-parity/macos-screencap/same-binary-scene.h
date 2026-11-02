@@ -23,6 +23,10 @@ __attribute__((visibility("default"))) int32_t mfs_mac_full_display_scene_run(
 __attribute__((visibility("default"))) uint32_t mfs_mac_full_display_witness_version(void) MFS_SCENE_NOEXCEPT;
 __attribute__((visibility("default"))) int32_t mfs_mac_full_display_witness_run(
     uint32_t mode, const char* executable, const char* directory) MFS_SCENE_NOEXCEPT;
+// Independent owned-window maximum-level control with the same RGB/witness protocol.
+__attribute__((visibility("default"))) uint32_t mfs_mac_maximum_level_scene_version(void) MFS_SCENE_NOEXCEPT;
+__attribute__((visibility("default"))) int32_t mfs_mac_maximum_level_scene_run(
+    uint32_t mode, const char* executable, const char* directory) MFS_SCENE_NOEXCEPT;
 // Original caller fixture: create/capture/finish/destroy on the same caller
 // thread. The context owns only its source object and returned CPU Mats; it
 // does not own, cancel or prove drainage of the source's asynchronous blocks.

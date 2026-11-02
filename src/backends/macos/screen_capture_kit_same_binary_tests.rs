@@ -73,6 +73,11 @@ fn records_all_display_pixels_in_both_implementation_orders() {
 fn records_full_display_native_witnesses_in_both_orders() {
     record_mode(true, true);
 }
+#[test]
+#[ignore = "requires a native Mac and independent owned maximum-level RGB/witness scene"]
+fn records_full_display_with_owned_maximum_level_scene_in_both_orders() {
+    record_config(true, true, true);
+}
 struct Timeline {
     start: Instant,
     rows: fs::File,
@@ -157,7 +162,11 @@ fn record(full: bool) {
     record_mode(full, false);
 }
 fn record_mode(full: bool, observe: bool) {
+    record_config(full, observe, false);
+}
+fn record_config(full: bool, observe: bool, maximum: bool) {
     use std::io::Write;
+    assert!(!maximum || (full && observe));
     let root = PathBuf::from(env::var_os("MFS_P1_MACOS_SAME_BINARY_ROOT").unwrap());
     let mode = env::var("MFS_P1_MACOS_SAME_BINARY_MODE")
         .unwrap()
@@ -197,6 +206,16 @@ fn record_mode(full: bool, observe: bool) {
     let scene_root = root.join("scene");
     fs::create_dir(&scene_root).unwrap();
     let mut command = Command::new(&executable);
+    if maximum {
+        command.env("MFS_P1_MACOS_MAXIMUM_LEVEL_FIXTURE", "1");
+        fs::write(
+            root.join("maximum-level-enabled.txt"),
+            b"schema=1\nmaximum_window_level_fixture=1\n",
+        )
+        .unwrap();
+    } else {
+        command.env_remove("MFS_P1_MACOS_MAXIMUM_LEVEL_FIXTURE");
+    }
     if full {
         command.env("MFS_P1_MACOS_SAME_BINARY_FULL", "1");
     } else {
@@ -484,6 +503,11 @@ fn record_mode(full: bool, observe: bool) {
     }
     // Keep capture failure observations, but require the CG metadata arm as a
     // strict positive control. Neither arm is a replacement source oracle.
+    if maximum {
+        eprintln!(
+            "native Rust macOS maximum_level_fixture mode={mode} calls=6 witness_requests=7 owned_scene_only=1 strict_full_rgb_oracle=1 recorded"
+        );
+    }
     assert_eq!(faults, 0);
     assert!(
         equal_results,

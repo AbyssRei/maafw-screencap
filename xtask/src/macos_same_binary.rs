@@ -188,15 +188,18 @@ fn original_call(
     )
 }
 pub fn run(args: &[String]) -> Result<()> {
-    run_kind(args, false, false)
+    run_kind(args, false, false, false)
 }
 pub fn run_full(args: &[String]) -> Result<()> {
-    run_kind(args, true, false)
+    run_kind(args, true, false, false)
 }
 pub fn run_full_witness(args: &[String]) -> Result<()> {
-    run_kind(args, true, true)
+    run_kind(args, true, true, false)
 }
-fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
+pub fn run_maximum_level(args: &[String]) -> Result<()> {
+    run_kind(args, true, true, true)
+}
+fn run_kind(args: &[String], full: bool, witness: bool, maximum: bool) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
@@ -219,8 +222,15 @@ fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
     let mut originals = Vec::new();
     let mut order_records = Vec::new();
     let mut witness_records = Vec::new();
+    let mut level_records = Vec::new();
     for mode in 0..=1 {
         let arm = root.join(format!("mode-{mode}"));
+        if !maximum
+            && (arm.join("maximum-level-enabled.txt").exists()
+                || arm.join("scene/maximum-level-control.txt").exists())
+        {
+            return Err("maximum-level fixture requires its separate diagnostic validator".into());
+        }
         if full && !witness && arm.join("witness-enabled.txt").exists() {
             return Err("interleaved witnesses require their separate diagnostic validator".into());
         }
@@ -311,6 +321,10 @@ fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
                     || number(&cg, "window_level")? > i32::MAX as u64
                 {
                     return Err("full-display fixture level differs".into());
+                }
+                if maximum {
+                    level_records.push(serde_json::json!({"mode":mode,"control":
+                        crate::macos_maximum_level::validate(&arm, &g, number(&cg, "window_level")?)?}));
                 }
                 if !text("scene-stdout.txt")?.contains("owned macOS full_display_rgb=1 inset=0 single_display_1to1=1 window_closed=1 passed") {
                     return Err("full-display producer did not finish its declared scene".into());
@@ -695,6 +709,7 @@ fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
             if entry.path() == root.join("same-binary-validation.json")
                 || entry.path() == root.join("full-display-validation.json")
                 || entry.path() == root.join("full-display-witness-validation.json")
+                || entry.path() == root.join("maximum-level-validation.json")
             {
                 continue;
             }
@@ -742,7 +757,15 @@ fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
         report["diagnostic_only"] = true.into();
         report["scope"] = "Separate interleaved CPU-view/window-census diagnostic. All twelve display images, held bytes and every pixel difference are recorded; seven native AppKit view redraws and CG window lists per arm are required. This added work can affect scheduling and is not a simultaneous display witness or proof of a dot owner. Original strict native RGB assertions and historical failures remain failed when pixels differ. No masked pixels, display parity, source-oracle replacement, callback-drain or full P1 acceptance.".into();
     }
-    let output = root.join(if witness {
+    if maximum {
+        report["layout_version"] = 5.into();
+        report["owned_scene_level_control"] = serde_json::json!(level_records);
+        report["maximum_window_level_fixture"] = true.into();
+        report["scope"] = "Independent owned NSWindow maximum-level fixture with the original strict native full-RGB oracle and both implementation orders. Public CGWindowLevelForKey queries, applied NSWindow level, seven actual window censuses/view redraws per arm and all twelve returned/held images are required. Only owned fixture window state is changed. Diagnostic records do not waive native pixel failures, attribute historical pixels, prove callback drainage or accept full P1.".into();
+    }
+    let output = root.join(if maximum {
+        "maximum-level-validation.json"
+    } else if witness {
         "full-display-witness-validation.json"
     } else if full {
         "full-display-validation.json"
@@ -756,7 +779,11 @@ fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if witness {
+    if maximum {
+        println!(
+            "macOS maximum_level_fixture arms=2 invocations=12 view_images=14 window_censuses=14 held_images=12 owned_scene_only=1 strict_native_rgb_assertions=1 diagnostic_only=1 full_P1_acceptance=0 observations_verified"
+        );
+    } else if witness {
         println!(
             "macOS full_display_witness arms=2 invocations=12 view_images=14 window_censuses=14 both_orders=1 held_images=12 diagnostic_only=1 full_display_acceptance=0 full_P1_acceptance=0 observations_verified"
         );

@@ -162,6 +162,23 @@ function Run-MacosFullDisplayWitnessProbes([string]$Artifacts) {
     catch {$script:failed=$true;Write-Host $_.Exception.Message}
 }
 
+function Run-MacosMaximumLevelProbes([string]$Artifacts) {
+    $root=Join-Path $Artifacts maximum-level-display
+    New-Item -ItemType Directory -Path $root|Out-Null
+    $test='backends::macos::screen_capture_kit::tests::same_binary::records_full_display_with_owned_maximum_level_scene_in_both_orders'
+    foreach($order in @(0,1)) {
+        $directory=Join-Path $root "mode-$order"
+        New-Item -ItemType Directory -Path $directory|Out-Null
+        $env:MFS_P1_MACOS_SAME_BINARY_ROOT=$directory
+        $env:MFS_P1_MACOS_SAME_BINARY_MODE=[string]$order
+        $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
+        try {Step "rust-macos-full-max-level-$order" cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$test,'--','--exact','--ignored','--test-threads=1','--nocapture')}
+        catch {$script:failed=$true;Write-Host $_.Exception.Message}
+    }
+    try {Step macos-maximum-level-records $ConfigureTool @('upstream-trace','macos-maximum-level',$root)}
+    catch {$script:failed=$true;Write-Host $_.Exception.Message}
+}
+
 function Run-RustMacosProbe([string]$Name,[string]$Test,[string]$Executable,[string]$Artifacts) {
     $directory=Join-Path $Artifacts $Name
     $scene=Join-Path $directory scene
