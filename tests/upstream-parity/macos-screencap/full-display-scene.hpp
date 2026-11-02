@@ -1,8 +1,9 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // A separate all-pixel control. Existing small-patch scenes stay unchanged.
-void full_display_cg_scene(NSApplication* app,const std::filesystem::path& directory) {
-    uint64_t queries=0;DisplayGeometry geometry;int64_t window_level=0;
+#include "full-display-witness.hpp"
+void full_display_cg_scene(NSApplication* app,const std::filesystem::path& directory,bool witnesses=false) {
+    uint64_t queries=0;DisplayGeometry geometry;int64_t window_level=0;uint32_t observed=0;
     {
         const auto first=cg_scene_geometry(0,queries);NSScreen* selected=nil;
         for(NSScreen* screen in [NSScreen screens]) {
@@ -58,14 +59,27 @@ void full_display_cg_scene(NSApplication* app,const std::filesystem::path& direc
         std::filesystem::rename(directory/"ready.tmp",directory/"ready.json");
         const auto until=Clock::now()+std::chrono::minutes(3);
         while(!std::filesystem::exists(directory/"stop")) {
+            if(witnesses && observed<7 && std::filesystem::exists(directory/("witness-request-"+std::to_string(observed)))) {
+                std::ifstream request(directory/("witness-request-"+std::to_string(observed)),std::ios::binary);
+                const std::string text((std::istreambuf_iterator<char>(request)),std::istreambuf_iterator<char>());
+                require(text=="slot="+std::to_string(observed)+"\n","invalid view/census witness request");
+                full_display_witness(view.value,geometry,window_level,observed,directory);++observed;
+            }
             require(Clock::now()<until,"full-display scene exceeded lifetime budget");pump();
         }
+        if(witnesses) {require(observed==7,"full-display scene stopped before all witnesses");}
     }
     std::ofstream state(directory/"cg-scene-state.txt",std::ios::binary);
     state<<"geometry_origin=core_graphics\ngeometry_queries="<<queries<<"\ndisplay_count="<<geometry.count
          <<"\ndisplay_id="<<geometry.id<<"\nscene_pid="<<geometry.pid<<"\nwindow_id="<<geometry.window
          <<"\nmain_thread="<<[NSThread isMainThread]<<"\nwindow_closed=1\nfull_display_rgb=1\npixel_inset=0\nbacking_scale=1\nwindow_level="<<window_level<<'\n';
     state.close();require(state.good() && queries==2,"cannot record full-display scene closure");
+    if(witnesses) {
+        std::ofstream state(directory/"witness-summary.txt",std::ios::binary);
+        state<<"schema=1\nrequests="<<observed<<"\nview_draws="<<observed<<"\ncensus_queries="<<observed
+             <<"\nmain_thread=1\nwindow_id="<<geometry.window<<"\nwindow_closed=1\n";
+        state.close();require(state.good(),"cannot record view/census witness closure");
+    }
     std::ofstream stopped(directory/"stopped.tmp");stopped<<"window_closed=1\n";stopped.close();
     require(stopped.good(),"cannot acknowledge full-display window closure");
     std::filesystem::rename(directory/"stopped.tmp",directory/"stopped.txt");

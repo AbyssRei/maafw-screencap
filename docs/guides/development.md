@@ -4,6 +4,10 @@
 
 ## 本轮原生与 CI 复核
 
+新增独立 `full-display-witness` 矩阵、精确 ignored 测试 `records_full_display_native_witnesses_in_both_orders` 与 `upstream-trace macos-full-display-witness <external matrix> [--check-only]`。两种调用顺序各在首帧前和六次调用后，通过请求/应答取得七组主线程证据：[AppKit 视图缓存接口](https://developer.apple.com/documentation/appkit/nsview/cachedisplay%28in%3Ato%3A%29?language=objc)只重绘自有 view，使用 NSColor 的语义 sRGB 分量输出独立、左上原点的 BGRA8；每个请求的 CG 窗口清单还记录实际顺序、ID、PID、layer、bounds 与可用名称。父进程区间必须落在对应截图调用之间，十四张 CPU view 必须逐像素匹配完整三色图样。此操作不能采样 WindowServer 合成结果，也不证明某个窗口生成了小圆点；新增绘制、查询和文件交接可能影响调度。
+
+原有未插入观察的整屏入口与 schema3 继续独立执行。新增原生测试仍在保存完整结果后执行同一严格三色断言，像素未知时仍失败；新 schema4 记录入口可以核验十二张真实图像、持帧和所有偏差，而固定记录 `capture_parity_accepted=false`，不掩蔽任何显示器像素，也不把诊断完整性当成配对或 P1 通过。本机 workspace（xtask 99 项）、Windows 和 Mac target Clippy、二十一组坏数据拒绝、两组人工 CPU 控制及十五组实际 Step mock 通过；十三份历史原生保存报告只读复核通过，确切 `3e389c4` 的原整屏失败仍被严格拒绝，123 份矩阵文件未变。首个人工夹具的 CRLF 协议失败和首版外层脚本误用最后一个故意失败 mock 子进程退出码的结果均保留，后续分别按 LF 和新 PowerShell 进程执行验证。使用归档开发依赖；Objective-C++ 编译、实际 view/census 数据与圆点归因尚待 Actions，人工控制不属于原生取帧。
+
 新增独立 `full-display-rgb` 验收矩阵与 `upstream-trace macos-full-display <external matrix> [--check-only]`。自有 borderless 窗口必须精确覆盖唯一显示器，首个入口明确要求 AppKit backing 与 CG point/pixel 为 1:1；整帧绘制左侧红、右上绿、右下蓝，测试 inset 为零。夹具采用 [Apple 的 NSImage 绘制 block 接口](https://developer.apple.com/documentation/appkit/nsimage/init%28size%3Aflipped%3Adrawinghandler%3A%29?language=objc)，block 只保留标量尺寸，MRC 下显式 retain/release 并由窗口保活 view/image。新私有入口与原有 small-patch/SC/CG 场景分开，固定 F 类不改；两个新进程组分别先执行原版三次再 Rust 三次，以及相反顺序。schema3 验证同程序/原生目标身份、全部十二张完整 BGR、六份 Rust BGRA 与转换/持帧、真正的 source 对象关闭及六次同步调用顺序；None、边缘坏像素、缩放/裁剪几何或不完整帧均不能通过。调用区间不伪装硬件帧时间，静态整屏不证明动态新鲜度、任意缩放、遮挡或回调排空。
 
 本机已经通过 workspace 测试（xtask 98 项）、Windows Clippy、Mac target 的 Rust typecheck/Clippy、二十八组 CPU 损坏记录拒绝与十四组实际 Step mock 控制；旧 schema2 实际 Mac 保存报告另经当前工具只读复核不变。人工矩阵借用旧可执行文件身份而重建六像素图样与时间数据，明确为序列化/像素检查控制，不是原生截图。Cargo 对 exact-test 的 exit77 包装为 exit101 时，编排仅凭当前目录的确切 pre-capture marker、且没有 source/capture 文件，才记录 missing_environment；原始退出和失败仍保留。开发使用归档依赖，不声称新的在线解析验收。

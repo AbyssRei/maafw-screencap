@@ -27,3 +27,12 @@ int32_t mfs_mac_full_display_scene_run(uint32_t mode,const char* executable,cons
         return mfs_mac_scene_fixture_main(3,arguments);
     }catch(...) {return 2;}
 }
+uint32_t mfs_mac_full_display_witness_version(void) noexcept {return 1;}
+int32_t mfs_mac_full_display_witness_run(uint32_t mode,const char* executable,const char* directory) noexcept {
+    if(mode>1 || !executable || !directory) {return 64;}
+    try {
+        std::string program(executable),path(directory),operation="display-scene-cg-full-witness";
+        char* arguments[]={program.data(),operation.data(),path.data(),nullptr};
+        return mfs_mac_scene_fixture_main(3,arguments);
+    }catch(...) {return 2;}
+}

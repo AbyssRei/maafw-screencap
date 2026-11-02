@@ -41,7 +41,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display)-[01]$') {
+        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display|full-witness)-[01]$') {
             # Cargo wraps an exact test process exit77 as exit101. Classify it
             # only with this fresh fixture's explicit pre-capture evidence.
             $sceneRoot=$env:MFS_P1_MACOS_SAME_BINARY_ROOT
@@ -56,7 +56,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 }
             }
         }
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(same-binary|full-display)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -164,6 +164,17 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         }
         if($Name -eq 'macos-full-display-records' -and -not $observed.Contains('macOS full_display arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 source_oracle_replaced=0 full_P1_acceptance=0 passed')) {
             $status='failed';throw 'Incomplete full-display RGB paired pixel/order records'
+        }
+        if($Name -match '^rust-macos-full-witness-([01])$') {
+            $order=$Matches[1];$originalFirst=if($order -eq '0'){1}else{0}
+            if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+                -not $observed.Contains("native Rust macOS full_display_witness mode=$order requests=7 captures=6 held=6 strict_full_rgb_oracle=1 recorded") -or
+                -not $observed.Contains("native Rust macOS full_display mode=$order original_first=$originalFirst calls=6 known_full_images=6 held_after_scene_close=6 full_rgb=1 no_capture_retry=1 full_P1_acceptance=0 passed")) {
+                $status='failed';throw 'Full-display witness native arm did not pass its unchanged strict RGB oracle'
+            }
+        }
+        if($Name -eq 'macos-full-witness-records' -and -not $observed.Contains('macOS full_display_witness arms=2 invocations=12 view_images=14 window_censuses=14 both_orders=1 held_images=12 diagnostic_only=1 full_display_acceptance=0 full_P1_acceptance=0 observations_verified')) {
+            $status='failed';throw 'Incomplete independent CPU-view/window-census observations'
         }
         if($Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|sample-matrix|layout|dimensions|manager|manager-scripts)$'){
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;'){
@@ -293,6 +304,7 @@ try {
         }
         Run-MacosSameBinaryProbes $rustArtifacts
         Run-MacosFullDisplayProbes $rustArtifacts
+        Run-MacosFullDisplayWitnessProbes $rustArtifacts
         try {Run-ObservedMacosSamePathProbe $rustArtifacts}
         catch {$failed=$true;Write-Host $_.Exception.Message}
     }else{

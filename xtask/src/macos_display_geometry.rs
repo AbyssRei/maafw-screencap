@@ -121,6 +121,15 @@ fn parse_kind(text: &str, full: bool) -> Result<Geometry> {
     })
 }
 impl Geometry {
+    pub fn expected_bgr(&self, x: usize, y: usize) -> [u8; 3] {
+        if !self.full_rgb || x >= self.width / 3 && y < self.height - self.height / 2 {
+            [0, 255, 0]
+        } else if x < self.width / 3 {
+            [0, 0, 255]
+        } else {
+            [255, 0, 0]
+        }
+    }
     pub fn span(&self, channels: usize) -> Result<usize> {
         self.width
             .checked_mul(self.height)
@@ -134,14 +143,7 @@ impl Geometry {
         for y in self.region[1]..self.region[3] {
             for x in self.region[0]..self.region[2] {
                 let offset = (y * self.width + x) * channels;
-                let expected =
-                    if !self.full_rgb || x >= self.width / 3 && y < self.height - self.height / 2 {
-                        [0, 255, 0]
-                    } else if x < self.width / 3 {
-                        [0, 0, 255]
-                    } else {
-                        [255, 0, 0]
-                    };
+                let expected = self.expected_bgr(x, y);
                 if bytes[offset..offset + 3] != expected
                     || channels == 4 && bytes[offset + 3] != 255
                 {

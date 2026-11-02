@@ -68,6 +68,11 @@ fn records_first_display_with_same_executable_scene_host() {
 fn records_all_display_pixels_in_both_implementation_orders() {
     record(true);
 }
+#[test]
+#[ignore = "requires a native Mac, separate CPU-view/census scene and explicit call order"]
+fn records_full_display_native_witnesses_in_both_orders() {
+    record_mode(true, true);
+}
 struct Timeline {
     start: Instant,
     rows: fs::File,
@@ -92,16 +97,66 @@ fn original_calls(
     original: &original_host::Original,
     root: &Path,
     sequence: &mut Option<Timeline>,
+    witness: &mut Option<Witness>,
 ) {
     for call in 0..3 {
         let begin = sequence.as_ref().map(Timeline::now);
         original.capture(call, root);
         if let Some(sequence) = sequence {
             sequence.append(0, call, begin.unwrap());
+            if let Some(witness) = witness {
+                witness.observe(sequence.rank);
+            }
         }
     }
 }
+struct Witness {
+    scene: PathBuf,
+    start: Instant,
+    rows: fs::File,
+    next: u32,
+}
+impl Witness {
+    fn observe(&mut self, slot: u32) {
+        use std::io::Write;
+        assert_eq!(slot, self.next);
+        assert!(slot < 7);
+        let now = || {
+            u64::try_from(self.start.elapsed().as_nanos())
+                .unwrap()
+                .checked_add(1)
+                .unwrap()
+        };
+        let begin = now();
+        let temporary = self.scene.join(format!("witness-request-{slot}.tmp"));
+        fs::write(&temporary, format!("slot={slot}\n")).unwrap();
+        fs::rename(
+            temporary,
+            self.scene.join(format!("witness-request-{slot}")),
+        )
+        .unwrap();
+        let acknowledgement = self.scene.join(format!("witness-{slot}-ready.txt"));
+        let until = Instant::now() + Duration::from_secs(15);
+        while !acknowledgement.exists() {
+            assert!(
+                Instant::now() < until,
+                "native view/census witness timed out"
+            );
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(
+            fs::read(acknowledgement).unwrap(),
+            format!("slot={slot}\nmain_thread=1\n").as_bytes()
+        );
+        writeln!(self.rows, "{slot}\t{begin}\t{}", now()).unwrap();
+        self.rows.flush().unwrap();
+        self.next = self.next.checked_add(1).unwrap();
+    }
+}
 fn record(full: bool) {
+    record_mode(full, false);
+}
+fn record_mode(full: bool, observe: bool) {
     use std::io::Write;
     let root = PathBuf::from(env::var_os("MFS_P1_MACOS_SAME_BINARY_ROOT").unwrap());
     let mode = env::var("MFS_P1_MACOS_SAME_BINARY_MODE")
@@ -146,6 +201,11 @@ fn record(full: bool) {
         command.env("MFS_P1_MACOS_SAME_BINARY_FULL", "1");
     } else {
         command.env_remove("MFS_P1_MACOS_SAME_BINARY_FULL");
+    }
+    if observe {
+        command.env("MFS_P1_MACOS_SAME_BINARY_WITNESS", "1");
+    } else {
+        command.env_remove("MFS_P1_MACOS_SAME_BINARY_WITNESS");
     }
     let child = command
         .env("MFS_P1_MACOS_SAME_BINARY_CHILD", "1")
@@ -244,9 +304,29 @@ fn record(full: bool) {
     } else {
         None
     };
+    let mut witness = if observe {
+        assert!(full);
+        fs::write(
+            root.join("witness-enabled.txt"),
+            b"schema=1\nrequests=7\nstrict_full_rgb_oracle=1\n",
+        )
+        .unwrap();
+        let mut rows = fs::File::create_new(root.join("witness.tsv")).unwrap();
+        writeln!(rows, "slot\tbegin_ns\tend_ns").unwrap();
+        let mut value = Witness {
+            scene: scene.root.clone(),
+            start: sequence.as_ref().unwrap().start,
+            rows,
+            next: 0,
+        };
+        value.observe(0);
+        Some(value)
+    } else {
+        None
+    };
     let original_first = !full || mode == 0;
     if original_first {
-        original_calls(&original, &root, &mut sequence);
+        original_calls(&original, &root, &mut sequence, &mut witness);
     }
     let mut caller_results = Vec::new();
     let capture = Capture::new(0);
@@ -265,6 +345,9 @@ fn record(full: bool) {
         let selection = *trace.display_selection.lock().unwrap();
         if let Some(sequence) = &mut sequence {
             sequence.append(1, u32::try_from(call).unwrap(), begin.unwrap());
+            if let Some(witness) = &mut witness {
+                witness.observe(sequence.rank);
+            }
         }
         let status = match &result {
             Ok(Some(image)) if !image.pixels().is_empty() => 1,
@@ -323,10 +406,13 @@ fn record(full: bool) {
         images.push(result.ok().flatten());
     }
     if !original_first {
-        original_calls(&original, &root, &mut sequence);
+        original_calls(&original, &root, &mut sequence, &mut witness);
     }
     if let Some(sequence) = &sequence {
         assert_eq!(sequence.rank, 6);
+    }
+    if let Some(witness) = &witness {
+        assert_eq!(witness.next, 7);
     }
     // This observation budget follows all six calls, in the declared order.
     // It never resubmits a capture or converts a late frame into a caller result.
@@ -390,6 +476,12 @@ fn record(full: bool) {
     }
     let schema = if full { 3 } else { 2 };
     fs::write(root.join("summary.txt"),format!("schema={schema}\nmode={mode}\ninvocations=3\nusable_images={usable}\nknown_patch_images={known}\nscene_closed=1\nscene_child_exit=0\nsame_binary=1\nfaults={faults}\nno_capture_retry=1\noriginal_oracle_replaced=0\nfull_P1_acceptance=0\noriginal_invocations=3\noriginal_usable_images={original_usable}\noriginal_known_patch_images={original_known}\noriginal_first={}\noriginal_owner_closed=1\npaired_caller_results={}\n{}",u8::from(original_first),u8::from(equal_results),if full {"full_display=1\n"} else {""})).unwrap();
+    if observe {
+        let captured = usable + original_usable;
+        eprintln!(
+            "native Rust macOS full_display_witness mode={mode} requests=7 captures={captured} held={captured} strict_full_rgb_oracle=1 recorded"
+        );
+    }
     // Keep capture failure observations, but require the CG metadata arm as a
     // strict positive control. Neither arm is a replacement source oracle.
     assert_eq!(faults, 0);

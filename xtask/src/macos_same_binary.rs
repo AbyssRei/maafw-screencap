@@ -5,7 +5,7 @@ use crate::macos_display_geometry as geometry;
 use crate::{Result, records};
 use std::{collections::BTreeMap, fs, path::Path};
 
-fn fields(text: &str) -> Result<BTreeMap<String, String>> {
+pub(super) fn fields(text: &str) -> Result<BTreeMap<String, String>> {
     let mut map = BTreeMap::new();
     for line in text.lines() {
         let (key, value) = line.split_once('=').ok_or("malformed same-binary field")?;
@@ -19,7 +19,7 @@ fn fields(text: &str) -> Result<BTreeMap<String, String>> {
     }
     Ok(map)
 }
-fn number(map: &BTreeMap<String, String>, key: &str) -> Result<u64> {
+pub(super) fn number(map: &BTreeMap<String, String>, key: &str) -> Result<u64> {
     let text = map.get(key).ok_or("missing same-binary scalar")?;
     let value = text.parse::<u64>()?;
     if value.to_string() != *text {
@@ -33,7 +33,7 @@ fn expect(map: &BTreeMap<String, String>, key: &str, value: u64) -> Result<()> {
     }
     Ok(())
 }
-fn rows(text: &str, columns: usize) -> Result<Vec<Vec<u64>>> {
+pub(super) fn rows(text: &str, columns: usize) -> Result<Vec<Vec<u64>>> {
     text.lines()
         .map(|line| {
             let row = line
@@ -178,9 +178,6 @@ fn original_call(
             return Err("same-process original CPU layout/span/held bytes differ".into());
         }
         known = g.pixels(&bgr, 3).is_ok();
-        if !known {
-            return Err("same-process original successful result has unknown target pixels".into());
-        }
     } else if names.iter().any(|name| arm.join(name).exists()) {
         return Err("original None/empty result has a substituted CPU image".into());
     }
@@ -191,12 +188,15 @@ fn original_call(
     )
 }
 pub fn run(args: &[String]) -> Result<()> {
-    run_kind(args, false)
+    run_kind(args, false, false)
 }
 pub fn run_full(args: &[String]) -> Result<()> {
-    run_kind(args, true)
+    run_kind(args, true, false)
 }
-fn run_kind(args: &[String], full: bool) -> Result<()> {
+pub fn run_full_witness(args: &[String]) -> Result<()> {
+    run_kind(args, true, true)
+}
+fn run_kind(args: &[String], full: bool, witness: bool) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
@@ -218,8 +218,12 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
     let mut common_schema = None;
     let mut originals = Vec::new();
     let mut order_records = Vec::new();
+    let mut witness_records = Vec::new();
     for mode in 0..=1 {
         let arm = root.join(format!("mode-{mode}"));
+        if full && !witness && arm.join("witness-enabled.txt").exists() {
+            return Err("interleaved witnesses require their separate diagnostic validator".into());
+        }
         if full && arm.join("missing-environment.txt").exists() {
             return Err("missing native environment cannot accept full-display captures".into());
         }
@@ -429,6 +433,16 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
                 }
             }
             order_records.push(serde_json::json!({"mode":mode,"calls":values}));
+            if witness {
+                let cg = fields(&text("scene/cg-scene-state.txt")?)?;
+                witness_records.push(crate::macos_full_display_witness::validate(
+                    &arm,
+                    &g,
+                    mode,
+                    &values,
+                    number(&cg, "window_level")?,
+                )?);
+            }
             Some(values)
         } else {
             None
@@ -560,26 +574,46 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
                 return Err("same-binary known-patch flag differs from actual pixels".into());
             }
             if let Some(finish) = &original_finish {
-                if row[1] == 1 && !correct {
+                if row[1] == 1 && !correct && !witness {
                     return Err(
                         "same-process Rust successful result has unknown target pixels".into(),
                     );
                 }
                 let mut original = original_call(&arm, call, row[1], &g, &consumer, finish)?;
+                if !witness && original["usable_image"] == true && original["known_patch"] != true {
+                    return Err(
+                        "same-process original successful result has unknown target pixels".into(),
+                    );
+                }
                 if let Some(sequence) = &sequence {
                     let original_rank = if mode == 0 { call } else { call + 3 };
                     let rust_rank = if mode == 0 { call + 3 } else { call };
                     let native = rows(&text(&format!("original-call-{call}.tsv"))?, 5)?;
+                    let paired = read(&format!("original-call-{call}.bgr"))?
+                        == read(&format!("call-{call}.bgr"))?;
                     if native[0][2] > sequence[original_rank][4] - sequence[original_rank][3]
                         || row[3] > sequence[rust_rank][4] - sequence[rust_rank][3]
-                        || read(&format!("original-call-{call}.bgr"))?
-                            != read(&format!("call-{call}.bgr"))?
+                        || !witness && !paired
                     {
                         return Err(
                             "full-display paired bytes or enclosing call intervals differ".into(),
                         );
                     }
-                    original["full_display_pixels_paired"] = true.into();
+                    original["full_display_pixels_paired"] = paired.into();
+                    if witness {
+                        original["full_pixel_differences"] =
+                            crate::macos_full_display_witness::differences(
+                                &g,
+                                &read(&format!("original-call-{call}.bgr"))?,
+                                3,
+                            )?;
+                        original["rust_full_pixel_differences"] =
+                            crate::macos_full_display_witness::differences(
+                                &g,
+                                &read(&format!("call-{call}.raw"))?,
+                                4,
+                            )?;
+                    }
                 }
                 original_usable += u64::from(original["usable_image"] == true);
                 original_known += u64::from(original["known_patch"] == true);
@@ -646,7 +680,10 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
                 }
             }
         }
-        if (mode == 1 || full) && (usable, known) != (3, 3) {
+        if witness && (usable != 3 || original_usable != 3) {
+            return Err("view/census diagnostic requires all six actual capture images".into());
+        }
+        if !witness && (mode == 1 || full) && (usable, known) != (3, 3) {
             return Err("same-binary CG metadata positive control failed".into());
         }
         arms.push(serde_json::json!({"mode":mode,"consumer":consumer,"producer":producer,"usable_images":usable,"known_patch_images":known,"scene_closed":true,"scene_module_explicitly_unloaded":false}));
@@ -657,6 +694,7 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
             let kind = entry.file_type()?;
             if entry.path() == root.join("same-binary-validation.json")
                 || entry.path() == root.join("full-display-validation.json")
+                || entry.path() == root.join("full-display-witness-validation.json")
             {
                 continue;
             }
@@ -692,7 +730,21 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
         report["full_target_rgb_images"] = 12.into();
         report["scope"]="Same-executable full-display RGB fixture on a single 1:1 display; both implementations run on one caller worker in original-first and Rust-first arms. All twelve returned images, paired full bytes, actual native display selection and CPU owners after scene/source closure are strict. Sequence intervals enclose synchronous fixture/API calls, not hardware frame timestamps or callback quiescence. Static content, not changing-display freshness or general scaling/occlusion support. Old source oracles and failures remain unchanged; no full backend/P1 acceptance.".into();
     }
-    let output = root.join(if full {
+    if witness {
+        report["layout_version"] = 4.into();
+        report
+            .as_object_mut()
+            .unwrap()
+            .remove("full_target_rgb_images");
+        report["captured_full_images"] = 12.into();
+        report["witnesses"] = serde_json::json!(witness_records);
+        report["capture_parity_accepted"] = false.into();
+        report["diagnostic_only"] = true.into();
+        report["scope"] = "Separate interleaved CPU-view/window-census diagnostic. All twelve display images, held bytes and every pixel difference are recorded; seven native AppKit view redraws and CG window lists per arm are required. This added work can affect scheduling and is not a simultaneous display witness or proof of a dot owner. Original strict native RGB assertions and historical failures remain failed when pixels differ. No masked pixels, display parity, source-oracle replacement, callback-drain or full P1 acceptance.".into();
+    }
+    let output = root.join(if witness {
+        "full-display-witness-validation.json"
+    } else if full {
         "full-display-validation.json"
     } else {
         "same-binary-validation.json"
@@ -704,7 +756,11 @@ fn run_kind(args: &[String], full: bool) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if full {
+    if witness {
+        println!(
+            "macOS full_display_witness arms=2 invocations=12 view_images=14 window_censuses=14 both_orders=1 held_images=12 diagnostic_only=1 full_display_acceptance=0 full_P1_acceptance=0 observations_verified"
+        );
+    } else if full {
         println!(
             "macOS full_display arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 source_oracle_replaced=0 full_P1_acceptance=0 passed"
         );
