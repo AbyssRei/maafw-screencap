@@ -42,6 +42,7 @@ mod manager_size;
 mod native;
 mod native_tools;
 mod pipewire;
+mod pipewire_format_branches;
 mod pipewire_format_stream;
 mod pipewire_host;
 mod pipewire_host_api;
@@ -224,6 +225,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-context macos  # original ScreenCaptureKit on native macOS arm64\n\n\
                       cargo xtask upstream-model pipewire [--offline-inputs <native run manifest>]  # portable control model on Windows, not Linux capture\n\n\
                       cargo xtask upstream-trace pipewire <source|rust> <external directory> [--check-only]\n\
+                      cargo xtask upstream-trace pipewire-format-branches <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace screen-geometry <external directory> [--check-only]\n\
                       cargo xtask upstream-trace screen-pending <external directory> [--check-only]\n\
                       cargo xtask upstream-trace framepool-target-loss <external matrix> [--check-only]\n\

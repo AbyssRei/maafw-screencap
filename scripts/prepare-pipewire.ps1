@@ -186,6 +186,18 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if ($Name -eq 'pipewire-source-format-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved') {
             throw 'Expected twenty-eight original native POD/parser/conversion fixtures'
         }
+        if($Name -eq 'pipewire-source-format-branches' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original PipeWire parser branches cases=8 native_first_property=8 accepted=5 unsupported_no_fallback=3 unknown_fallback=2 capture=0 saved')) {
+            throw 'Expected eight actual original parser branch observations'
+        }
+        if($Name -eq 'rust-pipewire-format-branches') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if(-not $observed.Contains('native PipeWire parser branches cases=8 differences=0 capture=0 recorded') -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
+                throw 'Expected one native parser branch regression and all eight source/Rust observations'
+            }
+        }
+        if($Name -eq 'pipewire-format-branch-records' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'PipeWire parser branch records cases=8 source_rust_differences=[0-8] diagnostic_only=1 capture=0 full_P1_acceptance=0 verified') {
+            throw 'Expected complete actual parser branch diagnostic records; native Rust parity stays a separate gate'
+        }
         if ($Name -eq 'pipewire-source-memfd-fixtures' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original MemFd helper cycles=20 maps=60 unmaps=60 retained_bgr=60 readonly_private=60 fd_preserved=60 passed') {
             throw 'Expected real original MemFd helper mappings, FD preservation and retained BGR owners'
         }
@@ -584,6 +596,15 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-native-formats timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::matches_original_format_pods_and_padded_conversion_bytes','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        $formatBranches=Join-Path $referenceArtifacts format-branches
+        $env:MFS_P1_PIPEWIRE_FORMAT_BRANCHES=$formatBranches
+        New-Item -ItemType Directory -Path $formatBranches -Force|Out-Null
+        try { Step pipewire-source-format-branches $sourceExecutable @('--format-branches',(Join-Path $formatBranches source)) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-pipewire-format-branches timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::format_branches::matches_original_standard_result_and_fallback_selection','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step pipewire-format-branch-records $ConfigureTool @('upstream-trace','pipewire-format-branches',$formatBranches) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step pipewire-source-memfd-fixtures timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--memfd-fixtures',$memfdDirectory) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step rust-pipewire-memfd-helper timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','backends::linux::pipewire::native::tests::opencv::mapping::matches_original_memfd_maps_and_retains_cpu_images_after_unmap','--','--exact','--ignored','--test-threads=1','--nocapture') }

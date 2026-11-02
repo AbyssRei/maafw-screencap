@@ -767,6 +767,7 @@ void save_format_fixtures(const std::filesystem::path& directory) {
     require(index==28 && records.good(),"format fixture records incomplete");
     std::cout<<"original PipeWire format fixtures=28 formats=7 choice_none=14 linear_modifier=14 saved\n";
 }
+#include "format-branch-fixtures.hpp"
 struct MemFile {
     int fd;
     explicit MemFile(int value):fd(value) { require(fd>=0,"memfd fixture creation failed"); }
@@ -1027,6 +1028,9 @@ int main(int argc,char** argv) {
         if(argc==3 && std::string_view(argv[1])=="--format-fixtures") {
             save_format_fixtures(argv[2]);
             return 0;
+        }
+        if(argc==3 && std::string_view(argv[1])=="--format-branches") {
+            save_format_branch_fixtures(argv[2]);return 0;
         }
         if(argc==3 && std::string_view(argv[1])=="--memfd-fixtures") {
             save_memfd_fixtures(argv[2]);

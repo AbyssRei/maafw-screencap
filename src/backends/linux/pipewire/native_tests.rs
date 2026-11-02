@@ -27,6 +27,9 @@ mod fd_fault;
 #[path = "memfd_stream_tests.rs"]
 mod memfd_stream;
 
+#[path = "format_branch_tests.rs"]
+mod format_branches;
+
 struct RawAudit;
 impl Converter<RawFrame> for RawAudit {
     type Image = RawFrame;
