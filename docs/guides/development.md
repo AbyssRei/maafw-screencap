@@ -4,6 +4,14 @@
 
 ## 逐函数对应审阅
 
+`GamepadControlUnitMgr.cpp` 的截图委托切片补十一项：七项 `Win32ControlUnitLoader` 构造/析构/加载/卸载/创建/销毁/handle 状态、`init_win32_unit`、真实 shared_ptr no-op deleter、截图和停用；头文件作为零函数体的声明/成员寿命顺序来源一并纳入。Rust 位置仅为 `delegate.rs`、`delegate_native.rs` 和平台 `delegate.rs`，三份当前整文件均匹配已登记历史原生输入并显式核算 CRLF。实际生成的 loader/source/可选条件片段包含所选 F 字节，source/model/原生桥边界单独核对，不把完整 Gamepad 类或 ViGEm 输入写成已执行。
+
+保留先构造新 loader 再替换旧 owner、缺模块/两个工厂导出/空工厂结果的短路、None mouse/keyboard、no-op view 和 connect 失败时先 view 后 loader 清理；截图/停用直接转发，不增加 connected/前台门禁。handle 对应是实际存储槽与 create/view/checked 的数据流，没有新造公共 Rust getter。Rust 独立 CPU 输出、失效 view 拒收、可失败路径/Arc、异常桥及销毁未证消费时保留模块均为明确安全适配；源直接 helper 误用、任意 DLL alias/析构失败/回调排空不据此验收。外层构造/析构/输入 connect/connected、foreground/input/app/UUID/features/info 等十九项及三个 Version/Create/Destroy API 导出明确未映射，未改标为已迁移；本批只覆盖实际截图路径。
+
+只读 `reference function-map` 保留完整历史 `manager-delegate-*` 66 项检查，为 60 通过、六失败，mask `6/10/14/38/42/46` 继续失败。原 274 个脚本对照、80 个原生加载生命周期与 63 个 mask 各有原范围；不由模型/加载/销毁三项通过推断所有取帧通过。外部 reader 初版错误地要求全部 66 项通过，已在执行记录校核前拒收并保留；修正仅记录实际 60/6，没有降低 native/checker 门禁。累计选定对应为 40 份来源、281 项，没有新捕获或改写既有无输入多轮结论，完整 P1 未通过。
+
+另从同一已封存原生批次复核九个 mask 首轮三次输出的 source/Rust，共 54 份目标 CPU 图；每份原始完整图像先匹配原生登记摘要，再按已记录几何提取实际 96×64 目标。`4/8/12` 的这些样本均为预期图样；`6/10/14` 部分样本各差 924 像素，均位于目标外三像素内；`38/42/46` 的首轮样本恰好没有差异，但其完整原生案例仍失败。没有修改输出、像素 mask 或原断言，也未证明差异像素的生产者；局部首轮图样不代替完整二十生命周期结果。
+
 PipeWire 原 36 项 F helper/源类对应另有当前完整 owner 版本：八份 Rust 库源码逐一以确切 Git 字节匹配 `e987a99` 原生登记摘要，旧函数范围/函数体重新核对，并显式补入 `Capture` 的构造、初始化、捕获、停用、connected、关闭/析构及 at-rest 边界。只读 `reference function-map` 保留本次全部 201 项原生通过记录；fd41/a5 的旧映射和失败记录不改写。本批只刷新 PipeWire 源类职责，不自动刷新其他 manager/factory 的独立快照，也不增加累计来源/函数数量；仍为 38 份、270 项。
 
 当前 whole owner 关闭配对 raw 资源与 Consumer counter reset；断连 init 在来源 stale close 前重置计数，已 connected 的早返回保留计数。独占调用完整结束后才可迁移，裸 Driver/Resources/map/lock 不外露，opaque Mat/loader 留在调用线程；只有完整私有 owner 有受限 `Send`，不增加 `Sync`、并发或 SDK 调度承诺。实际 80 组串行交接/720 份持帧及 40 次 Rust 展开控制与稳定 Box 地址、实际 loop 锁和 stop/join 顺序共同支持该边界，单独稳定地址或一次成功测试不等于一般线程安全证明。
