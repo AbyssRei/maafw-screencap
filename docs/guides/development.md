@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`ScreenCaptureKitScreencap.mm/.h` 新增十项对应：四个普通函数/方法、头文件构造与默认析构、窗口/显示器各两个真实嵌套 Objective-C++ block。确切 `1469603` 的原生 Clang AST 已从官方完整工程包取回，三个 namespace 根、六项普通声明/定义和四个 block 的名称、范围、原始函数体字节均匹配固定 F；默认析构的 synthetic CompoundStmt 单独识别，未虚构 `{}` 源函数体。新 census 使用原始 F 源字节、人工分类及独立 AST 位置佐证，未改写旧 C++ grammar 的错误记录，也未宣称审阅完整 SDK/macro/inline 展开。
+
+Rust 对应直接绑定 `screen_capture_kit.rs` 和 `pixel_buffer.rs` 的实际库函数及 RcBlock 闭包，两份整文件均匹配本次原生完整包登记字节，显式核算 CRLF。保持非零 window ID 的首个精确匹配、零 ID 的 `displays[0]`，以及 BGRA、sRGB、关闭 cursor、先提交 content 再等待原生五秒 semaphore；内部合并两个内容/样本回调路径，不复制后端。样本转换仍在 CVPixelBuffer lock 内完成，先释放 filter/config 的初始 create 所有权再 signal，复制 block 的独立引用按实际回调通道释放。源 MRC 未释放的 semaphore create +1 继续明确保留；仅测试在全部调用/回调拥有者结束后回收，不能写成产品清理成功。
+
+Rust 独立 Arc 请求结果、晚到转换/状态、受检尺寸/布局与原生 lock 失败拒收、CPU target 行复制和 callback panic/error 边界均为明确安全适配，额外复制不冒称省掉转换。只读 `reference function-map` 保留本次完整 154 项组件检查（133 通过、21 失败）及其日志，不能由源码对应、constructor/default drop 或稳定 Arc 地址推断回调排空、严格已知像素或 SDK 关闭/线程保证。累计选定对应为 38 份来源、270 项；本批没有新捕获，不改既有无输入多轮结论，完整 P1 仍未通过。
+
 新增 `FramePoolScreencap.h` 可用分支的内联构造对应：保留借用 HWND、空 COM/projection/device/session/texture 槽、零 descriptor/last size 和空图像；构造不提前激活、分配原生资源、调整窗口或取帧。Rust 的线程标记为额外安全限制，后续初始化/销毁仍由已审阅 CPP 方法对应承担。只读 `reference function-map` 核对本项和完整所选历史 45 项检查（39 通过、六失败）；包含构造的当前 Rust 整文件与登记原生输入一致，并显式核算 CRLF。本批没有新原生捕获或更改既有无输入多轮结论。
 
 同批纳入 `SafeDXGI.hpp`，其内容仅为 `SafeWindows.hpp`、`d3d11.h`、`dxgi1_2.h` 三个 include，没有函数体或自定义资源 wrapper；不凭文件名虚构 RAII 职责，也不把 SDK/COM 宏与 inline 展开写成已审阅。头文件旧 SDK 分支的构造、默认析构和空捕获三项明确保持未映射，不改标为应用/input 排除，不推断已实现或验证旧 SDK 构建。累计选定对应为 36 份来源、260 项；此处只增加一项可用分支构造，不是完整头文件、后端或 P1 验收。
@@ -79,6 +85,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+确切 `1469603` macOS 的官方完整工程 ZIP（359,275,006 字节）及其中 tar 的身份/CRC/摘要现已核对，并仅取回十四项选定输入，补齐全部十项 AST 输出。编译数据库、普通未插桩入口、仅移除 `-c`/object 输出的参数变换、编译器版本、退出码、两份 F 来源、1,967,302 字节原始 AST 与节点计数分别复核；实际 Xcode 27.1 身份继续按预装策略记录，不设置严格最新版门禁。该选取不表示整个批次的来源/依赖已完整恢复。六项普通 callable 和四个嵌套 block 的原始源位置已核对，并用于上述十项 Rust 对应；原 153 项检查状态不变，新增 AST 观察通过，组件仍保留 21 个失败。
 
 确切 `e987a99` 的 [Actions 41514949183](https://github.com/AbyssRei/maafw-screencap/actions/runs/41514949183) PipeWire 原生组件通过全部 201 项检查，原 197 项状态不变，新增两个原版 daemon/FD 交接、一个 Rust 交接及一个记录检查均通过。实际矩阵有 80 个生命周期、240 次返回图像和另加 40 次 Rust raw/converter 展开：每对象三个同时存活的调用线程依次创建/初始化、捕获/停用、捕获/异线程关闭，原生 loop 身份/启动代次不变，最终 task ID 集合及 FD 回到各自基线。独立 Python 复算全部 720 份即时/持帧 BGR/RGB、标记、已知目标像素及逐对象任务记录，归档的独立 checker 只读核对 schema1 报告亦通过；opaque Mat/loader 始终留在各自调用线程。
 
