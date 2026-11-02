@@ -94,6 +94,14 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected20 native failed mmap/retained FD/recovery observations and one exact Rust test'
             }
         }
+        if($Name -in @('original-wlr-memfd','rust-wlr-memfd','original-wlr-ftruncate','rust-wlr-ftruncate')){
+            $observed=Get-Content -LiteralPath $log -Raw
+            $parts=$Name.Split('-');$side=if($parts[0] -eq 'original'){'original'}else{'Rust'}
+            $summary="$side Wlr resource kind=$($parts[2]) cycles=20 kernel_failures=20 failed_fds_retained=0 recovery=20 held=20 limits_signals_restored=20 passed"
+            if(-not $observed.Contains($summary) -or ($parts[0] -eq 'rust' -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')){
+                throw 'Expected20 actual kernel resource errors/recovery and one exact Rust test'
+            }
+        }
         $sourceSummary=switch($Name){
             'original-wlr-shared-client' {'original Wlr shared_client cycles=20 captures=60 caller_released=20 first_source_released=20 last_client_released=20 retained=60 resources_balanced=1 passed'}
             'original-wlr-reconnect' {'original Wlr reconnect cycles=20 same_path_noop=20 close_reopen=20 changed_path=20 missing_path=20 subsequent_connect=20 captures=20 resources_balanced=1 passed'}
@@ -422,7 +430,7 @@ try{
         try{Test-WlrProtocolMatrix $sourceExecutable $library $runtime $referenceArtifacts}
         catch{$failed=$true;Write-Host $_.Exception.Message}
         . (Join-Path $PSScriptRoot validate-wlr-context.ps1)
-        foreach($mode in @('registry','failures','allocation')){
+        foreach($mode in @('registry','failures','allocation','memfd','ftruncate')){
             try{Test-WlrProtocolContext $sourceExecutable $library $runtime $referenceArtifacts $mode}
             catch{$failed=$true;Write-Host $_.Exception.Message}
         }

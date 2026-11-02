@@ -1,7 +1,7 @@
 # Copyright (C) 2026 AbyssRei
 # SPDX-License-Identifier: LGPL-3.0-or-later
 # Dot-sourced only by the explicit native Linux source-context batch.
-function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[string]$Runtime,[string]$Artifacts,[ValidateSet('registry','failures','allocation')][string]$Mode){
+function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[string]$Runtime,[string]$Artifacts,[ValidateSet('registry','failures','allocation','memfd','ftruncate')][string]$Mode){
     $matrix=Join-Path $Artifacts $Mode
     New-Item -ItemType Directory -Path $matrix|Out-Null
     $errors=[Collections.Generic.List[string]]::new()
@@ -22,7 +22,8 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
         try{
             $start=[Diagnostics.ProcessStartInfo]::new($env:MFS_P1_WLR_PROTOCOL_SERVER)
             $start.UseShellExecute=$false;$start.RedirectStandardOutput=$true;$start.RedirectStandardError=$true
-            foreach($argument in @('3',$producer,$env:MFS_P1_WLR_PROTOCOL_SERVER_LIBRARY,"--$Mode")){
+            $protocolMode=if($Mode -in @('memfd','ftruncate')){'allocation'}else{$Mode}
+            foreach($argument in @('3',$producer,$env:MFS_P1_WLR_PROTOCOL_SERVER_LIBRARY,"--$protocolMode")){
                 $start.ArgumentList.Add($argument)
             }
             $process=[Diagnostics.Process]::Start($start)
@@ -43,6 +44,10 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
                     'registry::preserves_last_output_and_existing_snapshots_through_global_removal'
                 }elseif($Mode -eq 'allocation'){
                     'allocation::retains_the_failed_mmap_fd_until_buffer_replacement'
+                }elseif($Mode -eq 'memfd'){
+                    'resource_failures::recovers_after_real_memfd_exhaustion'
+                }elseif($Mode -eq 'ftruncate'){
+                    'resource_failures::recovers_after_real_ftruncate_file_limit'
                 }else{
                     'failures::preserves_failed_outputs_and_buffer_reuse_before_native_disconnect'
                 }
@@ -65,7 +70,7 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
                 "premature=$premature exit=$($process.ExitCode)"|Set-Content -LiteralPath $log -Encoding utf8
                 $required=if($Mode -eq 'registry'){
                     'registry stopped rounds=20 globals=22 removed=21 outputs=22/22 frames=80/80 copies=80 graceful=1 error=0'
-                }elseif($Mode -eq 'allocation'){
+                }elseif($Mode -in @('allocation','memfd','ftruncate')){
                     'allocation stopped clients=20/20 frames=40/40 copies=20 failed=20 graceful=1 error=0'
                 }else{
                     'failures stopped clients=20/20 frames=80/80 copies=60 failed=40 disconnected=20 graceful=1 error=0'
@@ -82,7 +87,8 @@ function Test-WlrProtocolContext([string]$SourceExecutable,[string]$Library,[str
             }
         }
     }
-    try{Step "wlr-$Mode-records" $ConfigureTool @('upstream-protocol',"wlr-$Mode",$matrix)}
+    $recordArguments=if($Mode -in @('memfd','ftruncate')){@('upstream-protocol','wlr-resource-errors',$Mode,$matrix)}else{@('upstream-protocol',"wlr-$Mode",$matrix)}
+    try{Step "wlr-$Mode-records" $ConfigureTool $recordArguments}
     catch{$errors.Add($_.Exception.Message)}
     if($errors.Count -gt 0){throw ($errors -join "`n")}
 }

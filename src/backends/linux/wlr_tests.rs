@@ -17,6 +17,8 @@ mod early_close;
 mod host;
 #[path = "wlr_host_construction_tests.rs"]
 mod host_construction;
+#[path = "wlr_resource_tests.rs"]
+mod resource_failures;
 
 #[repr(C)]
 #[derive(Default)]

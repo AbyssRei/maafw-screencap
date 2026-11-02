@@ -60,6 +60,7 @@ mod wlr_failures;
 mod wlr_host_api;
 mod wlr_protocol;
 mod wlr_registry;
+mod wlr_resource_errors;
 mod wlr_retired_channel;
 
 #[path = "../../build-support/p0-configuration.rs"]

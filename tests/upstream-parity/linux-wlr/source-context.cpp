@@ -30,6 +30,7 @@
 #include <vector>
 #include "protocol-pattern.h"
 #include "allocation-observer.hpp"
+#include "resource-failure-observer.hpp"
 
 extern "C" void __real_wl_display_disconnect(wl_display*);
 
@@ -79,6 +80,7 @@ void save(const cv::Mat& image,const std::filesystem::path& path) {
 #include "registry-context.hpp"
 #include "failure-context.hpp"
 #include "allocation-context.hpp"
+#include "resource-failure-context.hpp"
 #include "early-close-context.hpp"
 void shared_client(const std::filesystem::path& socket,const std::filesystem::path& directory) {
     const auto baseline_fds=count("/proc/self/fd");
@@ -295,6 +297,8 @@ int main(int argc,char** argv) {
             else if(mode=="registry") { registry_context(argv[1],directory); }
             else if(mode=="failures") { failure_context(argv[1],directory); }
             else if(mode=="allocation") { allocation_context(argv[1],directory); }
+            else if(mode=="memfd") { resource_failure_context(argv[1],directory,ResourceFault::Memfd); }
+            else if(mode=="ftruncate") { resource_failure_context(argv[1],directory,ResourceFault::Truncate); }
             else if(mode=="protocol-1" || mode=="protocol-2" || mode=="protocol-3") {
                 protocol_context(argv[1],directory,static_cast<unsigned>(mode.back()-'0'));
             }
