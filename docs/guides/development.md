@@ -54,6 +54,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `bc90d12` 的 [Actions 41456456292](https://github.com/AbyssRei/maafw-screencap/actions/runs/41456456292) Linux job 已终态成功。当前 Wlr 151 项全部通过，包括 Clippy、真实 syscall 范围控制、memfd EMFILE 与 ftruncate EFBIG。独立读者核对双方各二十轮的错误、未覆盖调用方图像、失败资源状态、精确限制/信号恢复、正常恢复取帧与关闭后持帧；280 份实际像素、二十行 Rust memfd 范围记录、正常 producer 计数/退出均一致。单独原生控制仍实际观察零 NOFILE 下单项 poll EINVAL、真实 EMFILE、两次普通调用及故意展开后的限制恢复；这些当前记录不追写旧失败的未观测分支或 errno。
+
+官方 Wlr 轻量 ZIP（3,885,308 字节）的整体摘要、长度和 CRC 核对，9,034 份解出文件及 9,033 个可用登记输入/日志通过；memfd schema2、ftruncate schema1 与 mmap 保存报告在当前封存校验器上只读通过，矩阵字节未变。仍有 598 项完整输入缺口；本批成功不替代之前 `d139b85` 已封存的完整来源闭包，也不把其来源身份直接推广到本批。全函数当前对应、其他平台失败和完整 P1 继续待验收；既有本机无输入多轮与历史失败不改。预装工具按实际身份和所需能力验证，严格最新版仍不成为 CI 门禁。
+
 确切 `bc90d12` 的 [Actions 41456456292](https://github.com/AbyssRei/maafw-screencap/actions/runs/41456456292) macOS job 已终态失败；Objective-C++ 参考程序和真实 Rust 捕获均实际执行，组件为 129/148、十九项失败。与 `7b82fe8` 的旧 145 项逐名核对，没有删除或状态变化；新增的两个最高层级 RGB 用例失败，独立 schema5 记录检查通过。两臂均实际记录 ScreenSaver 1000、Maximum/requested/getter/census 2147483631，owner、窗口、七次请求及关闭一致；没有因预装工具落后于最新发布而阻断。
 
 独立读者核对最高层级矩阵全部 204 个登记文件、十二次取帧与 36 份当前/持帧字节、原版/Rust 调用顺序和十四张正确 CPU 视图，并逐字段复算保存报告的完整像素差异。original-first 的原版三张分别偏差 0、24、44 个像素，其 Rust 三张均偏差 52；Rust-first 的双方六张均偏差 52。全部十二张中仅首张原版图像完全符合 RGB 图样，六组逐次配对只有后三组字节相同。非零偏差仍在右上角 `[1012,4,1020,12]` 的 8×8 范围内，较小图样的包围框相应收缩，未遮罩任何像素。实际 census 在首个无 StatusIndicator 的观察后，将两份 layer 2147483630 的 StatusIndicator 列在自有 layer 2147483631 窗口之前；保存列表顺序不符合简单按层级数值排序的假设。该元数据和分时 CPU 视图仍不能证明谁产生了截图中的偏差，也不把提高层级解释为已经解决问题。
