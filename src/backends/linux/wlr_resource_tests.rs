@@ -276,7 +276,10 @@ fn run(kind: Fault) {
             let calls = Cell::new(0);
             let mut limit = Limit::new(kind);
             before = limit.before;
-            assert!(kind != Fault::Memfd || before.rlim_cur > connected);
+            assert!(
+                kind != Fault::Memfd
+                    || before.rlim_cur > libc::rlim_t::try_from(connected).unwrap()
+            );
             let result = capture.capture_with(|_| {
                 calls.set(calls.get() + 1);
                 Ok(())

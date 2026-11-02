@@ -32,6 +32,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 Wlr 另新增独立 `memfd`、`ftruncate` 故障用例，每端各计划二十轮。仍使用已有“大缓冲 Failed、正常缓冲恢复”的自有 IPC 夹具，原 syscall 参数与结果不伪造：原 C++ 在 UUID 构造后的真实调用内临时把 NOFILE/FSIZE 软限制降到零，Rust 在首个捕获调用外施加自有进程限制；原硬限制不改，原软限制须足以支持未注入时的操作。检查实际 EMFILE/EFBIG、失败对象仍已构造但不留 memfd、旧输出 owner/像素不变、正常恢复、关闭后持帧和精确资源平衡。源 C++ 对 ftruncate 的确切 fd 还在任何可能复用 fd 的文件观察前验证已关闭。生产捕获代码、原 mmap 用例及其断言未改；非资源故障模式的源 wrapper 原样转发。
 
+后续代码复查在原生执行前发现新 Linux 测试把 `usize` fd 计数直接与 `rlim_t` 比较，现已改用 `rlim_t::try_from` 检查式转换。此修正仅处理测试类型边界，不改变捕获行为、原断言含义或任何已记录原生结果；完整 Linux 编译和真实内核用例仍待验证。
+
 按 [Linux 资源限制](https://man7.org/linux/man-pages/man2/getrlimit.2.html)与[信号等待](https://man7.org/linux/man-pages/man2/sigtimedwait.2.html)契约，FSIZE 用例仅临时阻塞测试线程的 SIGXFSZ，拒绝原先待处理的该信号，消费故障调用后新待处理的信号，再恢复掩码；不安装信号处理函数，前后处理函数、flags 和 mask 均核对。此隔离夹具假定故障区间没有外部发送 SIGXFSZ；无法恢复或前提失效时终止自有测试进程并保留失败，不能继续当作原生成功。这不是 SDK 信号管理、任意资源耗尽或一般 OOM 恢复。
 
 已实现 `cargo xtask upstream-protocol wlr-resource-errors <memfd|ftruncate> <外部矩阵> [--check-only]`，校核每端二十行、逐次故障观察、实际 Copy 序列、恢复前后 fd、精确软/硬限制、信号状态、原输出与持帧、u32 线协议身份及源服务退出。两份人工完整矩阵和只读回读通过，十六组损坏数据被拒绝；二十个真实 Step 子进程 mock 拒绝零测试、ignored、缺摘要、十九轮和原退出 17。初次本机 controller 把两个 PowerShell 路径当作单个程序而失败，原日志保留，选定唯一程序后控制通过。Workspace（含 xtask 107 项）、Clippy、格式和两份 C++ 语法输入检查通过；这些 Windows 检查没有编译 Linux 测试体或 C++ 原生 target，真实编译/内核故障与信号恢复仍待 Actions。沿归档 Cargo 解析开发，nightly 更新确认当前版本；没有新的在线依赖验收，旧 mmap 成功及其他历史失败保持原身份。
