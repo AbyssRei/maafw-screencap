@@ -22,6 +22,7 @@ mod framepool_queries;
 mod framepool_record_control;
 mod framepool_size;
 mod framepool_target_loss;
+mod function_map;
 mod licenses;
 mod linux_compat;
 mod linux_config;
@@ -145,6 +146,9 @@ fn run() -> Result<()> {
     if argv.starts_with(&["reference".into(), "responsibilities".into()]) {
         return review::responsibility::run(&argv[2..]);
     }
+    if argv.starts_with(&["reference".into(), "function-map".into()]) {
+        return function_map::run(&argv[2..]);
+    }
     if argv.starts_with(&["reference".into(), "verify-run".into()]) {
         return batch::verify_run(&argv[2..]);
     }
@@ -182,6 +186,7 @@ fn run() -> Result<()> {
                       cargo xtask reference verify [--root <external directory>]\n\n\
                       cargo xtask reference verify-run <reference-relative run manifest>\n\n\
                       cargo xtask reference catalog <reference-relative input> [--root <external directory>]\n\n\
+                      cargo xtask reference function-map <reference-relative mapping> [--root <external directory>]\n\n\
                       cargo xtask reference licenses <Rust batch manifest> [--root <external directory>]\n\n\
                       cargo xtask check [--message-file <commit message file>]\n\
                       cargo xtask batch [--desktop | --prepare-only]\n\n\
