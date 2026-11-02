@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+PipeWire 原 36 项 F helper/源类对应另有当前完整 owner 版本：八份 Rust 库源码逐一以确切 Git 字节匹配 `e987a99` 原生登记摘要，旧函数范围/函数体重新核对，并显式补入 `Capture` 的构造、初始化、捕获、停用、connected、关闭/析构及 at-rest 边界。只读 `reference function-map` 保留本次全部 201 项原生通过记录；fd41/a5 的旧映射和失败记录不改写。本批只刷新 PipeWire 源类职责，不自动刷新其他 manager/factory 的独立快照，也不增加累计来源/函数数量；仍为 38 份、270 项。
+
+当前 whole owner 关闭配对 raw 资源与 Consumer counter reset；断连 init 在来源 stale close 前重置计数，已 connected 的早返回保留计数。独占调用完整结束后才可迁移，裸 Driver/Resources/map/lock 不外露，opaque Mat/loader 留在调用线程；只有完整私有 owner 有受限 `Send`，不增加 `Sync`、并发或 SDK 调度承诺。实际 80 组串行交接/720 份持帧及 40 次 Rust 展开控制与稳定 Box 地址、实际 loop 锁和 stop/join 顺序共同支持该边界，单独稳定地址或一次成功测试不等于一般线程安全证明。
+
+新映射同时用实际八例 POD 证据替换旧待证假设：标准 media/raw 观察均返回 2，原 F 的 `==0` 门限进入手动循环并保留末项属性，Rust 八项结果一致。生产解析器未改，早先疑似 unsupported-standard 回落差异没有被该实际矩阵复现；不扩大为所有格式/损坏 POD 等价。八份源码是匹配原生摘要后的独立 Git supplement，轻量包仍有 609 项完整输入缺口；不由当前映射、201 项通过或有限交接推断完整来源闭合、任意 FD/DMA/组合清理故障或完整 P1。
+
 `ScreenCaptureKitScreencap.mm/.h` 新增十项对应：四个普通函数/方法、头文件构造与默认析构、窗口/显示器各两个真实嵌套 Objective-C++ block。确切 `1469603` 的原生 Clang AST 已从官方完整工程包取回，三个 namespace 根、六项普通声明/定义和四个 block 的名称、范围、原始函数体字节均匹配固定 F；默认析构的 synthetic CompoundStmt 单独识别，未虚构 `{}` 源函数体。新 census 使用原始 F 源字节、人工分类及独立 AST 位置佐证，未改写旧 C++ grammar 的错误记录，也未宣称审阅完整 SDK/macro/inline 展开。
 
 Rust 对应直接绑定 `screen_capture_kit.rs` 和 `pixel_buffer.rs` 的实际库函数及 RcBlock 闭包，两份整文件均匹配本次原生完整包登记字节，显式核算 CRLF。保持非零 window ID 的首个精确匹配、零 ID 的 `displays[0]`，以及 BGRA、sRGB、关闭 cursor、先提交 content 再等待原生五秒 semaphore；内部合并两个内容/样本回调路径，不复制后端。样本转换仍在 CVPixelBuffer lock 内完成，先释放 filter/config 的初始 create 所有权再 signal，复制 block 的独立引用按实际回调通道释放。源 MRC 未释放的 semaphore create +1 继续明确保留；仅测试在全部调用/回调拥有者结束后回收，不能写成产品清理成功。
