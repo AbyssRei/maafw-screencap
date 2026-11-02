@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+新增 `FramePoolScreencap.h` 可用分支的内联构造对应：保留借用 HWND、空 COM/projection/device/session/texture 槽、零 descriptor/last size 和空图像；构造不提前激活、分配原生资源、调整窗口或取帧。Rust 的线程标记为额外安全限制，后续初始化/销毁仍由已审阅 CPP 方法对应承担。只读 `reference function-map` 核对本项和完整所选历史 45 项检查（39 通过、六失败）；包含构造的当前 Rust 整文件与登记原生输入一致，并显式核算 CRLF。本批没有新原生捕获或更改既有无输入多轮结论。
+
+同批纳入 `SafeDXGI.hpp`，其内容仅为 `SafeWindows.hpp`、`d3d11.h`、`dxgi1_2.h` 三个 include，没有函数体或自定义资源 wrapper；不凭文件名虚构 RAII 职责，也不把 SDK/COM 宏与 inline 展开写成已审阅。头文件旧 SDK 分支的构造、默认析构和空捕获三项明确保持未映射，不改标为应用/input 排除，不推断已实现或验证旧 SDK 构建。累计选定对应为 36 份来源、260 项；此处只增加一项可用分支构造，不是完整头文件、后端或 P1 验收。
+
 macOS 的普通 C++ grammar 虽已找到四个 `.mm` 方法，却不能可靠索引 Objective-C++ 消息及四个嵌套 block。新增 `cargo xtask reference macos-ast <compile_commands.json> <fixed F root> <new external output>`：仅在原生 macOS arm64 运行，从实际 CMake 数据库唯一选取 `mfs_macos_source_context` 对确切 F `.mm` 的普通编译，核对头文件/源码完整摘要及已选择的 Xcode compiler。保留 compiler、SDK、宏、include、架构和部署目标，只移除 `-c` 与 `-o`/object，增加 syntax-only/JSON AST/filter 参数；结构化调用不经过 shell，并拒收 response file、额外输出、歧义编译及需 shell 展开的命令。
 
 该观察在原生来源准备中独立运行，原始 AST、stderr、退出码、完整命令、compiler 版本/摘要、编译数据库及两份未改来源均立即外置登记。观察失败仍保留 failed 检查并继续独立捕获，不把缺失 AST 或成功语法编译计为像素/回调排空通过。JSON AST 随实际 compiler 归档；过滤根及 block 节点数只是版本相关的语法观察，含声明/重复引用的计数不能作为完整函数 census。后续仍须逐项核对真实 token/函数体范围、默认析构及嵌套 block 的源字节与 Rust 职责；当前累计对应数量不增加。归档依赖重放通过 workspace（118 项 xtask）、Release、Clippy、参数保留/拒收及 Windows 主机拒收控制；三个真实 Step 子进程另验证成功、输出前失败和输出后失败均继续编排，失败输出完整登记。初轮外部驱动的路径拼接错误单独保留。Windows Clang 的十项合成 callable/block 语法控制仅验证语法形态，实际 Apple/F AST 执行仍待 Actions。

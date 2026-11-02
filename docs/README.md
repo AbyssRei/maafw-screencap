@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+FramePool 头文件可用分支的内联构造已补对应，`SafeDXGI.hpp` 明确为仅含 include、零函数体；旧 SDK 三项 stub 仍列为未映射。累计选定 36 份来源、260 项，旧原生失败和完整 P1 状态不变，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
+
 macOS 新接入普通、未插桩 F 编译入口的原生 Clang AST 归档，保留实际选项、编译器和原始输出，供后续嵌套回调范围审阅。本机归档依赖检查通过，Apple 原生执行及完整函数对应仍待验证，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 确切 `e987a99` 的 Linux P0 PipeWire 已通过全部 27 项检查，含五项真实捕获及 Clippy；轻量包摘要和 32 项可用登记路径独立核对通过。新跨线程交接仍待执行结果，旧失败保留，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
