@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`source/Common/MaaBuffer.cpp` 现有独立的原生保留边界审阅：五项为 `MaaImageBufferSetRawData`、`MaaImageBufferResize`、`MaaImageBufferGetEncoded`、`MaaImageBufferGetEncodedSize` 和 `MaaImageBufferSetEncoded`。完整已登记 `custom-raw-source.inc` 与 F 原文件两段提取结果逐字节相同（显式处理 CRLF）；每个选定函数体只出现一次，实际 `bridge.cpp` 的 include、CMake 编译目标及各调用表达式也单独核对。它们是按计划保留在显式 C++/OpenCV 验收边界的原生操作，未新建 Rust 核心 codec/旧 C ABI，也没有被填进 Rust 库实现对应位置；累计 Rust 对应仍为 40 份来源、281 项。完整原文件的另 40 项函数逐项登记为本次未审阅，没有按输入排除或改称已迁移。
+
+raw setter 保留 null handle/data 拒绝、packed `cv::Mat(height,width,type,data)`、空图拒绝、实际 `handle->set(img)` 后返回 true 的顺序；安全桥在它之前另核验 native type、受检跨度和可读长度，不增加源接口没有的 stride。resize 保留带符号尺寸和 null→0 的一次原生转发。encoded setter 保留先判 null 再判长度，因此 null+0 拒绝，非空地址+0 才 clear；非零长度先构造原始编码字节副本，再 move 到真实 buffer。两个 getter 保留借用原生 cache 的生命周期，实际桥先取 encoded 数据再取长度，在同一未修改 owner 的通道内核验并复制测试用 cache；不延长到 cache 修改之后，也不把诊断复制称为免除工作。任意指针、全部异常/分配/插值参数和完整 MaaUtils 实现均不由这些调用验收。
+
+十二份当前相关库、生成器、C++ 桥、实际调用测试及记录校验器整文件均匹配历史原生登记输入，CRLF 差异显式记录。该完整 Custom 组件 18 项检查仍全部通过；重新以只读方式校核实际 raw 和 encoded/resize 矩阵：前者 1,664 种 native type、4,992 组、9,984 次真实调用/持帧及 9,662,208 字节，后者 144 组、288 次调用/持帧和 576 份 cache decode。两组核验前后的 9,196 份实际数据/报告文件摘要完全不变，没有重跑截图或修改历史状态。证据由参考目录 `local/current-custom-buffer-retained-bodies-path.txt` 指向；这关闭选定原生函数体与调用边界的身份核验，不代表完整 buffer/API、依赖、平台或 P1 通过。
+
 `GamepadControlUnitMgr.cpp` 的截图委托切片补十一项：七项 `Win32ControlUnitLoader` 构造/析构/加载/卸载/创建/销毁/handle 状态、`init_win32_unit`、真实 shared_ptr no-op deleter、截图和停用；头文件作为零函数体的声明/成员寿命顺序来源一并纳入。Rust 位置仅为 `delegate.rs`、`delegate_native.rs` 和平台 `delegate.rs`，三份当前整文件均匹配已登记历史原生输入并显式核算 CRLF。实际生成的 loader/source/可选条件片段包含所选 F 字节，source/model/原生桥边界单独核对，不把完整 Gamepad 类或 ViGEm 输入写成已执行。
 
 保留先构造新 loader 再替换旧 owner、缺模块/两个工厂导出/空工厂结果的短路、None mouse/keyboard、no-op view 和 connect 失败时先 view 后 loader 清理；截图/停用直接转发，不增加 connected/前台门禁。handle 对应是实际存储槽与 create/view/checked 的数据流，没有新造公共 Rust getter。Rust 独立 CPU 输出、失效 view 拒收、可失败路径/Arc、异常桥及销毁未证消费时保留模块均为明确安全适配；源直接 helper 误用、任意 DLL alias/析构失败/回调排空不据此验收。外层构造/析构/输入 connect/connected、foreground/input/app/UUID/features/info 等十九项及三个 Version/Create/Destroy API 导出明确未映射，未改标为已迁移；本批只覆盖实际截图路径。
