@@ -48,11 +48,17 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `bc90d12` 的 [Actions 41456456292](https://github.com/AbyssRei/maafw-screencap/actions/runs/41456456292) macOS job 已终态失败；Objective-C++ 参考程序和真实 Rust 捕获均实际执行，组件为 129/148、十九项失败。与 `7b82fe8` 的旧 145 项逐名核对，没有删除或状态变化；新增的两个最高层级 RGB 用例失败，独立 schema5 记录检查通过。两臂均实际记录 ScreenSaver 1000、Maximum/requested/getter/census 2147483631，owner、窗口、七次请求及关闭一致；没有因预装工具落后于最新发布而阻断。
+
+独立读者核对最高层级矩阵全部 204 个登记文件、十二次取帧与 36 份当前/持帧字节、原版/Rust 调用顺序和十四张正确 CPU 视图，并逐字段复算保存报告的完整像素差异。original-first 的原版三张分别偏差 0、24、44 个像素，其 Rust 三张均偏差 52；Rust-first 的双方六张均偏差 52。全部十二张中仅首张原版图像完全符合 RGB 图样，六组逐次配对只有后三组字节相同。非零偏差仍在右上角 `[1012,4,1020,12]` 的 8×8 范围内，较小图样的包围框相应收缩，未遮罩任何像素。实际 census 在首个无 StatusIndicator 的观察后，将两份 layer 2147483630 的 StatusIndicator 列在自有 layer 2147483631 窗口之前；保存列表顺序不符合简单按层级数值排序的假设。该元数据和分时 CPU 视图仍不能证明谁产生了截图中的偏差，也不把提高层级解释为已经解决问题。
+
+官方轻量 ZIP（38,696,354 字节）的整体摘要、长度及 CRC 通过，11,701 个可用登记路径和所有日志摘要核对；十五份保存报告通过当前校验器 `--check-only`，全部 11,702 份解出文件的前后摘要不变。另有 561 个完整输入路径仍缺，包含编译源码与父组件，不能授予完整来源闭包。初版外部读者错误要求所有输入属于当前组件，在创建结论目录前拒绝；现按既有规则把其他组件输入计为缺失，不打开外部路径或修改原生结果，初版与修正记录均保存。审阅在同级参考区 `runs/p1-bc90-macos-maximum-native-review-*` 独立封存，未重跑捕获或改写旧批次。旧十七项失败、新两项严格 RGB 失败、回调排空和完整 P1 的边界继续保留。
+
 macOS 现新增独立的自有窗口最高标准层级对照，分别运行 original-first、Rust-first，逐臂保留六次原取帧、七次 CPU 视图/窗口 census、持帧及整幅 RGB 断言。夹具通过 [CGWindowLevelForKey](https://developer.apple.com/documentation/coregraphics/cgwindowlevelforkey%28_%3A%29) 查询 ScreenSaver 与 Maximum，只设置自有 NSWindow，并要求 getter、实际 census、owner、关闭和查询记录一致。Apple 将这个查询定位于管理窗口的应用框架；这里用于独立验收夹具，没有成为 SDK 策略。其层级对照依据 [AppKit 的层级叠放语义](https://developer.apple.com/documentation/appkit/nswindow/level-swift.struct)，实际像素结果和历史 52 像素偏差的原因仍须各自观测，不能由层级元数据推定。
 
 新增 `cargo xtask upstream-trace macos-maximum-level <外部矩阵> [--check-only]` 输出独立 schema5 `maximum-level-validation.json`，要求明确选择、十二字段层级/所有者记录、当前 schema2 视图/census、两臂完整原版/Rust 结果和持帧；旧命令拒绝该新 profile，原 schema/保存报告保持可读。记录通过只说明完整诊断数据可复核，原生 RGB 断言失败仍使对应命令失败。产品捕获源码、原版调用、默认 ScreenSaver 场景、RGB 绘制/等待和最终像素断言均保留；没有给出像素遮罩、原因归属、回调排空或完整 P1 验收。
 
-本机沿封存 Cargo/vendor 输入验证 Workspace（含 110 项 xtask）、Clippy、Release 核心和新 CLI；Mac 目标 Rust 测试/绑定也通过交叉类型/Clippy 检查，未在 Windows 链接 Objective-C++/Apple SDK 或执行 Mac 二进制。两份人工像素/层级矩阵、只读回放、十四类新坏记录拒收、三个旧命令拒收新 profile、三份历史只读报告、三十次实际 Step 子进程 mock 和四种编排失败继续控制通过，没有新原生截图。初次控制驱动完成断言后保留了最后一个预期 exit17，显式修正驱动成功退出并在新目录重跑，实际子进程退出码/状态未改。另一次 Git archive 模式核对捕获默认 tar umask 与 Git mode 的区别，原 tar/失败保留，显式 umask 的另一份 canonical archive 核对 501 个原 Git blob/mode 通过。官方 nightly 更新确认未变；Objective-C++ 编译、SDK 链接和真实新场景仍待原生 Actions。
+提交夹具前，本机沿封存 Cargo/vendor 输入验证 Workspace（含 110 项 xtask）、Clippy、Release 核心和新 CLI；Mac 目标 Rust 测试/绑定也通过交叉类型/Clippy 检查，未在 Windows 链接 Objective-C++/Apple SDK 或执行 Mac 二进制。两份人工像素/层级矩阵、只读回放、十四类新坏记录拒收、三个旧命令拒收新 profile、三份历史只读报告、三十次实际 Step 子进程 mock 和四种编排失败继续控制通过，没有新原生截图。初次控制驱动完成断言后保留了最后一个预期 exit17，显式修正驱动成功退出并在新目录重跑，实际子进程退出码/状态未改。另一次 Git archive 模式核对捕获默认 tar umask 与 Git mode 的区别，原 tar/失败保留，显式 umask 的另一份 canonical archive 核对 501 个原 Git blob/mode 通过。官方 nightly 更新确认未变；后续实际 Objective-C++ 编译、SDK 链接和真实新场景的原生结果见上文。
 
 确切 `71237c7` 的 [Actions 41438918273](https://github.com/AbyssRei/maafw-screencap/actions/runs/41438918273) Linux job 已终态成功。其 P0 PipeWire 原生组件的 27 项检查全部通过：实际观察 `1.6.11`、完成源码准备/构建、五项捕获测试、consumer 与行所有权控制、Clippy，以及二十次流生命周期；逐轮均有 32 次 dequeue/queue、独立 callback/owner 线程和 native buffer 重用记录。自有 source 与 daemon 的退出均为 exit0、非意外、未强制终止。这里只读检查已有原生日志，没有重复运行捕获，也没有改写旧 `d868936` 的解析失败。
 
