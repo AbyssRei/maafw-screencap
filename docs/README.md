@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+确切 `d139b85` 的 Linux 原生 job 成功，Wlr 151/151：memfd 的真实 syscall 范围及 poll/展开恢复控制通过，两类故障的原版/Rust 各二十轮与 280 份像素独立核对。旧失败保留；597 项轻量输入缺口尚待完整工程包补核，不代表完整后端或 P1 通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 PipeWire 已修正实际出现的 `release.commit:null` 解析失败：只补查同一正式发布 tag 的 commit，保存身份来源，并继续核对真实 Git checkout。27 组元数据、8 组编排分支控制及真实 Tag API/Git ref 核对通过；不以旧缓存替代查询失败，新原生构建和取帧仍待 CI。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `d868936` 已原生编译，Wlr 为 152/155、三项失败：`ftruncate` 原版/Rust 各二十轮通过；Rust `memfd` 在覆盖整个捕获调用的 NOFILE 限制期间，于 Buffer 回调前退出，未触发目标故障。现将测试限制缩到真实 syscall 边界，新增严格范围记录和原生控制；108 项 xtask、记录/编排与独立 Linux 类型检查通过，新原生结果待验证。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

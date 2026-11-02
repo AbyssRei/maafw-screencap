@@ -34,6 +34,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d139b85` 的 [Actions 41435720011](https://github.com/AbyssRei/maafw-screencap/actions/runs/41435720011) Linux job 已终态成功，Wlr 组件列出的 151 项全部通过，包括原生 Clippy、真实 memfd 范围控制及两类资源故障。原 C++/Rust 对 memfd EMFILE、ftruncate EFBIG 各完成二十轮：失败 owner/fd、原输出、精确限制及信号恢复、正常取帧和关闭后持帧逐行核对，280 份像素与二十行 Rust syscall 范围数据独立通过。独立原生控制实际观察到零 NOFILE 下单项 poll 的 EINVAL、真实 EMFILE、两次未启用探针时正常调用及被捕获展开后的限制恢复；其故意 panic 消息属于通过的展开控制，退出为零。该独立控制不追写旧 `d868936` 未直接记录的 poll errno。新 memfd schema2、原 ftruncate schema1 与 mmap 保存报告只读检查通过，原数据未改。
+
+检查数从 `d868936` 的 155 变为 151，差异逐项核对为五个按需 clone 步骤没有重复执行，新增一个原生范围控制；相应 tag 分页/正式 release 查询和 source archive 全部仍通过，未省去任何旧原生用例。初次外部 reader 误把查询名统一写成 `-latest`，在写结论前拒绝；实际名称为 `-tags-N`/`-releases`，旧程序和失败保留，随后按现有真实分组核对，native 状态未改。官方轻量 ZIP（3,885,312 字节）的摘要、CRC、9,034 份文件和 9,033 个登记路径通过，仍有 597 项当前完整输入缺口。完整工程包传输尚在进行，本项只授予上述局部原生证据，不构成完整当前来源、其余失败组合、平台或 P1 验收。
+
 PipeWire 准备现处理实际下载响应的 `commit:null`：发布字段仍须含已发布状态与有效 tag；缺少 commit 时通过 [GitLab 单 tag API](https://docs.gitlab.com/api/tags/#retrieve-a-single-repository-tag) 查询同一 tag，严格校核名称、完整 Git 身份及可用时的 release/tag 一致性，统一十六进制大小写。两份原始响应和新增 `pipewire-source-identity.json` 均登记摘要；已有 checkout 的 HEAD、dirty 检查保持，不在查 tag 失败时选旧版本或缓存 commit。完整工程包的失败 P0 组件已核对 531 个登记路径、全部 516 项轻量输入缺口及另一份 500 文件的产品 Git blob/mode；首次只恢复组件前缀，reader 因缺少单独的 Rust 父 manifest 拒绝完整结论，随后从官方 tar 补回确切登记的这一项并核验摘要，原恢复文件和 native 状态未改。其父输入图未因此扩大验收。
 
 本机直接重现旧 `commit.id` 访问异常；同一 `1.6.11` 的真实 Tag API 与 Git 远端 ref 均为 `4287f31510771fc999f8a58a024c81ca10b8d55f`，只作为本批证据，不写成未来版本约束。27 组元数据控制包含 19 组缺失、错误类型、未发布、标签/commit 不符拒收，以及待查询状态和完整身份；八次直接执行实际准备分支，只有 HTTP 传输被 mock，核对正常 release 不多查询、空/缺失 commit 的同 tag 查询、URI 编码、保存摘要及四种失败均停在源码选择前。这些检查没有执行 Linux 源码构建或取帧。资源探针修正已独立提交 `d139b85` 并启动原生 CI；此解析修正继续单独提交，不重跑或改写旧失败，也不改变预装工具的能力门禁政策。
