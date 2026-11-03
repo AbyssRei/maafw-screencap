@@ -108,6 +108,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `f43996a` 的独立 [Actions 41558756707](https://github.com/AbyssRei/maafw-screencap/actions/runs/41558756707) 已终态失败，组件为 102/106。新增 `frame-pool-initialization-build`、原版、Rust 和记录四项均通过，实际执行 160 次原生拒绝及 80 次设备最终释放通知、零截图；与 `8c1369c` 的旧 102 项逐名对照，状态完全不变，四个原版 pseudo stop/inactive/layered 失败仍保留。该 runner 实际使用 VS build `18.11.12328.437` 与 SDK `10.0.26100.0`，准备日志明确最新版仅作参考且退出 0；年龄未成为 CI 门禁。
+
+官方 1,746,053 字节即时 ZIP 的发布摘要/CRC、3,292 份文件、3,185 个可用登记路径和全部 106 份日志独立核对；84 个相同摘要重复登记明确计数，625 项完整输入缺口保留。八份选定当前原生/Rust/编排/校验来源由确切 Git bytes 或明确 CRLF checkout 转换匹配实际登记摘要，另存来源补充；这不是整批完整来源闭包。新增八份初始化数据/保存报告在冻结校验器上只读通过，文件摘要不变。外部终态比较器首次触及 Windows 长路径限制的失败及修正版本另存。结果由同一 `current-framepool-init-development-path.txt` 的 `hosted-review/` 指向并封存，关闭的是新增故障路径的托管执行，原失败、全部设备故障/回调退出和完整 P1 均未验收；push 的完整三平台矩阵另行运行。
+
 新增独立 `mfs_framepool_init_reference` 与私有 Rust 单测 `preserves_failed_initialization_state_and_releases_replaced_native_devices`，检查尚未创建 item/session/pool 时的实际初始化失败。每侧 20 个对象，各固定四次调用：有效但隐藏的 HWND 连续两次在真实 `CreateForWindow` 返回 `E_INVALIDARG (-2147024809)`，原类保留 device/context/swapchain 三个槽；销毁窗口后，同一对象使用原标量 HWND，连续两次在真实 `D3D11CreateDeviceAndSwapChain` 返回 `DXGI_ERROR_INVALID_CALL (-2005270527)`，三个槽为空。第二次隐藏调用及首次销毁后调用须在返回前释放旧设备。原类/头文件/函数体未修改，测试通过类型化成员指针观察原字段；Rust 使用同一私有 `FramePoolCapture`，转换、clone、缓存回放均不得到达，产品 `frame_pool.rs` 没有改动。
 
 私有 fixture 的八个 C 导出实际加载、调用并核验六项标量宽度。`ID3D11Device::SetPrivateDataInterface` 持有原生 `IUnknown` sentinel，不反向持有设备；其最终 `Release` 写入进程寿命的原子记录，包含附着/最终线程与 QPC。Rust 将 fixture DLL 保留至进程退出，失败路径也不卸载可能仍被原生回调使用的代码。终止通知可以来自另一原生线程，不以调用线程相同为先验条件；本机三轮实际均在各自调用线程终止。本测试没有创建捕获 session，因此不证明 WGC callback 排空、任意设备故障、驱动资源总量或完整失败恢复。
