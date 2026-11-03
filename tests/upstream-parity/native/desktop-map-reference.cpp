@@ -40,6 +40,15 @@ struct Source : MAA_CTRL_UNIT_NS::DesktopDupScreencap {
     ID3D11Texture2D* staging()const{return readable_texture_;}
     uint32_t width()const{return texture_desc_.Width;}
     uint32_t height()const{return texture_desc_.Height;}
+    std::array<uint64_t,12> state()const{
+        const unsigned slots=unsigned(bool(d3d_device_))|(unsigned(bool(d3d_context_))<<1)|(unsigned(bool(dxgi_factory_))<<2)
+            |(unsigned(bool(dxgi_adapter_))<<3)|(unsigned(bool(dxgi_output_))<<4)|(unsigned(bool(dxgi_dup_))<<5)|(unsigned(bool(readable_texture_))<<6);
+        return {slots,reinterpret_cast<uintptr_t>(current_monitor_),output_just_initialized_,texture_desc_.Width,texture_desc_.Height,
+            reinterpret_cast<uintptr_t>(d3d_device_),reinterpret_cast<uintptr_t>(d3d_context_),reinterpret_cast<uintptr_t>(dxgi_factory_),
+            reinterpret_cast<uintptr_t>(dxgi_adapter_),reinterpret_cast<uintptr_t>(dxgi_output_),reinterpret_cast<uintptr_t>(dxgi_dup_),reinterpret_cast<uintptr_t>(readable_texture_)};
+    }
+    std::array<void*,4> observed_objects()const{return {d3d_device_,d3d_context_,dxgi_dup_,readable_texture_};}
+    void close(){uninit();}
 };
 struct Fixture {
     MfsPrintFixture value{};
@@ -73,7 +82,9 @@ cv::Mat target(const cv::Mat& desktop,HWND window) {
 }
 }
 #include "desktop-acquire-cases.hpp"
+#include "desktop-acquire-errors.hpp"
 int wmain(int argc,wchar_t** argv) {
+    if(argc==3 && std::wstring_view(argv[1])==L"--acquire-errors")return acquire_errors(argv[2]);
     if(argc==3 && std::wstring_view(argv[1])==L"--held-acquisition")return held_acquisition(argv[2]);
     try {
         if(argc!=2)throw std::runtime_error("usage: desktop-map EMPTY_ABSOLUTE_ROOT");

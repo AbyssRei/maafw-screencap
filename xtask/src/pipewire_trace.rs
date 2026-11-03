@@ -13,6 +13,12 @@ const MIN_NS: u64 = 120_000_000_000;
 pub fn run(args: &[String]) -> Result<()> {
     if args
         .first()
+        .is_some_and(|kind| kind == "desktop-acquire-errors")
+    {
+        return crate::desktop_acquire_errors::run(&args[1..]);
+    }
+    if args
+        .first()
         .is_some_and(|kind| kind == "framepool-lifetime")
     {
         return crate::framepool_lifetime::run(&args[1..]);

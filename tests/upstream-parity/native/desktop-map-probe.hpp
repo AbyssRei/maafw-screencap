@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 // Borrowed expression views over the original fields, never replacement COM
-// objects. Every operation forwards to the same real native interface.
+// objects. Operations forward to the same native interface except explicit
+// controlled failed Acquire HRESULTs in prototype modes 3..5 below.
 namespace mfs_dup_map {
 struct ConversionFailure : std::exception {
     const char* what() const noexcept override { return "controlled desktop conversion exception"; }
@@ -13,6 +14,7 @@ struct Trace {
     uint32_t timeout=0, subresource=0, pitch=0;
     bool mapped=false, held=false, violation=false;
     uintptr_t context=0, resource=0, duplication=0;
+    uint32_t native_acquires=0;bool injected_acquire=false;
 };
 inline thread_local Trace* active=nullptr;
 inline Trace* event(uint32_t code) noexcept {
@@ -72,7 +74,12 @@ struct Duplication {
     HRESULT AcquireNextFrame(UINT timeout,DXGI_OUTDUPL_FRAME_INFO* info,IDXGIResource** output) {
         auto* t=event(1);
         if(t){++t->acquires;t->timeout=timeout;t->duplication=reinterpret_cast<uintptr_t>(value);t->violation|=t->held || t->mapped;}
-        const HRESULT code=value->AcquireNextFrame(timeout,info,output);
+        HRESULT code;
+        if(t && t->fault>=3 && t->fault<=5){
+            if(timeout!=2000 || !info || !output || *output)throw std::runtime_error("controlled Acquire outputs/timeout differ");
+            t->injected_acquire=true;
+            code=t->fault==3?DXGI_ERROR_ACCESS_LOST:t->fault==4?DXGI_ERROR_WAIT_TIMEOUT:DXGI_ERROR_DEVICE_REMOVED;
+        }else{if(t){++t->native_acquires;}code=value->AcquireNextFrame(timeout,info,output);}
         if(t){t->acquired=code;t->held=SUCCEEDED(code);}
         return code;
     }

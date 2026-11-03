@@ -120,6 +120,16 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+DesktopDup 新增独立受控 `AcquireNextFrame` 失败矩阵：沿用完整未改 F 原类、同一私有 Rust 后端与既有原生寿命 observer，每侧二十个生命周期，各作一次真实预热截图、一次受控失败和一次真实后续截图。失败按周期选择 `DXGI_ERROR_ACCESS_LOST`、`DXGI_ERROR_WAIT_TIMEOUT`、`DXGI_ERROR_DEVICE_REMOVED`；仅显式测试作用域在真实接口边界返回该 HRESULT，保留传入的 2000ms 参数，故障处实际 driver 调用为零。预热与后续截图继续调用真实驱动；不能据此声称模拟物理设备故障或实际等待两秒失败。生产路径仍直接调用原接口，Rust 干预仅编入 prototype 测试。
+
+四阶段记录为成功预热、失败返回、下一次成功截图和显式关闭。F 的 `ACCESS_LOST` 只释放 duplication/staging、清空 monitor，槽位由 127 变为 31，保留 device/context/factory/adapter/output 和 texture descriptor。下一操作重选 adapter/output、重建 duplication/staging，继续使用原 device/context/factory，槽位恢复 127；另外两个失败保持全部原生状态。显式关闭后七槽归零，保留原 monitor/初始化标记语义，descriptor 清零。四个旧对象分别通过真实 D3D 析构通知或较弱 DXGI 私有 owner 通知观察；恢复代次的新 duplication/staging 未另行注册，不能推广为完整恢复代次资源闭包。
+
+预定三轮共 27 次命令全部退出 0，含新矩阵的九次原版/Rust/记录调用及十八次共享钩子的既有 Map/真实 held-acquisition 回归。独立复核重新摘要全部 1,346 项冻结输入及内容寻址副本，九组记录 checker 只读通过且文件不变；新矩阵重算 360 次公开调用、240 次实际成功截图、120 次受控失败（42 次 access-lost、78 次其他错误）、480 个旧对象、360 次 D3D 通知和 120 次 DXGI owner 释放。240 个保留 CPU owner、480 份完整即时/持帧图像的 2,949,120 像素、接口/线程/QPC、各阶段释放与保留状态均核对。四路监听 armed 区间零事件、最大间隔 77.6875ms，已注销并释放电源请求；prearm 没有实际事件，不声称新实物正控制。证据由参考目录 `local/current-desktop-acquire-errors-development-path.txt` 与 `local/current-desktop-acquire-errors-local-review-path.txt` 指向；三轮和独立复核已封存。
+
+`cargo xtask upstream-trace desktop-acquire-errors <外部矩阵> [--check-only]` 校验上述实际记录。五十四组保存数据控制接受三组、拒绝五十一组，覆盖原生调用数/错误码/等待参数、部分清理/保留身份、通知阶段/稳定性、缺行/重复、ABI/布局/完整像素及保存报告；原矩阵未改。实际 Step 二十七组输出控制、四组失败后独立继续及一个真实 checker 子命令通过。外部复核初版误用旧报告字段、两次 mock 子进程 ANSI 渲染保留断言，以及 stride 控制的 Windows CRLF 假设错误均保留；最终仅对 mock 文本保留断言归一化 ANSI SGR，不改变整行摘要、退出码、截图或任何像素断言，也不声称原始终端转义字节保留。
+
+本批使用显式归档的离线开发依赖，不声称新在线最新版解析。VS2026/MSBuild/SDK 28000 原生编译、所选 prototype/desktop-dup release 测试程序及严格 all-target Clippy、默认 release、workspace（库 34 通过/6 忽略、interop 4 通过、xtask 131 通过）和格式检查通过。完整 F CPP 的实际编译输入、六个冻结程序及五个 observer 导出另经来源校核。CI 已接入独立 source/Rust/records、严格单测试/完整摘要守卫及完整目录上传，广泛入口显式跳过已单列用例；实际托管执行仍待结果。预装工具年龄继续只作参考。此范围不覆盖真实显示器/分辨率切换、驱动 access/device loss、任意故障、全局 GPU、完整框架排空或完整 P1，既有失败不变。
+
 确切 `d43c60d` 的独立 Windows FramePool Actions `41632524368` 已失败结束，组件为 106/110：新增 `frame-pool-lifetime-build`、`frame-pool-source-lifetime`、`frame-pool-rust-lifetime`、`frame-pool-lifetime-records` 全通过；与封存 `f43996a` 相比，全部原 106 项名称/状态不变，四个原版 pseudo 黑图失败保留。工具准备成功，预装工具年龄未设门禁。官方 1,822,614 字节轻量 ZIP 的完整 SHA256/CRC、全部 110 份日志及 3,312 项可用登记路径已核对，轻量包本身仍缺 660 项完整输入；十三份确切 Git 源码补件另与实际原生登记摘要绑定，显式核对 CRLF，不据此称为完整源码/依赖闭包。
 
 新托管寿命矩阵的 127 份实际文件全部匹配原生登记，保存报告的 126 项引用亦一致。冻结 checker `--check-only` 通过且 127 文件摘要完全不变；独立再算两侧共 40 次真实取帧/生命周期、120 个对象与 D3D 析构通知、二十组显式 texture/device 引用对、四十个保留 CPU owner，以及八十份即时/持帧图像的 491,520 像素。四阶段、原生接口/线程/QPC、`uninit` 槽位 7 和独立 cache 保留均核对。此结论关闭该有限托管寿命入口，不接受 swapchain 析构、全局 GPU 资源、任意故障、完整框架回调排空、旧像素失败或完整 P1；已封存记录由参考目录 `local/current-framepool-lifetime-hosted-review-path.txt` 指向，未重复截图取得通过。

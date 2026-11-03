@@ -12,6 +12,7 @@ mod custom_raw;
 mod custom_reentry;
 mod dependencies;
 mod desktop_acquire;
+mod desktop_acquire_errors;
 mod desktop_fullscreen;
 mod desktop_lifetime;
 mod desktop_map;

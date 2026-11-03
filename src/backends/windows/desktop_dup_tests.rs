@@ -7,6 +7,9 @@ use super::*;
 mod native_map;
 
 #[cfg(feature = "prototype-windows")]
+#[path = "desktop_dup_acquire_error_tests.rs"]
+mod acquire_errors;
+#[cfg(feature = "prototype-windows")]
 #[path = "desktop_dup_acquire_tests.rs"]
 mod native_acquire;
 #[cfg(feature = "prototype-windows")]

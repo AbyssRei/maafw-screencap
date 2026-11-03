@@ -245,6 +245,29 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete native object-lifetime matrix with distinct destruction/association and explicit-reference controls'
             }
         }
+        if ($Name -in @('desktop-dup-source-acquire-errors','desktop-dup-rust-acquire-errors','desktop-dup-acquire-errors-records') -and $exitCode -eq 0) {
+            $observed=[IO.File]::ReadAllText($logPath)
+            $prefix = switch ($Name) {
+                'desktop-dup-source-acquire-errors' { 'original DesktopDup acquire_errors' }
+                'desktop-dup-rust-acquire-errors' { 'native Rust DesktopDup acquire_errors' }
+                'desktop-dup-acquire-errors-records' { 'DesktopDup acquire_errors' }
+            }
+            $summary = if ($Name -eq 'desktop-dup-acquire-errors-records') {
+                "$prefix public_calls=120 controlled_failures=40 access_lost=14 retained_other_errors=26 recoveries=40 observed_old_objects=160 retained_cpu=80 physical_device_faults=0 full_P1_acceptance=0 passed"
+            } else {
+                "$prefix cycles=20 public_calls=60 controlled_failures=20 access_lost=7 retained_other_errors=13 recoveries=20 observed_old_objects=80 retained_cpu=40 physical_device_faults=0 full_P1_acceptance=0 passed"
+            }
+            $leader = if ($Name -eq 'desktop-dup-rust-acquire-errors') {
+                '(?:test backends::windows::desktop_dup::tests::acquire_errors::matches_access_lost_partial_release_next_call_rebuild_and_retained_other_errors \.\.\. )?'
+            } else { '' }
+            if ([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($prefix)+'.*\r?$').Count -ne 1 -or
+                ($Name -eq 'desktop-dup-rust-acquire-errors' -and
+                    ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                     $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected one complete controlled Acquire HRESULT/partial release/next-operation recovery matrix'
+            }
+        }
         if ($Name -eq 'desktop-dup-source-map-boundary' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDup map_boundary cycles=20 warm=20 observed_calls=40 map_failures=7 conversion_failures=6 recovery=20 retained=47 native_forwarded=1 full_P1_acceptance=0 passed')) {
             throw 'Expected the complete original native DesktopDup Map/release/held matrix'
@@ -1171,6 +1194,9 @@ try {
         $desktopAcquireEvidence=Join-Path $desktopEvidence held-acquisition
         New-Item -ItemType Directory -Path (Join-Path $desktopAcquireEvidence source) -Force|Out-Null
         Invoke-FrameCheck desktop-dup-source-held-acquisition $desktopMapProgram @('--held-acquisition',(Join-Path $desktopAcquireEvidence source))
+        $desktopAcquireErrorsEvidence=Join-Path $desktopEvidence acquire-errors
+        New-Item -ItemType Directory -Path (Join-Path $desktopAcquireErrorsEvidence source)|Out-Null
+        Invoke-FrameCheck desktop-dup-source-acquire-errors $desktopMapProgram @('--acquire-errors',(Join-Path $desktopAcquireErrorsEvidence source))
         foreach ($modeName in @('desktop','window','default-output','window-fullscreen','window-workarea','window-geometry')) {
             $modeDirectory = Join-Path $desktopEvidence $modeName
             New-Item -ItemType Directory -Path $modeDirectory -Force | Out-Null
@@ -1443,6 +1469,8 @@ try {
         $caseSelection += @('--skip', $desktopMapCase)
         $desktopAcquireCase='backends::windows::desktop_dup::tests::native_acquire::preserves_caller_acquisition_when_native_rejects_capture_and_recovers_after_release'
         $caseSelection += @('--skip', $desktopAcquireCase)
+        $desktopAcquireErrorsCase='backends::windows::desktop_dup::tests::acquire_errors::matches_access_lost_partial_release_next_call_rebuild_and_retained_other_errors'
+        $caseSelection += @('--skip', $desktopAcquireErrorsCase)
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         if ($ManagerParity) {
@@ -1509,6 +1537,9 @@ try {
             $env:MFS_DESKTOP_ACQUIRE_ROOT=$desktopAcquireEvidence
             Invoke-FrameCheck desktop-dup-rust-held-acquisition cargo ($parityArguments+@('--',$desktopAcquireCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-held-acquisition-records $ConfigureTool @('upstream-trace','desktop-acquire',$desktopAcquireEvidence)
+            $env:MFS_DESKTOP_ACQUIRE_ERRORS_ROOT=$desktopAcquireErrorsEvidence
+            Invoke-FrameCheck desktop-dup-rust-acquire-errors cargo ($parityArguments+@('--',$desktopAcquireErrorsCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck desktop-dup-acquire-errors-records $ConfigureTool @('upstream-trace','desktop-acquire-errors',$desktopAcquireErrorsEvidence)
             New-Item -ItemType Directory -Path (Join-Path $desktopEvidence 'window-fullscreen/rust') | Out-Null
             Step 'desktop-dup-rust-fullscreen' cargo ($parityArguments + @('--',$desktopFullscreenCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Step 'desktop-dup-fullscreen-records' $ConfigureTool @('upstream-trace','desktop-fullscreen',(Join-Path $desktopEvidence 'window-fullscreen'))

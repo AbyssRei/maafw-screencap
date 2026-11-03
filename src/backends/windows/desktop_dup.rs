@@ -313,6 +313,17 @@ impl DesktopDupCapture {
         let mut resource = std::ptr::null_mut();
         #[cfg(all(test, feature = "prototype-windows"))]
         crate::platform::windows::desktop_dup::map_probe::acquiring(duplication);
+        #[cfg(all(test, feature = "prototype-windows"))]
+        // SAFETY: Same live caller/interface/out-slots as the direct production
+        // call below. Only an explicit scoped prototype fault changes its result.
+        let code = unsafe {
+            crate::platform::windows::desktop_dup::map_probe::acquire_next_frame(
+                duplication,
+                &mut info,
+                &mut resource,
+            )
+        };
+        #[cfg(not(all(test, feature = "prototype-windows")))]
         // SAFETY: Exact ABI and original 2000ms native wait, initialized outputs.
         let code = unsafe {
             (duplication.vtable().AcquireNextFrame)(

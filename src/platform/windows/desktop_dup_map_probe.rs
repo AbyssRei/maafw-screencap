@@ -10,6 +10,8 @@ pub(crate) struct Trace {
     pub fault: u32,
     pub order: u32,
     pub acquires: u32,
+    pub native_acquires: u32,
+    pub injected_acquire: bool,
     pub copies: u32,
     pub maps: u32,
     pub unmaps: u32,
@@ -33,7 +35,7 @@ thread_local! {static ACTIVE: Cell<Option<Trace>> = const { Cell::new(None) };}
 pub(crate) struct Guard(PhantomData<Rc<()>>);
 impl Guard {
     pub fn begin(fault: u32) -> Self {
-        assert!(fault <= 2);
+        assert!(fault <= 5);
         ACTIVE.with(|slot| {
             assert!(slot.get().is_none());
             slot.set(Some(Trace {
@@ -94,6 +96,30 @@ pub(crate) fn acquired(code: HRESULT) {
         t.acquired = code.0;
         t.held = code.is_ok();
     });
+}
+/// Same native interface, timeout and initialized out-slots; only explicit
+/// prototype faults 3..5 bypass the driver with a controlled failed HRESULT.
+pub(crate) unsafe fn acquire_next_frame(
+    duplication: &IDXGIOutputDuplication,
+    info: &mut DXGI_OUTDUPL_FRAME_INFO,
+    resource: &mut *mut std::ffi::c_void,
+) -> HRESULT {
+    let fault = ACTIVE.with(|slot| slot.get().map_or(0, |t| t.fault));
+    let injected = match fault {
+        3 => Some(DXGI_ERROR_ACCESS_LOST),
+        4 => Some(DXGI_ERROR_WAIT_TIMEOUT),
+        5 => Some(DXGI_ERROR_DEVICE_REMOVED),
+        _ => None,
+    };
+    if let Some(code) = injected {
+        assert!(resource.is_null());
+        update(|t| t.injected_acquire = true);
+        return code;
+    }
+    update(|t| t.native_acquires += 1);
+    // SAFETY: Caller owns the live same-thread duplication, preserves native
+    // acquisition rules and provides complete initialized writable outputs.
+    unsafe { (duplication.vtable().AcquireNextFrame)(duplication.as_raw(), 2000, info, resource) }
 }
 pub(crate) fn copied(context: &ID3D11DeviceContext, texture: &ID3D11Texture2D) {
     event(2, |t| {
