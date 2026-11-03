@@ -10,7 +10,7 @@ Windows 显式归档离线依赖下，Debug/Release 各通过八组 Custom 原�
 
 首次整文件单独编译后，旧负尺寸 resize 回归实际触发 OpenCV terminate，新增 buffers/raw 尚未运行；失败程序和输出外置保留，没有补造原生退出码。目标改用 `/EHsc-`，清除 C 链接函数不抛异常的编译假设，同时保留同步 C++ 展开，使实际原函数异常进入既有私有 `guarded` 边界；两种配置的该回归和其余七组随后均通过。Debug/Release 真实 CL 命令确认该选项在 `/EHsc` 之后，原始函数体和异常行为未改；依据见 [Microsoft `/EH` 文档](https://learn.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model)。这不声称恢复 SEH/进程终止或任意分配故障。
 
-`cargo xtask upstream-trace custom-buffers <外部 buffers 目录> [--check-only]` 核对八份实际数据文件、全部行/字节/owner 和完整目录，记录不进入产品。二十六项实际数据控制接受四项、拒绝二十二项；Windows 上执行三个平台真实 Step wrapper 的 54 个输出/退出控制及两个真实 native/checker 子进程通过。三平台独立 parity/records 入口已接入，拒绝零测试、部分/重复汇总、非零退出和损坏数据；新 Linux/macOS 原生执行仍待 Actions。本批未重新解析在线最新版依赖，也未改变预装工具年龄只作记录的 CI 规则。完整审阅由参考目录 `local/current-basic-buffer-helpers-development-path.txt` 和 `local/current-basic-buffer-helpers-source-review-path.txt` 指向，完整 P1 仍未通过。
+`cargo xtask upstream-trace custom-buffers <外部 buffers 目录> [--check-only]` 核对八份实际数据文件、全部行/字节/owner 和完整目录，记录不进入产品。二十六项实际数据控制接受四项、拒绝二十二项；Windows 上执行三个平台真实 Step wrapper 的 54 个输出/退出控制及两个真实 native/checker 子进程通过。三平台独立 parity/records 入口已接入，拒绝零测试、部分/重复汇总、非零退出和损坏数据；新增 Linux/macOS 原生执行及数据复核现已通过，结果与限制见下节。本批未重新解析在线最新版依赖，也未改变预装工具年龄只作记录的 CI 规则。完整审阅由参考目录 `local/current-basic-buffer-helpers-development-path.txt` 和 `local/current-basic-buffer-helpers-source-review-path.txt` 指向，完整 P1 仍未通过。
 
 剩余二十三个 list/rect helper 已另作固定 F 的完整顶层 Git 字节检索：744 个 blob 身份与内容均核对，五个 gitlink 仅记录身份、未把子模块内容算入检索。162 个函数标识符位点与 304 个相关类型/函数位点分布在 38 份文件；定义、声明、旧模块/语言导出、通用框架样例/测试之外，类型用于 resource/tasker/context 的 pipeline/识别结果以及 custom recognition/action agent RPC。选定 Win32/Custom/Gamepad/Linux/macOS/Dbg 与 ControlUnit 公共头的 120 个路径没有这三类类型/函数的字面使用。本轮据此保留其通用框架边界，不扩增截图 SDK 类型、Rust 对应或全量旧 API 测试；它们在验收 DLL 中仍仅编译、未运行验收。这不是任意宏/预处理展开、外部消费者或完整 P1 穷尽证明。逐文件类别、全部原始位点及源码副本由参考目录 `local/current-remaining-buffer-scope-review-path.txt` 指向；首次 reader 对 gitlink 和样例位点的错误前提分别保留。
 
@@ -129,6 +129,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+确切 `bb8056c` 的 [Actions 41662819907](https://github.com/AbyssRei/maafw-screencap/actions/runs/41662819907) Linux/macOS 新增基础 buffer 原生与记录两项均通过。PipeWire 组件为 207/207，原 205 项名称/状态不变；Mac 为 138/159，原 157 项及 21 个严格失败不变。两平台各八组 Custom 原生测试和本机冻结 checker 的八组只读数据复算全部通过；新增每平台一百个原 StringBuffer 创建/清空/销毁及其独立保留字符串值、780 个图像 owner，240/45,120 字节的即时/持有数据完整匹配，最终 owner 归零，新增 helper 零桌面截图。完整未改 F `MaaBuffer.cpp` 和实际公共头逐字节匹配已登记副本，四项真实 compile command 中恰有一次完整文件编译；十份确切 Git 源码另以登记摘要匹配保存，不冒称完整源码闭包。
+
+两份官方轻量 ZIP 分别为 Mac 41,554,965、Linux 39,976,902 字节，完整官方摘要及 CRC 均通过。首次 180 秒超时各保留约 7 MiB 原始部分文件，后以校核 HTTP 206 范围恢复同一官方包，没有重跑 native 测试。全部 159/207 项日志及可用输入均核对；Mac 21,156 项可用输入登记对应 11,839 个不同路径，Linux 53,588 项对应 44,178 个不同路径，重复项摘要一致。完整输入缺口分别仍为 632/664 个不同路径；附属 cardinality 审阅明确区分引用次数与路径数，未改旧报告。数据复核前后完整解压文件摘要不变。实际 Xcode 27.1/Apple Clang 21.0.0 与 LLVM 22.1.2 按预装身份记录，不因年龄阻断。Mac 的旧像素/超时失败及本机权威无输入结论保持原身份，完整 P1 未验收；材料由参考目录 `local/current-bb8056-unix-buffers-review-path.txt` 指向，输入计数补充位于同批 `input-cardinality-review`。
 
 DesktopDup 初始化现有独立失败/清理矩阵：完整未改 F 类只在 `D3D11CreateDevice` 和 `CreateDXGIFactory` 两个创建边界返回受控 HRESULT；同一 Rust 后端通过仅测试配置编入的调用方局部 hook 处理同样四种失败。设备边界使用 `E_FAIL`/`E_OUTOFMEMORY`，工厂边界在真实 hardware device/context 已创建并登记析构通知后使用 `E_FAIL`/`E_NOINTERFACE`。每侧另有二十次直接、无故障转发初始化对照，不调用截图；不是无 hook 的运行对照，也未模拟真实 OOM/物理设备故障。默认库不编入干预，两个原生调用表达式和 `init` 之外整份 Rust 捕获代码与前一提交相同，没有添加 WARP 或改变默认值。
 
