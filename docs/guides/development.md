@@ -12,6 +12,8 @@ Windows 显式归档离线依赖下，Debug/Release 各通过八组 Custom 原�
 
 `cargo xtask upstream-trace custom-buffers <外部 buffers 目录> [--check-only]` 核对八份实际数据文件、全部行/字节/owner 和完整目录，记录不进入产品。二十六项实际数据控制接受四项、拒绝二十二项；Windows 上执行三个平台真实 Step wrapper 的 54 个输出/退出控制及两个真实 native/checker 子进程通过。三平台独立 parity/records 入口已接入，拒绝零测试、部分/重复汇总、非零退出和损坏数据；新 Linux/macOS 原生执行仍待 Actions。本批未重新解析在线最新版依赖，也未改变预装工具年龄只作记录的 CI 规则。完整审阅由参考目录 `local/current-basic-buffer-helpers-development-path.txt` 和 `local/current-basic-buffer-helpers-source-review-path.txt` 指向，完整 P1 仍未通过。
 
+剩余二十三个 list/rect helper 已另作固定 F 的完整顶层 Git 字节检索：744 个 blob 身份与内容均核对，五个 gitlink 仅记录身份、未把子模块内容算入检索。162 个函数标识符位点与 304 个相关类型/函数位点分布在 38 份文件；定义、声明、旧模块/语言导出、通用框架样例/测试之外，类型用于 resource/tasker/context 的 pipeline/识别结果以及 custom recognition/action agent RPC。选定 Win32/Custom/Gamepad/Linux/macOS/Dbg 与 ControlUnit 公共头的 120 个路径没有这三类类型/函数的字面使用。本轮据此保留其通用框架边界，不扩增截图 SDK 类型、Rust 对应或全量旧 API 测试；它们在验收 DLL 中仍仅编译、未运行验收。这不是任意宏/预处理展开、外部消费者或完整 P1 穷尽证明。逐文件类别、全部原始位点及源码副本由参考目录 `local/current-remaining-buffer-scope-review-path.txt` 指向；首次 reader 对 gitlink 和样例位点的错误前提分别保留。
+
 确切 `02c7eb6` 的 Gamepad 合并对应现覆盖已有原始 CPP 索引的三十项及零函数体头文件：新增 UUID/features/info 三项 `capture_metadata`，按当前 Git 原文刷新同一 `gamepad.rs` 的全部位置；原 delegate/native/platform 三文件与旧对应字节相同。三项保留十进制 HWND、type 非 0 时 ds4、固定历史 feature 位、info 的无符号 HWND 与有符号 type/method；可失败独立 String、类型化分配错误及 JSON 文本对来源 object 的边界明确列出，不定案公共 SDK/ABI，也不声称任意 OOM 或连接后全场景由预连接矩阵验收。
 
 另外十二项逐一登记为输入/应用范围排除，Rust 位置和执行证据均为空，不伪造实现。`ensure_foreground` 只有 `touch_down`、`key_down` 两个原始调用点，截图、停用、连接与查询不调用它；共享捕获侧 ForegroundUtils 仍按自己的来源迁移。start/stop app 是应用转发；touch/key 方法是轴、扳机、按钮控制；click/swipe/click_key 是来源的弃用 false 槽，input_text 是不支持的输入槽。它们均不因此成为 SDK 能力，析构所需宿主 reset 与截图 owner 寿命仍保留独立对应。三个外层公共 C Version/Create/Destroy 导出仍单列，未冒称 Rust SDK 导出。
