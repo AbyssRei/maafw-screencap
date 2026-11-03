@@ -120,6 +120,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d43c60d` 的独立 Windows FramePool Actions `41632524368` 已失败结束，组件为 106/110：新增 `frame-pool-lifetime-build`、`frame-pool-source-lifetime`、`frame-pool-rust-lifetime`、`frame-pool-lifetime-records` 全通过；与封存 `f43996a` 相比，全部原 106 项名称/状态不变，四个原版 pseudo 黑图失败保留。工具准备成功，预装工具年龄未设门禁。官方 1,822,614 字节轻量 ZIP 的完整 SHA256/CRC、全部 110 份日志及 3,312 项可用登记路径已核对，轻量包本身仍缺 660 项完整输入；十三份确切 Git 源码补件另与实际原生登记摘要绑定，显式核对 CRLF，不据此称为完整源码/依赖闭包。
+
+新托管寿命矩阵的 127 份实际文件全部匹配原生登记，保存报告的 126 项引用亦一致。冻结 checker `--check-only` 通过且 127 文件摘要完全不变；独立再算两侧共 40 次真实取帧/生命周期、120 个对象与 D3D 析构通知、二十组显式 texture/device 引用对、四十个保留 CPU owner，以及八十份即时/持帧图像的 491,520 像素。四阶段、原生接口/线程/QPC、`uninit` 槽位 7 和独立 cache 保留均核对。此结论关闭该有限托管寿命入口，不接受 swapchain 析构、全局 GPU 资源、任意故障、完整框架回调排空、旧像素失败或完整 P1；已封存记录由参考目录 `local/current-framepool-lifetime-hosted-review-path.txt` 指向，未重复截图取得通过。
+
+确切 `02c7eb6` 的 Windows job `125809156872` 亦已失败结束，其七组件共 401 项检查为 390 通过、11 失败。469,836,742 字节官方 ZIP 的完整摘要/CRC及全部日志摘要已独立核对；唯一新增 `manager-gamepad-metadata` 通过，原有 400 项名称均保留。与 `7b3a608` 相比，Gamepad native mask 26 从失败变通过，30 从通过变失败，其余状态不变；本批失败 mask 为 `6/10/14/30/38/42/46`，FramePool 仍为 85/89、同样四个 pseudo 失败。这里只记录实际状态变化，像素生产者及变化原因仍未确定，不替代最终本机无输入三轮、不新增像素/资源数据复算或完整输入验收。已封存焦点记录由参考目录 `local/current-02c7-windows-focused-path.txt` 指向；多次传输失败/超时及部分文件均保留，最终分段恢复通过官方完整摘要，完整 P1 仍未通过。
+
 FramePool 新增完整未改 F 原类与同一私有 Rust 后端的成功取帧寿命矩阵。两侧各二十个自有窗口生命周期，每周期一次实际截图；在成功后对真实 device、immediate context 和 staging texture 注册既有独立 `ID3DDestructionNotifier` 观察。其私有 observer 与 DesktopDup 共用相同五项导出、具体接口 QI 和标量宽度检查，回调仍只写固定原子记录，fixture 模块保留至进程退出。未复制捕获实现，未改变产品 API、方法、等待、转换和清理流程。
 
 四个阶段分别为成功取帧、显式 `uninit`、捕获 owner 析构、额外 texture/device 引用释放。F 的 `uninit` 不清空 device/context/swapchain，也不清除独立 CPU cache；缓存槽位实际由 127 变为 7，cache 地址保留且与返回图像不同，前两类 D3D 对象此时不得析构。奇数周期另持有 texture 和 device 两个独立引用，不假定隐式父设备关系；owner 析构后这两个对象仍须存活，按 texture→device 顺序释放后再观察最终通知。未持有额外引用的周期在 owner 析构后的两秒观测预算内须完成，最终阶段同样核对实际通知。此有限预算不构成同步析构或任意驱动行为保证；swapchain 的真实析构没有在本矩阵观察。
@@ -130,7 +136,7 @@ FramePool 新增完整未改 F 原类与同一私有 Rust 后端的成功取帧�
 
 本批使用显式归档依赖。首次原生链接因继承伪最小化夹具开关却缺对应源文件而失败，首次 Rust 编译因新测试错用 `Attempt.result` 而失败；改用既有完整原生目标源清单和正确 `image` 字段后，原生/release Rust 重建、所选全部 target 严格 Clippy 均通过。外部矩阵准备的 PowerShell 引号错误也保留，发生时尚未冻结或执行截图。另一次 DesktopDup 独立构建控制在较长目录的 MSBuild 编译器探测阶段报 tlog `DirectoryNotFound`；改用较短独立目录后，同一 DesktopDup ON/FramePool OFF 配置编译通过，零截图，原失败保留，不改称 SDK 或捕获失败。最终默认 workspace 为库 34 通过/6 忽略、interop 4 通过、xtask 130 通过，格式、默认严格 Clippy 和 release 构建通过；不声称本批重新在线解析最新版。
 
-CI 已接入独立的 FramePool lifetime 构建/source/Rust/records，广泛测试入口显式跳过该已单列用例。另修正轻量上传清单：先前 DesktopDup lifetime 的通用 `.bgr` 匹配只能覆盖像素，不能覆盖寿命表/ABI/报告；现为 DesktopDup 和 FramePool 两个 lifetime 目录各声明完整上传范围。旧运行的实际上传缺口须由其完整工程包另行核验，不能把清单修正当作旧数据已经可用。后续托管寿命执行仍待结果；没有全局 GPU 统计闭包、任意设备故障、完整框架回调排空或 P1 验收结论。
+CI 已接入独立的 FramePool lifetime 构建/source/Rust/records，广泛测试入口显式跳过该已单列用例。另修正轻量上传清单：先前 DesktopDup lifetime 的通用 `.bgr` 匹配只能覆盖像素，不能覆盖寿命表/ABI/报告；现为 DesktopDup 和 FramePool 两个 lifetime 目录各声明完整上传范围。旧运行的实际上传缺口须由其完整工程包另行核验，不能把清单修正当作旧数据已经可用。后续独立托管寿命结果见本节开头；没有全局 GPU 统计闭包、任意设备故障、完整框架回调排空或 P1 验收结论。
 
 确切 `130aad1` 原生 Linux job `125848914800` 已成功，PipeWire 205/205、Wlr 151/151，全部 356 项名称/状态与封存 `02c7eb6` 一致。两份官方 ZIP 的完整摘要/长度/CRC、全部检查日志摘要及实际编译器/链接器身份核对，预装工具政策控制通过；这里只复核该确切提交的组件回归，不重新接受完整来源/依赖输入闭包。PipeWire 的零字节停滞与三分钟部分传输超时均保留，后续分段恢复逐项核对实际 HTTP range，最终完整官方摘要一致，旧部分文件不变。已封存焦点记录由参考目录 `local/current-130aad1-linux-focused-path.txt` 指向，完整 P1 未通过。
 
