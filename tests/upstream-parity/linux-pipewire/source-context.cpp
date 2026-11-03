@@ -987,13 +987,17 @@ void reinitialization_context(const char* socket,uint32_t node,const std::filesy
 }
 #if defined(MFS_PW_KWIN_NATIVE_API)
 #include "kwin-native-host.hpp"
+#include "kwin-portal-failure.hpp"
 #endif
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
         verify_runtime();
 #if defined(MFS_PW_KWIN_NATIVE_API)
-        require(argc==5 && std::string_view(argv[1])=="--kwin-native","usage: --kwin-native socket node artifacts");
+        if(argc==4 && std::string_view(argv[1])=="--kwin-portal-failure") {
+            kwin_portal_failure(argv[2],argv[3]);return 0;
+        }
+        require(argc==5 && std::string_view(argv[1])=="--kwin-native","usage: --kwin-native socket node artifacts | --kwin-portal-failure socket artifacts");
         uint32_t node=0;const std::string_view id=argv[3];
         const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
         require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid native KWin node");

@@ -25,6 +25,7 @@ mod framepool_record_control;
 mod framepool_size;
 mod framepool_target_loss;
 mod function_map;
+mod kwin_portal_failure;
 mod licenses;
 mod linux_compat;
 mod linux_config;
@@ -241,6 +242,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace framepool-order <external observations> [--check-only]\n\
                       cargo xtask upstream-trace framepool-border <external observations> [--check-only]\n\
                       cargo xtask upstream-trace framepool-init <external matrix> [--check-only]\n\
+                      cargo xtask upstream-trace kwin-portal-failure <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-queries <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-record-control <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-empty <external matrix> [--check-only]\n\

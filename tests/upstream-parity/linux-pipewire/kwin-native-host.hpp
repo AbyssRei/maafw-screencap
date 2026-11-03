@@ -10,12 +10,16 @@ struct MaaToolkitPortalHelper {
     }
 };
 namespace {
+// Only the separate pre-manager failure matrix selects these host outcomes.
+// Original C++ callers catch them; no exception crosses a Rust/FFI boundary.
+struct KWinPortalFailure { unsigned code; };
 struct KWinHost {
     const char* socket=nullptr;
     uint32_t node=0;
     int fd=-1;
     uint64_t before=0,after=0;
     unsigned helper_closed=0,helper_ended=0;
+    unsigned failure=0;
     std::unique_ptr<MaaToolkitPortalHelper> helper;
     std::vector<std::string> events;
 } kwin_host;
@@ -37,18 +41,25 @@ extern "C" MaaBool MaaToolkitPortalHelperOpenStream(MaaToolkitPortalHelper* help
     const int original=std::exchange(helper->original,-1);
     require(::close(original)==0,"cannot end original host message socket");
     errno=0;require(::fcntl(original,F_GETFD)==-1 && errno==EBADF,"original host fd survived close");
-    ++kwin_host.helper_closed;return 1;
+    ++kwin_host.helper_closed;
+    if(kwin_host.failure==1) {return 0;}
+    if(kwin_host.failure==2) {throw KWinPortalFailure{91};}
+    return 1;
 }
 extern "C" int MaaToolkitPortalHelperGetPipeWireFD(MaaToolkitPortalHelper* helper) {
     kwin_helper(helper);kwin_host.events.push_back("fd");
+    if(kwin_host.failure==3) {throw KWinPortalFailure{92};}
     require(!helper->transferred && helper->offered>=0,"KWin repeated/invalid fd offer");
     helper->transferred=true;kwin_host.fd=helper->offered;return helper->offered;
 }
 extern "C" uint32_t MaaToolkitPortalHelperGetPipeWireNodeID(MaaToolkitPortalHelper* helper) {
-    kwin_helper(helper);kwin_host.events.push_back("node");return kwin_host.node;
+    kwin_helper(helper);kwin_host.events.push_back("node");
+    if(kwin_host.failure==4) {throw KWinPortalFailure{93};}
+    return kwin_host.node;
 }
 extern "C" void MaaToolkitPortalHelperDestroy(MaaToolkitPortalHelper* helper) {
     kwin_helper(helper);kwin_host.events.push_back("destroy");
+    if(kwin_host.failure==5) {throw KWinPortalFailure{94};}
     require(helper->transferred,"KWin source destroyed helper before retrieving its offer");
     kwin_host.helper.reset();++kwin_host.helper_ended;
     kwin_host.after=socket_cookie(kwin_host.fd);

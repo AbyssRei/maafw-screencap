@@ -97,6 +97,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code = $LASTEXITCODE
         "exit=$code" | Add-Content -LiteralPath $log -Encoding utf8
+        if($code -eq 77 -and $Name -in @('original-kwin-portal-failure','rust-kwin-portal-failure','kwin-portal-failure-records')) {
+            throw 'Portal matrix has no environment-skip result; preserve the unexpected exit as a failure'
+        }
         if($code -eq 77){
             $status='missing_environment'
             Get-Content -LiteralPath $log -Tail 10 | ForEach-Object {Write-Host $_}
@@ -327,6 +330,29 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             $expected=$prefix+' PipeWire host offer cycles=20 create_errors=20 native_init=0 retained_identity=20 unconsumed_after_destroy=20 fixture_reclaims=20 capture=0 passed'
             if(-not $observed.Contains($expected) -or ($Name.StartsWith('rust-') -and $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;')) {
                 throw 'Expected exact native pre-init host error, retained socket identity and separately labelled fixture reclaim'
+            }
+        }
+        if($Name -in @('original-kwin-portal-failure','rust-kwin-portal-failure','kwin-portal-failure-records')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $summary=switch($Name) {
+                'original-kwin-portal-failure' {'original KWin Portal failures cases=100 stages=5 residual_sockets=100 fixture_reclaims=100 manager_created=0 native_capture=0 full_P1_acceptance=0 passed'}
+                'rust-kwin-portal-failure' {'Rust KWin Portal failures cases=100 stages=5 residual_sockets=100 fixture_reclaims=100 manager_created=0 native_capture=0 full_P1_acceptance=0 passed'}
+                'kwin-portal-failure-records' {'KWin Portal failure records cases=200 stages=5 residual_sockets=200 fixture_reclaims=200 files=204 native_capture=0 full_P1_acceptance=0 passed'}
+            }
+            $prefix=switch($Name) {
+                'original-kwin-portal-failure' {'original KWin Portal failures'}
+                'rust-kwin-portal-failure' {'Rust KWin Portal failures'}
+                'kwin-portal-failure-records' {'KWin Portal failure records'}
+            }
+            $leader=if($Name -eq 'rust-kwin-portal-failure') {
+                '(?:test backends::linux::manager::compat::tests::portal_failures::retains_host_socket_after_each_portal_failure_before_manager_construction \.\.\. )?'
+            }else{''}
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($prefix)+'.*\r?$').Count -ne 1 -or
+               ($Name -eq 'rust-kwin-portal-failure' -and
+                ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                 $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected all five pre-manager Portal failures, real residual socket identities and separately labelled fixture cleanup'
             }
         }
         if($Name -eq 'original-kwin-native-host' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original KWin ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 helper_call_order=20 duplicated_socket_identity=20 input_actions=0 passed')) {
@@ -824,6 +850,18 @@ try {
         catch { $failed=$true; Write-Host $_.Exception.Message }
         try { Step kwin-native-api-records $ConfigureTool @('upstream-trace','pipewire-host-api',$apiMatrix) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
+        $portalFailures=Join-Path $referenceArtifacts kwin-portal-failure
+        New-Item -ItemType Directory -Path $portalFailures|Out-Null
+        $env:MFS_P1_KWIN_PORTAL_FAILURE_ROOT=$portalFailures
+        try { Step original-kwin-portal-failure timeout @('--signal=TERM','--kill-after=5s','30s',$env:MFS_P1_KWIN_NATIVE_SOURCE,'--kwin-portal-failure',$socket,(Join-Path $portalFailures source)) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        finally {if(Test-Path -LiteralPath (Join-Path $portalFailures source)){Get-ChildItem -LiteralPath (Join-Path $portalFailures source) -File -Recurse|ForEach-Object{Save $_.FullName}}}
+        try { Step rust-kwin-portal-failure timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire','--','backends::linux::manager::compat::tests::portal_failures::retains_host_socket_after_each_portal_failure_before_manager_construction','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        finally {if(Test-Path -LiteralPath (Join-Path $portalFailures rust)){Get-ChildItem -LiteralPath (Join-Path $portalFailures rust) -File -Recurse|ForEach-Object{Save $_.FullName}}}
+        try { Step kwin-portal-failure-records $ConfigureTool @('upstream-trace','kwin-portal-failure',$portalFailures) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        finally {if(Test-Path -LiteralPath (Join-Path $portalFailures portal-failure-validation.json)){Save (Join-Path $portalFailures portal-failure-validation.json)}}
         $mobilityMatrix=Join-Path $referenceArtifacts thread-mobility
         $env:MFS_P1_PIPEWIRE_THREAD_MOBILITY=$mobilityMatrix
         foreach($mode in 0,1) {

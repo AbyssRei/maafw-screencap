@@ -108,6 +108,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+新增 KWin 创建前的受控 Portal 失败矩阵：原生 C++ 入口 `--kwin-portal-failure <private socket> <全新输出目录>` 调用未修改的完整 `MaaKWinControlUnitCreate`，Rust 精确测试 `backends::linux::manager::compat::tests::portal_failures::retains_host_socket_after_each_portal_failure_before_manager_construction` 调用同一私有兼容 Config 构造器。每侧计划一百次，五种情况各二十次：宿主 Open 已取得真实 socket 后返回 false，或在 Open、fd getter、node getter、helper Destroy 依次返回受控错误 91–94。原版异常只由 C++ 调用方捕获，Rust 使用宿主 Result；不使 C++ 异常跨越 Rust ABI。每次均须没有 manager/捕获构造，保留完整调用前缀、helper、一个未消费 socket 与相同 `SO_COOKIE`，再显式关闭同一 fixture offer 并核对实际任务身份和 fd 基线。成功路径的既有 KWin 宿主夹具默认选择不变。
+
+`cargo xtask upstream-trace kwin-portal-failure <已存在的外部矩阵> [--check-only]` 要求两侧共两百次完整记录及 204 份文件，逐项检查错误、调用顺序、真实 cookie、残留/回收区分、caller 和一百组关闭后任务列表；保存报告始终声明零截图、完整 P1 未验收。编排独立保留原版、Rust 和记录检查，失败不省略后续案例，每步 finally 保存部分证据；该矩阵不以未知退出 77 冒充缺环境。private-daemon/socket 并非 DBus/桌面授权，异常点是宿主控制条件；本项不接受真实 Portal、输入动作、一般失败、已开始原生流的清理或完整兼容 ABI。产品构造/失败清理均未改动，不把原 helper 残留改写为产品清理成功。
+
+本机使用与上一初始化开发批次一致的显式归档依赖重放，nightly 已检查更新；123 项 xtask/工作区测试、默认 Release、严格 Clippy 和格式检查通过。Linux 目标的测试编译/Clippy 也通过，属于交叉静态检查，尚非原生执行。28 次人工 CLI 控制包含两项成功和二十六项拒收；28 项实际 `Step` 控制/56 个隔离子进程，以及实际三步编排的四种失败位置/12 次显式 mock 案例均通过，输出/错误和非通过 aggregate 保留。首版 checker 把数字任务 ID 当作字符串的编译失败及修正版本分别保存；所有控制都不算真实 Linux socket/capture 验收。原生 C++ 编译、该新 Rust 用例和实际记录矩阵待 Actions 执行，证据由 `local/current-kwin-portal-failure-development-path.txt` 指向；已有平台失败和完整 P1 门禁继续保留。
+
 确切 `f43996a` 的独立 [Actions 41558756707](https://github.com/AbyssRei/maafw-screencap/actions/runs/41558756707) 已终态失败，组件为 102/106。新增 `frame-pool-initialization-build`、原版、Rust 和记录四项均通过，实际执行 160 次原生拒绝及 80 次设备最终释放通知、零截图；与 `8c1369c` 的旧 102 项逐名对照，状态完全不变，四个原版 pseudo stop/inactive/layered 失败仍保留。该 runner 实际使用 VS build `18.11.12328.437` 与 SDK `10.0.26100.0`，准备日志明确最新版仅作参考且退出 0；年龄未成为 CI 门禁。
 
 官方 1,746,053 字节即时 ZIP 的发布摘要/CRC、3,292 份文件、3,185 个可用登记路径和全部 106 份日志独立核对；84 个相同摘要重复登记明确计数，625 项完整输入缺口保留。八份选定当前原生/Rust/编排/校验来源由确切 Git bytes 或明确 CRLF checkout 转换匹配实际登记摘要，另存来源补充；这不是整批完整来源闭包。新增八份初始化数据/保存报告在冻结校验器上只读通过，文件摘要不变。外部终态比较器首次触及 Windows 长路径限制的失败及修正版本另存。结果由同一 `current-framepool-init-development-path.txt` 的 `hosted-review/` 指向并封存，关闭的是新增故障路径的托管执行，原失败、全部设备故障/回调退出和完整 P1 均未验收；push 的完整三平台矩阵另行运行。

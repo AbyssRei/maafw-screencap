@@ -3,6 +3,9 @@
 use super::*;
 #[path = "../../../tests/upstream-parity/linux-manager/compat-cases.rs"]
 mod corpus;
+#[cfg(target_os = "linux")]
+#[path = "manager_compat_portal_tests.rs"]
+mod portal_failures;
 
 struct Host<'a> {
     case: &'a corpus::Case,

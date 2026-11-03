@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+KWin 创建入口已新增真实 socket 的 Portal 中途失败矩阵准备：Open false 与四个宿主错误保留 helper/未消费 fd，再由夹具回收。本机和 Linux 目标静态检查通过，原生 Linux 运行仍待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `f43996a` 的独立托管 FramePool 为 102/106：新增初始化四项全部通过，原有 102 项状态不变、四项 pseudo 失败保留。预装 SDK 26100 按实际能力通过准备，版本年龄没有阻断；见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 FramePool 的真实隐藏/已销毁 HWND 初始化失败现已完成本机原版/Rust 连续三轮：480 次原生拒绝、240 次设备最终释放通知通过，零截图、零输入事件。此范围不包含完整初始化故障或 P1 验收，历史像素失败保留；见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
