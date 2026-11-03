@@ -7,6 +7,10 @@ use super::*;
 mod initialization;
 
 #[cfg(feature = "prototype-windows")]
+#[path = "desktop_dup_output_tests.rs"]
+mod primary_output;
+
+#[cfg(feature = "prototype-windows")]
 #[path = "desktop_dup_map_tests.rs"]
 mod native_map;
 

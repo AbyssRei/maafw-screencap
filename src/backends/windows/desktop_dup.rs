@@ -189,10 +189,20 @@ impl DesktopDupCapture {
             self.device.as_ref(),
             self.context.as_ref(),
         );
+        #[cfg(all(test, feature = "prototype-windows"))]
+        native(
+            "primary output device observer",
+            crate::platform::windows::desktop_dup::output_probe::created(
+                self.device.as_ref(),
+                self.context.as_ref(),
+            ),
+        )?;
         // SAFETY: The generated IID adopts one factory reference on this caller.
         let create_factory = || unsafe { CreateDXGIFactory() };
         #[cfg(all(test, feature = "prototype-windows"))]
         let result = crate::platform::windows::desktop_dup::init_probe::factory(create_factory);
+        #[cfg(all(test, feature = "prototype-windows"))]
+        let result = crate::platform::windows::desktop_dup::output_probe::factory(result);
         #[cfg(not(all(test, feature = "prototype-windows")))]
         let result = create_factory();
         self.factory = Some(native("CreateDXGIFactory", result)?);

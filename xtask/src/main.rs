@@ -18,6 +18,7 @@ mod desktop_fullscreen;
 mod desktop_initialization;
 mod desktop_lifetime;
 mod desktop_map;
+mod desktop_primary_output;
 mod frame_pool_alpha;
 mod framepool_border;
 mod framepool_empty;

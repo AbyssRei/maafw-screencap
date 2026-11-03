@@ -221,6 +221,26 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete Rust real held-acquisition rejection/owner test'
             }
         }
+        if ($Name -match '^desktop-dup-(source|rust|records)-primary-output-([0-3])$' -and $exitCode -eq 0) {
+            $role=$Matches[1];$mode=[int]$Matches[2]
+            $observed=[IO.File]::ReadAllText($logPath)
+            $summary=if($role -eq 'source') {
+                "original DesktopDup primary_output mode=$mode cycles=20 public_rejections=40 primary_forwarding_controls=20 d3d_notifications=80 captures=0 full_P1_acceptance=0 passed"
+            } elseif($role -eq 'rust') {
+                "native Rust DesktopDup primary_output mode=$mode cycles=20 public_rejections=40 primary_forwarding_controls=20 d3d_notifications=80 captures=0 full_P1_acceptance=0 passed"
+            } else {
+                "DesktopDup primary output mode=$mode public_rejections=80 primary_forwarding_controls=40 d3d_notifications=160 captures=0 actual_files=8 full_P1_acceptance=0 passed"
+            }
+            $leader=if($role -eq 'rust') {
+                '(?:test backends::windows::desktop_dup::tests::primary_output::preserves_partial_primary_output_owners_and_releases_them_after_controlled_failure \.\.\. )?'
+            } else {''}
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+                ($role -eq 'rust' -and
+                    ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                     $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected the complete selected primary-output native failure/control/owner matrix'
+            }
+        }
         if ($Name -in @('desktop-dup-source-initialization','desktop-dup-rust-initialization','desktop-dup-initialization-records') -and $exitCode -eq 0) {
             $observed=[IO.File]::ReadAllText($logPath)
             $summary=switch($Name) {
@@ -1245,6 +1265,18 @@ try {
         $desktopInitializationEvidence=Join-Path $desktopEvidence initialization
         New-Item -ItemType Directory -Path (Join-Path $desktopInitializationEvidence source)|Out-Null
         Invoke-FrameCheck desktop-dup-source-initialization $desktopInitializationProgram @((Join-Path $desktopInitializationEvidence source))
+        Step desktop-dup-primary-output-build $cmake @('--build',$build,'--config','Release','--target','mfs_desktop_output_reference','--parallel','4')
+        foreach($name in @('mfs_desktop_output_reference.exe','mfs_desktop_output_probe.dll')) {
+            $saved=Join-Path $artifacts $name
+            Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved;Save-Input $saved
+        }
+        $env:MFS_DESKTOP_OUTPUT_LIBRARY=Join-Path $artifacts mfs_desktop_output_probe.dll
+        $desktopOutputEvidence=Join-Path $desktopEvidence primary-output
+        foreach($mode in 0..3) {
+            $sourceRoot=Join-Path $desktopOutputEvidence "mode-$mode/source"
+            New-Item -ItemType Directory -Path $sourceRoot|Out-Null
+            Invoke-FrameCheck "desktop-dup-source-primary-output-$mode" (Join-Path $artifacts mfs_desktop_output_reference.exe) @([string]$mode,$sourceRoot)
+        }
         $desktopLifetimeEvidence=Join-Path $desktopEvidence lifetime
         New-Item -ItemType Directory -Path (Join-Path $desktopLifetimeEvidence source)|Out-Null
         Invoke-FrameCheck desktop-dup-source-lifetime (Join-Path $artifacts mfs_desktop_lifetime_reference.exe) @((Join-Path $desktopLifetimeEvidence source))
@@ -1541,6 +1573,8 @@ try {
         $caseSelection += @('--skip', $desktopPendingCase)
         $desktopPendingAdapterCase='backends::windows::desktop_dup::tests::pending::consumes_original_owner_and_rejects_null_window_without_frames'
         $caseSelection += @('--skip', $desktopPendingAdapterCase)
+        $desktopPrimaryOutputCase='backends::windows::desktop_dup::tests::primary_output::preserves_partial_primary_output_owners_and_releases_them_after_controlled_failure'
+        $caseSelection += @('--skip', $desktopPrimaryOutputCase)
         $desktopResourceFixtureCase='backends::windows::desktop_dup::tests::pending::balances_process_gdi_after_both_render_workers_join_without_capturing'
         $caseSelection += @('--skip', $desktopResourceFixtureCase)
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
@@ -1603,6 +1637,12 @@ try {
             $env:MFS_DESKTOP_INITIALIZATION_ROOT=$desktopInitializationEvidence
             Invoke-FrameCheck desktop-dup-rust-initialization cargo ($parityArguments+@('--',$desktopInitializationCase,'--exact','--ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-initialization-records $ConfigureTool @('upstream-trace','desktop-initialization',$desktopInitializationEvidence)
+            foreach($mode in 0..3) {
+                $env:MFS_DESKTOP_OUTPUT_MODE=[string]$mode
+                $env:MFS_DESKTOP_OUTPUT_ROOT=Join-Path $desktopOutputEvidence "mode-$mode"
+                Invoke-FrameCheck "desktop-dup-rust-primary-output-$mode" cargo ($parityArguments+@('--',$desktopPrimaryOutputCase,'--exact','--ignored','--test-threads=1','--nocapture'))
+                Invoke-FrameCheck "desktop-dup-records-primary-output-$mode" $ConfigureTool @('upstream-trace','desktop-primary-output',$env:MFS_DESKTOP_OUTPUT_ROOT)
+            }
             $env:MFS_DESKTOP_LIFETIME_ROOT=$desktopLifetimeEvidence
             Invoke-FrameCheck desktop-dup-rust-lifetime cargo ($parityArguments+@('--',$desktopLifetimeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-lifetime-records $ConfigureTool @('upstream-trace','desktop-lifetime',$desktopLifetimeEvidence)

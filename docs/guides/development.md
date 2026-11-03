@@ -130,6 +130,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+DesktopDup 默认主输出路径新增四个原生失败边界：`EnumAdapters`、`EnumOutputs`、`QueryInterface(IDXGIOutput1)`、`DuplicateOutput`。完整未改 F 类和同一 Rust 后端使用只在测试中启用的 COM 转发器；真实 default hardware device/context、工厂、主适配器/输出枚举及接口查询按原调用消费。选定边界分别返回受控 `E_FAIL` 或 `E_NOINTERFACE`；每组另有二十次真实主输出枚举/查询转发对照，均在复制创建处以明确 `E_ABORT` 哨兵停止，双方都调用公开 capture/screencap。没有访问原版私有方法、修改系统 vtable、调用真实 `DuplicateOutput` 或取得桌面帧，转发对照不是无干预的驱动创建成功证明。普通库不编入 caller-local hook；Rust 的创建参数和 `init` 之外完整捕获主体逐字保持不变。
+
+归档离线依赖下，Debug/Release 各四组、每侧每组二十轮失败/对照配对均通过：每配置 320 次公开拒绝、160 次主输出转发对照、320 次真实设备创建及 640 次实际 device/context 析构通知，零 sample/转换。失败后原版/Rust 的资源掩码分别保留为 `7/15/15/31`，显式 uninit 后清零；查询失败中的临时 output 在返回前释放，factory/adapter 等成员按实际路径保留。COM 转发器保存真实接口引用，其 create/destroy 计数只证明转发器及其持有引用释放，不当作底层 DXGI 对象或全局 GPU 析构；D3D 通知另经真实接口消费核对。这里不接受实际驱动复制创建、目标显示器查找/回退、重试恢复、物理设备故障或完整 P1。
+
+`cargo xtask upstream-trace desktop-primary-output <外部单模式配对目录> [--check-only]` 使用布局一、八份 ABI/调用/转发器/寿命数据，逐项核验实际模式、错误表面、局部资源、零帧、caller/指针、D3D 通知与时钟。八份真实 Debug/Release 报告只读通过；41 项记录控制接受八份实际数据及两份明确合成的零 callback-ID 数据，拒绝 31 份损坏/缺失数据，另有十二次非法 CLI 模式参数在写数据前拒绝。[官方注册接口](https://learn.microsoft.com/en-us/windows/win32/api/d3dcommon/nf-d3dcommon-id3ddestructionotifier-registerdestructioncallback)定义 `UINT` 标识而未规定非零，因此新校验器保留位宽与跨阶段一致性检查，不额外拒绝 opaque 零值；本批未观察到实际驱动返回零 ID，不把合成接受当作原生证据。112 组 Step mock、四组失败后继续及原版/Rust/checker 三个真实子进程通过；新 hook 未激活时，既有初始化错误矩阵也通过 Debug/Release 的新 Rust/旧确切原版记录回归。
+
+固定 F 两份完整源码/头文件的 SHA256 与 Git blob、整文件一次 include、原生参数、执行前程序/选定源码摘要及全部原始记录独立核对。另归档 799 条编译器读取路径和实际 Debug/Release CL/link 日志；这些依赖摘要在执行后采集，不宣称完整输入已预先冻结。初版直接调用原版私有方法的编译失败、旧选择器窄化写法、尝试重建已存在不可覆写报告，以及外部 reader 对 tlog 目录、长路径和 UTF-8/UTF-16 的前提错误均外置保留；最终使用公开 capture 和明确哨兵、先检查单字符范围、只读报告及按 BOM 识别的短名日志归档，没有重试旧截图失败或降低像素/资源断言。选定严格工作区 Clippy、默认 release、无 prototype 的直接库、工作区测试（库 34 通过/6 忽略、interop 4、xtask 133）及格式均通过。新增四模式原版/Rust/记录独立 CI 入口、聚合跳过与完整 primary-output 上传已接入，托管执行仍待验证；材料由参考目录 `local/current-desktop-primary-output-development-path.txt`、`local/current-desktop-primary-output-source-review-path.txt` 指向，不声称新的在线最新依赖解析或完整来源/平台/P1 验收。
+
 DesktopDupWindow 首帧测试现把进程 GDI 计数移至两个绘制 fixture 创建前、以及两者原生关闭成功并完成 worker join 后，另外查询两枚实际 HWND 均已失效。仍严格要求前后计数相等，覆盖捕获对象及 fixture 的完整生命周期，不再在独立更新窗口持续绘制时取比较快照；这不是全局 GPU 计数，也不确定下述旧 `13→11` 的具体原因。首帧 gate 到捕获对象释放的整段代码逐字与 `fb60c96` 相同，原版类、绘制器、预热/等待、转换/裁剪和像素断言未改。测试专用平台 helper 清除调用线程的旧错误，并在零计数时检查原生错误；[Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getguiresources)明确零可表示无对象或失败。实际 Win32 线程错误状态配合受控计数返回的检查覆盖空计数、正值、旧错误与失败，不声称制造了真实进程资源查询故障。
 
 新 DesktopDup 记录布局二在 `pending.tsv` 中显式声明边界，增加 `resources.tsv` 的四十组 baseline/owners/closed 观察，共 323 份数据文件。校验 DWORD 计数/线程宽度、实际 HWND、独立 UI owner、同一 capture caller、窗口失效和与 pending/update 记录的交叉身份；缺文件、删标记或计数不等均拒收。旧布局一的通过报告仍只读通过，旧不完整失败仍拒收，不把旧计数改作新边界证据。25 项控制接受三组、拒绝 22 组；其中新布局控制使用旧实际像素/身份与明确合成的资源计数，不是新截图。33 组真实 Step wrapper 的 mock 输出控制、四组失败后独立继续及两个实际 checker 子进程通过，当前 CI 拒绝用旧布局成功摘要替代新资源记录。

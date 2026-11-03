@@ -18,3 +18,7 @@ pub(crate) mod map_probe;
 #[cfg(all(test, feature = "prototype-windows"))]
 #[path = "desktop_dup_init_probe.rs"]
 pub(crate) mod init_probe;
+
+#[cfg(all(test, feature = "prototype-windows"))]
+#[path = "desktop_dup_output_probe.rs"]
+pub(crate) mod output_probe;
