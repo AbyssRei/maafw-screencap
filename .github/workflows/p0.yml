@@ -361,6 +361,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/source-border/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/marker-input-control/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/target-loss/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/initialization/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/queries/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/record-control/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/empty-client/**

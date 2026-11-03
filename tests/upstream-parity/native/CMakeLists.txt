@@ -110,6 +110,11 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     add_executable(mfs_framepool_alpha_reference framepool-alpha-reference.cpp ${_framepool_sources}
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/PrintWindowScreencap.cpp")
     add_executable(mfs_framepool_target_loss_reference framepool-target-loss-reference.cpp ${_framepool_sources})
+    add_library(mfs_framepool_init_fixture SHARED framepool-init-fixture.cpp)
+    target_link_libraries(mfs_framepool_init_fixture PRIVATE User32 D3D11)
+    add_executable(mfs_framepool_init_reference framepool-init-reference.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp")
+    target_link_libraries(mfs_framepool_init_reference PRIVATE mfs_framepool_init_fixture)
     # Source-only order observation; no manager or native source is rewritten.
     add_executable(mfs_framepool_order_reference framepool-order-reference.cpp ${_framepool_sources}
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp"
@@ -212,6 +217,7 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
         set_property(TARGET mfs_framepool_alpha_reference PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_alpha_poll_reference APPEND PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_target_loss_reference PROPERTY ${_property} "${_value}")
+        set_property(TARGET mfs_framepool_init_reference APPEND PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_order_reference PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_border_reference APPEND PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_query_reference APPEND PROPERTY ${_property} "${_value}")

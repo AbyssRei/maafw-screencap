@@ -56,6 +56,9 @@ pub fn run(args: &[String]) -> Result<()> {
     if args.first().is_some_and(|kind| kind == "framepool-border") {
         return crate::framepool_border::run(&args[1..]);
     }
+    if args.first().is_some_and(|kind| kind == "framepool-init") {
+        return crate::framepool_init::run(&args[1..]);
+    }
     if args
         .first()
         .is_some_and(|kind| kind == "framepool-record-control")

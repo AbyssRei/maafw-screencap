@@ -108,6 +108,16 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+新增独立 `mfs_framepool_init_reference` 与私有 Rust 单测 `preserves_failed_initialization_state_and_releases_replaced_native_devices`，检查尚未创建 item/session/pool 时的实际初始化失败。每侧 20 个对象，各固定四次调用：有效但隐藏的 HWND 连续两次在真实 `CreateForWindow` 返回 `E_INVALIDARG (-2147024809)`，原类保留 device/context/swapchain 三个槽；销毁窗口后，同一对象使用原标量 HWND，连续两次在真实 `D3D11CreateDeviceAndSwapChain` 返回 `DXGI_ERROR_INVALID_CALL (-2005270527)`，三个槽为空。第二次隐藏调用及首次销毁后调用须在返回前释放旧设备。原类/头文件/函数体未修改，测试通过类型化成员指针观察原字段；Rust 使用同一私有 `FramePoolCapture`，转换、clone、缓存回放均不得到达，产品 `frame_pool.rs` 没有改动。
+
+私有 fixture 的八个 C 导出实际加载、调用并核验六项标量宽度。`ID3D11Device::SetPrivateDataInterface` 持有原生 `IUnknown` sentinel，不反向持有设备；其最终 `Release` 写入进程寿命的原子记录，包含附着/最终线程与 QPC。Rust 将 fixture DLL 保留至进程退出，失败路径也不卸载可能仍被原生回调使用的代码。终止通知可以来自另一原生线程，不以调用线程相同为先验条件；本机三轮实际均在各自调用线程终止。本测试没有创建捕获 session，因此不证明 WGC callback 排空、任意设备故障、驱动资源总量或完整失败恢复。
+
+本机 VS2026/MSBuild 编译原版与 fixture 后，冻结 1,477 份实际程序、CL/link 读取、SDK、生成声明和工作树输入，再自动执行三轮原版 → Rust → 独立记录检查，共九次进程调用。480 次真实初始化拒绝及 240 次设备终止通知全部通过，零截图；四路 Raw Input/低级 hook 鼠标键盘监听为零输入事件，最大采样间隔 78.5914 ms，小于 500 ms，桌面前提和注销完成，未声称本次注册有新的物理输入正控制。全部冻结现场/存档摘要、527 份工作树快照、八份读取日志和两份确切 F blob 已独立核对，三组只读复验前后的 24 份数据/报告均不变。
+
+`cargo xtask upstream-trace framepool-init <已存在的外部矩阵> [--check-only]` 核验两侧 160 次调用、80 次终止通知、原版实际 HRESULT 日志、ABI、线程/时钟/槽状态和七份完整输入；报告明确零截图且 `full_P1_accepted=false`。基于实际矩阵的三十次 CLI 控制中两项成功、二十八项缺行/多行/重复、状态/错误码、迟到/缺失通知、ABI/文件/保存报告篡改等被拒收。真实 `Step`/`Invoke-FrameCheck` 的二十八项控制、五十六个隔离子进程核验完整汇总、零测试、重复输出、非零/未知 77 退出及失败后继续独立案例。首版门禁误拒真实串行 libtest 同行前缀、误收重复结果行，现均修正；失败版本和修正后记录分别保留。外部 dumpbin reader 首次误将 DLL 标题当作导出，修正后八项实际导出已核对，原失败也保留。
+
+本批是显式归档依赖离线重放，nightly 更新后的 122 项 xtask/工作区测试、所选 Windows 42 通过/25 忽略、默认 Release、Clippy 与格式检查通过；忽略的桌面测试由各自显式入口负责，不称全部原生通过。独立四调用原版 pilot 的三轮输入/原生记录也保存，未替代最终配对结果。prepare-native 将原版、Rust、记录检查分别保留，原版失败不会省略后续独立证据；即时上传新增 `frame-pool-context/initialization/**`。新托管原生执行仍待验证；CI 预装工具按实际能力与身份记录，年龄不作门禁。证据由参考目录 `local/current-framepool-init-development-path.txt` 指向；已有四项原版 pseudo 黑图、六项 mixed mask 与 Mac 失败、完整初始化/设备损失和 P1 门禁不因此改变。
+
 同一 `0fe79b2` 的两个原生 Mac job 均已终态失败，原型步骤均通过，既有来源组件各为 133/154，21 个失败的名称和全部 154 项状态完全一致，没有因预装工具不是严格最新版停止。实际身份与结果如下；runner 名称和内核身份分别保留，不用标签推造系统版本。
 
 | 原生运行 | 实际 Darwin 内核 | 实际 Xcode / build | 来源组件 |

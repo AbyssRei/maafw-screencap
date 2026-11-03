@@ -145,6 +145,31 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         & $Program @Arguments >> $logPath 2>&1
         $exitCode = $LASTEXITCODE
         "exit=$exitCode" | Add-Content -LiteralPath $logPath -Encoding utf8
+        if ($Name -in @('frame-pool-source-initialization','frame-pool-rust-initialization','frame-pool-initialization-records') -and $exitCode -eq 0) {
+            $observed=[IO.File]::ReadAllText($logPath)
+            $summary = switch ($Name) {
+                'frame-pool-source-initialization' { 'original FramePool initialization cycles=20 calls=80 hidden_rejections=40 destroyed_rejections=40 final_device_notifications=40 native_captures=0 full_P1_acceptance=0 passed' }
+                'frame-pool-rust-initialization' { 'Rust FramePool initialization cycles=20 calls=80 hidden_rejections=40 destroyed_rejections=40 final_device_notifications=40 native_captures=0 full_P1_acceptance=0 passed' }
+                'frame-pool-initialization-records' { 'FramePool initialization calls=160 native_rejections=160 final_device_notifications=80 native_captures=0 files=7 full_P1_acceptance=0 passed' }
+            }
+            $prefix = switch ($Name) {
+                'frame-pool-source-initialization' { 'original FramePool initialization' }
+                'frame-pool-rust-initialization' { 'Rust FramePool initialization' }
+                'frame-pool-initialization-records' { 'FramePool initialization' }
+            }
+            # Serial libtest may print its test name on the summary's line.
+            # Accept that exact owner test prefix, retaining a single summary.
+            $leader = if ($Name -eq 'frame-pool-rust-initialization') {
+                '(?:test backends::windows::frame_pool::tests::initialization::preserves_failed_initialization_state_and_releases_replaced_native_devices \.\.\. )?'
+            } else { '' }
+            if ([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($prefix)+'.*\r?$').Count -ne 1 -or
+                ($Name -eq 'frame-pool-rust-initialization' -and
+                    ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                     $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected the complete native initialization/device lifetime matrix; no capture/P1 acceptance'
+            }
+        }
         if ($Name -eq 'frame-pool-source-border') {
             $observed = [IO.File]::ReadAllText($logPath)
             if ($exitCode -eq 77 -and $observed -match '(?m)^border environment missing before_capture=1 property_unavailable=1\r?$') {
@@ -1042,6 +1067,26 @@ try {
         $frameContextEvidence = Join-Path $artifacts frame-pool-context
         New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
         if($FramePoolParity) {
+            $frameInitEvidence=Join-Path $frameContextEvidence initialization
+            New-Item -ItemType Directory -Path (Join-Path $frameInitEvidence source)|Out-Null
+            $initProgram=Join-Path $artifacts mfs_framepool_init_reference.exe
+            $initFixture=Join-Path $artifacts mfs_framepool_init_fixture.dll
+            try {
+                Step frame-pool-initialization-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_init_reference','--parallel','4')
+                foreach($name in @('mfs_framepool_init_reference.exe','mfs_framepool_init_fixture.dll')) {
+                    $saved=Join-Path $artifacts $name
+                    Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved
+                    Save-Input $saved
+                }
+                Invoke-FrameCheck frame-pool-source-initialization $initProgram @((Join-Path $frameInitEvidence source))
+            } catch { $script:failed=$true; Write-Host $_.Exception.Message }
+            finally {
+                $nativeLog=Join-Path $logsRoot frame-pool-source-initialization.log
+                if(Test-Path -LiteralPath $nativeLog) {
+                    Copy-Item -LiteralPath $nativeLog -Destination (Join-Path $frameInitEvidence source-log.txt)
+                }
+                Get-ChildItem -LiteralPath $frameInitEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName }
+            }
             $borderEvidence=Join-Path $frameContextEvidence source-border
             New-Item -ItemType Directory -Path $borderEvidence|Out-Null
             try {
@@ -1244,9 +1289,10 @@ try {
         $frameEmptyCase = 'backends::windows::frame_pool::tests::empty_client::clears_warm_cache_on_real_zero_client_and_recovers_without_old_pixels'
         $frameMapCase = 'backends::windows::frame_pool::tests::map_boundary::preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion_failures'
         $frameSizeCase = 'backends::windows::frame_pool::tests::size_boundary::preserves_original_size_query_catches_partial_states_and_recovery'
+        $frameInitCase = 'backends::windows::frame_pool::tests::initialization::preserves_failed_initialization_state_and_releases_replaced_native_devices'
         $frameAlphaCase = 'backends::windows::frame_pool::tests::alpha_sequence::records_original_alpha_sequence_pixels_and_held_owners'
         $caseSelection += @('--skip', $frameAlphaCase)
-        $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameRecordCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase, '--skip', $frameSizeCase)
+        $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameRecordCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase, '--skip', $frameSizeCase, '--skip', $frameInitCase)
         if ($FramePoolParity) { $caseSelection += @('--skip', $frameCase, '--skip', $frameLifecycleCase, '--skip', $framePseudoCase) }
         $desktopCase = 'backends::windows::desktop_dup::tests::matches_original_target_pixels_across_twenty_desktop_and_window_lifecycles'
         $desktopDefaultCase = 'backends::windows::desktop_dup::tests::selects_adapter_zero_output_zero_for_null_hwnd_and_retains_cpu_pixels'
@@ -1333,6 +1379,10 @@ try {
             Step 'desktop-dup-rust-conversion-boundary' cargo ($parityArguments + @('--',$desktopConversionCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
         }
         if ($FramePoolParity) {
+            $env:MFS_P1_FRAMEPOOL_INIT_ARTIFACTS = $frameInitEvidence
+            $env:MFS_P1_FRAMEPOOL_INIT_FIXTURE = $initFixture
+            Invoke-FrameCheck frame-pool-rust-initialization cargo ($parityArguments + @('--',$frameInitCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck frame-pool-initialization-records $ConfigureTool @('upstream-trace','framepool-init',$frameInitEvidence)
             # Only this exact process adds the PrintWindow content witness;
             # ordinary FramePool tests keep their original feature selection.
             $alphaArguments = @($parityArguments)
