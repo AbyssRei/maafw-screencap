@@ -205,6 +205,7 @@ impl Fixture {
     }
     #[cfg(any(
         feature = "windows-screen-dc",
+        feature = "windows-desktop-dup",
         feature = "windows-desktop-dup-window",
         feature = "windows-frame-pool"
     ))]
@@ -241,7 +242,7 @@ impl Fixture {
         }
         Ok(())
     }
-    #[cfg(any(feature = "windows-desktop-dup-window", feature = "windows-frame-pool"))]
+    #[cfg(any(feature = "windows-desktop-dup", feature = "windows-frame-pool"))]
     pub fn start_inside_desktop_updates(&mut self) -> Result<(), Box<dyn Error>> {
         type Start = unsafe extern "C" fn(*mut c_void) -> i32;
         // SAFETY: Exact print-thread.h owner command. The UI owner retains the

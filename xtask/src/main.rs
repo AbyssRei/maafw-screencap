@@ -13,6 +13,7 @@ mod custom_reentry;
 mod dependencies;
 mod desktop_acquire;
 mod desktop_fullscreen;
+mod desktop_lifetime;
 mod desktop_map;
 mod frame_pool_alpha;
 mod framepool_border;

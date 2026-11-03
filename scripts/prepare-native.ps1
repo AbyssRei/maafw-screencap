@@ -198,6 +198,30 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete Rust real held-acquisition rejection/owner test'
             }
         }
+        if ($Name -in @('desktop-dup-source-lifetime','desktop-dup-rust-lifetime','desktop-dup-lifetime-records') -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $prefix = switch ($Name) {
+                'desktop-dup-source-lifetime' { 'original DesktopDup lifetime' }
+                'desktop-dup-rust-lifetime' { 'native Rust DesktopDup lifetime' }
+                'desktop-dup-lifetime-records' { 'DesktopDup lifetime' }
+            }
+            $summary = if ($Name -eq 'desktop-dup-lifetime-records') {
+                "$prefix sides=2 public_calls=40 native_objects=160 d3d_destruction_notifications=120 dxgi_private_owner_releases=40 held_texture_controls=20 held_device_controls=20 retained_cpu=40 extra_flush=0 global_gpu_allocation_proof=0 full_P1_acceptance=0 passed"
+            } else {
+                "$prefix cycles=20 native_objects=80 d3d_destruction_notifications=60 dxgi_private_owner_releases=20 held_texture_controls=10 held_device_controls=10 retained_cpu=20 extra_flush=0 full_P1_acceptance=0 passed"
+            }
+            # Serial libtest may put the exact owner test name on this line.
+            $leader = if ($Name -eq 'desktop-dup-rust-lifetime') {
+                '(?:test backends::windows::desktop_dup::tests::native_lifetime::releases_observed_gpu_objects_while_cpu_images_survive_backend_and_window_shutdown \.\.\. )?'
+            } else { '' }
+            if ([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($prefix)+'.*\r?$').Count -ne 1 -or
+                ($Name -eq 'desktop-dup-rust-lifetime' -and
+                    ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                     $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected one complete native object-lifetime matrix with distinct destruction/association and explicit-reference controls'
+            }
+        }
         if ($Name -eq 'desktop-dup-source-map-boundary' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDup map_boundary cycles=20 warm=20 observed_calls=40 map_failures=7 conversion_failures=6 recovery=20 retained=47 native_forwarded=1 full_P1_acceptance=0 passed')) {
             throw 'Expected the complete original native DesktopDup Map/release/held matrix'
@@ -1105,6 +1129,15 @@ try {
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_desktop_dup_reference.exe) -Destination $desktopProgram
         Save-Input $desktopProgram
         $desktopEvidence = Join-Path $artifacts desktop-dup-source
+        Step desktop-dup-lifetime-build $cmake @('--build',$build,'--config','Release','--target','mfs_desktop_lifetime_reference','--parallel','4')
+        foreach($name in @('mfs_desktop_lifetime_reference.exe','mfs_d3d_lifetime.dll')) {
+            $saved=Join-Path $artifacts $name
+            Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved;Save-Input $saved
+        }
+        $env:MFS_D3D_LIFETIME_LIBRARY=Join-Path $artifacts mfs_d3d_lifetime.dll
+        $desktopLifetimeEvidence=Join-Path $desktopEvidence lifetime
+        New-Item -ItemType Directory -Path (Join-Path $desktopLifetimeEvidence source)|Out-Null
+        Invoke-FrameCheck desktop-dup-source-lifetime (Join-Path $artifacts mfs_desktop_lifetime_reference.exe) @((Join-Path $desktopLifetimeEvidence source))
         Step desktop-dup-map-build $cmake @('--build',$build,'--config','Release','--target','mfs_desktop_map_reference','--parallel','4')
         $desktopMapProgram=Join-Path $artifacts mfs_desktop_map_reference.exe
         Copy-Item -LiteralPath (Join-Path $build Release/mfs_desktop_map_reference.exe) -Destination $desktopMapProgram
@@ -1366,6 +1399,8 @@ try {
         $desktopGeometryCase = 'backends::windows::desktop_dup::tests::native_geometry::captures_all_corrected_native_clients_and_keeps_independent_target_owners'
         $caseSelection += @('--skip', $desktopGeometryCase)
         $desktopMapCase='backends::windows::desktop_dup::tests::native_map::unmaps_and_releases_each_real_acquisition_before_conversion_and_after_map_rejection'
+        $desktopLifetimeCase='backends::windows::desktop_dup::tests::native_lifetime::releases_observed_gpu_objects_while_cpu_images_survive_backend_and_window_shutdown'
+        $caseSelection += @('--skip', $desktopLifetimeCase)
         $caseSelection += @('--skip', $desktopMapCase)
         $desktopAcquireCase='backends::windows::desktop_dup::tests::native_acquire::preserves_caller_acquisition_when_native_rejects_capture_and_recovers_after_release'
         $caseSelection += @('--skip', $desktopAcquireCase)
@@ -1426,6 +1461,9 @@ try {
         }
         if ($DesktopDupParity) {
             $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence
+            $env:MFS_DESKTOP_LIFETIME_ROOT=$desktopLifetimeEvidence
+            Invoke-FrameCheck desktop-dup-rust-lifetime cargo ($parityArguments+@('--',$desktopLifetimeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck desktop-dup-lifetime-records $ConfigureTool @('upstream-trace','desktop-lifetime',$desktopLifetimeEvidence)
             $env:MFS_DESKTOP_MAP_ROOT=$desktopMapEvidence
             Invoke-FrameCheck desktop-dup-rust-map-boundary cargo ($parityArguments+@('--',$desktopMapCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-map-records $ConfigureTool @('upstream-trace','desktop-map',$desktopMapEvidence)

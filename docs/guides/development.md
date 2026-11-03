@@ -120,6 +120,20 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+DesktopDup 新增独立的真实对象寿命矩阵：原版目标单独编译完整未改 F `DesktopDupScreencap.cpp`，Rust 直接调用同一私有后端；每侧二十个自有 96×64 场景生命周期，每周期只作一次公开截图。先预热成功，再观察实际 device、immediate context、duplication 和 staging texture，原 `uninit` 的七个缓存槽从 127 归零。device/context/texture 通过真实 `ID3DDestructionNotifier`，duplication 通过唯一 GUID 的 `SetPrivateDataInterface` owner；两种证据分别记录，后者只证明关联 owner 释放。奇数周期分别保留 texture 和 device 两个显式引用，不假定隐式父设备引用；释放这两个引用前不得收到其通知。最终通知的两秒预算是有限观测条件，不是 API 同步析构保证。
+
+原生 observer 的具体接口 QI、六项标量宽度、注册方式/返回码、线程/QPC、稳定对象身份和每周期三阶段记录均独立核对；注册仅借用当前对象，临时 QI 引用在返回前释放。回调只写进程寿命的固定原子记录，无借用栈地址、原生对象访问、分配或 I/O；Rust 即使失败也保留 fixture 模块至进程退出。没有添加 `Flush`、`ClearState`、设备重置或取帧重试。持有的 CPU 图像在后端、原生资源和窗口退出后逐字节重读；不把这些私有诊断导出变成产品 ABI。
+
+本机预定三轮共九次原版/Rust/记录调用全部退出 0；独立复核重算 120 次公开截图/生命周期、480 个对象、360 次 D3D 析构通知、120 次 DXGI owner 释放、各六十个显式 texture/device 引用控制，以及 240 份完整即时/持帧目标文件。全部 1,341 项运行输入及内容寻址副本重新摘要一致；三个冻结 checker 的只读复验各保持 127 份实际文件不变。四路 Raw Input/低级 hook 在 armed 区间零事件，最大采样间隔 79.3404ms，全部注销且电源请求归还；本次仅观察到 prearm 鼠标通道 1/3，不声称新键盘实物挑战。证据由参考目录 `local/current-desktop-lifetime-development-path.txt` 与 `local/current-desktop-lifetime-local-review-path.txt` 指向，已封存的三轮和最终复核不得改写。
+
+`cargo xtask upstream-trace desktop-lifetime <外部矩阵> [--check-only]` 校核完整原生状态和目标像素，分别报告两种通知的意义，不声称全局 GPU 内存闭包。四十组实际数据副本控制接受三组完整记录、拒绝三十七组损坏记录；三阶段、计数、重复/缺行、接口身份、显式持有、时序、ABI、像素和保存报告均覆盖，原矩阵未改。实际 Step 的二十七组输出控制、四组独立继续执行和一个真实冻结 checker 子命令通过；不完整/重复摘要、零/多/忽略/测量测试、非零退出均拒绝，失败汇总保留。控制初版错误地把矩阵根目录无关文件视为受登记数据，失败已保留，修正仅改用保存报告字段。输出控制还暴露七项宽松匹配，现只接受完整整行及确切 libtest 前缀，不重跑截图取得绿色。
+
+本批使用显式归档依赖、VS2026/MSBuild、SDK 28000 和记录的 nightly，不声称新在线最新版解析。首轮原生编译缺 `dxgi1_2.h`、直接 DD feature 缺共享夹具方法的两次失败均保留；补头与正确 feature gating 后重建通过，没有改后端捕获算法。CI 已接入独立 source/Rust/records 三项和构建，后续托管执行仍待结果。预装工具年龄继续只作参考；有限对象/CPU 所有权通过不覆盖任意 device/access loss、完整回调排空、历史像素失败或完整 P1。
+
+确切 `130aad1` 的原生 Mac Actions `41615832824` 已完成：新增 `macos-live-sample-hook-control`、`rust-macos-live-sample`、`macos-live-sample-records` 全通过，组件为 136/157；全部原 154 项名称/状态及 21 个失败完全不变。官方 41,548,013 字节 ZIP 的 SHA256/CRC、11,986 项归档内容、全部 157 份日志、42 份实际登记数据、41 项报告引用及十六份确切 Git 来源补件均独立核对。冻结 checker `--check-only` 通过且 42 文件摘要未变；真实原生 Mat 类型查询为 64。
+
+三份真实回调样本各执行一次现有 Rust 转换，完整 2,359,296 像素重算通过：原生转换前/后 BGRA 与 Rust 即时/持有 BGRA 相同，原版即时/持有 BGR 与 Rust 即时/持有 BGR 及所有 BGRA 的前三通道相同。六份 Rust CPU owner、三份原版 BGR 持帧、测试回调共享上下文归还和已 join reader 记录核对；不接受已知场景、两次独立选源或整个框架回调排空。组件仍整体失败，原像素/超时断言无豁免。直接下载三分钟零字节超时保留，后续显式任务局部代理 DNS、正常 TLS 身份校验的独立传输通过官方长度/摘要；未输出凭据或修改持久网络设置。已封存记录由参考目录 `local/current-macos-live-sample-native-path.txt` 指向，不授予完整输入闭包或 P1 验收。
+
 新增独立 `macos-live-sample` 诊断，不替换已有原版/Rust 严格场景。确切 F 的原类仍通过单独观察模块编译，保持选源、配置、原转换和五秒等待；观察包装先转发原完成块，再于同一实际回调同步将相同 CMSampleBuffer 借给已有 Rust `pixel_buffer::with_sample` 与显式 OpenCV 适配器。预期每次取帧记录原生转换前/后 BGRA、原版及 Rust 完整 BGR、Rust 锁/复制/转换/解锁和原生线程身份，三次调用各只执行一次。新入口没有人工已知场景，因此只检验同一真实输入的转换与所有权，不能据此豁免旧场景像素失败或证明两次独立截图选源等价。
 
 原类上下文和逃逸观察块共享一个测试回调 owner；注册成功或拒绝均按私有头约定接管/释放，完成计数在 Rust Arc 归还之后发布。原对象结束后，在已 join 的另一个线程重读并释放六份 Rust CPU owner，另保留原版三份持帧对照；模块退出与回调上下文归还分别记录，不证明整个原生框架回调排空。CPU 访问继续使用现有只读锁及配对解锁，遵循 [CoreVideo 锁契约](https://developer.apple.com/documentation/corevideo/cvpixelbufferlockbaseaddress(_:_:))，不保存样本或原生基址。默认产品后端和既有观察模式不启用新 hook。
@@ -128,7 +142,7 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 校验实际旧原生数据时另发现该批 OpenCV 的 BGR 类型标签为 64，不能把历史标签 16 写成校验器常量；现由私有头的真实原生查询提供编译时标签，再核对实际 Mat 记录。合成控制同时验证两种标签及错误配对，未将它定为 SDK 格式编码。首次外部 CLI 控制因 Windows 文本换行拒绝而停止，失败保留；这是控制生成器的问题，不改写旧原生结果。修正后的六组实际 CLI 子命令接受三项、拒绝三项，验证创建、只读、已有报告、改动持帧与改动报告；Rust 侧记录明确由旧原生数据合成，未执行新 Rust 回调或真实捕获。
 
-本机 VS2026/MSBuild 的 guard Debug/Release、Apple target Rust 类型检查与严格 Clippy、workspace 125 项 xtask、默认库 34 通过/6 忽略及 4 项 interop 均通过；使用与先前集成批一致的显式归档依赖和 nightly 身份，不声称重新查询在线最新版。首次严格 Clippy 的合成夹具 `chunks_exact` 提示已修正并单独保留失败日志。准备脚本已接入新原生测试/记录检查，现有组件上传覆盖其输出；Apple 原生编译和实际样本转换仍待新 CI。记录由参考目录 `local/current-macos-live-sample-development-path.txt` 指向，完整 P1 尚未验收。
+此前开发批的本机 VS2026/MSBuild guard Debug/Release、Apple target Rust 类型检查与严格 Clippy、workspace 125 项 xtask、默认库 34 通过/6 忽略及 4 项 interop 均通过；使用与先前集成批一致的显式归档依赖和 nightly 身份，不声称重新查询在线最新版。首次严格 Clippy 的合成夹具 `chunks_exact` 提示已修正并单独保留失败日志。该批只完成原生测试/记录准备，当时尚未执行 Apple 捕获；后续真实结果见本节开头，不改写开发批身份。开发记录由参考目录 `local/current-macos-live-sample-development-path.txt` 指向，完整 P1 尚未验收。
 
 确切 `02c7eb6` 的原生 Mac job 已失败结束，组件仍为 133/154；全部 154 项名称和状态与已封存 `7b3a608` 一致，21 项旧失败保留。官方 40,056,162 字节组件 ZIP 的摘要/CRC、11,941 项归档内容和每项日志摘要核对，实际工具身份和预装政策控制保留；没有工具年龄门禁失败。本轮不重审全部轻量输入缺口、源码/依赖闭包或改变像素、超时和回调结论；焦点记录由参考目录 `local/current-02c7-macos-focused-path.txt` 指向。
 

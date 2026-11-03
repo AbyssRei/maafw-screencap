@@ -227,6 +227,14 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     endforeach()
 endif()
 if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
+    add_library(mfs_d3d_lifetime SHARED d3d-lifetime.cpp)
+    target_link_libraries(mfs_d3d_lifetime PRIVATE D3D11 Dxgi)
+    add_executable(mfs_desktop_lifetime_reference desktop-lifetime-reference.cpp print-parity.cpp print-thread.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp")
+    target_include_directories(mfs_desktop_lifetime_reference PRIVATE
+        "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/include"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit" ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mfs_desktop_lifetime_reference PRIVATE mfs_d3d_lifetime mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 Dwmapi D3D11 Dxgi)
     add_executable(mfs_desktop_dup_reference desktop-dup-reference.cpp print-parity.cpp print-thread.cpp
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp"
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupWindowScreencap.cpp")
