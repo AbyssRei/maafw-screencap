@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // One explicitly selected mask per fresh test process; no failed-case retry.
 use super::*;
+use crate::backends::windows::gamepad::{Error as GamepadError, GamepadCapture};
 use crate::platform::windows::window_api::{Point, SystemWindow, WindowApi};
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host as com};
 use std::fmt::Write;
@@ -140,19 +141,24 @@ fn captures_selected_method_through_original_and_rust_factories()
         fixture.start_desktop_updates()?;
     }
     let mut held = Vec::new();
+    let gamepad = gamepad_host::Trace::new(&ops, &rust, rust.join("rust-gamepad-host.tsv"));
     let mut rows = String::new();
     let mut mismatch = false;
     for cycle in 0..20 {
         println!("runtime method={method} Rust cycle={cycle} initialize");
-        let mut capture = CaptureDelegate::new(
+        gamepad.mode(0);
+        let mut capture = GamepadCapture::new(
             Native::new(&rust, &ops).unwrap(),
+            gamepad.provider(),
             fixture.hwnd() as usize,
+            cycle % 2,
             method,
         );
+        assert!(!capture.connected());
         let initialized = capture
-            .initialize()
+            .connect()
             .map_err(|error| format!("Rust runtime init {error:?}"))?;
-        if initialized != Some(true) {
+        if !initialized || !capture.connected() {
             return Err(format!(
                 "Rust runtime initialization false: {initialized:?}; source_passed={source_passed}"
             )
@@ -162,6 +168,17 @@ fn captures_selected_method_through_original_and_rust_factories()
         assert!(selected != 0 && (selected & method) == selected);
         let scope = geometry(fixture.hwnd(), selected)?;
         for shot in 0..3 {
+            if shot == 1 {
+                let mode = u32::try_from(cycle % 3 + 1).unwrap();
+                gamepad.mode(mode);
+                let result = match capture.connect() {
+                    Ok(value) => i32::from(value),
+                    Err(GamepadError::Host(_)) => 2,
+                    Err(error) => return Err(format!("unexpected capture init {error:?}").into()),
+                };
+                assert_eq!(result, if mode == 1 { 0 } else { 2 });
+                assert!(!capture.connected());
+            }
             let mut image = ops.image();
             if !capture
                 .capture(&mut image)
@@ -189,6 +206,8 @@ fn captures_selected_method_through_original_and_rust_factories()
         )?;
         std::fs::write(rust.join("rust-cycles.tsv"), &rows)?;
     }
+    assert!(gamepad.closed());
+    gamepad.save()?;
     fixture.close()?;
     drop(fixture);
     let objects_after = adapter.objects();
@@ -238,6 +257,9 @@ fn captures_selected_method_through_original_and_rust_factories()
     }
     println!(
         "real native runtime method={method}; source_lifecycles=20 Rust_lifecycles=20; source_retained=60 Rust_retained=60; actual factory/virtual capture and window/module shutdown=1 passed"
+    );
+    println!(
+        "Gamepad native outer method={method} cycles_per_side=20 failed_reconnects_per_side=20 original_class_api=1 same_Rust_delegate=1 input_actions=0 full_P1_acceptance=0 passed"
     );
     Ok(())
 }

@@ -514,7 +514,13 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                -not $observed.Contains("real native runtime method=$runtimeMask; source_lifecycles=20 Rust_lifecycles=20; source_retained=60 Rust_retained=60; actual factory/virtual capture and window/module shutdown=1 passed")) {
                 throw 'Expected actual original/Rust factory capture/lifetime case, not constructor or zero-test success'
             }
-            & $ConfigureTool upstream-delegate win32-runtime $runtimeMask $env:MFS_DELEGATE_RUNTIME_RECORDS >> $logPath 2>&1
+            $outerSummary="Gamepad native outer method=$runtimeMask cycles_per_side=20 failed_reconnects_per_side=20 original_class_api=1 same_Rust_delegate=1 input_actions=0 full_P1_acceptance=0 passed"
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($outerSummary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^Gamepad native outer.*\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result:').Count -ne 1) {
+                throw 'Expected the complete original outer Gamepad and retained real native capture after controlled host failures'
+            }
+            & $ConfigureTool upstream-delegate gamepad-runtime $runtimeMask $env:MFS_DELEGATE_RUNTIME_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual native runtime images/owners/events failed independent verification'}
         }
         if ($Name -eq 'pipewire-control-source-model' -and $exitCode -eq 0) {
@@ -1029,6 +1035,13 @@ try {
             Save-Input $saved
         }
         $env:MFS_P1_GAMEPAD_HOST_RECORDS=Join-Path $artifacts gamepad-host
+        if($offline) {
+            Save-Input (Prepared-File gamepad-runtime-scope.txt)
+        } else {
+            $gamepadRuntimeScope=Join-Path $inputsRoot gamepad-runtime-scope.txt
+            Copy-Item -LiteralPath (Join-Path $delegateBuild gamepad-runtime-scope.txt) -Destination $gamepadRuntimeScope
+            Save-Input $gamepadRuntimeScope
+        }
         $delegateEvidence=Join-Path $artifacts windows-delegate
         $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS=$delegateEvidence
         $delegateNativeEvidence=Join-Path $artifacts windows-delegate-native

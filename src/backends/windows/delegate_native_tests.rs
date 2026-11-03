@@ -13,6 +13,9 @@ use std::{
 };
 #[path = "delegate_destroy_tests.rs"]
 mod destroy;
+#[cfg(feature = "prototype-windows-com")]
+#[path = "delegate_gamepad_host_tests.rs"]
+mod gamepad_host;
 #[path = "delegate_native_host_tests.rs"]
 mod host;
 #[path = "delegate_query_tests.rs"]

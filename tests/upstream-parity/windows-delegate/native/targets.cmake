@@ -57,7 +57,21 @@ foreach(_property INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS LINK_L
     get_target_property(_value mfs_delegate_native_source ${_property})
     set_property(TARGET mfs_delegate_runtime_source PROPERTY ${_property} "${_value}")
 endforeach()
+target_sources(mfs_delegate_runtime_source PRIVATE
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit/Manager/GamepadControlUnitMgr.cpp"
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit/API/GamepadControlUnitAPI.cpp")
+# No scripted DLL overlay: only directory and opaque input owner are supplied.
+target_include_directories(mfs_delegate_runtime_source BEFORE PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/native/gamepad-overlay"
+    "${CMAKE_CURRENT_SOURCE_DIR}/gamepad-overlay"
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit"
+    "${MFS_UPSTREAM_ROOT}/source/include")
+target_compile_definitions(mfs_delegate_runtime_source PRIVATE
+    MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-gamepad-native-runtime")
 target_link_libraries(mfs_delegate_runtime_source PRIVATE WindowsApp RuntimeObject CoreMessaging User32)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/gamepad-runtime-scope.txt"
+    "Current63-mask runtime consumes the complete unchanged F Gamepad manager/header/API through real outer C factories, versus the same private Rust GamepadCapture/Native delegate. Only input-owner and library-directory boundaries are supplied; no input action/device is used. Each cycle performs a controlled host reconnect failure (false/connect exception/create exception), then continues real capture through the retained delegate. Separate host event snapshots bind reset-before-capture teardown and final input release to actual native unit/module/capture counters. Historical partial-facade records keep their original scope. This does not accept arbitrary host/native faults, complete callbacks or full P1.\n")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/native-scope.txt"
     "Actual flags=0 Windows DLL loads, original LibraryHolder/Boost DLL and loader/outer capture bodies. Real original interface ABI. Source provider compiles all six fixed original screenshot methods/helper and manager bodies; input=None shim and logger/path injection remain. The original paired-owner matrix exercises GDI. A separate explicit runtime executable/test accepts all63 nonempty method masks on independent owned UI-thread windows, MTA/current-thread dispatchers, 20 lifecycles and60 retained CPU images per side. DesktopDup retains full monitor scope and checks its owned-window ROI; DesktopDupWindow stays window-only. Rust provider remains an acceptance-only C++ ABI facade over the actual private Rust manager/factory. Rust output crosses two explicit boundary safety copies; the independent source process clones once into executable-owned storage. Full host/format/fault/pseudo-minimize/resource/framework matrices and P1 remain pending.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/native-scope.txt"

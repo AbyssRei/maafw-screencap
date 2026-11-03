@@ -332,6 +332,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.h
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/gamepad-host-source/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/gamepad-runtime-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/framepool-device-only.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-native-*.txt

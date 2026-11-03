@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Explicit native acceptance process; capture remains synchronous and unchanged.
 #include "bridge.h"
-#include "delegate-source.hpp"
+#include "Manager/GamepadControlUnitMgr.h"
+#include "MaaControlUnit/GamepadControlUnitAPI.h"
+#include "MaaUtils/Runtime.h"
 #include <dispatcherqueue.h>
 #include <roapi.h>
 #include <winrt/Windows.System.h>
@@ -15,6 +17,7 @@
 #include <array>
 #include <algorithm>
 #include <limits>
+#include "gamepad-runtime.hpp"
 namespace {
 struct Host {
     bool initialized=false;
@@ -128,36 +131,47 @@ int wmain(int argc,wchar_t** argv) {
         MaaNS::directory=argv[1];const std::filesystem::path output=argv[3];
         const auto method=std::stoull(argv[4]);const auto cycles=std::stoul(argv[5]);
         if(!method || method>63 || cycles!=20 || !output.is_absolute() || !std::filesystem::is_directory(output)) {throw std::logic_error("runtime arguments");}
-        mfs_dn_set_mode(5);Trace trace{output};Host host;Fixture fixture;fixture.open(argv[2],method);
+        if(std::string_view(MaaGamepadControlUnitGetVersion())!="mfs-p1-gamepad-native-runtime") {throw std::logic_error("original outer API version differs");}
+        MaaGamepadControlUnitDestroy(nullptr);
+        mfs_dn_set_mode(5);Trace trace{output};MfsGamepadNative::Trace outer_trace{output};Host host;Fixture fixture;fixture.open(argv[2],method);
         std::vector<std::pair<cv::Mat,Geometry>> held;held.reserve(60);
         std::ofstream table(output/L"source-cycles.tsv");
         bool mismatch=false;
         for(unsigned cycle=0;cycle<cycles;++cycle) {
             uint64_t selected=0;Geometry scope;
             {
-                Source::GamepadControlUnitMgr manager;manager.hwnd_=static_cast<HWND>(fixture.span.hwnd);manager.screencap_method_=method;
+                MfsGamepadFixture::mode=0;
+                std::unique_ptr<MAA_CTRL_UNIT_NS::GamepadControlUnitAPI,decltype(&MaaGamepadControlUnitDestroy)> manager(
+                    MaaGamepadControlUnitCreate(fixture.span.hwnd,cycle%2,method),MaaGamepadControlUnitDestroy);
+                if(!manager || manager->connected()) {throw std::runtime_error("source outer initial state");}
                 std::cout<<"source cycle="<<cycle<<" initialize"<<std::endl;
-                if(!manager.init_win32_unit()) {throw std::runtime_error("source runtime initialization false");}
+                if(!manager->connect() || !manager->connected()) {throw std::runtime_error("source runtime outer initialization false");}
                 MfsDnEvent events[4096]{};size_t count=0;uint64_t owners=0;
                 if(mfs_dn_events(events,std::size(events),&count,&owners)) {throw std::runtime_error("source runtime diagnostic overflow");}
                 for(size_t index=0;index<count;++index) {if(events[index].kind==7) {selected=events[index].a;}}
                 if(!selected || (selected&method)!=selected) {throw std::runtime_error("source runtime selected outside mask");}
-                scope=geometry(manager.hwnd_,selected);
+                scope=geometry(static_cast<HWND>(fixture.span.hwnd),selected);
                 for(unsigned shot=0;shot<3;++shot) {
+                    if(shot==1) {
+                        MfsGamepadFixture::mode=cycle%3+1;
+                        int status=2;try{status=manager->connect();}catch(const std::runtime_error&){}
+                        if(status!=(MfsGamepadFixture::mode==1?0:2) || manager->connected()) {throw std::runtime_error("source controlled outer failure differs");}
+                    }
                     cv::Mat image;
-                    if(!manager.screencap(image)) {throw std::runtime_error("source runtime capture false");}
+                    if(!manager->screencap(image)) {throw std::runtime_error("source runtime capture false");}
                     // Extra executable-owned safety clone, before unit/module
                     // destruction. Native conversion remains at original point.
                     auto independent=image.clone();
                     save(independent,output/(L"source-"+std::to_wstring(cycle)+L"-"+std::to_wstring(shot)+L".bgr"),scope);
                     mismatch|=!pixels(independent,scope);held.emplace_back(std::move(independent),scope);
                 }
-                if(!manager.inactive()) {throw std::runtime_error("source runtime inactive false");}
+                if(!manager->inactive()) {throw std::runtime_error("source runtime inactive false");}
             }
             const bool unloaded=GetModuleHandleW((MaaNS::directory/L"MaaWin32ControlUnit.dll").c_str())==nullptr;
             table<<cycle<<'\t'<<selected<<'\t'<<unloaded<<'\t'<<scope.width<<'\t'<<scope.height<<'\t'<<scope.x<<'\t'<<scope.y<<'\n';table.flush();
             if(!unloaded) {throw std::runtime_error("source runtime module retained");}
         }
+        if(!MfsGamepadFixture::inputs.empty()) {throw std::runtime_error("source outer input owners survived");}
         fixture.close();
         for(size_t index=0;index<held.size();++index) {
             mismatch|=!pixels(held[index].first,held[index].second);
