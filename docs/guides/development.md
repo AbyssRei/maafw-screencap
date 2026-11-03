@@ -130,6 +130,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+较早的 DesktopDup 寿命、FramePool 寿命及 DesktopDup 受控 Acquire 错误记录校验器补齐原生位宽：caller/attach/callback 的 `DWORD` 线程身份和 `UINT` callback ID 即使通过 `u64` 观察通道传输，仍须可窄化为 `u32`。根据真实表头的三个前缀列，线程在第 8/9 个零基索引，callback ID 是第 12 列；第 13 列是对象指针，保留非零及 64 位身份，时钟也不窄化。没有添加 opaque callback ID 非零要求，实际捕获、原生观察器、布局及已保存报告均未改。
+
+冻结旧工具对三份真实托管报告及 33 份另目录合成控制执行三十六次只读 CLI：十八份把调用/注册线程、完成线程或 callback ID 一致改成 `2^32` 的数据也被接受。新工具对同一三十六项只读验证，明确拒绝全部十八份越界控制，继续接受三份真实报告、十二份零/最大 UINT 合法边界控制和三份加宽 QPC 控制；合计七十二次调用，原始实际数据及各控制目录前后摘要不变。合法边界是合成数据，不冒称驱动实际返回零或最大 ID。归档离线 lock 与原资源边界开发批一致，xtask release 构建、133 项测试、严格 all-targets Clippy 和格式通过；首次外部准备误引用不存在的主输出根 lock，在构建前停止，随后核对确切已归档 lock。来源/控制及日志由参考目录 `local/current-native-lifetime-width-path.txt` 指向；本批没有原生执行、新在线依赖解析或全部数值字段审计，也不改变历史失败和完整 P1 状态。
+
 DesktopDup 默认主输出路径新增四个原生失败边界：`EnumAdapters`、`EnumOutputs`、`QueryInterface(IDXGIOutput1)`、`DuplicateOutput`。完整未改 F 类和同一 Rust 后端使用只在测试中启用的 COM 转发器；真实 default hardware device/context、工厂、主适配器/输出枚举及接口查询按原调用消费。选定边界分别返回受控 `E_FAIL` 或 `E_NOINTERFACE`；每组另有二十次真实主输出枚举/查询转发对照，均在复制创建处以明确 `E_ABORT` 哨兵停止，双方都调用公开 capture/screencap。没有访问原版私有方法、修改系统 vtable、调用真实 `DuplicateOutput` 或取得桌面帧，转发对照不是无干预的驱动创建成功证明。普通库不编入 caller-local hook；Rust 的创建参数和 `init` 之外完整捕获主体逐字保持不变。
 
 归档离线依赖下，Debug/Release 各四组、每侧每组二十轮失败/对照配对均通过：每配置 320 次公开拒绝、160 次主输出转发对照、320 次真实设备创建及 640 次实际 device/context 析构通知，零 sample/转换。失败后原版/Rust 的资源掩码分别保留为 `7/15/15/31`，显式 uninit 后清零；查询失败中的临时 output 在返回前释放，factory/adapter 等成员按实际路径保留。COM 转发器保存真实接口引用，其 create/destroy 计数只证明转发器及其持有引用释放，不当作底层 DXGI 对象或全局 GPU 析构；D3D 通知另经真实接口消费核对。这里不接受实际驱动复制创建、目标显示器查找/回退、重试恢复、物理设备故障或完整 P1。

@@ -37,6 +37,11 @@ fn phase(
     stage: usize,
     kind: u64,
 ) -> Result<()> {
+    // Native DWORD threads and the opaque UINT callback ID are transported
+    // as u64; the interface address and QPC fields are separate 64-bit values.
+    for field in [8, 9, 12] {
+        u32::try_from(row[field])?;
+    }
     if row[..3] != [u64::try_from(cycle)?, u64::try_from(stage)?, kind]
         || row[3..7] != [1, 1, kind, 1]
         || row[8] != call[4]
@@ -121,6 +126,7 @@ fn side(root: &Path, rust: bool) -> Result<serde_json::Value> {
         return Err("incomplete FramePool lifetime matrix".into());
     }
     let caller = calls[0][4];
+    u32::try_from(caller)?;
     if caller == 0 {
         return Err("FramePool native lifetime caller absent".into());
     }

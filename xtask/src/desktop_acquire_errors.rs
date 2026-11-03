@@ -85,6 +85,11 @@ fn lifetime(
     phase: usize,
     kind: usize,
 ) -> Result<()> {
+    // This table has three prefix columns before the u64 observer transport;
+    // DWORD threads and UINT IDs remain 32-bit, unlike pointers and QPC values.
+    for field in [8, 9, 12] {
+        u32::try_from(row[field])?;
+    }
     let expected_object = before[[7, 8, 12, 13][kind]];
     if row[..3]
         != [
@@ -171,6 +176,7 @@ fn side(root: &Path) -> Result<serde_json::Value> {
         return Err("incomplete Acquire errors matrix".into());
     }
     let caller = calls[0][15];
+    u32::try_from(caller)?;
     if caller == 0 {
         return Err("Acquire errors caller absent".into());
     }

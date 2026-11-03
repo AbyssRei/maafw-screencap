@@ -36,6 +36,11 @@ fn phase(
     stage: usize,
     kind: usize,
 ) -> Result<()> {
+    // The observer widens DWORD thread identities and UINT callback IDs to
+    // u64. Object addresses (column 13) and QPC values retain their full width.
+    for field in [8, 9, 12] {
+        u32::try_from(r[field])?;
+    }
     if r[..3]
         != [
             u64::try_from(cycle)?,
@@ -126,6 +131,7 @@ fn side(root: &Path) -> Result<serde_json::Value> {
         return Err("incomplete native object lifetime matrix".into());
     }
     let caller = calls[0][4];
+    u32::try_from(caller)?;
     if caller == 0 {
         return Err("native lifetime caller absent".into());
     }
