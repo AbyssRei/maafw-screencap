@@ -41,6 +41,16 @@ target_compile_definitions(mfs_gamepad_host_model PRIVATE NOMINMAX WIN32_LEAN_AN
     MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-gamepad-host")
 target_compile_options(mfs_gamepad_host_model PRIVATE /utf-8 /EHs)
 target_link_libraries(mfs_gamepad_host_model PRIVATE Boost::dll Boost::function ${OpenCV_LIBS} User32)
+
+# Same complete unedited original class/API, query-only external consumption.
+add_executable(mfs_gamepad_metadata_original gamepad-metadata.cpp
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit/Manager/GamepadControlUnitMgr.cpp"
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit/API/GamepadControlUnitAPI.cpp")
+foreach(_property INCLUDE_DIRECTORIES COMPILE_DEFINITIONS COMPILE_OPTIONS LINK_LIBRARIES)
+    get_target_property(_actual mfs_gamepad_host_model ${_property})
+    set_property(TARGET mfs_gamepad_metadata_original PROPERTY ${_property} "${_actual}")
+endforeach()
+
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/toolchain-$<CONFIG>.txt" CONTENT
     "compiler=${CMAKE_CXX_COMPILER}\ncompiler_id=${CMAKE_CXX_COMPILER_ID}\ncompiler_version=${CMAKE_CXX_COMPILER_VERSION}\nsdk=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}\nconfiguration=$<CONFIG>\nmsvc_runtime=$<TARGET_PROPERTY:mfs_windows_delegate_model,MSVC_RUNTIME_LIBRARY>\n")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"

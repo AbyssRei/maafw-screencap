@@ -26,6 +26,7 @@ mod framepool_size;
 mod framepool_target_loss;
 mod function_map;
 mod gamepad_host;
+mod gamepad_metadata;
 mod gamepad_runtime;
 mod kwin_portal_failure;
 mod licenses;
@@ -225,7 +226,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace custom-raw <external raw directory> [--check-only]\n\n\
                       cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
-                      cargo xtask upstream-delegate gamepad-host <external records> [--check-only]\n\n\
+                      cargo xtask upstream-delegate <gamepad-host|gamepad-metadata> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate gamepad-runtime <mask> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate win32-destroy <external records> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\

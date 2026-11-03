@@ -4,7 +4,7 @@
 
 ## 逐函数对应审阅
 
-Gamepad 的截图相关外层在确切 `ae4e578` 补四项：原构造、析构、`connect` 和 `connected` 对应同一私有 `GamepadCapture`；已有截图/停用映射另追加外层直接转发位置，原 `CaptureDelegate`、原生 loader 和平台模块未复制或修改。四项保留标量选择器、空初态、宿主创建先于替换、连接失败保留旧捕获状态、可选截图初始化 false 仅警告、connected 短路，以及 reset→捕获 view/loader→宿主 owner 的退出顺序。reset 不得展开、原失效 view 拒绝和类型化边界错误均明确列为安全/接口边界；未实现 ViGEm、输入、foreground、UUID/features/info 或公共 Gamepad SDK 导出。
+Gamepad 的截图相关外层在确切 `ae4e578` 补四项：原构造、析构、`connect` 和 `connected` 对应同一私有 `GamepadCapture`；已有截图/停用映射另追加外层直接转发位置，原 `CaptureDelegate`、原生 loader 和平台模块未复制或修改。四项保留标量选择器、空初态、宿主创建先于替换、连接失败保留旧捕获状态、可选截图初始化 false 仅警告、connected 短路，以及 reset→捕获 view/loader→宿主 owner 的退出顺序。reset 不得展开、原失效 view 拒绝和类型化边界错误均明确列为安全/接口边界；该对应批没有实现 ViGEm、输入、foreground、UUID/features/info 或公共 Gamepad SDK 导出。随后三项元数据的独立迁移与验证见下节，不重标该批旧映射。
 
 新的合并对应为两份既有 F 来源、十五项，原文/blob/行号/范围摘要和实际 Rust Git 字节逐一通过只读 `reference function-map`。运行链接分开保存：原生历史批次的 66 项检查仍为 60 通过、六失败，mask `6/10/14/38/42/46` 不变；新增八项是本机 Debug/Release 完整原类/API 与 Rust 的 CPU Mat/宿主/DLL 边界模型及记录检查，全部通过、零实际截图和输入动作，不改称原生取帧。合并 reader 的 68/6 仅为两类记录的计数，不是新的 native 通过率。最终重建前后的 217 份 Gamepad 记录在每种配置均逐字节相同，539 份实现提交的 canonical tar 与全部 Git blob/mode 核对。最初外部索引 reader 的 key 错误、后续只读 SSH DNS 失败分别保存；远端身份改由 GitHub Ref API 核对，没有更改已保存结果或 Git 连接配置。选定累计增加四项至 40 份来源/285 项；其余十五项外层源码和三个 API 导出仍明确未映射。完整审阅由参考目录 `local/current-gamepad-host-functions-path.txt` 指向，不授予完整语义、SDK、截图或 P1 验收。
 
@@ -111,6 +111,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+同一私有 `GamepadCapture` 现已迁移 `request_uuid`、`get_features`、`get_info`。保留构造时的 HWND/type/method，不读取连接状态或创建宿主/捕获资源；UUID 使用十进制 HWND，Xbox360 的值 0 以外均按来源返回 ds4 名称，先完成可失败分配和格式化再替换调用方 String。info 保留无符号 HWND、type/method 的有符号 64 位转换和原 JSON 字段；features 固定为来源的三个历史输入标志，只属于私有来源元数据，不代表 SDK 已实现输入。捕获委托和生命周期分支未改，公共 SDK/ABI 仍待后续阶段。
+
+新的独立 C++ collector 编译整个未改 F manager/header/API，经原 C 创建/销毁及虚接口执行；Debug、Release 各 144 组、288 个查询阶段、原版/Rust 合计 1,728 次查询通过，两配置共 3,456 次。覆盖 null/大值/最大 HWND、0/1/2/有符号边界/最大 type，以及 0/1/63/64/高位/最大 method；每次用不同长度旧 UUID 验证替换，返回值在 manager 销毁后仍持有。原版和 Rust 均要求零输入 owner、零捕获 unit/模块及空事件记录；旧 72 例宿主/CPU Mat 回归在两配置也通过。本批没有实际屏幕取帧。
+
+`cargo xtask upstream-delegate gamepad-metadata <已存在的外部记录目录> [--check-only]` 严格核验三份原始文件、全部字段/相位/顺序、来源统计和保存报告。24 项实际记录控制中两项通过、22 项缺失/损坏/多余/错误值被拒绝；字段控制先移除保存报告，避免只触发摘要差异。实际 `Step` 的十五项控制/三十个模拟子进程覆盖真实 libtest 同行格式、重复/缺失结果、零测试、非零及未知 77、坏记录和失败后继续独立检查；工作区真实 Rust→原 C++ 查询子进程也经同一个 Step 和新 checker 通过。最初控制误复制已有输出报告被 `create_new` 拒绝，保留失败后只清除新控制副本的保存输出，没有放宽写入保护。
+
+`upstream-parity manager` 新增独立 `manager-gamepad-metadata` 进程及组件包记录路径；默认聚合跳过它，避免重复执行。在线准备编译保存原 collector，离线 manager 现要求 25 项 oracle 输入，旧数据只读入口不变。工作区测试（123 项 xtask、默认库 34 通过/6 忽略及四项互操作）、选定 Windows feature 全目标 Clippy、默认 Release、格式检查通过；依赖明确复用归档批次，不声称新在线最新解析。开发先在外部源码快照编译/验证并封存，63 组原生矩阵结束后才合入；严格补丁预检的首次 CRLF 传输错误及最初外部 CMake OpenCV 作用域链接错误分别保留。工作区复验由参考目录 `local/current-gamepad-metadata-integrated-path.txt` 指向；新托管执行待验证，函数对应计数暂留 40 份来源/285 项，完整 P1 与既有原生失败未因此验收。
 
 确切 `7b3a608` 的 Gamepad 原生入口现编译完整未改 F manager/header/API，通过真实 Boost/LibraryHolder、原创建/销毁入口及虚接口调用实际 Win32 provider；Rust 使用同一个 `GamepadCapture`、原生委托和 manager。目录边界明确指向本批真实 DLL，输入 owner 仍是不会操作设备的显式夹具。每侧每轮二十个生命周期、六十次实际取帧，并在每个生命周期交替注入宿主 false、连接异常或构造异常；失败后两次取帧继续使用旧捕获 owner。完整宿主/原生计数记录每侧 182 行，核验 reset 时委托仍在、原生 unit 销毁及模块卸载后才释放输入 owner。`cargo xtask upstream-delegate gamepad-runtime <mask> <已存在的外部记录目录> [--check-only]` 先复算未改的窗口像素、完整跨度、持帧、选定范围和原生事件，再检查新增宿主记录；旧 `win32-runtime` 入口及历史报告保持可读。
 

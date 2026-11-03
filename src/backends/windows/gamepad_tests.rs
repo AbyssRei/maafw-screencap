@@ -5,6 +5,8 @@ use super::*;
 use std::{cell::RefCell, collections::BTreeSet, rc::Rc, sync::Arc};
 #[path = "../../../tests/upstream-parity/windows-delegate/gamepad-cases.rs"]
 mod cases;
+#[path = "gamepad_metadata_tests.rs"]
+mod metadata;
 
 struct HostState {
     mode: u32,

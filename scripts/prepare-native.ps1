@@ -36,6 +36,7 @@ $nativeMissingEnvironment = $false
 $delegateNativeEvidence = ''
 $delegateFactoryEvidence = ''
 $delegateRuntimeEvidence = ''
+$gamepadMetadataEvidence = ''
 $delegateQueryEvidence = ''
 $delegateDestroyEvidence = ''
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
@@ -457,6 +458,19 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                -not $observed.Contains('Custom raw types=1664 cases=4992 source_rust_captures=9984 native_owners_retained=9984 rust_scopes=4992 exact_type_catalog=1 input_actions=0 passed')){
                 throw 'Expected every actual compiled raw type, both manager callbacks and retained native owners'
             }
+        }
+        if($Name -eq 'manager-gamepad-metadata' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary='Gamepad metadata cases=144 phases=288 queries_per_side=864 exact_original_class_api=1 input_owners=0 capture_units=0 native_capture=0 full_P1_acceptance=0 passed'
+            $leader='(?:test backends::windows::gamepad::tests::metadata::matches_original_uuid_features_and_info_without_host_or_capture_owners \.\.\. )?'
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^'+$leader+'Gamepad metadata.*\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$') {
+                throw 'Expected all original/Rust Gamepad metadata queries and one executed test'
+            }
+            & $ConfigureTool upstream-delegate gamepad-metadata $env:MFS_P1_GAMEPAD_METADATA_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Actual Gamepad metadata records failed independent validation'}
         }
         if($Name -eq 'manager-gamepad-host' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -986,6 +1000,8 @@ try {
             foreach($name in @('win32-info-source.inc','win32-info-members.inc','win32-identity-source.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
+            $env:MFS_P1_GAMEPAD_METADATA_SOURCE=Prepared-File mfs_gamepad_metadata_original.exe
+            Save-Input $env:MFS_P1_GAMEPAD_METADATA_SOURCE
             $env:MFS_P1_GAMEPAD_HOST_MODEL=Prepared-File mfs_gamepad_host_model.exe
             Save-Input $env:MFS_P1_GAMEPAD_HOST_MODEL
             foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','windows-delegate-manager-queries.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
@@ -1003,7 +1019,7 @@ try {
             Save-ManagerMetadataReference $metadataBuild $inputsRoot $metadataEvidence
             $delegateBuild=Join-Path $nativeRoot ('delegate-'+[DateTime]::UtcNow.Ticks)
             Step windows-delegate-configure $cmake (@('-S',(Join-Path $productRoot tests/upstream-parity/windows-delegate),'-B',$delegateBuild,'-DMFS_BUILD_NATIVE_DELEGATE=ON',"-DMFS_UPSTREAM_ROOT=$UpstreamRoot","-DMFS_MAAUTILS_ROOT=$maautils","-DMFS_BOOST_ROOT=$boost","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)","-DOpenCV_DIR=$opencvInstall")+$generator)
-            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_gamepad_host_model','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','--parallel','4')
+            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_gamepad_host_model','mfs_gamepad_metadata_original','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','--parallel','4')
             foreach($item in @(@('delegate-loader.inc','windows-delegate-loader.inc'),@('delegate-source.inc','windows-delegate-source.inc'),@('delegate-condition.inc','windows-delegate-condition.inc'),@('original-LibraryHolder.h','windows-delegate-LibraryHolder.h'),@('source-scope.txt','windows-delegate-scope.txt'),@('CMakeCache.txt','windows-delegate-CMakeCache.txt'),@('toolchain-Release.txt','windows-delegate-toolchain-Release.txt'),@('Release/mfs_windows_delegate_model.exe','mfs_windows_delegate_model.exe'))) {
                 $saved=Join-Path $inputsRoot $item[1]
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
@@ -1020,6 +1036,9 @@ try {
                 Save-Input $saved
             }
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Join-Path $inputsRoot mfs_windows_delegate_model.exe
+            $env:MFS_P1_GAMEPAD_METADATA_SOURCE=Join-Path $inputsRoot mfs_gamepad_metadata_original.exe
+            Copy-Item -LiteralPath (Join-Path $delegateBuild Release/mfs_gamepad_metadata_original.exe) -Destination $env:MFS_P1_GAMEPAD_METADATA_SOURCE
+            Save-Input $env:MFS_P1_GAMEPAD_METADATA_SOURCE
             $env:MFS_P1_GAMEPAD_HOST_MODEL=Join-Path $inputsRoot mfs_gamepad_host_model.exe
             Copy-Item -LiteralPath (Join-Path $delegateBuild Release/mfs_gamepad_host_model.exe) -Destination $env:MFS_P1_GAMEPAD_HOST_MODEL
             Save-Input $env:MFS_P1_GAMEPAD_HOST_MODEL
@@ -1034,6 +1053,8 @@ try {
             Copy-Item -LiteralPath (Join-Path $UpstreamRoot $relative) -Destination $saved
             Save-Input $saved
         }
+        $gamepadMetadataEvidence=Join-Path $artifacts gamepad-metadata
+        $env:MFS_P1_GAMEPAD_METADATA_RECORDS=$gamepadMetadataEvidence
         $env:MFS_P1_GAMEPAD_HOST_RECORDS=Join-Path $artifacts gamepad-host
         if($offline) {
             Save-Input (Prepared-File gamepad-runtime-scope.txt)
@@ -1357,6 +1378,7 @@ try {
             $env:MFS_MANAGER_SIZE_ROOT=$managerSizeEvidence
             $managerSizeCase='backends::windows::manager::size_tests::continues_to_gdi_after_framepool_rejects_nonpositive_initial_item_size'
             $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
+            $gamepadMetadataCase='backends::windows::gamepad::tests::metadata::matches_original_uuid_features_and_info_without_host_or_capture_owners'
             $gamepadHostCase='backends::windows::gamepad::tests::matches_original_outer_host_failures_capture_retention_and_reset_before_teardown'
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
@@ -1366,13 +1388,14 @@ try {
             $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
             $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
-            $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase)
+            $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase,'--skip',$gamepadMetadataCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
                 @{name='manager-metadata-parity';arguments=($parityArguments + @('--','metadata_matches_original','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-identity-parity';arguments=($parityArguments + @('--',$managerIdentityCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-gamepad-metadata';arguments=($parityArguments + @('--',$gamepadMetadataCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gamepad-host';arguments=($parityArguments + @('--',$gamepadHostCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
@@ -1516,6 +1539,7 @@ catch {
 finally {
     if($screenGeometryEvidence -and (Test-Path -LiteralPath $screenGeometryEvidence)) {Get-ChildItem -LiteralPath $screenGeometryEvidence -File|ForEach-Object {Save-Input $_.FullName}}
     if($geometryEvidence -and (Test-Path -LiteralPath $geometryEvidence)) {Get-ChildItem -LiteralPath $geometryEvidence -File|ForEach-Object {Save-Input $_.FullName}}
+    if($gamepadMetadataEvidence -and (Test-Path -LiteralPath $gamepadMetadataEvidence)) {Get-ChildItem -LiteralPath $gamepadMetadataEvidence -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateRuntimeEvidence -and (Test-Path -LiteralPath $delegateRuntimeEvidence)) {Get-ChildItem -LiteralPath $delegateRuntimeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}

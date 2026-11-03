@@ -18,7 +18,7 @@ mod queries;
 #[path = "windows_delegate_runtime.rs"]
 mod runtime;
 
-pub const ORACLE_INPUTS: [&str; 24] = [
+pub const ORACLE_INPUTS: [&str; 25] = [
     "mfs_windows_delegate_model.exe",
     "windows-delegate-loader.inc",
     "windows-delegate-source.inc",
@@ -43,6 +43,7 @@ pub const ORACLE_INPUTS: [&str; 24] = [
     "windows-delegate-manager-queries.inc",
     "mfs_delegate_runtime_source.exe",
     "gamepad-runtime-scope.txt",
+    "mfs_gamepad_metadata_original.exe",
 ];
 pub fn require_oracle(inputs: &[records::Artifact]) -> Result<()> {
     for name in ORACLE_INPUTS {
@@ -63,6 +64,9 @@ pub(crate) fn verify_runtime(args: &[String]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|arg| arg == "gamepad-metadata") {
+        return crate::gamepad_metadata::run(&args[1..]);
+    }
     if args.first().is_some_and(|arg| arg == "gamepad-host") {
         return crate::gamepad_host::run(&args[1..]);
     }
