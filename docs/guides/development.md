@@ -130,6 +130,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+首帧夹具新增独立测试 `pending::preparation::observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins`，使用相同绘制 DLL，逐项执行同一显示器/工作区布局、独立更新窗口、目标正常窗口样式、重绘、presentation、激活与可见性检查，但不创建捕获对象、不持有队列、不调用取帧。每个成功前提下的进程预定二十个独立生命周期，逐步写入外部 `layout.tsv`/`preparation.tsv`；保留每次计数差异并在整组末尾报错，遇到准备失败则先完成两个显式 close/join 及 HWND 失效观察，再返回原错误与清理结果，不重试到通过。现有首帧测试主体仅增加子测试模块声明，原捕获、等待、像素和严格资源相等断言均未改。
+
+最终程序的本机三轮全部无输入干扰：1,372 项声明输入及执行前独立副本核对，最大监听间隔 71.0064ms，四路监听确认注销，未声称新物理正控制。每轮在第零例得到相同阶段计数：baseline、两个 fixture 创建、owner、更新几何和更新启动均为 `9`，设置目标样式后为 `11`，重绘、presentation、激活和两个 UI worker 关闭/join 后仍为 `11`；两枚 HWND 均已失效。激活每次也明确返回原生前台拒绝，退出均为 101；因此三轮保留 `missing_environment` 与 `9→11`，没有二十例完整通过或取帧验收。进程计数不能证明前后是同一对象，也不据此排除捕获路径存在其他资源问题。
+
+另执行四十次直接 `AdjustWindowRectExForDpi` 查询，popup/framed 两组均保持零 GDI；六个独立进程各执行二十个隐藏窗口生命周期，使用简单 `DefWindowProcW` 类、真实样式及关闭/类注销调用。popup、单独 border、单独 dialog-frame 全程为零；framed、caption、caption-menu 均在首例 `SetWindowLongPtrW` 返回后从 `0` 增至 `2`，其后十九例及每次 `DestroyWindow`、最终类注销后均为 `2`。这些控制没有显示窗口、捕获或调用原绘制器，定位的是本机原生 caption 样式副作用；尚未识别两个对象、证明其生命周期/归属或认定与托管 `9→11` 同因，没有暖机迁移基线、容差或旧断言豁免。
+
+release 单测试构建、工作区测试（库 34 通过/6 忽略、interop 4、xtask 133）、选定严格工作区 all-targets Clippy 和格式通过。十六项 Step 输出/退出控制及三组独立后续执行通过；新增独立 CI 入口跳过聚合重复执行，严格拒绝零/重复/部分结果、资源差异、非零退出和错误测试计数，完整原始诊断目录纳入上传。显式归档离线 lock 与前一 lookup 验证批相同，不声称新的在线最新版解析。首次外部 reader 误把后来已有 lookup 测试模块的完整捕获文件与较早资源快照相比，拒绝后改为捕获文件对当前 HEAD、未改绘制器对确切旧执行前快照分别核对，原失败材料保留。材料由参考目录 `local/current-desktop-full-fixture-development-path.txt`、`local/current-desktop-full-fixture-review-path.txt` 指向；新托管执行和完整 P1 仍待验证。Actions 预装工具年龄、RC 身份和最新查询失败仍仅记录，所需能力及实际断言继续作为门禁。
+
 DesktopDup 新增真实隐藏 HWND/显示器身份上的查找与主输出回退对照。完整未改 F 类仍从公开 `screencap` 进入，同一 Rust 后端复用既有测试配置的 caller-local 创建 hook，没有更改捕获主体。五组情形分别在首次查找 `EnumAdapters`、`EnumOutputs`、`GetDesc`、`QueryInterface(IDXGIOutput1)` 返回受控错误，以及真实 `GetDesc` 后把描述符 Monitor 置空；后者是明确的描述符控制，不是物理显示器变化。额外枚举尾部显式返回 `DXGI_ERROR_NOT_FOUND`，限定在真实第一个适配器/输出，不能据此接受任意多 GPU/多输出搜索。每组另有匹配真实监视器的转发对照；所有路径均在复制创建处返回明确 `E_ABORT`，零真实驱动复制、取帧或转换。
 
 归档离线依赖下，Debug/Release 各五组、双方每组四十次公开拒绝通过：每配置 400 次拒绝、200 次主输出回退、200 次匹配控制、400 次真实设备创建、800 次实际 device/context 析构通知，以及十枚实际隐藏 HWND 的关闭。回退开始前临时 adapter/output 转发器已释放的计数为 160/120；完整 factory/adapter/output 转发器释放为 400/560/520，仍只证明其持有的引用结束，弱于底层 DXGI/全局 GPU 析构。公开失败后保留资源槽 `31`，显式关闭后为零；匹配控制保留真实 monitor，回退路径保留空 monitor，`uninit` 不重置该来源标量。Rust 还记录最后一个查找错误；枚举尾部的 NOT_FOUND 可能覆盖较早错误，不把它冒称原版公开 HRESULT。源码、原生调用参数、完整 F 头/体及其 Git blob 已核对，核心捕获和既有 hook 整文件不变；另记录执行后的 894 条编译器读取路径，不宣称完整输入已预先冻结。

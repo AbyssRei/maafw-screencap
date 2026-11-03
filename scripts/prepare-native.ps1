@@ -323,7 +323,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete controlled Acquire HRESULT/partial release/next-operation recovery matrix'
             }
         }
-        if ($Name -in @('desktop-dup-pending','desktop-dup-pending-records','desktop-dup-pending-adapter','desktop-dup-resource-fixtures') -and $exitCode -eq 0) {
+        if ($Name -in @('desktop-dup-pending','desktop-dup-pending-records','desktop-dup-pending-adapter','desktop-dup-resource-fixtures','desktop-dup-resource-preparation') -and $exitCode -eq 0) {
             $observed=[IO.File]::ReadAllText($logPath)
             $summary=if($Name -eq 'desktop-dup-pending') {
                 'desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 quiescent_counts=40 full_P1_acceptance=0 passed'
@@ -331,6 +331,8 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 'DesktopDupWindow original adapter owners=20 null_window_calls=20 failure_outputs_empty=20 owners_destroyed=20 native_frames=0 passed'
             } elseif($Name -eq 'desktop-dup-resource-fixtures') {
                 'desktop_resource_fixture_cases=20 joined_workers=40 invalid_windows=40 capture_calls=0 passed'
+            } elseif($Name -eq 'desktop-dup-resource-preparation') {
+                'desktop_preparation_cases=20 joined_workers=40 invalid_windows=40 resource_mismatches=0 capture_calls=0 full_P1_acceptance=0 passed'
             } else {
                 'DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=323 quiescent_counts=40 full_P1_acceptance=0 passed'
             }
@@ -340,6 +342,8 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 '(?:test backends::windows::desktop_dup::tests::pending::consumes_original_owner_and_rejects_null_window_without_frames \.\.\. )?'
             } elseif($Name -eq 'desktop-dup-resource-fixtures') {
                 '(?:test backends::windows::desktop_dup::tests::pending::balances_process_gdi_after_both_render_workers_join_without_capturing \.\.\. )?'
+            } elseif($Name -eq 'desktop-dup-resource-preparation') {
+                '(?:test backends::windows::desktop_dup::tests::pending::preparation::observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins \.\.\. )?'
             } else { '' }
             if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
                 ($Name -ne 'desktop-dup-pending-records' -and
@@ -1612,6 +1616,8 @@ try {
         $caseSelection += @('--skip', $desktopLookupCase)
         $desktopResourceFixtureCase='backends::windows::desktop_dup::tests::pending::balances_process_gdi_after_both_render_workers_join_without_capturing'
         $caseSelection += @('--skip', $desktopResourceFixtureCase)
+        $desktopPreparationCase='backends::windows::desktop_dup::tests::pending::preparation::observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins'
+        $caseSelection += @('--skip', $desktopPreparationCase)
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         if ($ManagerParity) {
@@ -1699,6 +1705,8 @@ try {
             $desktopPendingEvidence=Join-Path $desktopEvidence pending
             $env:MFS_DESKTOP_RESOURCE_FIXTURE_ROOT=Join-Path $desktopEvidence resource-fixtures
             Invoke-FrameCheck desktop-dup-resource-fixtures cargo ($parityArguments+@('--',$desktopResourceFixtureCase,'--exact','--ignored','--test-threads=1','--nocapture'))
+            $env:MFS_DESKTOP_PREPARATION_ROOT=Join-Path $desktopEvidence resource-preparation
+            Invoke-FrameCheck desktop-dup-resource-preparation cargo ($parityArguments+@('--',$desktopPreparationCase,'--exact','--ignored','--test-threads=1','--nocapture'))
             $env:MFS_DESKTOP_PENDING_ROOT=$desktopPendingEvidence
             Invoke-FrameCheck desktop-dup-pending-adapter cargo ($parityArguments+@('--',$desktopPendingAdapterCase,'--exact','--ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-pending cargo ($parityArguments+@('--',$desktopPendingCase,'--exact','--ignored','--test-threads=1','--nocapture'))

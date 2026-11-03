@@ -1,6 +1,9 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! P1 first capture with a real asynchronous correction queued on a held owner.
+#[path = "desktop_fixture_tests.rs"]
+mod preparation;
+
 use crate::backends::windows::desktop_dup_window::DesktopDupWindowCapture;
 use crate::backends::windows::parity_adapter::{Adapter, Image};
 use crate::platform::windows::window_api::{Point, SystemWindow, Window, WindowApi};
