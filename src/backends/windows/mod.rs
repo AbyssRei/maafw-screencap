@@ -4,6 +4,9 @@
 mod delegate;
 #[cfg(feature = "windows-manager")]
 mod delegate_native;
+#[cfg(all(test, feature = "windows-manager"))]
+#[path = "../../../tests/common/windows_delegate.rs"]
+mod delegate_script;
 #[cfg(feature = "windows-desktop-dup")]
 mod desktop_dup;
 #[cfg(feature = "windows-desktop-dup-window")]
@@ -12,6 +15,8 @@ mod desktop_dup_window;
 mod frame_pool;
 #[cfg(feature = "windows-frame-pool")]
 mod frame_pool_pseudo;
+#[cfg(feature = "windows-manager")]
+mod gamepad;
 #[cfg(feature = "windows-gdi")]
 mod gdi;
 #[cfg(any(

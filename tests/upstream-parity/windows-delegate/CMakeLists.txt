@@ -27,6 +27,20 @@ target_include_directories(mfs_windows_delegate_model PRIVATE
 target_compile_definitions(mfs_windows_delegate_model PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_compile_options(mfs_windows_delegate_model PRIVATE /utf-8 /EHsc)
 target_link_libraries(mfs_windows_delegate_model PRIVATE Boost::dll Boost::function ${OpenCV_LIBS})
+# Whole original outer class/API. Host input and DLL discovery are explicit
+# fixture boundaries; their actions never reach an input device or desktop.
+add_executable(mfs_gamepad_host_model gamepad-model.cpp
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit/Manager/GamepadControlUnitMgr.cpp"
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit/API/GamepadControlUnitAPI.cpp")
+target_include_directories(mfs_gamepad_host_model PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/gamepad-overlay" "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/overlay" "${CMAKE_CURRENT_BINARY_DIR}"
+    "${MFS_UPSTREAM_ROOT}/source/MaaGamepadControlUnit" "${MFS_UPSTREAM_ROOT}/source/include" "${MFS_UPSTREAM_ROOT}/include"
+    "${MFS_MAAUTILS_ROOT}/include" "${MFS_BOOST_ROOT}" "${MFS_MEOJSON_INCLUDE}" ${OpenCV_INCLUDE_DIRS})
+target_compile_definitions(mfs_gamepad_host_model PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN
+    MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-gamepad-host")
+target_compile_options(mfs_gamepad_host_model PRIVATE /utf-8 /EHs)
+target_link_libraries(mfs_gamepad_host_model PRIVATE Boost::dll Boost::function ${OpenCV_LIBS} User32)
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/toolchain-$<CONFIG>.txt" CONTENT
     "compiler=${CMAKE_CXX_COMPILER}\ncompiler_id=${CMAKE_CXX_COMPILER_ID}\ncompiler_version=${CMAKE_CXX_COMPILER_VERSION}\nsdk=${CMAKE_VS_WINDOWS_TARGET_PLATFORM_VERSION}\nconfiguration=$<CONFIG>\nmsvc_runtime=$<TARGET_PROPERTY:mfs_windows_delegate_model,MSVC_RUNTIME_LIBRARY>\n")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"

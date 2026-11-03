@@ -458,6 +458,19 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected every actual compiled raw type, both manager callbacks and retained native owners'
             }
         }
+        if($Name -eq 'manager-gamepad-host' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary='Gamepad outer host cases=72 exact_original_class_api=1 capture_delegate_reused=1 reset_before_capture_teardown=1 input_actions=0 native_capture=0 full_P1_acceptance=0 passed'
+            $leader='(?:test backends::windows::gamepad::tests::matches_original_outer_host_failures_capture_retention_and_reset_before_teardown \.\.\. )?'
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^'+$leader+'Gamepad outer host.*\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$') {
+                throw 'Expected all whole-class Gamepad host/capture ownership cases and one executed test'
+            }
+            & $ConfigureTool upstream-delegate gamepad-host $env:MFS_P1_GAMEPAD_HOST_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Actual Gamepad outer host records failed independent validation'}
+        }
         if($Name -eq 'manager-delegate-parity' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -967,6 +980,8 @@ try {
             foreach($name in @('win32-info-source.inc','win32-info-members.inc','win32-identity-source.inc','macos-info-source.inc','macos-info-members.inc','meojson-prepared.json')) {Save-Input (Prepared-File $name)}
             $env:MFS_P1_MANAGER_METADATA_ARTIFACTS=$metadataEvidence
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Prepared-File mfs_windows_delegate_model.exe
+            $env:MFS_P1_GAMEPAD_HOST_MODEL=Prepared-File mfs_gamepad_host_model.exe
+            Save-Input $env:MFS_P1_GAMEPAD_HOST_MODEL
             foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','windows-delegate-manager-queries.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
             $env:MFS_DELEGATE_NATIVE_BUILD=Split-Path -Parent (Prepared-File mfs_delegate_bridge.dll)
         } else {
@@ -982,7 +997,7 @@ try {
             Save-ManagerMetadataReference $metadataBuild $inputsRoot $metadataEvidence
             $delegateBuild=Join-Path $nativeRoot ('delegate-'+[DateTime]::UtcNow.Ticks)
             Step windows-delegate-configure $cmake (@('-S',(Join-Path $productRoot tests/upstream-parity/windows-delegate),'-B',$delegateBuild,'-DMFS_BUILD_NATIVE_DELEGATE=ON',"-DMFS_UPSTREAM_ROOT=$UpstreamRoot","-DMFS_MAAUTILS_ROOT=$maautils","-DMFS_BOOST_ROOT=$boost","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)","-DOpenCV_DIR=$opencvInstall")+$generator)
-            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','--parallel','4')
+            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_gamepad_host_model','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','--parallel','4')
             foreach($item in @(@('delegate-loader.inc','windows-delegate-loader.inc'),@('delegate-source.inc','windows-delegate-source.inc'),@('delegate-condition.inc','windows-delegate-condition.inc'),@('original-LibraryHolder.h','windows-delegate-LibraryHolder.h'),@('source-scope.txt','windows-delegate-scope.txt'),@('CMakeCache.txt','windows-delegate-CMakeCache.txt'),@('toolchain-Release.txt','windows-delegate-toolchain-Release.txt'),@('Release/mfs_windows_delegate_model.exe','mfs_windows_delegate_model.exe'))) {
                 $saved=Join-Path $inputsRoot $item[1]
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
@@ -999,8 +1014,21 @@ try {
                 Save-Input $saved
             }
             $env:MFS_P1_WINDOWS_DELEGATE_MODEL=Join-Path $inputsRoot mfs_windows_delegate_model.exe
+            $env:MFS_P1_GAMEPAD_HOST_MODEL=Join-Path $inputsRoot mfs_gamepad_host_model.exe
+            Copy-Item -LiteralPath (Join-Path $delegateBuild Release/mfs_gamepad_host_model.exe) -Destination $env:MFS_P1_GAMEPAD_HOST_MODEL
+            Save-Input $env:MFS_P1_GAMEPAD_HOST_MODEL
             $env:MFS_DELEGATE_NATIVE_BUILD=$inputsRoot
         }
+        foreach($relative in @('source/MaaGamepadControlUnit/Manager/GamepadControlUnitMgr.cpp',
+            'source/MaaGamepadControlUnit/Manager/GamepadControlUnitMgr.h','source/MaaGamepadControlUnit/API/GamepadControlUnitAPI.cpp',
+            'source/include/Common/Conf.h','include/MaaControlUnit/ControlUnitAPI.h','include/MaaControlUnit/GamepadControlUnitAPI.h',
+            'include/MaaFramework/MaaDef.h','include/MaaFramework/MaaPort.h')) {
+            $saved=Join-Path (Join-Path $inputsRoot gamepad-host-source) $relative
+            New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+            Copy-Item -LiteralPath (Join-Path $UpstreamRoot $relative) -Destination $saved
+            Save-Input $saved
+        }
+        $env:MFS_P1_GAMEPAD_HOST_RECORDS=Join-Path $artifacts gamepad-host
         $delegateEvidence=Join-Path $artifacts windows-delegate
         $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS=$delegateEvidence
         $delegateNativeEvidence=Join-Path $artifacts windows-delegate-native
@@ -1316,6 +1344,7 @@ try {
             $env:MFS_MANAGER_SIZE_ROOT=$managerSizeEvidence
             $managerSizeCase='backends::windows::manager::size_tests::continues_to_gdi_after_framepool_rejects_nonpositive_initial_item_size'
             $delegateCase='backends::windows::delegate::tests::matches_original_capture_delegation_owners_failures_and_output_forwarding'
+            $gamepadHostCase='backends::windows::gamepad::tests::matches_original_outer_host_failures_capture_retention_and_reset_before_teardown'
             $delegateNativeCase='backends::windows::delegate_native::tests::consumes_real_factory_and_releases_units_before_unloading_modules'
             $delegateFactoryCase='backends::windows::delegate_native::tests::constructs_original_selector_masks_without_connecting_or_capturing'
             $delegateDestroyCase='backends::windows::delegate_native::tests::destroy::retains_module_and_first_error_after_consumed_unit_reports_cleanup_failure'
@@ -1324,13 +1353,14 @@ try {
             $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
             $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
-            $caseSelection+=@('--skip',$delegateDestroyCase)
+            $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
                 @{name='manager-metadata-parity';arguments=($parityArguments + @('--','metadata_matches_original','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-identity-parity';arguments=($parityArguments + @('--',$managerIdentityCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-parity';arguments=($parityArguments + @('--',$delegateCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-gamepad-host';arguments=($parityArguments + @('--',$gamepadHostCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-native';arguments=($parityArguments + @('--',$delegateNativeCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-destroy';arguments=($parityArguments + @('--',$delegateDestroyCase,'--exact','--ignored','--test-threads=1','--nocapture'))},

@@ -108,6 +108,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+Gamepad 的截图相关外层新增私有 `GamepadCapture`，通过类型化宿主 owner 复用原有 `CaptureDelegate`，没有复制捕获后端。它保留先清 connected、成功构造新宿主后才替换旧 owner、宿主连接失败时保留旧捕获委托、可选捕获初始化返回 false 仅警告、connected 短路，以及析构先 reset、再结束捕获 view/loader、最后释放宿主 owner 的顺序。截图与 inactive 不新增外层 connected 门槛；原版已失效 view 不作未定义的虚调用，Rust 仍明确拒绝。宿主只是截图相关初始化/寿命边界，不实施 ViGEm 驱动、手柄输入、前台操作或 SDK。
+
+最终 Debug/Release 各 72 个配对场景通过，实际编译整个未改 F `GamepadControlUnitMgr.cpp`、原头文件及 `GamepadControlUnitAPI.cpp`，经真实原 C 入口构造/销毁和虚接口执行；宿主输入 owner、DLL 查找/后端结果是显式夹具。每种配置、每侧分别观察 144 次宿主创建尝试、126 次连接、71 次最终 reset、98 次 capture 转发及 98 次 inactive 转发，并核对两次返回后的持有输出、生命周期和异常/false 分离。这里的 capture 转发仅操作受控 OpenCV Mat，不是屏幕取帧。八份 F 来源逐一匹配确切 Git blob，957/958 份冻结的实际编译/生成/SDK/工作树输入及存档摘要核对；旧 Rust/C++ 委托夹具仅搬入共享位置，原断言未改，既有 274 例委托回归在两配置均通过。
+
+`cargo xtask upstream-delegate gamepad-host <已存在的外部记录目录> [--check-only]` 独立核验 216 份原版/Rust/错误文件及完整事件、选择器、输出、宿主失败后的旧 owner 保留和销毁顺序；只读复验包含保存报告共 217 份文件且字节不变。十九次实际记录控制中两项成功、十七项损坏/缺失/多余/顺序/保存报告控制拒收，坏数据控制先移除保存报告，避免只碰到旧摘要。真实 `Step` 的十三项控制/二十六个子进程包含实际 libtest 同行日志、零测试、重复结果、非零及未知 77、记录缺失和失败后继续独立案例，均保留正确状态。首版外部 Step harness 误复用已存在的报告，被写入保护拒绝；修正为每例独立记录副本后通过，原失败保留。早期编译/重复模块/Clippy 等开发失败亦分别保留。
+
+本批使用明确归档依赖和已更新 nightly，不称新在线最新依赖验收；工作区测试通过，包含 xtask 123 项、默认库 34 通过/6 忽略及互操作四项；另有所选 Windows 53 通过/8 忽略、默认 Release、格式和 Clippy 检查通过。忽略入口由显式调用负责。`upstream-parity manager` 新增独立 `manager-gamepad-host` 检查，即时上传保存原类来源及全部记录；新的托管执行待验证。完整源码职责对应数仍为 40 份来源/281 项，没有把新部分运行结果冒充完整逐函数覆盖或 P1 通过。历史六项 mixed mask、FramePool pseudo 和 Mac 像素/回调失败保持原状态；Actions 预装工具按实际能力和身份记录，年龄不作门禁。完整开发记录由参考目录 `local/current-gamepad-host-development-path.txt` 指向。
+
 确切 `ab544fc` 的 [Actions 41564727121](https://github.com/AbyssRei/maafw-screencap/actions/runs/41564727121) 原生 Linux PipeWire 组件现已通过全部 205 项检查：新增 `original-kwin-portal-failure`、`rust-kwin-portal-failure` 和记录检查全部通过，与已复核 `8c1369c` 的原有 202 项逐名对照，全部状态不变。真实 C++ 原版、Rust 和实际矩阵均已执行；两侧各 100 次失败，每种 Open false/错误 91–94 各二十次，分别有一百个不同的非零 socket cookie，在失败前后保持相同。每次确认 helper 与一个未消费 fd 残留，再由夹具回收；各侧 101 组实际任务身份、fd 基线和 caller 均已独立核对。没有创建 manager、PipeWire 流或截图；不把残留或夹具回收称为产品清理，也不把受控宿主错误当作真实 DBus/桌面授权验收。
 
 官方即时 ZIP（39,849,712 字节）的发布摘要/CRC、44,285 份文件、44,079 个可用登记路径和全部 205 份日志核对；9,401 次相同摘要重复登记明确保留，623 项完整输入仍缺。八份当前 Rust/原生夹具/编排/校验源码由确切 Git bytes 或明确 CRLF checkout 转换匹配实际登记摘要，上传的完整 KWin 原文件亦匹配固定 F；这些选取不代表全部来源闭包。冻结校验器对实际 205 份矩阵数据/报告只读通过，摘要不变。另在真实矩阵副本上执行 29 次 CLI 控制：两项成功、二十七项错误/调用顺序/残留/回收/任务/文件/报告篡改被拒收；字段和资源负向控制先移除旧报告，确保拒收来自语义或结构检查，原矩阵不变。证据由同一参考 marker 的 `hosted-review/`、`native-cli-controls/` 指向；组件通过不接受其他平台旧失败、一般宿主故障、完整兼容 ABI 或 P1，整个平台 job 的后续组件与最终状态分别记录。

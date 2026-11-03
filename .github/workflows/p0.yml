@@ -331,6 +331,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/custom-source-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-*.h
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/gamepad-host-source/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-scope.txt
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/framepool-device-only.inc
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/inputs/windows-delegate-native-*.txt
@@ -341,6 +342,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/manager-size-rejection/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/custom-capture/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/gamepad-host/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate-native/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate-factory/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/windows-delegate-queries/**
