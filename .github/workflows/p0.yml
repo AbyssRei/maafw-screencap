@@ -252,6 +252,18 @@ jobs:
           if ($env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) { $shared = @('--offline-inputs', $env:MFS_WINDOWS_SHARED_NATIVE_INPUTS) }
           cargo xtask upstream-parity desktop-dup @shared
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload Windows DesktopDup diagnostics
+        if: always() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-windows-desktop-dup-diagnostics
+          path: |
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-desktop-dup-windows-*/manifest.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-desktop-dup-windows-*/native-result.json
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-desktop-dup-windows-*/inputs/desktop-dup-scope.md
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-desktop-dup-windows-*/windows-x64-vs2026-msbuild-release/logs/*.log
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-desktop-dup-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/**
+          if-no-files-found: warn
       - name: Validate partial Custom callback and real ImageBuffer migration
         if: ${{ !cancelled() && runner.os == 'Windows' }}
         env:
@@ -360,6 +372,7 @@ jobs:
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/held-acquisition/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/lifetime/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/acquire-errors/**
+            ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/desktop-dup-source/pending/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/alpha-sequence/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/alpha-rust/**
             ${{ env.MFS_REFERENCE_ROOT }}/runs/p1-*-windows-*/windows-x64-vs2026-msbuild-release/reference-u/artifacts/frame-pool-context/alpha-poll/**

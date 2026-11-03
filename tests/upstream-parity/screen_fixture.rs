@@ -14,15 +14,15 @@ struct Span {
     popup_height: i32,
 }
 type Close = unsafe extern "C" fn(*mut *mut c_void) -> i32;
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 type QueueGate = unsafe extern "C" fn(*mut c_void, u32, *mut u64, usize) -> i32;
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 pub struct QueueHold<'a> {
     fixture: &'a mut Fixture,
     control: QueueGate,
     released: bool,
 }
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 impl QueueHold<'_> {
     pub fn hwnd(&self) -> *mut c_void {
         self.fixture.hwnd()
@@ -56,7 +56,7 @@ impl QueueHold<'_> {
         self.operation(2)
     }
 }
-#[cfg(feature = "windows-screen-dc")]
+#[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
 impl Drop for QueueHold<'_> {
     fn drop(&mut self) {
         if !self.released {
@@ -155,7 +155,7 @@ impl Adapter {
     }
 }
 impl Fixture {
-    #[cfg(feature = "windows-screen-dc")]
+    #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
     pub fn activate(&self) -> Result<(), Box<dyn Error>> {
         type Activate = unsafe extern "C" fn(*mut c_void) -> i32;
         type Info = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
@@ -185,7 +185,7 @@ impl Fixture {
         }
         Ok(())
     }
-    #[cfg(feature = "windows-screen-dc")]
+    #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
     pub fn hold_queue(&mut self) -> Result<QueueHold<'_>, Box<dyn Error>> {
         // SAFETY: Resolve before arming; an armed gate always has a release
         // guard, including a native error or a Rust assertion unwind.

@@ -120,6 +120,18 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+DesktopDupWindow 新增独立首帧异步校正测试：直接调用完整未改 F 原类和同一私有 Rust 后端，不预先调用几何 helper。自有目标 UI 队列在首帧前显式挂起，原正常异步校正请求尚未消费时，要求返回原 192×128 客户区图像；直接释放队列后只等待真实消息完成，要求恰好一次移动，再取校正后的图像并保存两类持帧。挂起目标队列时不能用同一 UI owner 的 timer 提供帧，因此另建同输出、不与校正前后目标重叠的 32×32 更新窗口，记录其实际线程、更新进度、错误与关闭。十秒夹具 gate 失败开放仅用于避免遗留挂起窗口，不构成原生取消能力。原生预热/2000ms 等待/全输出转换后裁剪流程未改；原版仅在验收发布边界 clone 目标，新增工作明确保留。
+
+本机预定三轮均在 `SetForegroundWindow` 被拒绝时停止，尚未进入 gate 或调用任何截图；前台为实际 Codex 进程，没有伪造前台、注入输入或改变系统策略。六次测试/记录调用保留实际非零退出，输入监测整批有效、零 armed 事件，最大间隔 69.7507ms，全部 1,355 项冻结输入及副本重新摘要一致，监听已注销。三次属于 `missing_environment`，不接受首帧/像素或完整 P1；没有通过重跑消除该结果。冻结失败批已封存，由参考目录 `local/current-desktop-pending-development-path.txt` 指向。
+
+私有 `desktop-pending.h` 三项原类 owner 创建/截图/销毁导出已有真实消费控制：独立测试和实际 Step 子命令各完成二十个空 HWND 生命周期，原类在截图入口拒绝、失败图像为空，owner 恰好消费，零帧。原版与 Rust 图像都由既有实际 Mat owner/模块保活；原生 owner 留在创建调用线程，没有新增通用 Send/Sync 或产品 C ABI。两项窗口/呈现观测函数从 ScreenDC 测试文件移至共享测试文件，函数体保持原样；ScreenDC 与 DesktopDup 独立原生配置均编译通过。
+
+`cargo xtask upstream-trace desktop-pending <外部矩阵> [--check-only]` 复用原有精确几何/完整像素/持帧校核，另校核四十个独立更新 owner 及其与 gate 的真实线程关系。十四组记录控制接受三组、拒绝十一组：实际旧 ScreenDC 记录只读回归、实际新入口缺行拒绝，与明确使用旧像素和合成更新记录的 schema 控制分别标注；合成记录不是 DesktopDupWindow 截图证据。三十组实际 Step 输出控制含原始前台拒绝的 `missing_environment` 分类，四组独立继续及一个真实原类适配器子命令通过；首帧成功摘要在控制中明确为 mock，没有冒充原生结果。选定 release 测试程序/严格 all-target Clippy、默认 release、workspace（库 34 通过/6 忽略、interop 4、xtask 132）与格式均通过；首次测试程序缺少仅 ScreenDC 启用的 activate 方法，以及新增线程交叉校核的 signed/u64 编译错误均保留，修正只在夹具 feature 范围与受检窄化。
+
+CI 已接入独立 adapter/capture/records 三项与确切单测试守卫、广泛入口跳过和完整 pending 目录上传；另在 DesktopDup 组件结束后即时上传 `p1-windows-desktop-dup-diagnostics`，避免等待后续长 manager 矩阵，实际新入口托管执行仍待结果。此前 `9c1cf91` 的 Windows DesktopDup 步骤已于 2026-11-03 14:07:54 UTC 成功结束；这只是原生组件步骤状态，新增 Acquire 矩阵的数据、像素和输入闭包仍需其实际归档，不能从单一步骤状态推算记录计数或完整 P1。
+
+职责状态另新增参考目录 `local/current-responsibility-status-path.txt`：在保留历史 106 份来源锚点、58 个待验收案例与原映射的前提下，纠正七处把 Xcode 27.2 正式版缺失列作 CI 阻断的过时说明，补入已封存 DesktopDup 受控错误与 Mac manager 对应记录。`reference responsibilities` 对新映射只读通过；这不是全量当前源码锚点刷新或 native/whole-case 验收。预装工具年龄、RC 身份和最新查询失败继续只作参考，本机在线最新依赖策略另行适用。
+
 DesktopDup 新增独立受控 `AcquireNextFrame` 失败矩阵：沿用完整未改 F 原类、同一私有 Rust 后端与既有原生寿命 observer，每侧二十个生命周期，各作一次真实预热截图、一次受控失败和一次真实后续截图。失败按周期选择 `DXGI_ERROR_ACCESS_LOST`、`DXGI_ERROR_WAIT_TIMEOUT`、`DXGI_ERROR_DEVICE_REMOVED`；仅显式测试作用域在真实接口边界返回该 HRESULT，保留传入的 2000ms 参数，故障处实际 driver 调用为零。预热与后续截图继续调用真实驱动；不能据此声称模拟物理设备故障或实际等待两秒失败。生产路径仍直接调用原接口，Rust 干预仅编入 prototype 测试。
 
 四阶段记录为成功预热、失败返回、下一次成功截图和显式关闭。F 的 `ACCESS_LOST` 只释放 duplication/staging、清空 monitor，槽位由 127 变为 31，保留 device/context/factory/adapter/output 和 texture descriptor。下一操作重选 adapter/output、重建 duplication/staging，继续使用原 device/context/factory，槽位恢复 127；另外两个失败保持全部原生状态。显式关闭后七槽归零，保留原 monitor/初始化标记语义，descriptor 清零。四个旧对象分别通过真实 D3D 析构通知或较弱 DXGI 私有 owner 通知观察；恢复代次的新 duplication/staging 未另行注册，不能推广为完整恢复代次资源闭包。

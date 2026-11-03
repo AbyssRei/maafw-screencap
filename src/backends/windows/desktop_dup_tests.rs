@@ -24,6 +24,10 @@ mod fullscreen;
 #[path = "desktop_geometry_tests.rs"]
 mod native_geometry;
 
+#[cfg(all(feature = "prototype-windows", feature = "windows-desktop-dup-window"))]
+#[path = "desktop_pending_tests.rs"]
+mod pending;
+
 #[cfg(feature = "prototype-windows")]
 #[derive(Debug)]
 enum ProbeError {

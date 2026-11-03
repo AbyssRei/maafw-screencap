@@ -11,6 +11,10 @@ use std::{
     sync::Arc,
 };
 
+#[cfg(feature = "windows-desktop-dup-window")]
+#[path = "desktop_pending_adapter.rs"]
+mod desktop_pending;
+
 #[cfg(feature = "windows-manager")]
 #[path = "manager_adapter.rs"]
 pub(crate) mod manager;
@@ -93,7 +97,7 @@ pub(crate) struct Adapter {
 }
 
 impl Adapter {
-    #[cfg(feature = "windows-screen-dc")]
+    #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
     pub fn screen_window_observation(
         &self,
         window: *mut c_void,
@@ -108,7 +112,7 @@ impl Adapter {
         }
         Ok(output)
     }
-    #[cfg(feature = "windows-screen-dc")]
+    #[cfg(any(feature = "windows-screen-dc", feature = "windows-desktop-dup-window"))]
     pub fn screen_present(&self) -> Result<[i32; 2], Box<dyn Error>> {
         type Present = unsafe extern "C" fn(*mut i32, usize) -> i32;
         // SAFETY: Exact private fixture signature, no object/context retained.

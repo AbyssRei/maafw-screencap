@@ -294,6 +294,16 @@ target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
 file(TO_CMAKE_PATH "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/ScreenDCScreencap.cpp" MFS_SCREEN_CPP_PATH)
 target_compile_definitions(mfs_gdi_parity PRIVATE MFS_UPSTREAM_SCREEN_CPP="${MFS_SCREEN_CPP_PATH}")
 endif()
+if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
+target_sources(mfs_gdi_parity PRIVATE desktop-pending.cpp
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp"
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupWindowScreencap.cpp")
+target_link_libraries(mfs_gdi_parity PRIVATE D3D11 Dxgi Dwmapi)
+endif()
+if(MFS_BUILD_SCREEN_PARITY OR MFS_BUILD_DESKTOP_DUP_REFERENCE)
+target_sources(mfs_gdi_parity PRIVATE screen-observation.cpp)
+target_link_libraries(mfs_gdi_parity PRIVATE Dwmapi)
+endif()
 if(MFS_BUILD_PRINT_PARITY)
 target_sources(mfs_gdi_parity PRIVATE print-parity.cpp print-read-probe.cpp print-query-probe.cpp
     print-conversion-probe.cpp print-fault-reference.cpp pseudo-script.cpp print-pseudo.cpp pseudo-fixture.cpp print-thread.cpp

@@ -268,6 +268,27 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete controlled Acquire HRESULT/partial release/next-operation recovery matrix'
             }
         }
+        if ($Name -in @('desktop-dup-pending','desktop-dup-pending-records','desktop-dup-pending-adapter') -and $exitCode -eq 0) {
+            $observed=[IO.File]::ReadAllText($logPath)
+            $summary=if($Name -eq 'desktop-dup-pending') {
+                'desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 full_P1_acceptance=0 passed'
+            } elseif($Name -eq 'desktop-dup-pending-adapter') {
+                'DesktopDupWindow original adapter owners=20 null_window_calls=20 failure_outputs_empty=20 owners_destroyed=20 native_frames=0 passed'
+            } else {
+                'DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=322 full_P1_acceptance=0 passed'
+            }
+            $leader=if($Name -eq 'desktop-dup-pending') {
+                '(?:test backends::windows::desktop_dup::tests::pending::captures_first_client_before_queued_adjustment_and_after_exactly_one_move \.\.\. )?'
+            } elseif($Name -eq 'desktop-dup-pending-adapter') {
+                '(?:test backends::windows::desktop_dup::tests::pending::consumes_original_owner_and_rejects_null_window_without_frames \.\.\. )?'
+            } else { '' }
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+                ($Name -ne 'desktop-dup-pending-records' -and
+                    ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                     $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected the complete first DesktopDupWindow capture before queued adjustment and independent update-owner evidence'
+            }
+        }
         if ($Name -eq 'desktop-dup-source-map-boundary' -and $exitCode -eq 0 -and
             -not (Get-Content -LiteralPath $logPath -Raw).Contains('original DesktopDup map_boundary cycles=20 warm=20 observed_calls=40 map_failures=7 conversion_failures=6 recovery=20 retained=47 native_forwarded=1 full_P1_acceptance=0 passed')) {
             throw 'Expected the complete original native DesktopDup Map/release/held matrix'
@@ -306,7 +327,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected the full initial-capture matrix with real queued corrections, not zero tests'
             }
         }
-        if ($Name -eq 'screen-native-pending-parity' -and $exitCode -ne 0 -and
+        if ($Name -in @('screen-native-pending-parity','desktop-dup-pending') -and $exitCode -ne 0 -and
             (Get-Content -LiteralPath $logPath -Raw).Contains('missing_environment: owned window is active on its UI queue but lacks actual foreground')) {
             $status = 'missing_environment'
             throw 'Queued-correction first capture requires the actual foreground before holding its UI queue; no capture was accepted'
@@ -1471,6 +1492,10 @@ try {
         $caseSelection += @('--skip', $desktopAcquireCase)
         $desktopAcquireErrorsCase='backends::windows::desktop_dup::tests::acquire_errors::matches_access_lost_partial_release_next_call_rebuild_and_retained_other_errors'
         $caseSelection += @('--skip', $desktopAcquireErrorsCase)
+        $desktopPendingCase='backends::windows::desktop_dup::tests::pending::captures_first_client_before_queued_adjustment_and_after_exactly_one_move'
+        $caseSelection += @('--skip', $desktopPendingCase)
+        $desktopPendingAdapterCase='backends::windows::desktop_dup::tests::pending::consumes_original_owner_and_rejects_null_window_without_frames'
+        $caseSelection += @('--skip', $desktopPendingAdapterCase)
         if ($DesktopDupParity) { $caseSelection += @('--skip', $desktopCase, '--skip', $desktopDefaultCase, '--skip', $desktopConversionCase) }
         if ($PrintWindowParity) { $caseSelection += @('--skip', $foregroundCase) }
         if ($ManagerParity) {
@@ -1540,6 +1565,11 @@ try {
             $env:MFS_DESKTOP_ACQUIRE_ERRORS_ROOT=$desktopAcquireErrorsEvidence
             Invoke-FrameCheck desktop-dup-rust-acquire-errors cargo ($parityArguments+@('--',$desktopAcquireErrorsCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-acquire-errors-records $ConfigureTool @('upstream-trace','desktop-acquire-errors',$desktopAcquireErrorsEvidence)
+            $desktopPendingEvidence=Join-Path $desktopEvidence pending
+            $env:MFS_DESKTOP_PENDING_ROOT=$desktopPendingEvidence
+            Invoke-FrameCheck desktop-dup-pending-adapter cargo ($parityArguments+@('--',$desktopPendingAdapterCase,'--exact','--ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck desktop-dup-pending cargo ($parityArguments+@('--',$desktopPendingCase,'--exact','--ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck desktop-dup-pending-records $ConfigureTool @('upstream-trace','desktop-pending',$desktopPendingEvidence)
             New-Item -ItemType Directory -Path (Join-Path $desktopEvidence 'window-fullscreen/rust') | Out-Null
             Step 'desktop-dup-rust-fullscreen' cargo ($parityArguments + @('--',$desktopFullscreenCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Step 'desktop-dup-fullscreen-records' $ConfigureTool @('upstream-trace','desktop-fullscreen',(Join-Path $desktopEvidence 'window-fullscreen'))

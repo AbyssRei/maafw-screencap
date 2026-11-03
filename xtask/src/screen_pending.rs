@@ -17,6 +17,12 @@ struct Report {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_kind(args, false)
+}
+pub(crate) fn run_desktop(args: &[String]) -> Result<()> {
+    run_kind(args, true)
+}
+fn run_kind(args: &[String], desktop: bool) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
@@ -27,7 +33,7 @@ pub fn run(args: &[String]) -> Result<()> {
         }
     };
     let directory = records::external_root(Path::new(path))?;
-    let report = validate(&directory)?;
+    let report = validate(&directory, desktop)?;
     let output = directory.join("pending-validation.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != serde_json::to_value(&report)? {
@@ -36,9 +42,15 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "ScreenDC queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 actual_files=321 full_P1_acceptance=0 passed"
-    );
+    if desktop {
+        println!(
+            "DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=322 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "ScreenDC queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 actual_files=321 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }
 fn array(text: &str, width: usize) -> Result<Vec<i64>> {
@@ -128,7 +140,7 @@ fn pixels(bytes: &[u8]) -> Result<()> {
     }
     Ok(())
 }
-fn validate(root: &Path) -> Result<Report> {
+fn validate(root: &Path, desktop: bool) -> Result<Report> {
     let text = fs::read_to_string(root.join("pending.tsv"))?;
     let mut lines = text.lines();
     if lines.next() != Some("cycle\tside\tstage\tvalues") {
@@ -191,6 +203,13 @@ fn validate(root: &Path) -> Result<Report> {
         return Err("pending work-area correction differs".into());
     }
     let mut inputs = vec![records::artifact(root, &root.join("pending.tsv"))?];
+    let update_threads = if desktop {
+        let threads = validate_updates(root, &monitor, &before, &after)?;
+        inputs.push(records::artifact(root, &root.join("updates.tsv"))?);
+        Some(threads)
+    } else {
+        None
+    };
     for cycle in 0..20 {
         for side in ["source", "rust"] {
             let setup = take(cycle, side, "setup", 31)?;
@@ -203,6 +222,14 @@ fn validate(root: &Path) -> Result<Report> {
             let final_geometry = take(cycle, side, "final", 31)?;
             let objects = take(cycle, side, "gdi", 2)?;
             let closed = take(cycle, side, "closed", 1)?;
+            if let Some(threads) = &update_threads {
+                let update = threads[usize::try_from(cycle)? * 2 + usize::from(side == "rust")];
+                if update[0] == u64::try_from(entered[5])?
+                    || update[1] != u64::try_from(entered[6])?
+                {
+                    return Err("update owner must be independent of held target queue on the same capture caller".into());
+                }
+            }
             for geometry in [&setup, &completed, &final_geometry] {
                 native_coordinates(&geometry[..18])?;
                 native_coordinates(&geometry[21..25])?;
@@ -268,7 +295,7 @@ fn validate(root: &Path) -> Result<Report> {
             }
         }
     }
-    if !rows.is_empty() || inputs.len() != 321 {
+    if !rows.is_empty() || inputs.len() != 321 + usize::from(desktop) {
         return Err("additional pending records".into());
     }
     for entry in fs::read_dir(root)? {
@@ -291,13 +318,172 @@ fn validate(root: &Path) -> Result<Report> {
         retained_images: 80,
         queue_timeouts: 0,
         inputs,
-        scope: "Original/Rust capture with a fixture-held UI queue and real asynchronous geometry request, known pixels, one native correction after direct release and post-close owners. Does not prove arbitrary foreign-window races, DesktopDupWindow, input-free execution or full P1 acceptance.",
+        scope: if desktop {
+            "Original whole F DesktopDupWindow/Rust first capture with a held target UI queue, real asynchronous correction and a distinct nonoverlapping same-output update owner. Native warmups/waits/full-output conversion/crop remain unchanged; source target clone occurs only at acceptance publication. Known complete target pixels, one movement after direct release, retained CPU owners and explicit update-owner close. No arbitrary foreign-window races, in-flight driver fault, global GPU, input-free execution or full P1 acceptance follows."
+        } else {
+            "Original/Rust capture with a fixture-held UI queue and real asynchronous geometry request, known pixels, one native correction after direct release and post-close owners. Does not prove arbitrary foreign-window races, DesktopDupWindow, input-free execution or full P1 acceptance."
+        },
     })
+}
+
+fn validate_updates(
+    root: &Path,
+    monitor: &[i64],
+    before: &[i64],
+    after: &[i64],
+) -> Result<Vec<[u64; 2]>> {
+    let text = fs::read_to_string(root.join("updates.tsv"))?;
+    validate_update_text(&text, monitor, before, after)
+}
+fn validate_update_text(
+    text: &str,
+    monitor: &[i64],
+    before: &[i64],
+    after: &[i64],
+) -> Result<Vec<[u64; 2]>> {
+    let mut lines = text.lines();
+    if lines.next() != Some("cycle\tside\tstage\tvalues") {
+        return Err("update owner header differs".into());
+    }
+    let mut rows = BTreeMap::new();
+    for line in lines {
+        let fields: Vec<_> = line.split('\t').collect();
+        if fields.len() != 4 {
+            return Err("update owner row width differs".into());
+        }
+        let cycle: u32 = fields[0].parse()?;
+        if cycle.to_string() != fields[0]
+            || rows
+                .insert((cycle, fields[1], fields[2]), fields[3])
+                .is_some()
+        {
+            return Err("noncanonical/duplicate update owner row".into());
+        }
+    }
+    if rows.len() != 200 {
+        return Err("incomplete update owner matrix".into());
+    }
+    let mut owners = Vec::new();
+    for cycle in 0..20 {
+        for side in ["source", "rust"] {
+            // Geometry is a signed record; other arrays use exact native u64.
+            let geometry_text = rows
+                .get(&(cycle, side, "geometry"))
+                .ok_or("missing update geometry")?;
+            let geometry: Vec<i64> = serde_json::from_str(geometry_text)?;
+            if geometry.len() != 31 {
+                return Err("update geometry width differs".into());
+            }
+            native_coordinates(&geometry[..18])?;
+            let client = screen(&geometry);
+            let overlaps = |target: &[i64]| {
+                client[0] < target[2]
+                    && target[0] < client[2]
+                    && client[1] < target[3]
+                    && target[1] < client[3]
+            };
+            if geometry[..4] != *monitor
+                || client[2] - client[0] != 32
+                || client[3] - client[1] != 32
+                || client[0] < monitor[0]
+                || client[1] < monitor[1]
+                || client[2] > monitor[2]
+                || client[3] > monitor[3]
+                || overlaps(before)
+                || overlaps(after)
+            {
+                return Err("update owner overlaps target or selects a different output".into());
+            }
+            let mut take = |stage| -> Result<Vec<u64>> {
+                Ok(serde_json::from_str(
+                    rows.remove(&(cycle, side, stage))
+                        .ok_or("missing update owner stage")?,
+                )?)
+            };
+            let threads = take("threads")?;
+            let first = take("before")?;
+            let last = take("after")?;
+            let closed = take("closed")?;
+            if threads.len() != 4
+                || threads[0] == 0
+                || threads[0] == threads[1]
+                || threads[0] != threads[2]
+                || first.len() != 3
+                || last.len() != 3
+                || first[0] == 0
+                || last[0] != first[0]
+                || last[1] <= first[1]
+                || first[2] != 0
+                || last[2] != 0
+                || closed != [1]
+            {
+                return Err("update owner threads/progress/error/close differs".into());
+            }
+            rows.remove(&(cycle, side, "geometry"));
+            owners.push([threads[0], threads[1]]);
+        }
+    }
+    if !rows.is_empty() {
+        return Err("additional update owner records".into());
+    }
+    Ok(owners)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_disjoint_update_owner_overlap_missing_progress_foreign_threads_and_incomplete_rows()
+    {
+        let monitor = [0, 0, 1920, 1080];
+        let before = [0, 952, 192, 1080];
+        let after = [0, 904, 192, 1032];
+        let mut geometry = [0; 31];
+        geometry[..4].copy_from_slice(&monitor);
+        geometry[14] = 32;
+        geometry[15] = 32;
+        let make = |geometry: &[i64], threads: &str, last: &str, closed: &str| {
+            let mut text = String::from("cycle\tside\tstage\tvalues\n");
+            for cycle in 0..20 {
+                for side in ["source", "rust"] {
+                    for (stage, value) in [
+                        ("geometry", serde_json::to_string(geometry).unwrap()),
+                        ("threads", threads.into()),
+                        ("before", "[1,2,0]".into()),
+                        ("after", last.into()),
+                        ("closed", closed.into()),
+                    ] {
+                        text.push_str(&format!("{cycle}\t{side}\t{stage}\t{value}\n"));
+                    }
+                }
+            }
+            text
+        };
+        let valid = make(&geometry, "[10,20,10,30]", "[1,3,0]", "[1]");
+        validate_update_text(&valid, &monitor, &before, &after).unwrap();
+        for invalid in [
+            make(&geometry, "[20,20,20,30]", "[1,3,0]", "[1]"),
+            make(&geometry, "[10,20,11,30]", "[1,3,0]", "[1]"),
+            make(&geometry, "[10,20,10,30]", "[1,2,0]", "[1]"),
+            make(&geometry, "[10,20,10,30]", "[2,3,0]", "[1]"),
+            make(&geometry, "[10,20,10,30]", "[1,3,1]", "[1]"),
+            make(&geometry, "[10,20,10,30]", "[1,3,0]", "[0]"),
+            valid.lines().take(200).collect::<Vec<_>>().join("\n"),
+            valid.clone() + "0\tsource\tclosed\t[1]\n",
+        ] {
+            assert!(validate_update_text(&invalid, &monitor, &before, &after).is_err());
+        }
+        geometry[17] = 950;
+        assert!(
+            validate_update_text(
+                &make(&geometry, "[10,20,10,30]", "[1,3,0]", "[1]"),
+                &monitor,
+                &before,
+                &after
+            )
+            .is_err()
+        );
+    }
     #[test]
     fn accepts_translated_screen_origin_and_rejects_other_geometry_changes() {
         // A framed 192x128 client moves upward by a 48px work-area correction.
