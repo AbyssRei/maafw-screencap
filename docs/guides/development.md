@@ -130,6 +130,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+对下述简单隐藏窗口控制追加两次独立调试执行，每次二十个生命周期，零捕获。CDB 10.0.28000.2957 观察实际 `CreateFontIndirectExW` 入口和返回；两次均只有首例 `SetWindowLongPtrW` 前后标记之间的两个创建，调用栈经过 UxTheme 的 `CInternalNonclientMetrics::Acquire`、`NcGetCaptionFont`、`OnDwpStyleChanged` 及真实 `DefWindowProcW`/原生样式设置。后十九次样式设置没有该入口的新调用，计数始终为 `2`。第二次在二十个窗口销毁和类注销后，对两枚实际返回句柄只读调用公开 `GetObjectType`/`GetObjectW`，分别仍为 `OBJ_FONT (6)`、返回 92 字节；记录的选定字段均为 Microsoft YaHei UI、height -12、weight 400。句柄保留 64 位不透明值，包括实际的高位扩展，不窄化或自行删除 UxTheme 的对象。
+
+这解释了该独立调试进程所观察到的两个 GDI 对象；调试器会改变时序，没有把这两枚句柄追溯成旧进程、原绘制器或托管 `9→11` 的同一对象，也不接受任意删除/重用连续身份、完整字体字节、框架缓存清理或全局资源关闭。原首帧和资源断言、基线、取帧与历史失败均未修改。首次调试因命令文件路径解释错误停止在创建入口，保留不完整失败；改用独立工作目录和相对命令文件后完成观察。首次 reader 把调试器回显的断点声明当作实际 brush/bitmap 事件而拒绝，最终单独核对声明与实际输出，原始日志未改。两次成功执行、一次失败尝试及最终只读查询由参考目录 `local/current-caption-style-native-trace-path.txt`、`local/current-caption-style-native-review-path.txt` 指向；完整 P1 仍未通过。
+
 首帧夹具新增独立测试 `pending::preparation::observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins`，使用相同绘制 DLL，逐项执行同一显示器/工作区布局、独立更新窗口、目标正常窗口样式、重绘、presentation、激活与可见性检查，但不创建捕获对象、不持有队列、不调用取帧。每个成功前提下的进程预定二十个独立生命周期，逐步写入外部 `layout.tsv`/`preparation.tsv`；保留每次计数差异并在整组末尾报错，遇到准备失败则先完成两个显式 close/join 及 HWND 失效观察，再返回原错误与清理结果，不重试到通过。现有首帧测试主体仅增加子测试模块声明，原捕获、等待、像素和严格资源相等断言均未改。
 
 最终程序的本机三轮全部无输入干扰：1,372 项声明输入及执行前独立副本核对，最大监听间隔 71.0064ms，四路监听确认注销，未声称新物理正控制。每轮在第零例得到相同阶段计数：baseline、两个 fixture 创建、owner、更新几何和更新启动均为 `9`，设置目标样式后为 `11`，重绘、presentation、激活和两个 UI worker 关闭/join 后仍为 `11`；两枚 HWND 均已失效。激活每次也明确返回原生前台拒绝，退出均为 101；因此三轮保留 `missing_environment` 与 `9→11`，没有二十例完整通过或取帧验收。进程计数不能证明前后是同一对象，也不据此排除捕获路径存在其他资源问题。
