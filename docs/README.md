@@ -1,6 +1,6 @@
 # 文档导航与维护约定
 
-手动原生 workflow 新增 `macos_runner` 选择，可用同一完整矩阵比较 `xcode-27` 与 `macos-26`；默认仍为前者，原断言和旧失败保留。实际新环境执行待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+同一 `0fe79b2` 已在 `macos-26` 与 `xcode-27` 实际执行完整 Mac 组件：两边均为 133/154，同样的 21 项失败保留；没有工具版本门禁失败。默认仍为后者，原断言不变，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `8c1369c` 的独立 Windows FramePool 为 98/102，四个原版伪最小化黑图失败保留；新诊断三张外圈图与六张历史异常目标逐字节相同，仍未认定生产者。完整官方包的三个运行清单输入已核对。Linux PipeWire 为 202/202，包含真实 `NoneScreencap` 的虚调用与 Mat 保留测试；完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 

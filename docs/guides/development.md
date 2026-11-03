@@ -108,7 +108,18 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
-手动原生 workflow 现接受 `gh workflow run p0.yml --ref <分支> -f macos_runner=macos-26`，以完全相同的准备、原版/Rust 捕获和记录门禁执行另一个原生 Mac 环境；`macos_runner` 仅允许 `xcode-27` 与 `macos-26`，push/PR 和手动默认仍选前者。`framepool_only=true` 的专项选择不变。GitHub 的[标准 runner 清单](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)包含这两个 arm64 标签；实际 OS/Xcode/SDK/编译器和当前依赖仍随运行归档，预装工具年龄只作参考。新增选择不改变测试/断言/步骤、工具能力要求、资产路径或历史结论；去除新增输入并还原唯一 matrix 表达式后，整个 YAML 结构与父提交完全相等。五个事件/选项组合的模型检查通过，尚不证明托管路由、macOS 26 编译或取帧。开发证据由参考目录 `local/current-macos-runner-selection-path.txt` 指向；该额外环境的结果不能替代 macOS 27 结果或完整 P1。
+同一 `0fe79b2` 的两个原生 Mac job 均已终态失败，原型步骤均通过，既有来源组件各为 133/154，21 个失败的名称和全部 154 项状态完全一致，没有因预装工具不是严格最新版停止。实际身份与结果如下；runner 名称和内核身份分别保留，不用标签推造系统版本。
+
+| 原生运行 | 实际 Darwin 内核 | 实际 Xcode / build | 来源组件 |
+| --- | --- | --- | --- |
+| [手动 macos-26](https://github.com/AbyssRei/maafw-screencap/actions/runs/41549421258) | 25.6.0 arm64 | 26.6 / 17F113 | 133 通过、21 失败 |
+| [push xcode-27](https://github.com/AbyssRei/maafw-screencap/actions/runs/41549403347) | 27.0.0 arm64 | 27.1 / 27A9275 | 133 通过、21 失败 |
+
+两份官方即时 ZIP 的摘要/CRC、各 11,941 份文件、11,786 个可用登记路径和全部 154 份日志均核对；每份仍有 582 项完整输入缺口。十二份捕获库、场景、观察器及编排源码分别匹配同一提交的 canonical 字节和各自的原生登记摘要。两边 same-path 观察器均完成 content 转发、提交 1024×768 sample 后，原生等待返回 49，后续十五秒无 sample callback 或 semaphore signal；不同路径及 CG 场景的四项原版/记录正控制在两边均通过。该结果不支持把问题仅归为 macOS 27，也不是只改变 OS 的单变量实验：工具、宿主和独立解析的依赖环境同时不同。它没有证明共同原因、callback 排空、像素生产者或完整 P1；来源、原断言、默认 runner 与旧失败均未改。复核由参考目录 `local/current-macos-environment-comparison-path.txt` 指向。
+
+另对确切 `8c1369c` 的六个原版 native sample 做 56 项登记输入的只读复核：12 份转换前/后 BGRA 副本相同，每张 1024×768 图的全部 alpha 字节均为 255，转换后的每个 BGR 通道均来自同一原生样本；14 张独立 CPU 场景图全量符合 RGB 图样。原版样本在 mode0 三次的差异为 0/24/44 点，mode1 为 52/52/52 点；所有差异都位于至少一个相邻窗口 census 所记录的 `Window Server / StatusIndicator` 矩形中，最大像素边界为 `[1012,4,1020,12]`，记录的窗口边界为 `[1002,-6,28,28]`。census 和截图并非原子同步观察，不能由空间关联确认生产者、原生合成参数或另一组无回调超时的原因，也没有 mask 或改判失败。证据由参考目录 `local/current-8c-macos-sample-census-path.txt` 指向。
+
+手动原生 workflow 现接受 `gh workflow run p0.yml --ref <分支> -f macos_runner=macos-26`，以完全相同的准备、原版/Rust 捕获和记录门禁执行另一个原生 Mac 环境；`macos_runner` 仅允许 `xcode-27` 与 `macos-26`，push/PR 和手动默认仍选前者。`framepool_only=true` 的专项选择不变。GitHub 的[标准 runner 清单](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)包含这两个 arm64 标签；实际 OS/Xcode/SDK/编译器和当前依赖仍随运行归档，预装工具年龄只作参考。新增选择不改变测试/断言/步骤、工具能力要求、资产路径或历史结论；去除新增输入并还原唯一 matrix 表达式后，整个 YAML 结构与父提交完全相等。开发时五个事件/选项组合的模型检查先通过，后续托管路由和原生结果见上表。开发证据由参考目录 `local/current-macos-runner-selection-path.txt` 指向；该额外环境的结果不能替代 macOS 27 结果或完整 P1。
 
 确切 `8c1369c` 原生 macOS 的官方即时 ZIP（40,032,711 字节）摘要、CRC、11,941 份文件、11,786 个实际可用登记路径、全部 154 份日志与十项 AST 输出另已核对，仍保留 582 项完整输入缺口。全部状态与之前批次相同：133 通过、21 失败；相同状态不表示失败发生在相同位置。本次单独的 same-path 观察入口完成 content 回调/转发并提交 1024×768 sample 请求，原五秒等待超时，后续十五秒仍没有 sample callback 或 semaphore signal；`sample_enter` 仅为提交标记，不能写成进入 sample completion。另一个 Foundation consumer 在截图前的几何查询即超时；其他失败原 oracle 的 nullopt 与整屏像素断言各保留原边界，不统称为角落图形或同一种问题。观察器仅在 stderr 的单行输出期间持锁，完成后才调用原 completion；没有据日志认定观察器锁、Apple 服务或像素生产者为原因。参考目录 `local/current-8c-macos-native-review-path.txt` 指向该只读复核，当前失败及完整 P1 状态不变。
 
