@@ -19,6 +19,7 @@ mod frame_pool_alpha;
 mod framepool_border;
 mod framepool_empty;
 mod framepool_init;
+mod framepool_lifetime;
 mod framepool_map;
 mod framepool_order;
 mod framepool_queries;

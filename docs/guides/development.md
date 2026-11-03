@@ -120,6 +120,20 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+FramePool 新增完整未改 F 原类与同一私有 Rust 后端的成功取帧寿命矩阵。两侧各二十个自有窗口生命周期，每周期一次实际截图；在成功后对真实 device、immediate context 和 staging texture 注册既有独立 `ID3DDestructionNotifier` 观察。其私有 observer 与 DesktopDup 共用相同五项导出、具体接口 QI 和标量宽度检查，回调仍只写固定原子记录，fixture 模块保留至进程退出。未复制捕获实现，未改变产品 API、方法、等待、转换和清理流程。
+
+四个阶段分别为成功取帧、显式 `uninit`、捕获 owner 析构、额外 texture/device 引用释放。F 的 `uninit` 不清空 device/context/swapchain，也不清除独立 CPU cache；缓存槽位实际由 127 变为 7，cache 地址保留且与返回图像不同，前两类 D3D 对象此时不得析构。奇数周期另持有 texture 和 device 两个独立引用，不假定隐式父设备关系；owner 析构后这两个对象仍须存活，按 texture→device 顺序释放后再观察最终通知。未持有额外引用的周期在 owner 析构后的两秒观测预算内须完成，最终阶段同样核对实际通知。此有限预算不构成同步析构或任意驱动行为保证；swapchain 的真实析构没有在本矩阵观察。
+
+预定连续三轮共九次 source/Rust/records 调用全部退出 0。独立复核重新核对全部 1,527 项冻结输入及内容寻址副本，三个冻结 checker 只读复验均保持 127 份实际记录不变；重算 120 次取帧/生命周期、360 个真实对象与析构通知、六十组显式引用对、120 个保留 CPU owner，以及 240 份完整即时/持帧图像的 1,474,560 像素。原生注册方式、返回码、接口身份、线程/QPC、四阶段状态与 cache 地址逐项核验。四路监听在 armed 区间零输入、最大间隔 75.6276ms，已注销并释放电源请求；本次 prearm 未观测到实物事件，不声称新的实物正控制。记录由参考目录 `local/current-framepool-lifetime-development-path.txt` 与 `local/current-framepool-lifetime-local-review-path.txt` 指向，三轮及最终复核已封存，不得改写。
+
+`cargo xtask upstream-trace framepool-lifetime <外部矩阵> [--check-only]` 独立验证上述记录。四十九组实际数据副本接受三组完整记录、拒绝四十六组损坏记录，覆盖 uninit 保留、owner/额外引用释放、注册/身份/时序/缓存、缺行/重复、布局/完整像素及保存报告；原矩阵未改。实际 Step 二十七组输出控制、四组独立继续执行以及一个真实冻结 checker 子命令均通过；完整整行摘要及确切单测试通过才接受，失败汇总和后续检查分别保留。
+
+本批使用显式归档依赖。首次原生链接因继承伪最小化夹具开关却缺对应源文件而失败，首次 Rust 编译因新测试错用 `Attempt.result` 而失败；改用既有完整原生目标源清单和正确 `image` 字段后，原生/release Rust 重建、所选全部 target 严格 Clippy 均通过。外部矩阵准备的 PowerShell 引号错误也保留，发生时尚未冻结或执行截图。另一次 DesktopDup 独立构建控制在较长目录的 MSBuild 编译器探测阶段报 tlog `DirectoryNotFound`；改用较短独立目录后，同一 DesktopDup ON/FramePool OFF 配置编译通过，零截图，原失败保留，不改称 SDK 或捕获失败。最终默认 workspace 为库 34 通过/6 忽略、interop 4 通过、xtask 130 通过，格式、默认严格 Clippy 和 release 构建通过；不声称本批重新在线解析最新版。
+
+CI 已接入独立的 FramePool lifetime 构建/source/Rust/records，广泛测试入口显式跳过该已单列用例。另修正轻量上传清单：先前 DesktopDup lifetime 的通用 `.bgr` 匹配只能覆盖像素，不能覆盖寿命表/ABI/报告；现为 DesktopDup 和 FramePool 两个 lifetime 目录各声明完整上传范围。旧运行的实际上传缺口须由其完整工程包另行核验，不能把清单修正当作旧数据已经可用。后续托管寿命执行仍待结果；没有全局 GPU 统计闭包、任意设备故障、完整框架回调排空或 P1 验收结论。
+
+确切 `130aad1` 原生 Linux job `125848914800` 已成功，PipeWire 205/205、Wlr 151/151，全部 356 项名称/状态与封存 `02c7eb6` 一致。两份官方 ZIP 的完整摘要/长度/CRC、全部检查日志摘要及实际编译器/链接器身份核对，预装工具政策控制通过；这里只复核该确切提交的组件回归，不重新接受完整来源/依赖输入闭包。PipeWire 的零字节停滞与三分钟部分传输超时均保留，后续分段恢复逐项核对实际 HTTP range，最终完整官方摘要一致，旧部分文件不变。已封存焦点记录由参考目录 `local/current-130aad1-linux-focused-path.txt` 指向，完整 P1 未通过。
+
 DesktopDup 新增独立的真实对象寿命矩阵：原版目标单独编译完整未改 F `DesktopDupScreencap.cpp`，Rust 直接调用同一私有后端；每侧二十个自有 96×64 场景生命周期，每周期只作一次公开截图。先预热成功，再观察实际 device、immediate context、duplication 和 staging texture，原 `uninit` 的七个缓存槽从 127 归零。device/context/texture 通过真实 `ID3DDestructionNotifier`，duplication 通过唯一 GUID 的 `SetPrivateDataInterface` owner；两种证据分别记录，后者只证明关联 owner 释放。奇数周期分别保留 texture 和 device 两个显式引用，不假定隐式父设备引用；释放这两个引用前不得收到其通知。最终通知的两秒预算是有限观测条件，不是 API 同步析构保证。
 
 原生 observer 的具体接口 QI、六项标量宽度、注册方式/返回码、线程/QPC、稳定对象身份和每周期三阶段记录均独立核对；注册仅借用当前对象，临时 QI 引用在返回前释放。回调只写进程寿命的固定原子记录，无借用栈地址、原生对象访问、分配或 I/O；Rust 即使失败也保留 fixture 模块至进程退出。没有添加 `Flush`、`ClearState`、设备重置或取帧重试。持有的 CPU 图像在后端、原生资源和窗口退出后逐字节重读；不把这些私有诊断导出变成产品 ABI。

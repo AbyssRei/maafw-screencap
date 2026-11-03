@@ -171,6 +171,29 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected the complete native initialization/device lifetime matrix; no capture/P1 acceptance'
             }
         }
+        if ($Name -in @('frame-pool-source-lifetime','frame-pool-rust-lifetime','frame-pool-lifetime-records') -and $exitCode -eq 0) {
+            $observed=[IO.File]::ReadAllText($logPath)
+            $prefix = switch ($Name) {
+                'frame-pool-source-lifetime' { 'original FramePool lifetime' }
+                'frame-pool-rust-lifetime' { 'native Rust FramePool lifetime' }
+                'frame-pool-lifetime-records' { 'FramePool lifetime' }
+            }
+            $summary = if ($Name -eq 'frame-pool-lifetime-records') {
+                "$prefix sides=2 public_calls=40 d3d_destruction_notifications=120 explicit_reference_pairs=20 uninit_gpu_slots=7 retained_cpu=40 extra_flush=0 global_gpu_allocation_proof=0 full_P1_acceptance=0 passed"
+            } else {
+                "$prefix cycles=20 public_calls=20 d3d_destruction_notifications=60 explicit_reference_pairs=10 uninit_gpu_slots=7 retained_cpu=20 extra_flush=0 full_P1_acceptance=0 passed"
+            }
+            $leader = if ($Name -eq 'frame-pool-rust-lifetime') {
+                '(?:test backends::windows::frame_pool::tests::native_lifetime::retains_gpu_owners_at_uninit_and_releases_them_after_owner_drop_and_explicit_holds \.\.\. )?'
+            } else { '' }
+            if ([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($prefix)+'.*\r?$').Count -ne 1 -or
+                ($Name -eq 'frame-pool-rust-lifetime' -and
+                    ([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                     $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$'))) {
+                throw 'Expected one complete successful-capture FramePool lifetime matrix distinguishing uninit, owning drop and explicit holds'
+            }
+        }
         if ($Name -eq 'frame-pool-source-border') {
             $observed = [IO.File]::ReadAllText($logPath)
             if ($exitCode -eq 77 -and $observed -match '(?m)^border environment missing before_capture=1 property_unavailable=1\r?$') {
@@ -1162,6 +1185,20 @@ try {
         $frameContextEvidence = Join-Path $artifacts frame-pool-context
         New-Item -ItemType Directory -Path $frameContextEvidence | Out-Null
         if($FramePoolParity) {
+            $frameLifetimeEvidence=Join-Path $frameContextEvidence lifetime
+            New-Item -ItemType Directory -Path (Join-Path $frameLifetimeEvidence source)|Out-Null
+            $env:MFS_D3D_LIFETIME_LIBRARY=Join-Path $artifacts mfs_d3d_lifetime.dll
+            try {
+                Step frame-pool-lifetime-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_lifetime_reference','--parallel','4')
+                foreach($name in @('mfs_framepool_lifetime_reference.exe','mfs_d3d_lifetime.dll')) {
+                    $saved=Join-Path $artifacts $name
+                    Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved;Save-Input $saved
+                }
+                Invoke-FrameCheck frame-pool-source-lifetime (Join-Path $artifacts mfs_framepool_lifetime_reference.exe) @((Join-Path $frameLifetimeEvidence source))
+            } catch { $script:failed=$true; Write-Host $_.Exception.Message }
+            finally {
+                Get-ChildItem -LiteralPath $frameLifetimeEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName }
+            }
             $frameInitEvidence=Join-Path $frameContextEvidence initialization
             New-Item -ItemType Directory -Path (Join-Path $frameInitEvidence source)|Out-Null
             $initProgram=Join-Path $artifacts mfs_framepool_init_reference.exe
@@ -1385,6 +1422,8 @@ try {
         $frameMapCase = 'backends::windows::frame_pool::tests::map_boundary::preserves_warm_cache_and_unmaps_exactly_once_across_native_map_and_conversion_failures'
         $frameSizeCase = 'backends::windows::frame_pool::tests::size_boundary::preserves_original_size_query_catches_partial_states_and_recovery'
         $frameInitCase = 'backends::windows::frame_pool::tests::initialization::preserves_failed_initialization_state_and_releases_replaced_native_devices'
+        $frameLifetimeCase = 'backends::windows::frame_pool::tests::native_lifetime::retains_gpu_owners_at_uninit_and_releases_them_after_owner_drop_and_explicit_holds'
+        $caseSelection += @('--skip', $frameLifetimeCase)
         $frameAlphaCase = 'backends::windows::frame_pool::tests::alpha_sequence::records_original_alpha_sequence_pixels_and_held_owners'
         $caseSelection += @('--skip', $frameAlphaCase)
         $caseSelection += @('--skip', $frameTargetLossCase, '--skip', $frameQueryCase, '--skip', $frameRecordCase, '--skip', $frameEmptyCase, '--skip', $frameMapCase, '--skip', $frameSizeCase, '--skip', $frameInitCase)
@@ -1483,6 +1522,9 @@ try {
             Step 'desktop-dup-rust-conversion-boundary' cargo ($parityArguments + @('--',$desktopConversionCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
         }
         if ($FramePoolParity) {
+            $env:MFS_FRAMEPOOL_LIFETIME_ROOT=$frameLifetimeEvidence
+            Invoke-FrameCheck frame-pool-rust-lifetime cargo ($parityArguments + @('--',$frameLifetimeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck frame-pool-lifetime-records $ConfigureTool @('upstream-trace','framepool-lifetime',$frameLifetimeEvidence)
             $env:MFS_P1_FRAMEPOOL_INIT_ARTIFACTS = $frameInitEvidence
             $env:MFS_P1_FRAMEPOOL_INIT_FIXTURE = $initFixture
             Invoke-FrameCheck frame-pool-rust-initialization cargo ($parityArguments + @('--',$frameInitCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))

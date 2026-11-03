@@ -89,6 +89,10 @@ target_include_directories(mfs_reference_u PRIVATE
     "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit")
 target_link_libraries(mfs_reference_u PRIVATE mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32)
 endif()
+if(MFS_BUILD_DESKTOP_DUP_REFERENCE OR MFS_BUILD_FRAMEPOOL_REFERENCE)
+    add_library(mfs_d3d_lifetime SHARED d3d-lifetime.cpp)
+    target_link_libraries(mfs_d3d_lifetime PRIVATE D3D11 Dxgi)
+endif()
 if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     # An executable isolates C++/WinRT's process factory/MTA state. This is a
     # source-only environment observation, not Rust FramePool parity acceptance.
@@ -115,6 +119,8 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     add_executable(mfs_framepool_init_reference framepool-init-reference.cpp
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/FramePoolScreencap.cpp")
     target_link_libraries(mfs_framepool_init_reference PRIVATE mfs_framepool_init_fixture)
+    add_executable(mfs_framepool_lifetime_reference framepool-lifetime-reference.cpp ${_framepool_sources})
+    target_link_libraries(mfs_framepool_lifetime_reference PRIVATE mfs_d3d_lifetime)
     # Source-only order observation; no manager or native source is rewritten.
     add_executable(mfs_framepool_order_reference framepool-order-reference.cpp ${_framepool_sources}
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp"
@@ -218,6 +224,7 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
         set_property(TARGET mfs_framepool_alpha_poll_reference APPEND PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_target_loss_reference PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_init_reference APPEND PROPERTY ${_property} "${_value}")
+        set_property(TARGET mfs_framepool_lifetime_reference APPEND PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_order_reference PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_border_reference APPEND PROPERTY ${_property} "${_value}")
         set_property(TARGET mfs_framepool_query_reference APPEND PROPERTY ${_property} "${_value}")
@@ -227,8 +234,6 @@ if(MFS_BUILD_FRAMEPOOL_REFERENCE)
     endforeach()
 endif()
 if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
-    add_library(mfs_d3d_lifetime SHARED d3d-lifetime.cpp)
-    target_link_libraries(mfs_d3d_lifetime PRIVATE D3D11 Dxgi)
     add_executable(mfs_desktop_lifetime_reference desktop-lifetime-reference.cpp print-parity.cpp print-thread.cpp
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/DesktopDupScreencap.cpp")
     target_include_directories(mfs_desktop_lifetime_reference PRIVATE

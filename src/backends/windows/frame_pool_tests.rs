@@ -31,6 +31,10 @@ mod size_boundary;
 mod initialization;
 
 #[cfg(feature = "prototype-windows-com")]
+#[path = "frame_pool_lifetime_tests.rs"]
+mod native_lifetime;
+
+#[cfg(feature = "prototype-windows-com")]
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host};
 
 #[test]
