@@ -130,6 +130,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+DesktopDupWindow 首帧测试现把进程 GDI 计数移至两个绘制 fixture 创建前、以及两者原生关闭成功并完成 worker join 后，另外查询两枚实际 HWND 均已失效。仍严格要求前后计数相等，覆盖捕获对象及 fixture 的完整生命周期，不再在独立更新窗口持续绘制时取比较快照；这不是全局 GPU 计数，也不确定下述旧 `13→11` 的具体原因。首帧 gate 到捕获对象释放的整段代码逐字与 `fb60c96` 相同，原版类、绘制器、预热/等待、转换/裁剪和像素断言未改。测试专用平台 helper 清除调用线程的旧错误，并在零计数时检查原生错误；[Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getguiresources)明确零可表示无对象或失败。实际 Win32 线程错误状态配合受控计数返回的检查覆盖空计数、正值、旧错误与失败，不声称制造了真实进程资源查询故障。
+
+新 DesktopDup 记录布局二在 `pending.tsv` 中显式声明边界，增加 `resources.tsv` 的四十组 baseline/owners/closed 观察，共 323 份数据文件。校验 DWORD 计数/线程宽度、实际 HWND、独立 UI owner、同一 capture caller、窗口失效和与 pending/update 记录的交叉身份；缺文件、删标记或计数不等均拒收。旧布局一的通过报告仍只读通过，旧不完整失败仍拒收，不把旧计数改作新边界证据。25 项控制接受三组、拒绝 22 组；其中新布局控制使用旧实际像素/身份与明确合成的资源计数，不是新截图。33 组真实 Step wrapper 的 mock 输出控制、四组失败后独立继续及两个实际 checker 子进程通过，当前 CI 拒绝用旧布局成功摘要替代新资源记录。
+
+最终程序的本机三轮零截图 fixture 控制全部通过：六十对窗口、120 个真实 UI worker join、120 个实际 HWND 失效，全部前后计数为 `9→9`。双方每次 1,362 项执行前冻结输入及独立副本均核对；此批零原始/低级鼠标键盘事件，最大采样间隔 70.9712ms，监听确认注销，不声称新物理正控制。另对同一最终程序执行预定首帧三轮，六次测试/记录调用仍在实际前台拒绝处停止，零图像，最大间隔 76.2872ms、输入有效、监听已注销，保持 `missing_environment` 和记录拒收。较早中间程序的同类三轮结果也保留，不用原生零截图控制接受完整取帧或持帧矩阵。
+
+归档离线依赖下，选定测试构建/Clippy、默认 release、无 prototype 的直接窗口库、工作区测试和严格 Clippy、格式均通过；xtask 为 133 项。新 fixture 独立 CI 入口、聚合跳过、完整资源目录上传和新格式摘要已接入，托管布局二取帧仍待执行。初次选错受 feature 限制的原生模块、投影缺少 `SetLastError`、外部 Step 控制遗漏 Artifact/未括起的连接表达式，以及来源 reader 误把预热 fixture 当循环内创建的前提错误均保留；最终使用受控 prototype 生成输入、平台测试 helper 和独立新目录，无 lint 抑制或旧失败豁免。开发与已封存来源审阅分别由参考目录 `local/current-desktop-pending-resource-development-path.txt`、`local/current-desktop-pending-resource-source-review-path.txt` 指向；本批不声称新的在线最新依赖解析或完整 P1 验收。
+
 确切 `bb8056c` 的 [Actions 41662819907](https://github.com/AbyssRei/maafw-screencap/actions/runs/41662819907) Linux/macOS 新增基础 buffer 原生与记录两项均通过。PipeWire 组件为 207/207，原 205 项名称/状态不变；Mac 为 138/159，原 157 项及 21 个严格失败不变。两平台各八组 Custom 原生测试和本机冻结 checker 的八组只读数据复算全部通过；新增每平台一百个原 StringBuffer 创建/清空/销毁及其独立保留字符串值、780 个图像 owner，240/45,120 字节的即时/持有数据完整匹配，最终 owner 归零，新增 helper 零桌面截图。完整未改 F `MaaBuffer.cpp` 和实际公共头逐字节匹配已登记副本，四项真实 compile command 中恰有一次完整文件编译；十份确切 Git 源码另以登记摘要匹配保存，不冒称完整源码闭包。
 
 两份官方轻量 ZIP 分别为 Mac 41,554,965、Linux 39,976,902 字节，完整官方摘要及 CRC 均通过。首次 180 秒超时各保留约 7 MiB 原始部分文件，后以校核 HTTP 206 范围恢复同一官方包，没有重跑 native 测试。全部 159/207 项日志及可用输入均核对；Mac 21,156 项可用输入登记对应 11,839 个不同路径，Linux 53,588 项对应 44,178 个不同路径，重复项摘要一致。完整输入缺口分别仍为 632/664 个不同路径；附属 cardinality 审阅明确区分引用次数与路径数，未改旧报告。数据复核前后完整解压文件摘要不变。实际 Xcode 27.1/Apple Clang 21.0.0 与 LLVM 22.1.2 按预装身份记录，不因年龄阻断。Mac 的旧像素/超时失败及本机权威无输入结论保持原身份，完整 P1 未验收；材料由参考目录 `local/current-bb8056-unix-buffers-review-path.txt` 指向，输入计数补充位于同批 `input-cardinality-review`。

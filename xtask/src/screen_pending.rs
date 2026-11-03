@@ -42,7 +42,11 @@ fn run_kind(args: &[String], desktop: bool) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if desktop {
+    if desktop && report.layout_version == 2 {
+        println!(
+            "DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=323 quiescent_counts=40 full_P1_acceptance=0 passed"
+        );
+    } else if desktop {
         println!(
             "DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=322 full_P1_acceptance=0 passed"
         );
@@ -161,7 +165,8 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
             return Err("noncanonical or duplicate pending row".into());
         }
     }
-    if rows.len() != 404 {
+    let resource_layout = rows.contains_key(&(-1, "fixture", "resources"));
+    if rows.len() != 404 + usize::from(resource_layout) || (resource_layout && !desktop) {
         return Err("incomplete or additional pending matrix".into());
     }
     let mut take = |cycle, side, stage, width| -> Result<Vec<i64>> {
@@ -178,6 +183,9 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
     let work = take(-1, "fixture", "work", 4)?;
     let before = take(-1, "fixture", "before", 4)?;
     let after = take(-1, "fixture", "after", 4)?;
+    if resource_layout && take(-1, "fixture", "resources", 1)? != [2] {
+        return Err("unknown desktop resource boundary layout".into());
+    }
     for rectangle in [&monitor, &work, &before, &after] {
         native_coordinates(rectangle)?;
     }
@@ -210,6 +218,20 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
     } else {
         None
     };
+    // Historical layout-one records keep their original in-flight count scope.
+    // New desktop records add independently checked before-create/after-join
+    // observations, including real window validity and owner/caller identities.
+    let resource_boundaries = if resource_layout {
+        inputs.push(records::artifact(root, &root.join("resources.tsv"))?);
+        Some(validate_resource_text(&fs::read_to_string(
+            root.join("resources.tsv"),
+        )?)?)
+    } else {
+        if root.join("resources.tsv").exists() {
+            return Err("resource observations require the explicit layout marker".into());
+        }
+        None
+    };
     for cycle in 0..20 {
         for side in ["source", "rust"] {
             let setup = take(cycle, side, "setup", 31)?;
@@ -228,6 +250,22 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
                     || update[1] != u64::try_from(entered[6])?
                 {
                     return Err("update owner must be independent of held target queue on the same capture caller".into());
+                }
+            }
+            if let Some(resources) = &resource_boundaries {
+                let index = usize::try_from(cycle)? * 2 + usize::from(side == "rust");
+                let resource = &resources[index];
+                let update = update_threads.as_ref().ok_or("missing update owners")?[index];
+                if resource.caller != u32::try_from(entered[6])?
+                    || resource.target_owner != u32::try_from(entered[5])?
+                    || resource.update_owner != u32::try_from(update[0])?
+                    || resource.target != u64::try_from(visible[4])?
+                    || resource.update != update[2]
+                    || objects != [i64::from(resource.before), i64::from(resource.after)]
+                {
+                    return Err(
+                        "resource boundary differs from actual capture/update owners".into(),
+                    );
                 }
             }
             for geometry in [&setup, &completed, &final_geometry] {
@@ -257,7 +295,7 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
                 || screen(&completed) != after.as_slice()
                 || completed[20] != setup[20].checked_add(1).ok_or("message count overflow")?
                 || completed[25] & 0x14 != 0x14
-                || objects[0] <= 0
+                || objects[0] < i64::from(resource_boundaries.is_none())
                 || objects[0] != objects[1]
                 || closed != [1]
             {
@@ -295,7 +333,9 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
             }
         }
     }
-    if !rows.is_empty() || inputs.len() != 321 + usize::from(desktop) {
+    if !rows.is_empty()
+        || inputs.len() != 321 + usize::from(desktop) + usize::from(resource_boundaries.is_some())
+    {
         return Err("additional pending records".into());
     }
     for entry in fs::read_dir(root)? {
@@ -312,13 +352,15 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
     }
     inputs.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Report {
-        layout_version: 1,
+        layout_version: if resource_boundaries.is_some() { 2 } else { 1 },
         cases: 40,
         captures: 80,
         retained_images: 80,
         queue_timeouts: 0,
         inputs,
-        scope: if desktop {
+        scope: if resource_boundaries.is_some() {
+            "Original whole F DesktopDupWindow/Rust first capture with a held target UI queue, unchanged native capture and independent nonoverlapping update owner. Strict GDI counts surround both fixture lifetimes: before create and after checked close/worker join, with actual invalid HWND and cross-bound caller/owner observations. Complete target pixels, one queued correction and post-close CPU owners. No historical failure reclassification, arbitrary races, global GPU, input-free execution or full P1 acceptance follows."
+        } else if desktop {
             "Original whole F DesktopDupWindow/Rust first capture with a held target UI queue, real asynchronous correction and a distinct nonoverlapping same-output update owner. Native warmups/waits/full-output conversion/crop remain unchanged; source target clone occurs only at acceptance publication. Known complete target pixels, one movement after direct release, retained CPU owners and explicit update-owner close. No arbitrary foreign-window races, in-flight driver fault, global GPU, input-free execution or full P1 acceptance follows."
         } else {
             "Original/Rust capture with a fixture-held UI queue and real asynchronous geometry request, known pixels, one native correction after direct release and post-close owners. Does not prove arbitrary foreign-window races, DesktopDupWindow, input-free execution or full P1 acceptance."
@@ -331,7 +373,7 @@ fn validate_updates(
     monitor: &[i64],
     before: &[i64],
     after: &[i64],
-) -> Result<Vec<[u64; 2]>> {
+) -> Result<Vec<[u64; 3]>> {
     let text = fs::read_to_string(root.join("updates.tsv"))?;
     validate_update_text(&text, monitor, before, after)
 }
@@ -340,7 +382,7 @@ fn validate_update_text(
     monitor: &[i64],
     before: &[i64],
     after: &[i64],
-) -> Result<Vec<[u64; 2]>> {
+) -> Result<Vec<[u64; 3]>> {
     let mut lines = text.lines();
     if lines.next() != Some("cycle\tside\tstage\tvalues") {
         return Err("update owner header differs".into());
@@ -420,7 +462,7 @@ fn validate_update_text(
                 return Err("update owner threads/progress/error/close differs".into());
             }
             rows.remove(&(cycle, side, "geometry"));
-            owners.push([threads[0], threads[1]]);
+            owners.push([threads[0], threads[1], first[0]]);
         }
     }
     if !rows.is_empty() {
@@ -429,9 +471,113 @@ fn validate_update_text(
     Ok(owners)
 }
 
+struct ResourceBoundary {
+    before: u32,
+    after: u32,
+    caller: u32,
+    target: u64,
+    update: u64,
+    target_owner: u32,
+    update_owner: u32,
+}
+fn validate_resource_text(text: &str) -> Result<Vec<ResourceBoundary>> {
+    let mut lines = text.lines();
+    if lines.next() != Some("cycle\tside\tstage\tvalues") {
+        return Err("resource boundary header differs".into());
+    }
+    let mut boundaries = Vec::new();
+    for cycle in 0..20 {
+        for side in ["source", "rust"] {
+            let mut take = |stage: &str, width| -> Result<Vec<u64>> {
+                let line = lines.next().ok_or("missing resource boundary")?;
+                let fields: Vec<_> = line.split('\t').collect();
+                if fields.len() != 4
+                    || fields[0] != cycle.to_string()
+                    || fields[1] != side
+                    || fields[2] != stage
+                {
+                    return Err("noncanonical resource boundary order/identity".into());
+                }
+                let values: Vec<u64> = serde_json::from_str(fields[3])?;
+                if values.len() != width {
+                    return Err("resource boundary width differs".into());
+                }
+                Ok(values)
+            };
+            let baseline = take("baseline", 2)?;
+            let owners = take("owners", 5)?;
+            let closed = take("closed", 4)?;
+            let boundary = ResourceBoundary {
+                before: u32::try_from(baseline[0])?,
+                after: u32::try_from(closed[0])?,
+                caller: u32::try_from(baseline[1])?,
+                target: owners[0],
+                update: owners[1],
+                target_owner: u32::try_from(owners[2])?,
+                update_owner: u32::try_from(owners[3])?,
+            };
+            if boundary.before != boundary.after
+                || boundary.caller == 0
+                || owners[4] != u64::from(boundary.caller)
+                || closed[1] != u64::from(boundary.caller)
+                || closed[2..] != [0, 0]
+                || boundary.target == 0
+                || boundary.update == 0
+                || boundary.target == boundary.update
+                || boundary.target_owner == 0
+                || boundary.update_owner == 0
+                || boundary.target_owner == boundary.update_owner
+                || boundary.target_owner == boundary.caller
+                || boundary.update_owner == boundary.caller
+            {
+                return Err("unbalanced resources, live window or invalid resource owner".into());
+            }
+            boundaries.push(boundary);
+        }
+    }
+    if lines.next().is_some() {
+        return Err("additional resource boundaries".into());
+    }
+    Ok(boundaries)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_resource_leaks_live_windows_invalid_native_ids_and_incomplete_boundaries() {
+        let mut valid = String::from("cycle\tside\tstage\tvalues\n");
+        for cycle in 0..20 {
+            for side in ["source", "rust"] {
+                for (stage, values) in [
+                    ("baseline", "[0,20]"),
+                    ("owners", "[101,102,10,11,20]"),
+                    ("closed", "[0,20,0,0]"),
+                ] {
+                    valid.push_str(&format!("{cycle}\t{side}\t{stage}\t{values}\n"));
+                }
+            }
+        }
+        assert_eq!(validate_resource_text(&valid).unwrap().len(), 40);
+        for invalid in [
+            valid.replace("[0,20,0,0]", "[1,20,0,0]"),
+            valid.replace("[0,20,0,0]", "[0,20,1,0]"),
+            valid.replace("[0,20,0,0]", "[0,20,0,1]"),
+            valid.replace("[0,20,0,0]", "[0,21,0,0]"),
+            valid.replace("[0,20]", "[4294967296,20]"),
+            valid.replace("[0,20]", "[0,4294967296]"),
+            valid.replace("101,102,10,11,20", "101,102,4294967296,11,20"),
+            valid.replace("101,102,10,11,20", "101,102,10,4294967296,20"),
+            valid.replace("101,102,10,11,20", "101,101,10,11,20"),
+            valid.replace("101,102,10,11,20", "101,102,10,10,20"),
+            valid.replace("101,102,10,11,20", "101,102,20,11,20"),
+            valid.replace("101,102,10,11,20", "0,102,10,11,20"),
+            valid.lines().take(120).collect::<Vec<_>>().join("\n"),
+            valid.clone() + "0\tsource\tclosed\t[0,20,0,0]\n",
+        ] {
+            assert!(validate_resource_text(&invalid).is_err());
+        }
+    }
     #[test]
     fn rejects_disjoint_update_owner_overlap_missing_progress_foreign_threads_and_incomplete_rows()
     {

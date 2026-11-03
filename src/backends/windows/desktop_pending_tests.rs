@@ -12,6 +12,16 @@ use std::{
     time::{Duration, Instant},
 };
 
+fn caller_thread() -> u64 {
+    // SAFETY: Scalar native identity query; no pointers or ownership transfer.
+    u64::from(unsafe { crate::platform::windows::desktop_dup::native::GetCurrentThreadId() })
+}
+
+fn resource_count(adapter: &Adapter) -> Result<u32, Box<dyn Error>> {
+    crate::platform::windows::test_library::checked_gdi_count(|| adapter.objects())
+        .map_err(|error| format!("GetGuiResources failed: {error}").into())
+}
+
 fn save(root: &Path, name: &str, image: &Image) -> Result<(), Box<dyn Error>> {
     let mut pixels = OpenOptions::new()
         .write(true)
@@ -65,6 +75,81 @@ fn rectangle(window: Window) -> Result<[i32; 4], Box<dyn Error>> {
 }
 
 #[test]
+#[ignore = "requires an explicitly enabled native visible desktop and rendering adapter"]
+fn balances_process_gdi_after_both_render_workers_join_without_capturing()
+-> Result<(), Box<dyn Error>> {
+    let root = std::env::var_os("MFS_DESKTOP_RESOURCE_FIXTURE_ROOT")
+        .ok_or("missing render-resource evidence directory")?;
+    let root = std::path::PathBuf::from(root);
+    std::fs::create_dir_all(&root)?;
+    let mut records = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("fixtures.tsv"))?;
+    writeln!(records, "cycle\tstage\tvalues")?;
+    let adapter = Adapter::load()?;
+    // Match the main test's one initial geometry fixture before accounting.
+    let mut warm = adapter.render_fixture(192, 128)?;
+    warm.geometry([0; 6])?;
+    warm.close()?;
+    for cycle in 0..20 {
+        let baseline = resource_count(&adapter)?;
+        let caller = caller_thread();
+        writeln!(
+            records,
+            "{cycle}\tbaseline\t{:?}",
+            [u64::from(baseline), caller]
+        )?;
+        let mut target = adapter.render_fixture(192, 128)?;
+        let mut background = adapter.render_fixture(32, 32)?;
+        let target_window = target.hwnd();
+        let update_window = background.hwnd();
+        let target_threads = target.thread_info()?;
+        let update_threads = background.thread_info()?;
+        writeln!(
+            records,
+            "{cycle}\towners\t{:?}",
+            [
+                target_window as usize as u64,
+                update_window as usize as u64,
+                target_threads[0],
+                update_threads[0],
+                caller_thread(),
+            ]
+        )?;
+        assert_eq!(target_threads[1], caller);
+        assert_eq!(update_threads[1], caller);
+        assert_ne!(target_threads[0], update_threads[0]);
+        background.start_inside_desktop_updates()?;
+        let updates = background.desktop_update_info()?;
+        writeln!(records, "{cycle}\tupdates\t{updates:?}")?;
+        assert!(updates[1] > 0 && updates[2] == 0);
+        background.close()?;
+        target.close()?;
+        let target_valid = SystemWindow.valid(target_window);
+        let update_valid = SystemWindow.valid(update_window);
+        let objects = resource_count(&adapter)?;
+        writeln!(
+            records,
+            "{cycle}\tclosed\t{:?}",
+            [
+                u64::from(objects),
+                caller_thread(),
+                u64::from(target_valid),
+                u64::from(update_valid),
+            ]
+        )?;
+        records.flush()?;
+        assert!(!target_valid && !update_valid);
+        assert_eq!(objects, baseline, "fixture counts after both owner joins");
+    }
+    println!(
+        "desktop_resource_fixture_cases=20 joined_workers=40 invalid_windows=40 capture_calls=0 passed"
+    );
+    Ok(())
+}
+
+#[test]
 #[ignore = "requires an explicitly enabled native visible desktop and original adapter"]
 fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
 -> Result<(), Box<dyn Error>> {
@@ -112,12 +197,18 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
     writeln!(records, "-1\tfixture\twork\t{work:?}")?;
     writeln!(records, "-1\tfixture\tbefore\t{before:?}")?;
     writeln!(records, "-1\tfixture\tafter\t{after:?}")?;
+    writeln!(records, "-1\tfixture\tresources\t[2]")?;
     records.flush()?;
     let mut updates = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(root.join("updates.tsv"))?;
     writeln!(updates, "cycle\tside\tstage\tvalues")?;
+    let mut resources = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("resources.tsv"))?;
+    writeln!(resources, "cycle\tside\tstage\tvalues")?;
     let overlaps =
         |a: [i64; 4], b: [i64; 4]| a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
     let update_rect = [
@@ -133,8 +224,33 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
     let mut held = Vec::new();
     for cycle in 0..20 {
         for side in ["source", "rust"] {
+            // Both owned UI workers from the preceding side have joined.
+            // Sample before starting either renderer, never during timer paint.
+            let baseline = resource_count(&adapter)?;
+            let baseline_caller = caller_thread();
             let mut fixture = adapter.render_fixture(192, 128)?;
             let mut background = adapter.render_fixture(32, 32)?;
+            let target_window = fixture.hwnd();
+            let update_window = background.hwnd();
+            let target_threads = fixture.thread_info()?;
+            let update_threads = background.thread_info()?;
+            writeln!(
+                resources,
+                "{cycle}\t{side}\tbaseline\t{:?}",
+                [u64::from(baseline), baseline_caller]
+            )?;
+            writeln!(
+                resources,
+                "{cycle}\t{side}\towners\t{:?}",
+                [
+                    target_window as usize as u64,
+                    update_window as usize as u64,
+                    target_threads[0],
+                    update_threads[0],
+                    caller_thread(),
+                ]
+            )?;
+            resources.flush()?;
             let update_geometry =
                 background.geometry([1, 0x9000_0000, update_rect[0], update_rect[1], 32, 32])?;
             assert_eq!(client(&update_geometry), update_rect);
@@ -163,7 +279,6 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
             assert_eq!(visible[3], visible[4], "actual foreground before hold");
             assert_eq!(visible[6], visible[7], "target is visible at its center");
             assert_eq!(visible[8..10], [0, 0], "not cloaked");
-            let baseline = adapter.objects();
             let gate = fixture.hold_queue()?;
             let entered = gate.state()?;
             writeln!(records, "{cycle}\t{side}\tentered\t{entered:?}")?;
@@ -289,13 +404,32 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
             assert_eq!(update_after[0], update_before[0]);
             assert!(update_after[1] > update_before[1] && update_after[2] == 0);
             writeln!(updates, "{cycle}\t{side}\tafter\t{update_after:?}")?;
-            let objects = adapter.objects();
-            writeln!(records, "{cycle}\t{side}\tgdi\t{:?}", [baseline, objects])?;
-            assert_eq!(objects, baseline, "balanced GDI resources");
             background.close()?;
             writeln!(updates, "{cycle}\t{side}\tclosed\t[1]")?;
             updates.flush()?;
             fixture.close()?;
+            // close() checks native cleanup and joins each worker. Verify the
+            // actual HWNDs are gone before the matching process-wide snapshot.
+            let target_valid = SystemWindow.valid(target_window);
+            let update_valid = SystemWindow.valid(update_window);
+            let objects = resource_count(&adapter)?;
+            writeln!(
+                resources,
+                "{cycle}\t{side}\tclosed\t{:?}",
+                [
+                    u64::from(objects),
+                    caller_thread(),
+                    u64::from(target_valid),
+                    u64::from(update_valid),
+                ]
+            )?;
+            resources.flush()?;
+            writeln!(records, "{cycle}\t{side}\tgdi\t{:?}", [baseline, objects])?;
+            assert!(!target_valid && !update_valid, "owned windows must be gone");
+            assert_eq!(
+                objects, baseline,
+                "balanced GDI resources after UI workers join"
+            );
             writeln!(records, "{cycle}\t{side}\tclosed\t[1]")?;
             held.push((format!("{cycle}-{side}-pending-held"), image));
             held.push((format!("{cycle}-{side}-completed-held"), final_image));
@@ -311,7 +445,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
         );
     }
     println!(
-        "desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 full_P1_acceptance=0 passed"
+        "desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 quiescent_counts=40 full_P1_acceptance=0 passed"
     );
     Ok(())
 }

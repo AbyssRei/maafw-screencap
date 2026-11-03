@@ -45,3 +45,39 @@ impl Drop for Module {
         assert_ne!(unsafe { sys::FreeLibrary(self.0) }, 0);
     }
 }
+
+#[cfg(feature = "windows-desktop-dup-window")]
+pub(crate) fn checked_gdi_count(query: impl FnOnce() -> u32) -> Result<u32, u32> {
+    // GetGuiResources uses zero for both an empty process count and failure.
+    // SAFETY: Thread-local scalar native last-error access, no borrowed data.
+    unsafe { sys::SetLastError(0) };
+    let count = query();
+    if count == 0 {
+        // SAFETY: Immediate same-thread error query after the supplied call.
+        let error = unsafe { sys::GetLastError() };
+        if error != 0 {
+            return Err(error);
+        }
+    }
+    Ok(count)
+}
+
+#[cfg(feature = "windows-desktop-dup-window")]
+#[test]
+fn distinguishes_empty_gdi_count_from_native_failure_and_stale_error() {
+    // These are real thread-local Win32 errors around a controlled count call;
+    // no process GUI resource or desktop is created/queried by this control.
+    unsafe { sys::SetLastError(5) };
+    assert_eq!(checked_gdi_count(|| 0), Ok(0));
+    assert_eq!(checked_gdi_count(|| 9), Ok(9));
+    assert_eq!(
+        checked_gdi_count(|| {
+            // SAFETY: Same-thread controlled Win32 error, no pointers.
+            unsafe { sys::SetLastError(5) };
+            0
+        }),
+        Err(5)
+    );
+    // SAFETY: Leave no controlled stale error on the test caller.
+    unsafe { sys::SetLastError(0) };
+}
