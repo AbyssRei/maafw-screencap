@@ -4,6 +4,14 @@
 
 ## 逐函数对应审阅
 
+`MaaBuffer.cpp` 新增基础字符串/图像 helper 原生消费验证：完整未修改 F 文件现在作为独立 translation unit 编译一次，实际公共 `MaaBuffer.h` 一同归档；旧五体生成片段仅保留为来源比较输入，不再 include。新增八个 StringBuffer 与九个 ImageBuffer helper 的实际调用，连同原五项操作，选定原生运行范围为 22/45；其余二十三项 list/rect 函数逐一登记为仅编译、未运行验收。没有把这些原生 API 填成 Rust 产品实现或最终 SDK ABI，Rust 函数对应并集不因此增长；较早五体审阅保留原批身份。
+
+Windows 显式归档离线依赖下，Debug/Release 各通过八组 Custom 原生测试和八组记录校核。新增每配置二十轮、一百个独立字符串 owner、780 个独立图像 owner，覆盖嵌入 NUL、空值、非 UTF-8 字节、十三个实际深度和 1/3/4 通道。原 buffer clear/destroy、输入覆盖后完整保留 240 字符串字节和 45,120 图像字节，最终 owner 归零；释放后的 Mat 通道/type 元数据按实际来源保留，不假定 reset 为默认类型。这是 CPU helper/所有权验证，零桌面截图，也不定案 SDK 字符串编码。
+
+首次整文件单独编译后，旧负尺寸 resize 回归实际触发 OpenCV terminate，新增 buffers/raw 尚未运行；失败程序和输出外置保留，没有补造原生退出码。目标改用 `/EHsc-`，清除 C 链接函数不抛异常的编译假设，同时保留同步 C++ 展开，使实际原函数异常进入既有私有 `guarded` 边界；两种配置的该回归和其余七组随后均通过。Debug/Release 真实 CL 命令确认该选项在 `/EHsc` 之后，原始函数体和异常行为未改；依据见 [Microsoft `/EH` 文档](https://learn.microsoft.com/en-us/cpp/build/reference/eh-exception-handling-model)。这不声称恢复 SEH/进程终止或任意分配故障。
+
+`cargo xtask upstream-trace custom-buffers <外部 buffers 目录> [--check-only]` 核对八份实际数据文件、全部行/字节/owner 和完整目录，记录不进入产品。二十六项实际数据控制接受四项、拒绝二十二项；Windows 上执行三个平台真实 Step wrapper 的 54 个输出/退出控制及两个真实 native/checker 子进程通过。三平台独立 parity/records 入口已接入，拒绝零测试、部分/重复汇总、非零退出和损坏数据；新 Linux/macOS 原生执行仍待 Actions。本批未重新解析在线最新版依赖，也未改变预装工具年龄只作记录的 CI 规则。完整审阅由参考目录 `local/current-basic-buffer-helpers-development-path.txt` 和 `local/current-basic-buffer-helpers-source-review-path.txt` 指向，完整 P1 仍未通过。
+
 确切 `02c7eb6` 的 Gamepad 合并对应现覆盖已有原始 CPP 索引的三十项及零函数体头文件：新增 UUID/features/info 三项 `capture_metadata`，按当前 Git 原文刷新同一 `gamepad.rs` 的全部位置；原 delegate/native/platform 三文件与旧对应字节相同。三项保留十进制 HWND、type 非 0 时 ds4、固定历史 feature 位、info 的无符号 HWND 与有符号 type/method；可失败独立 String、类型化分配错误及 JSON 文本对来源 object 的边界明确列出，不定案公共 SDK/ABI，也不声称任意 OOM 或连接后全场景由预连接矩阵验收。
 
 另外十二项逐一登记为输入/应用范围排除，Rust 位置和执行证据均为空，不伪造实现。`ensure_foreground` 只有 `touch_down`、`key_down` 两个原始调用点，截图、停用、连接与查询不调用它；共享捕获侧 ForegroundUtils 仍按自己的来源迁移。start/stop app 是应用转发；touch/key 方法是轴、扳机、按钮控制；click/swipe/click_key 是来源的弃用 false 槽，input_text 是不支持的输入槽。它们均不因此成为 SDK 能力，析构所需宿主 reset 与截图 owner 寿命仍保留独立对应。三个外层公共 C Version/Create/Destroy 导出仍单列，未冒称 Rust SDK 导出。

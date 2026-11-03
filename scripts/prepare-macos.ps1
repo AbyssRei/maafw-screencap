@@ -101,6 +101,12 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'custom-raw-parity'){
             $status='failed';Assert-CustomRawLog $observed;$status='passed'
         }
+        if($Name -eq 'custom-buffers-parity'){
+            $status='failed';Assert-CustomBuffersLog $observed;$status='passed'
+        }
+        if($Name -eq 'custom-buffers-records'){
+            $status='failed';Assert-CustomBufferRecordsLog $observed;$status='passed'
+        }
         if($Name -eq 'custom-native-parity'){
             $status='failed';Assert-CustomNativeLog $observed;$status='passed'
         }

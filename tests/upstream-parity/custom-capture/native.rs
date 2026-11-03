@@ -192,6 +192,8 @@ impl Lib {
     }
 }
 
+#[path = "buffers.rs"]
+mod buffers;
 #[path = "identity.rs"]
 mod identity;
 #[path = "images.rs"]

@@ -40,6 +40,20 @@ function Assert-CustomRawLog([string]$Text) {
         throw 'Expected every actual compiled raw type, both manager callbacks and retained native owners'
     }
 }
+function Assert-CustomBuffersLog([string]$Text) {
+    $summary='native Custom buffer helpers cycles=20 original_string_owners=100 original_image_owners=780 retained_strings=100 retained_images=780 string_bytes=240 image_bytes=45120 final_owners=0 native_capture_frames=0 passed'
+    $leader='(?:test backends::custom::native_tests::buffers::preserves_original_string_image_helpers_nulls_clear_and_retained_storage \.\.\. )?'
+    if([regex]::Matches($Text,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+       [regex]::Matches($Text,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s\r?$').Count -ne 1){
+        throw 'Expected complete original string/image helpers, retained CPU bytes and balanced native owners'
+    }
+}
+function Assert-CustomBufferRecordsLog([string]$Text) {
+    $summary='Custom buffer helpers cycles=20 original_string_owners=100 original_image_owners=780 retained_strings=100 retained_images=780 string_bytes=240 image_bytes=45120 final_owners=0 native_capture_frames=0 passed'
+    if([regex]::Matches($Text,'(?m)^'+[regex]::Escape($summary)+'\r?$').Count -ne 1){
+        throw 'Expected complete original string/image helper record validation'
+    }
+}
 function Test-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     $log=Join-Path $logsRoot custom-reference.log
     $status='failed'
@@ -148,6 +162,8 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
         Step custom-images-records $ConfigureTool @('upstream-trace','custom-images',(Join-Path $evidence images))
         Step custom-raw-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::raw::preserves_every_compiled_raw_type_callback_bytes_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture')
         Step custom-raw-records $ConfigureTool @('upstream-trace','custom-raw',(Join-Path $evidence raw))
+        Step custom-buffers-parity cargo @('test','--release','--locked','--lib','--no-default-features','--features','custom-capture','backends::custom::native_tests::buffers::preserves_original_string_image_helpers_nulls_clear_and_retained_storage','--','--exact','--ignored','--test-threads=1','--nocapture')
+        Step custom-buffers-records $ConfigureTool @('upstream-trace','custom-buffers',(Join-Path $evidence buffers))
         Step custom-native-clippy cargo @('clippy','--workspace','--all-targets','--locked','--no-default-features','--features','custom-capture','--','-D','warnings')
         Step custom-core-direct-build cargo @('build','--release','--locked','--lib','--no-default-features','--features','custom-capture')
         Step custom-core-runtime-tree cargo @('tree','--locked','-p','maafw-screencap','--edges','normal','--no-default-features','--features','custom-capture')

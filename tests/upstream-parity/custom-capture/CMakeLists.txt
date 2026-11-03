@@ -21,6 +21,7 @@ foreach(_input MFS_UPSTREAM_ROOT MFS_MAAUTILS_ROOT MFS_MEOJSON_INCLUDE)
 endforeach()
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/custom-capture-source.cmake")
 foreach(_native_source
+    source/Common/MaaBuffer.cpp
     source/MaaCustomControlUnit/Manager/CustomControlUnitMgr.cpp
     source/MaaCustomControlUnit/Manager/CustomControlUnitMgr.h
     source/MaaCustomControlUnit/API/CustomControlUnitAPI.cpp
@@ -29,12 +30,14 @@ foreach(_native_source
     include/MaaControlUnit/ControlUnitAPI.h
     include/MaaControlUnit/MaaControlUnitDef.h
     include/MaaFramework/Instance/MaaCustomController.h
+    include/MaaFramework/Utility/MaaBuffer.h
     include/MaaFramework/MaaDef.h
     include/MaaFramework/MaaPort.h)
     configure_file("${MFS_UPSTREAM_ROOT}/${_native_source}"
         "${CMAKE_CURRENT_BINARY_DIR}/native-api-source/${_native_source}" COPYONLY)
 endforeach()
 add_library(mfs_custom_capture SHARED bridge.cpp
+    "${MFS_UPSTREAM_ROOT}/source/Common/MaaBuffer.cpp"
     "${MFS_UPSTREAM_ROOT}/source/MaaCustomControlUnit/Manager/CustomControlUnitMgr.cpp"
     "${MFS_UPSTREAM_ROOT}/source/MaaCustomControlUnit/API/CustomControlUnitAPI.cpp")
 target_include_directories(mfs_custom_capture PRIVATE
@@ -46,7 +49,10 @@ target_compile_definitions(mfs_custom_capture PRIVATE MAA_FRAMEWORK_EXPORTS MAA_
     MAA_VERSION="mfs-p1-custom-api" NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(mfs_custom_capture PRIVATE ${OpenCV_LIBS})
 if(MSVC)
-    target_compile_options(mfs_custom_capture PRIVATE /utf-8 /EHsc)
+    # Original C-linkage helpers may throw (for example invalid cv::resize).
+    # Preserve unwinding until our explicit noexcept adapters translate errors;
+    # /EHsc's implicit /EHc would assume these separate-TU C calls never throw.
+    target_compile_options(mfs_custom_capture PRIVATE /utf-8 /EHsc-)
 endif()
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
     "Exact fixed constructor/connect/connected/screencap/inactive/request_uuid/get_features/get_info/get_info_from_controller and raw C setter. Also compile complete unchanged original Custom API/manager and actual public base/mixin declarations, with logging-only overlay, for capture/identity/info virtual consumers and original C create/destroy. Real MaaUtils buffers, meojson and OpenCV. Rust unit uses uninvoked false input/app/shell slots solely to instantiate the actual interface. No input actions, framework loader or SDK provider acceptance. Mat and UUID actual caller assignment is inside the original native buffer lifetime, not deferred to virtual return; native probes reject outside-scope assignment. Opaque native heads add bookkeeping allocation, and independent Rust UUID storage adds a byte copy. No second pixel copy. JSON parse/object copy stays inside its temporary buffer, type replacement after it. The separate 7x7 same-live-unit synchronous callback reentry matrix retains distinct inner/outer callers and actual nested C++ exceptions. Acceptance scope tracking uses owner-thread stack scopes and per-operation identities, permitting an enclosing buffer to stay alive while the inner operation publishes. Outside/foreign/early-scope operations remain rejected. Controlled native value/unit ledgers are not a general heap-leak proof, concurrent/destruction reentry contract or full P1 acceptance.\n")
@@ -54,3 +60,5 @@ file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
     "Separate encoded/resize matrix: additionally compile the exact fixed resize and encoded C getter/setter bodies. Real ImageBuffer/PNG codec operations stay inside the original callback. Self-owned gray/BGR/BGRA PNG and malformed/zero/null inputs, cache/clone timing, integer-ratio INTER_AREA and automatic sizes, contained negative-size exceptions, released-versus-default empty Mat headers and retained owners are checked. Diagnostic encoded copies/cache decode remain explicit test work. This is not every codec/raw type, arbitrary resampling or complete P1 acceptance.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
     "Separate raw-type matrix: all 13 declared depths and 128 channel counts from the actual copied OpenCV type headers, exact unchanged raw C setter, real ImageBuffer clone and native Mat ownership. The safe acceptance adapter validates canonical type/depth and readable span before native consumption. Both managers run callback values 0/1/255, independent input overwrite, false output preservation and retained owners across input/context destruction. Rejected short/overflowing spans and reserved/out-of-mask types never reach the original setter. These private raw type values are not public SDK formats or color-conversion support; every codec and full P1 remain unaccepted.\n")
+file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-scope.txt"
+    "The complete unchanged F Common/MaaBuffer.cpp is now compiled once as its own translation unit; the historical five-body generated fragment remains an archived source comparison input and is not included. Separate basic buffer probes consume eight StringBuffer and nine additional ImageBuffer C functions through the actual header inside exception-contained private adapters. Native owners, null/empty differences, embedded NUL/arbitrary bytes, clone lifetime and released Mat type metadata remain original behavior. Compilation of list/rectangle helpers is not their migration/runtime acceptance, and no legacy API is added to the Rust product or final SDK.\n")

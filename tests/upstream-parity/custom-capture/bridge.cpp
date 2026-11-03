@@ -33,7 +33,6 @@ struct CustomControlUnitMgr {
 };
 #include "custom-source.inc"
 }
-#include "custom-raw-source.inc"
 namespace {
 std::atomic<uint64_t> images=0,contexts=0,entered=0,exited=0;
 std::atomic<uint64_t> raw_source_calls=0;
@@ -333,3 +332,4 @@ uint64_t mfs_custom_info_count(uint32_t index) noexcept {
 }
 #include "native-unit.inc"
 #include "images.inc"
+#include "buffers.inc"

@@ -23,6 +23,9 @@ struct MfsCustomView {
     int32_t width,height,type,channels,references;
 };
 MFS_CUSTOM_EXPORT size_t mfs_custom_abi(uint32_t index) noexcept;
+MFS_CUSTOM_EXPORT size_t mfs_custom_buffer_abi(uint32_t index) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_string_buffer_probe(const uint8_t*,size_t,uint64_t*,size_t,void**) noexcept;
+MFS_CUSTOM_EXPORT int32_t mfs_custom_image_buffer_probe(const uint8_t*,size_t,int32_t,uint64_t*,size_t,void**) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_create(uint8_t table,void** output) noexcept;
 MFS_CUSTOM_EXPORT void mfs_custom_destroy(void* context) noexcept;
 MFS_CUSTOM_EXPORT int32_t mfs_custom_configure(void* context,MfsCustomBool connect,

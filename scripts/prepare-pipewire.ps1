@@ -115,6 +115,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'custom-reentry-parity'){Assert-CustomReentryLog (Get-Content -LiteralPath $log -Raw)}
         if($Name -eq 'custom-images-parity'){Assert-CustomImagesLog (Get-Content -LiteralPath $log -Raw)}
         if($Name -eq 'custom-raw-parity'){Assert-CustomRawLog (Get-Content -LiteralPath $log -Raw)}
+        if($Name -eq 'custom-buffers-parity'){Assert-CustomBuffersLog (Get-Content -LiteralPath $log -Raw)}
+        if($Name -eq 'custom-buffers-records'){Assert-CustomBufferRecordsLog (Get-Content -LiteralPath $log -Raw)}
         if($Name -eq 'custom-core-runtime-tree'){Assert-CustomRuntimeTree (Get-Content -LiteralPath $log -Raw)}
         if ($Name -eq 'rust-pipewire-consumer-control' -and (Get-Content -LiteralPath $log -Raw) -notmatch '(?m)^test result: ok\. 4 passed; 0 failed; 1 ignored;') {
             throw 'Expected four portable consumer tests; the external source oracle remains explicitly ignored on this Linux entry'

@@ -550,6 +550,22 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected every actual compiled raw type, both manager callbacks and retained native owners'
             }
         }
+        if($Name -eq 'custom-buffers-parity' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary='native Custom buffer helpers cycles=20 original_string_owners=100 original_image_owners=780 retained_strings=100 retained_images=780 string_bytes=240 image_bytes=45120 final_owners=0 native_capture_frames=0 passed'
+            $leader='(?:test backends::custom::native_tests::buffers::preserves_original_string_image_helpers_nulls_clear_and_retained_storage \.\.\. )?'
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s\r?$').Count -ne 1){
+                throw 'Expected complete original string/image helpers, retained CPU bytes and balanced native owners'
+            }
+        }
+        if($Name -eq 'custom-buffers-records' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary='Custom buffer helpers cycles=20 original_string_owners=100 original_image_owners=780 retained_strings=100 retained_images=780 string_bytes=240 image_bytes=45120 final_owners=0 native_capture_frames=0 passed'
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($summary)+'\r?$').Count -ne 1){
+                throw 'Expected complete original string/image helper record validation'
+            }
+        }
         if($Name -eq 'manager-gamepad-metadata' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             $summary='Gamepad metadata cases=144 phases=288 queries_per_side=864 exact_original_class_api=1 input_owners=0 capture_units=0 native_capture=0 full_P1_acceptance=0 passed'
@@ -1056,6 +1072,8 @@ try {
         Step custom-images-records $ConfigureTool @('upstream-trace','custom-images',(Join-Path $customEvidence images))
         Step custom-raw-parity cargo ($customArgs+@('backends::custom::native_tests::raw::preserves_every_compiled_raw_type_callback_bytes_and_native_owners','--','--exact','--ignored','--test-threads=1','--nocapture'))
         Step custom-raw-records $ConfigureTool @('upstream-trace','custom-raw',(Join-Path $customEvidence raw))
+        Step custom-buffers-parity cargo ($customArgs+@('backends::custom::native_tests::buffers::preserves_original_string_image_helpers_nulls_clear_and_retained_storage','--','--exact','--ignored','--test-threads=1','--nocapture'))
+        Step custom-buffers-records $ConfigureTool @('upstream-trace','custom-buffers',(Join-Path $customEvidence buffers))
         $customClippy=@('clippy','--workspace','--all-targets','--locked','--features','custom-capture,prototype-windows-com')
         if($offline){$customClippy+=@('--offline','--config',$CargoConfig)}
         Step custom-native-clippy cargo ($customClippy+@('--','-D','warnings'))
