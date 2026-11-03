@@ -4,6 +4,10 @@
 
 ## 逐函数对应审阅
 
+Gamepad 的截图相关外层在确切 `ae4e578` 补四项：原构造、析构、`connect` 和 `connected` 对应同一私有 `GamepadCapture`；已有截图/停用映射另追加外层直接转发位置，原 `CaptureDelegate`、原生 loader 和平台模块未复制或修改。四项保留标量选择器、空初态、宿主创建先于替换、连接失败保留旧捕获状态、可选截图初始化 false 仅警告、connected 短路，以及 reset→捕获 view/loader→宿主 owner 的退出顺序。reset 不得展开、原失效 view 拒绝和类型化边界错误均明确列为安全/接口边界；未实现 ViGEm、输入、foreground、UUID/features/info 或公共 Gamepad SDK 导出。
+
+新的合并对应为两份既有 F 来源、十五项，原文/blob/行号/范围摘要和实际 Rust Git 字节逐一通过只读 `reference function-map`。运行链接分开保存：原生历史批次的 66 项检查仍为 60 通过、六失败，mask `6/10/14/38/42/46` 不变；新增八项是本机 Debug/Release 完整原类/API 与 Rust 的 CPU Mat/宿主/DLL 边界模型及记录检查，全部通过、零实际截图和输入动作，不改称原生取帧。合并 reader 的 68/6 仅为两类记录的计数，不是新的 native 通过率。最终重建前后的 217 份 Gamepad 记录在每种配置均逐字节相同，539 份实现提交的 canonical tar 与全部 Git blob/mode 核对。最初外部索引 reader 的 key 错误、后续只读 SSH DNS 失败分别保存；远端身份改由 GitHub Ref API 核对，没有更改已保存结果或 Git 连接配置。选定累计增加四项至 40 份来源/285 项；其余十五项外层源码和三个 API 导出仍明确未映射。完整审阅由参考目录 `local/current-gamepad-host-functions-path.txt` 指向，不授予完整语义、SDK、截图或 P1 验收。
+
 `source/Common/MaaBuffer.cpp` 现有独立的原生保留边界审阅：五项为 `MaaImageBufferSetRawData`、`MaaImageBufferResize`、`MaaImageBufferGetEncoded`、`MaaImageBufferGetEncodedSize` 和 `MaaImageBufferSetEncoded`。完整已登记 `custom-raw-source.inc` 与 F 原文件两段提取结果逐字节相同（显式处理 CRLF）；每个选定函数体只出现一次，实际 `bridge.cpp` 的 include、CMake 编译目标及各调用表达式也单独核对。它们是按计划保留在显式 C++/OpenCV 验收边界的原生操作，未新建 Rust 核心 codec/旧 C ABI，也没有被填进 Rust 库实现对应位置；累计 Rust 对应仍为 40 份来源、281 项。完整原文件的另 40 项函数逐项登记为本次未审阅，没有按输入排除或改称已迁移。
 
 raw setter 保留 null handle/data 拒绝、packed `cv::Mat(height,width,type,data)`、空图拒绝、实际 `handle->set(img)` 后返回 true 的顺序；安全桥在它之前另核验 native type、受检跨度和可读长度，不增加源接口没有的 stride。resize 保留带符号尺寸和 null→0 的一次原生转发。encoded setter 保留先判 null 再判长度，因此 null+0 拒绝，非空地址+0 才 clear；非零长度先构造原始编码字节副本，再 move 到真实 buffer。两个 getter 保留借用原生 cache 的生命周期，实际桥先取 encoded 数据再取长度，在同一未修改 owner 的通道内核验并复制测试用 cache；不延长到 cache 修改之后，也不把诊断复制称为免除工作。任意指针、全部异常/分配/插值参数和完整 MaaUtils 实现均不由这些调用验收。
@@ -114,7 +118,7 @@ Gamepad 的截图相关外层新增私有 `GamepadCapture`，通过类型化宿�
 
 `cargo xtask upstream-delegate gamepad-host <已存在的外部记录目录> [--check-only]` 独立核验 216 份原版/Rust/错误文件及完整事件、选择器、输出、宿主失败后的旧 owner 保留和销毁顺序；只读复验包含保存报告共 217 份文件且字节不变。十九次实际记录控制中两项成功、十七项损坏/缺失/多余/顺序/保存报告控制拒收，坏数据控制先移除保存报告，避免只碰到旧摘要。真实 `Step` 的十三项控制/二十六个子进程包含实际 libtest 同行日志、零测试、重复结果、非零及未知 77、记录缺失和失败后继续独立案例，均保留正确状态。首版外部 Step harness 误复用已存在的报告，被写入保护拒绝；修正为每例独立记录副本后通过，原失败保留。早期编译/重复模块/Clippy 等开发失败亦分别保留。
 
-本批使用明确归档依赖和已更新 nightly，不称新在线最新依赖验收；工作区测试通过，包含 xtask 123 项、默认库 34 通过/6 忽略及互操作四项；另有所选 Windows 53 通过/8 忽略、默认 Release、格式和 Clippy 检查通过。忽略入口由显式调用负责。`upstream-parity manager` 新增独立 `manager-gamepad-host` 检查，即时上传保存原类来源及全部记录；新的托管执行待验证。完整源码职责对应数仍为 40 份来源/281 项，没有把新部分运行结果冒充完整逐函数覆盖或 P1 通过。历史六项 mixed mask、FramePool pseudo 和 Mac 像素/回调失败保持原状态；Actions 预装工具按实际能力和身份记录，年龄不作门禁。完整开发记录由参考目录 `local/current-gamepad-host-development-path.txt` 指向。
+本批使用明确归档依赖和已更新 nightly，不称新在线最新依赖验收；工作区测试通过，包含 xtask 123 项、默认库 34 通过/6 忽略及互操作四项；另有所选 Windows 53 通过/8 忽略、默认 Release、格式和 Clippy 检查通过。忽略入口由显式调用负责。`upstream-parity manager` 新增独立 `manager-gamepad-host` 检查，即时上传保存原类来源及全部记录；新的托管执行待验证。随后独立四项来源对应将选定累计增加至 40 份来源/285 项，详见逐函数审阅；部分运行结果不代表完整逐函数覆盖或 P1 通过。历史六项 mixed mask、FramePool pseudo 和 Mac 像素/回调失败保持原状态；Actions 预装工具按实际能力和身份记录，年龄不作门禁。完整开发记录由参考目录 `local/current-gamepad-host-development-path.txt` 指向。
 
 确切 `ab544fc` 的 [Actions 41564727121](https://github.com/AbyssRei/maafw-screencap/actions/runs/41564727121) 原生 Linux PipeWire 组件现已通过全部 205 项检查：新增 `original-kwin-portal-failure`、`rust-kwin-portal-failure` 和记录检查全部通过，与已复核 `8c1369c` 的原有 202 项逐名对照，全部状态不变。真实 C++ 原版、Rust 和实际矩阵均已执行；两侧各 100 次失败，每种 Open false/错误 91–94 各二十次，分别有一百个不同的非零 socket cookie，在失败前后保持相同。每次确认 helper 与一个未消费 fd 残留，再由夹具回收；各侧 101 组实际任务身份、fd 基线和 caller 均已独立核对。没有创建 manager、PipeWire 流或截图；不把残留或夹具回收称为产品清理，也不把受控宿主错误当作真实 DBus/桌面授权验收。
 
