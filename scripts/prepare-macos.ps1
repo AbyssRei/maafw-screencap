@@ -56,13 +56,26 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 }
             }
         }
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','rust-macos-live-sample') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
             throw "$Name exited with $code ($status); see $log"
         }
         $observed=Get-Content -LiteralPath $log -Raw
+        if($Name -eq 'rust-macos-live-sample' -and (
+            $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+            [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+            -not $observed.Contains('native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1') -or
+            [regex]::Matches($observed,[regex]::Escape('native Rust macOS live_sample calls=3 original_samples=3 rust_conversions=3 retained_cpu=6 callback_owner_released=1 full_P1_acceptance=0 passed')).Count -ne 1)) {
+            $status='failed';throw 'Incomplete actual same-live-sample Rust test or native main-thread host'
+        }
+        if($Name -eq 'macos-live-sample-records' -and [regex]::Matches($observed,[regex]::Escape('macOS live_sample calls=3 original_samples=3 same_callback_conversions=3 full_byte_pairs=3 retained_cpu=6 callback_owner_released=1 known_scene_acceptance=0 full_P1_acceptance=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete same-live-sample full-byte/ownership records'
+        }
+        if($Name -eq 'macos-live-sample-hook-control' -and [regex]::Matches($observed,[regex]::Escape('live_sample_hook cases=3 visits=1 releases=3 joined_callback=1 native_samples=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete shared live-sample hook ownership control'
+        }
         if($Name -eq 'macos-display-observer-same-path-consumer' -and
             (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or
              -not $observed.Contains('event=wait_return slot=0 value=0') -or
@@ -338,6 +351,7 @@ try {
         Run-MacosFullDisplayWitnessProbes $rustArtifacts
         Run-MacosMaximumLevelProbes $rustArtifacts
         Run-MacosNativeSampleProbes $rustArtifacts
+        Run-MacosLiveSampleProbe $rustArtifacts
         try {Run-ObservedMacosSamePathProbe $rustArtifacts}
         catch {$failed=$true;Write-Host $_.Exception.Message}
     }else{

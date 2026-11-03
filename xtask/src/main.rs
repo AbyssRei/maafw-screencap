@@ -37,6 +37,7 @@ mod macos_capture_stages;
 mod macos_display_geometry;
 mod macos_display_patch;
 mod macos_full_display_witness;
+mod macos_live_sample;
 mod macos_manager_queries;
 mod macos_maximum_level;
 mod macos_native_sample;

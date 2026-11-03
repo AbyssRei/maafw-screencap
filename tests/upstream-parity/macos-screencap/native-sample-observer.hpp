@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 #include "native-sample-state.hpp"
+#include "live-sample-hook.hpp"
 #include <cstdint>
 #include <filesystem>
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
@@ -9,7 +10,7 @@
 namespace MfsMacSample {
 struct Observation;
 using Scope=ThreadScope<Observation>;
-std::shared_ptr<Observation> begin(uint32_t call);
+std::shared_ptr<Observation> begin(uint32_t call,std::shared_ptr<LiveHook> hook={});
 // Called after the real source return has already been saved. The extra wait
 // observes only this wrapper's post-forward copy, never replaces/retries the
 // source return and never proves framework callback unregistration/drainage.

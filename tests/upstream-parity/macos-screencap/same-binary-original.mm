@@ -19,6 +19,7 @@
 #include <unistd.h>
 #ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
 #include "native-sample-observer.hpp"
+#include "live-sample.h"
 #endif
 
 namespace {
@@ -36,6 +37,7 @@ struct Original {
     std::array<std::optional<cv::Mat>,3> images;
 #ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
     std::array<std::shared_ptr<MfsMacSample::Observation>,3> observed;
+    std::shared_ptr<MfsMacSample::LiveHook> live;
 #endif
     Original() {++owners;}
     ~Original() {--owners;}
@@ -65,7 +67,7 @@ int32_t mfs_mac_same_binary_original_capture(void* pointer,uint32_t call,const c
         if(owner.thread!=thread_id() || owner.finished || call!=owner.calls || call>=3) {return 1;}
         ++owner.calls; // A failing call cannot be silently resubmitted.
 #ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
-        auto observation=MfsMacSample::begin(call);owner.observed[call]=observation;
+        auto observation=MfsMacSample::begin(call,owner.live);owner.observed[call]=observation;
 #endif
         const auto begin=std::chrono::steady_clock::now();
         {
@@ -117,3 +119,19 @@ int32_t mfs_mac_same_binary_original_destroy(void* pointer) noexcept {
         delete owner;return 0;
     }catch(...) {return 2;}
 }
+#ifdef MFS_MAC_NATIVE_SAMPLE_OBSERVER
+uint64_t mfs_mac_original_live_bgr_type(void) noexcept {return static_cast<uint64_t>(CV_8UC3);}
+int32_t mfs_mac_original_set_live_sample(void* pointer,void* context,MfsMacLiveVisit visit,MfsMacLiveRelease release) noexcept {
+    if(!release) {return 1;}
+    MfsMacSample::LiveHook transferred(context,visit,release);
+    try {
+        if(!pointer || !context || !visit) {return 1;}
+        auto& owner=*static_cast<Original*>(pointer);
+        if(owner.thread!=thread_id() || owner.calls || owner.finished || owner.live) {return 1;}
+        // Allocation failure leaves the stack guard owning context. A successful
+        // move transfers it once; shared copies never duplicate release duties.
+        owner.live=std::make_shared<MfsMacSample::LiveHook>(std::move(transferred));
+        return 0;
+    }catch(...) {return 2;}
+}
+#endif

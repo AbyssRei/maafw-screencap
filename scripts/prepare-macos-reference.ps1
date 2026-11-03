@@ -123,6 +123,10 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_macos_sample_association_control
     Copy-Item -LiteralPath $association -Destination $saved;Save $saved
     Step macos-native-sample-association-control $association @()
+    $hook=Join-Path $build mfs_mac_live_sample_hook_control
+    $saved=Join-Path $refInputs mfs_mac_live_sample_hook_control
+    Copy-Item -LiteralPath $hook -Destination $saved;Save $saved
+    Step macos-live-sample-hook-control $hook @()
     return $executable
 }
 
@@ -217,6 +221,27 @@ function Run-MacosNativeSampleProbes([string]$Artifacts) {
     } finally {
         if($null -eq $previous) {Remove-Item Env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE -ErrorAction SilentlyContinue}
         else {$env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE=$previous}
+    }
+}
+
+function Run-MacosLiveSampleProbe([string]$Artifacts) {
+    $root=Join-Path $Artifacts live-sample
+    New-Item -ItemType Directory -Path $root|Out-Null
+    $test='backends::macos::screen_capture_kit::tests::same_binary::live_sample::converts_the_same_live_original_sample_and_retains_cpu_owners_after_source_shutdown'
+    $previous=@{}
+    foreach($key in @('MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE','MFS_P1_MACOS_MAIN_THREAD_HOST','MFS_P1_MACOS_LIVE_SAMPLE_ARTIFACTS')) {
+        $previous[$key]=[Environment]::GetEnvironmentVariable($key)
+    }
+    try {
+        $env:MFS_P1_MACOS_SAME_BINARY_SCENE_MODULE=$script:MacosNativeSampleModule
+        $env:MFS_P1_MACOS_MAIN_THREAD_HOST='1'
+        $env:MFS_P1_MACOS_LIVE_SAMPLE_ARTIFACTS=$root
+        try {Step rust-macos-live-sample cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$test,'--','--exact','--ignored','--test-threads=1','--nocapture')}
+        catch {$script:failed=$true;Write-Host $_.Exception.Message}
+        try {Step macos-live-sample-records $ConfigureTool @('upstream-trace','macos-live-sample',$root)}
+        catch {$script:failed=$true;Write-Host $_.Exception.Message}
+    }finally {
+        foreach($key in $previous.Keys){[Environment]::SetEnvironmentVariable($key,$previous[$key])}
     }
 }
 

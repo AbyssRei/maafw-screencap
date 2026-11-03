@@ -78,6 +78,7 @@ void pixels(const std::filesystem::path& path,const std::vector<uint8_t>& data) 
 std::atomic<uint64_t> serial{1};
 }
 struct Observation {
+    std::shared_ptr<LiveHook> hook;
     uint32_t call;uint64_t id,caller=thread_id();
     std::atomic<uint64_t> content_enter{0},content_callback{0},sample_enter{0},sample_callback{0};
     std::atomic<uint64_t> content_enter_thread{0},content_callback_thread{0},sample_enter_thread{0},sample_callback_thread{0};
@@ -89,9 +90,9 @@ struct Observation {
     bool sample_present=false,error_present=false;
     Snapshot before,after;
 };
-std::shared_ptr<Observation> begin(uint32_t call) {
+std::shared_ptr<Observation> begin(uint32_t call,std::shared_ptr<LiveHook> hook) {
     if(call>=3 || Scope::current()) {throw std::runtime_error("invalid native sample observation association");}
-    auto state=std::make_shared<Observation>();state->call=call;state->id=serial.fetch_add(1);
+    auto state=std::make_shared<Observation>();state->hook=std::move(hook);state->call=call;state->id=serial.fetch_add(1);
     if(state->id==0 || state->id==UINT64_MAX || state->caller==0) {throw std::runtime_error("native sample identity overflow");}
     return state;
 }
@@ -173,6 +174,13 @@ void write(const std::shared_ptr<Observation>& state,const std::filesystem::path
             completion(sample,error);
             if(first) {
                 state->forwarded.fetch_add(1);
+                // Separate opt-in same-sample diagnostic. Original conversion,
+                // release and signal have already run. This synchronous borrow
+                // cannot prolong a native pixel pointer beyond the callback;
+                // only independently owned CPU results may survive it.
+                if(state->hook && state->hook->visit(state->hook->context,sample,state->call)!=0) {
+                    state->fault.fetch_or(8);
+                }
                 try {MfsMacSample::copy(sample,state->after);}catch(...) {state->fault.fetch_or(2);}
                 state->ready.store(true,std::memory_order_release);
             }

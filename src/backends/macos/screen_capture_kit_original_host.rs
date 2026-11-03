@@ -11,6 +11,7 @@ type Destroy = unsafe extern "C" fn(*mut c_void) -> i32;
 type Owners = unsafe extern "C" fn() -> u64;
 
 pub(super) struct Original {
+    module: *mut c_void,
     // Native source and CPU Mat owner; deliberately !Send/!Sync. Every access
     // and destruction occurs on this owning libtest caller thread.
     owner: Option<NonNull<c_void>>,
@@ -86,6 +87,7 @@ impl Original {
         let owner = NonNull::new(pointer).expect("original source context");
         assert_eq!(unsafe { owners() }, 1);
         Self {
+            module,
             owner: Some(owner),
             invoke,
             finish,
@@ -94,13 +96,43 @@ impl Original {
         }
     }
     pub(super) fn capture(&self, call: u32, root: &Path) {
+        assert_eq!(self.capture_result(call, root), 0);
+    }
+    pub(super) fn capture_result(&self, call: u32, root: &Path) -> i32 {
         let directory = CString::new(root.as_os_str().as_bytes()).unwrap();
         // SAFETY: Live thread-local context, exact once-only index, synchronous
         // path borrow. Original class returns before the fixture saves bytes.
-        assert_eq!(
-            unsafe { (self.invoke)(self.owner.unwrap().as_ptr(), call, directory.as_ptr()) },
-            0
-        );
+        unsafe { (self.invoke)(self.owner.unwrap().as_ptr(), call, directory.as_ptr()) }
+    }
+    /// The callbacks must match T, contain unwinding, and use only independent
+    /// CPU owners after their synchronous native sample borrow ends.
+    pub(super) unsafe fn install_live_sample<T: Send + Sync + 'static>(
+        &self,
+        state: Arc<T>,
+        visit: unsafe extern "C" fn(*mut c_void, *const c_void, u32) -> i32,
+        release: unsafe extern "C" fn(*mut c_void),
+    ) -> i32 {
+        type Install = unsafe extern "C" fn(
+            *mut c_void,
+            *mut c_void,
+            unsafe extern "C" fn(*mut c_void, *const c_void, u32) -> i32,
+            unsafe extern "C" fn(*mut c_void),
+        ) -> i32;
+        // SAFETY: Exact live-sample.h export in the explicitly selected observed
+        // module. Resolve before transferring state so missing exports cannot
+        // leak its Arc. Valid release consumes it on every native result.
+        let install =
+            unsafe { symbol::<Install>(self.module, c"mfs_mac_original_set_live_sample") };
+        let context = Arc::into_raw(state).cast_mut().cast();
+        unsafe { install(self.owner.unwrap().as_ptr(), context, visit, release) }
+    }
+    pub(super) fn live_bgr_type(&self) -> u64 {
+        // SAFETY: Scalar query from the exact live-sample.h declaration in the
+        // retained observation module, compiled against its actual OpenCV.
+        let query = unsafe {
+            symbol::<unsafe extern "C" fn() -> u64>(self.module, c"mfs_mac_original_live_bgr_type")
+        };
+        unsafe { query() }
     }
     pub(super) fn finish(mut self, root: &Path) {
         let directory = CString::new(root.as_os_str().as_bytes()).unwrap();

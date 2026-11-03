@@ -64,6 +64,26 @@ fn validate_record(
     pid: u64,
     caller: u64,
 ) -> Result<()> {
+    validate_record_shape(
+        record,
+        call,
+        [
+            u64::from(g.count),
+            u64::from(g.display),
+            u64::try_from(g.width)?,
+            u64::try_from(g.height)?,
+        ],
+        pid,
+        caller,
+    )
+}
+fn validate_record_shape(
+    record: &Observation,
+    call: usize,
+    display: [u64; 4],
+    pid: u64,
+    caller: u64,
+) -> Result<()> {
     if record.schema != 1
         || u64::from(record.call) != u64::try_from(call)?
         || record.serial
@@ -88,10 +108,10 @@ fn validate_record(
         || record.error_present != 0
         || record.content_present != 1
         || record.content_error_present != 0
-        || record.display_count != u64::from(g.count)
-        || record.display_id != u64::from(g.display)
-        || record.display_width != u64::try_from(g.width)?
-        || record.display_height != u64::try_from(g.height)?
+        || record.display_count != display[0]
+        || record.display_id != display[1]
+        || record.display_width != display[2]
+        || record.display_height != display[3]
         || record.filter_present != 1
         || record.config_present != 1
         || record.config_width != record.display_width
@@ -112,8 +132,8 @@ fn validate_record(
         .ok_or("native readable span overflow")?;
     let packed = row.checked_mul(s.height).ok_or("native packed overflow")?;
     if record.before != record.after
-        || s.width != u64::try_from(g.width)?
-        || s.height != u64::try_from(g.height)?
+        || s.width != display[2]
+        || s.height != display[3]
         || s.row != row
         || s.stride < row
         || s.span != span
@@ -130,27 +150,19 @@ fn validate_record(
     }
     Ok(())
 }
-pub fn validate(
-    arm: &Path,
-    mode: u64,
-    call: usize,
-    g: &Geometry,
-    pid: u64,
-    caller: u64,
-) -> Result<serde_json::Value> {
+fn payloads(arm: &Path, call: usize, record: &Observation) -> Result<(Vec<u8>, Vec<u8>)> {
     let stem = format!("original-native-{call}");
-    let record: Observation = crate::records::read(&arm.join(format!("{stem}.json")))?;
-    validate_record(&record, call, g, pid, caller)?;
     let before = fs::read(arm.join(format!("{stem}-before.bgra")))?;
     let after = fs::read(arm.join(format!("{stem}-after.bgra")))?;
     let bgr = fs::read(arm.join(format!("original-call-{call}.bgr")))?;
+    let pixels = record
+        .before
+        .width
+        .checked_mul(record.before.height)
+        .ok_or("native pixel overflow")?;
     if before.len() != usize::try_from(record.before.packed_bytes)?
         || before != after
-        || bgr.len()
-            != g.width
-                .checked_mul(g.height)
-                .and_then(|n| n.checked_mul(3))
-                .ok_or("BGR span overflow")?
+        || bgr.len() != usize::try_from(pixels.checked_mul(3).ok_or("BGR span overflow")?)?
         || before
             .as_chunks::<4>()
             .0
@@ -162,6 +174,50 @@ pub fn validate(
             "native callback input changed or original BGR differs from actual native rows".into(),
         );
     }
+    Ok((before, bgr))
+}
+/// The independent live diagnostic has no known-scene premise. It checks the
+/// actual native display/configuration and the separately returned Rust layout,
+/// not visibility or source-selection equivalence of two different captures.
+pub(crate) fn validate_live(
+    root: &Path,
+    call: usize,
+    pid: u64,
+    caller: u64,
+    layout: [u64; 3],
+) -> Result<(u64, Vec<u8>, Vec<u8>)> {
+    let record: Observation =
+        crate::records::read(&root.join(format!("original-native-{call}.json")))?;
+    if record.display_count == 0 || record.display_id == 0 || record.before.stride != layout[2] {
+        return Err("live sample native display or Rust row stride differs".into());
+    }
+    validate_record_shape(
+        &record,
+        call,
+        [
+            record.display_count,
+            record.display_id,
+            layout[0],
+            layout[1],
+        ],
+        pid,
+        caller,
+    )?;
+    let (raw, bgr) = payloads(root, call, &record)?;
+    Ok((record.sample_callback_thread, raw, bgr))
+}
+pub fn validate(
+    arm: &Path,
+    mode: u64,
+    call: usize,
+    g: &Geometry,
+    pid: u64,
+    caller: u64,
+) -> Result<serde_json::Value> {
+    let stem = format!("original-native-{call}");
+    let record: Observation = crate::records::read(&arm.join(format!("{stem}.json")))?;
+    validate_record(&record, call, g, pid, caller)?;
+    let (before, _) = payloads(arm, call, &record)?;
     Ok(
         serde_json::json!({"mode":mode,"call":call,"serial":record.serial,
         "actual_native_pixels":g.width.checked_mul(g.height).ok_or("pixel overflow")?,

@@ -7,6 +7,8 @@ use std::{
     fs,
     process::{Child, Command, Stdio},
 };
+#[path = "screen_capture_kit_live_sample_tests.rs"]
+mod live_sample;
 #[path = "screen_capture_kit_original_host.rs"]
 mod original_host;
 

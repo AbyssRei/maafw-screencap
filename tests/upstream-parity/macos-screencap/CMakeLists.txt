@@ -65,6 +65,9 @@ set_target_properties(mfs_macos_same_binary_scene PROPERTIES
 # Only this separate class object receives selector aliases. The fixture scenes,
 # ordinary reference targets and Rust capture calls keep their original selectors.
 add_library(mfs_macos_native_sample_class OBJECT "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
+add_executable(mfs_mac_live_sample_hook_control live-sample-hook-control.cpp)
+target_compile_options(mfs_mac_live_sample_hook_control PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(mfs_mac_live_sample_hook_control PRIVATE Threads::Threads)
 target_include_directories(mfs_macos_native_sample_class PRIVATE ${_mfs_source_includes})
 target_compile_definitions(mfs_macos_native_sample_class PRIVATE MFS_MAC_NATIVE_SAMPLE_ALIAS=1)
 target_compile_options(mfs_macos_native_sample_class PRIVATE -fno-objc-arc -fblocks -Wall -Wextra
