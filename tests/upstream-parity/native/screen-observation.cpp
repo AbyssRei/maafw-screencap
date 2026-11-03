@@ -40,4 +40,3 @@ extern "C" MFS_PARITY_EXPORT int32_t mfs_screen_fixture_present(int32_t* output,
     output[1] = DwmFlush();
     return 0;
 }
-
