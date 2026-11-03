@@ -130,6 +130,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `902a7cc` 的 [Actions 41713336107](https://github.com/AbyssRei/maafw-screencap/actions/runs/41713336107) DesktopDup 组件现为 93/95，全部十六项新查找/回退检查通过，原七十九项名称/状态不变。五组原版/Rust 实际记录独立复核 400 次公开拒绝、200 次主输出回退、200 次匹配对照、400 个真实设备、800 次实际 D3D 析构通知及十个隐藏 HWND 的关闭/类注销；factory/adapter/output 转发器释放为 400/560/520，回退之前的临时 adapter/output 引用分别为 160/120。真实驱动 `DuplicateOutput`、样本和转换均为零，转发器释放仍不当作底层 DXGI 对象析构。原有主输出矩阵的 320 次拒绝/640 次 D3D 通知也核对，不能据这些受控失败接受物理多输出搜索、真实复制创建/取帧、反复调用恢复或完整 P1。
+
+该官方包的 21,815,073 字节、完整 SHA256、CRC、路径包含/重复名/符号链接均核验；95 份日志和 1,826 条可用登记输入摘要匹配，仍缺 628 个不同完整输入，十八份选定源码另以确切 Git 字节及登记摘要匹配保存。冻结 lookup 开发批工具对五组新矩阵及十二组旧矩阵只读通过，另一次不完整 pending 数据仍拒收，全部解压数据前后字节不变。首帧仍在原版第零例、两个 worker 完成 join 且 HWND 失效后严格因 `9→11` 失败；八阶段实值为 `9/12/11/11/11/11/11/11`，只有两张完整正确即时图，没有持帧数据。取帧前的 `12` 与先前 `21b46b6` 的 `11` 不同，原版/Rust 捕获对象均在该采样之后才创建；这些计数仍不能证明对象身份、来源或后续保留原因，不能套用本机独立字体控制追认托管同因。首次 reader 未规范化旧封存表的 Windows 分隔符而停止，第二次误套旧阶段数值而拒绝；最终单独记录该次实际序列，保留所有旧 reader/数据，不重跑原生程序或更改断言。独立材料由参考目录 `local/current-desktop-lookup-hosted-review-path.txt` 指向。此时 Linux 作业成功、Mac 作业失败、Windows 仍在 manager 步骤，完整作业/平台和 P1 不据该有限组件审阅验收。
+
 对下述简单隐藏窗口控制追加两次独立调试执行，每次二十个生命周期，零捕获。CDB 10.0.28000.2957 观察实际 `CreateFontIndirectExW` 入口和返回；两次均只有首例 `SetWindowLongPtrW` 前后标记之间的两个创建，调用栈经过 UxTheme 的 `CInternalNonclientMetrics::Acquire`、`NcGetCaptionFont`、`OnDwpStyleChanged` 及真实 `DefWindowProcW`/原生样式设置。后十九次样式设置没有该入口的新调用，计数始终为 `2`。第二次在二十个窗口销毁和类注销后，对两枚实际返回句柄只读调用公开 `GetObjectType`/`GetObjectW`，分别仍为 `OBJ_FONT (6)`、返回 92 字节；记录的选定字段均为 Microsoft YaHei UI、height -12、weight 400。句柄保留 64 位不透明值，包括实际的高位扩展，不窄化或自行删除 UxTheme 的对象。
 
 这解释了该独立调试进程所观察到的两个 GDI 对象；调试器会改变时序，没有把这两枚句柄追溯成旧进程、原绘制器或托管 `9→11` 的同一对象，也不接受任意删除/重用连续身份、完整字体字节、框架缓存清理或全局资源关闭。原首帧和资源断言、基线、取帧与历史失败均未修改。首次调试因命令文件路径解释错误停止在创建入口，保留不完整失败；改用独立工作目录和相对命令文件后完成观察。首次 reader 把调试器回显的断点声明当作实际 brush/bitmap 事件而拒绝，最终单独核对声明与实际输出，原始日志未改。两次成功执行、一次失败尝试及最终只读查询由参考目录 `local/current-caption-style-native-trace-path.txt`、`local/current-caption-style-native-review-path.txt` 指向；完整 P1 仍未通过。
