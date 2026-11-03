@@ -271,6 +271,15 @@ if(MFS_BUILD_DESKTOP_DUP_REFERENCE)
         "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap" ${OpenCV_INCLUDE_DIRS})
     target_compile_definitions(mfs_desktop_output_reference PRIVATE MFS_UPSTREAM_DESKTOP_DUP_CPP="${MFS_DESKTOP_DUP_CPP_PATH}")
     target_link_libraries(mfs_desktop_output_reference PRIVATE mfs_desktop_output_probe mfs_d3d_lifetime mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 D3D11 Dxgi)
+    add_library(mfs_desktop_lookup_probe SHARED desktop-lookup-probe.cpp)
+    target_link_libraries(mfs_desktop_lookup_probe PRIVATE mfs_d3d_lifetime User32 Dxgi)
+    add_executable(mfs_desktop_lookup_reference desktop-lookup-reference.cpp)
+    target_include_directories(mfs_desktop_lookup_reference PRIVATE
+        "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/include"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit"
+        "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap" ${OpenCV_INCLUDE_DIRS})
+    target_compile_definitions(mfs_desktop_lookup_reference PRIVATE MFS_UPSTREAM_DESKTOP_DUP_CPP="${MFS_DESKTOP_DUP_CPP_PATH}")
+    target_link_libraries(mfs_desktop_lookup_reference PRIVATE mfs_desktop_lookup_probe mfs_d3d_lifetime mfs_reference_utils ${OpenCV_LIBS} Gdi32 User32 D3D11 Dxgi)
 endif()
 if(MFS_BUILD_GDI_PARITY)
 add_executable(mfs_render_marker_control print-marker-control.cpp)

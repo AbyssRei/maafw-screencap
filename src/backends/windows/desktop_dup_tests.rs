@@ -11,6 +11,10 @@ mod initialization;
 mod primary_output;
 
 #[cfg(feature = "prototype-windows")]
+#[path = "desktop_dup_lookup_tests.rs"]
+mod output_lookup;
+
+#[cfg(feature = "prototype-windows")]
 #[path = "desktop_dup_map_tests.rs"]
 mod native_map;
 
