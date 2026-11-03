@@ -4,6 +4,14 @@
 
 ## 逐函数对应审阅
 
+确切 `02c7eb6` 的 Gamepad 合并对应现覆盖已有原始 CPP 索引的三十项及零函数体头文件：新增 UUID/features/info 三项 `capture_metadata`，按当前 Git 原文刷新同一 `gamepad.rs` 的全部位置；原 delegate/native/platform 三文件与旧对应字节相同。三项保留十进制 HWND、type 非 0 时 ds4、固定历史 feature 位、info 的无符号 HWND 与有符号 type/method；可失败独立 String、类型化分配错误及 JSON 文本对来源 object 的边界明确列出，不定案公共 SDK/ABI，也不声称任意 OOM 或连接后全场景由预连接矩阵验收。
+
+另外十二项逐一登记为输入/应用范围排除，Rust 位置和执行证据均为空，不伪造实现。`ensure_foreground` 只有 `touch_down`、`key_down` 两个原始调用点，截图、停用、连接与查询不调用它；共享捕获侧 ForegroundUtils 仍按自己的来源迁移。start/stop app 是应用转发；touch/key 方法是轴、扳机、按钮控制；click/swipe/click_key 是来源的弃用 false 槽，input_text 是不支持的输入槽。它们均不因此成为 SDK 能力，析构所需宿主 reset 与截图 owner 寿命仍保留独立对应。三个外层公共 C Version/Create/Destroy 导出仍单列，未冒称 Rust SDK 导出。
+
+只读 `reference function-map` 核对精确 F 字节、行/范围、当前 Rust Git 内容和全部声明运行组。历史 66 项原生状态仍为 60 通过/六失败；先前八项宿主模型日志及新增四项主配置查询/独立记录日志均通过、零本次新截图。汇总 72 通过/六失败是三类记录之和，不能写成新的 native 通过率。源索引三十项全覆盖也不等于预处理、宏、SDK 或编译器穷尽语义。封存记录由参考目录 `local/current-gamepad-metadata-functions-path.txt` 指向。
+
+十六组最新清单已重新按来源路径和函数身份去重，累计 40 份来源/300 项；本次只增加三项实现对应和十二项排除。原始 44 文件索引中未进入该 Rust 对应并集的四份来源为 MaaBuffer.cpp、GamepadControlUnitAPI.cpp 及 KWin/WlRoots 兼容 API；原生保留的五项 buffer 操作和兼容创建已有各自边界审阅，不能改称完整 Rust 映射。已经出现的文件也可能保留条件分支或更广 SDK/宏范围，不能凭路径出现宣布完整 P1。去重记录在参考目录 `local/current-function-census-union.json`，旧并集已另存保全。
+
 Gamepad 的截图相关外层在确切 `ae4e578` 补四项：原构造、析构、`connect` 和 `connected` 对应同一私有 `GamepadCapture`；已有截图/停用映射另追加外层直接转发位置，原 `CaptureDelegate`、原生 loader 和平台模块未复制或修改。四项保留标量选择器、空初态、宿主创建先于替换、连接失败保留旧捕获状态、可选截图初始化 false 仅警告、connected 短路，以及 reset→捕获 view/loader→宿主 owner 的退出顺序。reset 不得展开、原失效 view 拒绝和类型化边界错误均明确列为安全/接口边界；该对应批没有实现 ViGEm、输入、foreground、UUID/features/info 或公共 Gamepad SDK 导出。随后三项元数据的独立迁移与验证见下节，不重标该批旧映射。
 
 新的合并对应为两份既有 F 来源、十五项，原文/blob/行号/范围摘要和实际 Rust Git 字节逐一通过只读 `reference function-map`。运行链接分开保存：原生历史批次的 66 项检查仍为 60 通过、六失败，mask `6/10/14/38/42/46` 不变；新增八项是本机 Debug/Release 完整原类/API 与 Rust 的 CPU Mat/宿主/DLL 边界模型及记录检查，全部通过、零实际截图和输入动作，不改称原生取帧。合并 reader 的 68/6 仅为两类记录的计数，不是新的 native 通过率。最终重建前后的 217 份 Gamepad 记录在每种配置均逐字节相同，539 份实现提交的 canonical tar 与全部 Git blob/mode 核对。最初外部索引 reader 的 key 错误、后续只读 SSH DNS 失败分别保存；远端身份改由 GitHub Ref API 核对，没有更改已保存结果或 Git 连接配置。选定累计增加四项至 40 份来源/285 项；其余十五项外层源码和三个 API 导出仍明确未映射。完整审阅由参考目录 `local/current-gamepad-host-functions-path.txt` 指向，不授予完整语义、SDK、截图或 P1 验收。
@@ -111,6 +119,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+确切 `02c7eb6` 的原生 Mac job 已失败结束，组件仍为 133/154；全部 154 项名称和状态与已封存 `7b3a608` 一致，21 项旧失败保留。官方 40,056,162 字节组件 ZIP 的摘要/CRC、11,941 项归档内容和每项日志摘要核对，实际工具身份和预装政策控制保留；没有工具年龄门禁失败。本轮不重审全部轻量输入缺口、源码/依赖闭包或改变像素、超时和回调结论；焦点记录由参考目录 `local/current-02c7-macos-focused-path.txt` 指向。
 
 同一私有 `GamepadCapture` 现已迁移 `request_uuid`、`get_features`、`get_info`。保留构造时的 HWND/type/method，不读取连接状态或创建宿主/捕获资源；UUID 使用十进制 HWND，Xbox360 的值 0 以外均按来源返回 ds4 名称，先完成可失败分配和格式化再替换调用方 String。info 保留无符号 HWND、type/method 的有符号 64 位转换和原 JSON 字段；features 固定为来源的三个历史输入标志，只属于私有来源元数据，不代表 SDK 已实现输入。捕获委托和生命周期分支未改，公共 SDK/ABI 仍待后续阶段。
 

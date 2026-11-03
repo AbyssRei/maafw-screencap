@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Gamepad 的三项查询及十二项输入/应用排除已补来源对应；十六组清单的独立去重累计为 40 份来源、300 项。原生旧失败保留，不代表完整文件/编译器或 P1 验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。确切 `02c7eb6` 的 Mac 仍为 133/154、原 21 项失败不变，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 同一私有 Gamepad owner 已迁移 UUID/features/info：Debug、Release 各 144 组完整原类/API 配对查询及原有 72 例宿主回归通过。固定 features 是来源元数据，未实现输入能力；新记录校验、独立 CI 入口和离线 collector 已接入，本批零真实截图，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 完整原版 Gamepad 类/API 与同一 Rust owner 的本机 63 组原生组合已完成连续三轮和独立复核：零输入干扰，7,560 个生命周期、45,360 份即时/持帧图像通过。`7b3a608` 托管 Windows 仍有七组像素失败、FramePool 四项失败，Mac 仍有 21 项失败；Linux 两组件通过，完整 P1 未验收。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
