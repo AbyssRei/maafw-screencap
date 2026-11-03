@@ -1,6 +1,6 @@
 # 文档导航与维护约定
 
-KWin 创建入口已新增真实 socket 的 Portal 中途失败矩阵准备：Open false 与四个宿主错误保留 helper/未消费 fd，再由夹具回收。本机和 Linux 目标静态检查通过，原生 Linux 运行仍待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `ab544fc` 的原生 PipeWire 组件为 205/205；新增 KWin Portal 中途失败三项通过，原有 202 项状态不变。两侧各一百次真实 socket 残留及夹具回收记录已独立复验，真实 DBus 授权及完整 P1 仍未验收，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `f43996a` 的独立托管 FramePool 为 102/106：新增初始化四项全部通过，原有 102 项状态不变、四项 pseudo 失败保留。预装 SDK 26100 按实际能力通过准备，版本年龄没有阻断；见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 

@@ -108,11 +108,15 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `ab544fc` 的 [Actions 41564727121](https://github.com/AbyssRei/maafw-screencap/actions/runs/41564727121) 原生 Linux PipeWire 组件现已通过全部 205 项检查：新增 `original-kwin-portal-failure`、`rust-kwin-portal-failure` 和记录检查全部通过，与已复核 `8c1369c` 的原有 202 项逐名对照，全部状态不变。真实 C++ 原版、Rust 和实际矩阵均已执行；两侧各 100 次失败，每种 Open false/错误 91–94 各二十次，分别有一百个不同的非零 socket cookie，在失败前后保持相同。每次确认 helper 与一个未消费 fd 残留，再由夹具回收；各侧 101 组实际任务身份、fd 基线和 caller 均已独立核对。没有创建 manager、PipeWire 流或截图；不把残留或夹具回收称为产品清理，也不把受控宿主错误当作真实 DBus/桌面授权验收。
+
+官方即时 ZIP（39,849,712 字节）的发布摘要/CRC、44,285 份文件、44,079 个可用登记路径和全部 205 份日志核对；9,401 次相同摘要重复登记明确保留，623 项完整输入仍缺。八份当前 Rust/原生夹具/编排/校验源码由确切 Git bytes 或明确 CRLF checkout 转换匹配实际登记摘要，上传的完整 KWin 原文件亦匹配固定 F；这些选取不代表全部来源闭包。冻结校验器对实际 205 份矩阵数据/报告只读通过，摘要不变。另在真实矩阵副本上执行 29 次 CLI 控制：两项成功、二十七项错误/调用顺序/残留/回收/任务/文件/报告篡改被拒收；字段和资源负向控制先移除旧报告，确保拒收来自语义或结构检查，原矩阵不变。证据由同一参考 marker 的 `hosted-review/`、`native-cli-controls/` 指向；组件通过不接受其他平台旧失败、一般宿主故障、完整兼容 ABI 或 P1，整个平台 job 的后续组件与最终状态分别记录。
+
 新增 KWin 创建前的受控 Portal 失败矩阵：原生 C++ 入口 `--kwin-portal-failure <private socket> <全新输出目录>` 调用未修改的完整 `MaaKWinControlUnitCreate`，Rust 精确测试 `backends::linux::manager::compat::tests::portal_failures::retains_host_socket_after_each_portal_failure_before_manager_construction` 调用同一私有兼容 Config 构造器。每侧计划一百次，五种情况各二十次：宿主 Open 已取得真实 socket 后返回 false，或在 Open、fd getter、node getter、helper Destroy 依次返回受控错误 91–94。原版异常只由 C++ 调用方捕获，Rust 使用宿主 Result；不使 C++ 异常跨越 Rust ABI。每次均须没有 manager/捕获构造，保留完整调用前缀、helper、一个未消费 socket 与相同 `SO_COOKIE`，再显式关闭同一 fixture offer 并核对实际任务身份和 fd 基线。成功路径的既有 KWin 宿主夹具默认选择不变。
 
 `cargo xtask upstream-trace kwin-portal-failure <已存在的外部矩阵> [--check-only]` 要求两侧共两百次完整记录及 204 份文件，逐项检查错误、调用顺序、真实 cookie、残留/回收区分、caller 和一百组关闭后任务列表；保存报告始终声明零截图、完整 P1 未验收。编排独立保留原版、Rust 和记录检查，失败不省略后续案例，每步 finally 保存部分证据；该矩阵不以未知退出 77 冒充缺环境。private-daemon/socket 并非 DBus/桌面授权，异常点是宿主控制条件；本项不接受真实 Portal、输入动作、一般失败、已开始原生流的清理或完整兼容 ABI。产品构造/失败清理均未改动，不把原 helper 残留改写为产品清理成功。
 
-本机使用与上一初始化开发批次一致的显式归档依赖重放，nightly 已检查更新；123 项 xtask/工作区测试、默认 Release、严格 Clippy 和格式检查通过。Linux 目标的测试编译/Clippy 也通过，属于交叉静态检查，尚非原生执行。28 次人工 CLI 控制包含两项成功和二十六项拒收；28 项实际 `Step` 控制/56 个隔离子进程，以及实际三步编排的四种失败位置/12 次显式 mock 案例均通过，输出/错误和非通过 aggregate 保留。首版 checker 把数字任务 ID 当作字符串的编译失败及修正版本分别保存；所有控制都不算真实 Linux socket/capture 验收。原生 C++ 编译、该新 Rust 用例和实际记录矩阵待 Actions 执行，证据由 `local/current-kwin-portal-failure-development-path.txt` 指向；已有平台失败和完整 P1 门禁继续保留。
+本机使用与上一初始化开发批次一致的显式归档依赖重放，nightly 已检查更新；123 项 xtask/工作区测试、默认 Release、严格 Clippy 和格式检查通过。Linux 目标的测试编译/Clippy 也通过，属于交叉静态检查，尚非原生执行。28 次人工 CLI 控制包含两项成功和二十六项拒收；28 项实际 `Step` 控制/56 个隔离子进程，以及实际三步编排的四种失败位置/12 次显式 mock 案例均通过，输出/错误和非通过 aggregate 保留。首版 checker 把数字任务 ID 当作字符串的编译失败及修正版本分别保存；所有控制都不算真实 Linux socket/capture 验收。随后确切 `ab544fc` 的原生 C++、Rust 和实际记录结果见本节开头，证据由 `local/current-kwin-portal-failure-development-path.txt` 指向；已有平台失败和完整 P1 门禁继续保留。
 
 确切 `f43996a` 的独立 [Actions 41558756707](https://github.com/AbyssRei/maafw-screencap/actions/runs/41558756707) 已终态失败，组件为 102/106。新增 `frame-pool-initialization-build`、原版、Rust 和记录四项均通过，实际执行 160 次原生拒绝及 80 次设备最终释放通知、零截图；与 `8c1369c` 的旧 102 项逐名对照，状态完全不变，四个原版 pseudo stop/inactive/layered 失败仍保留。该 runner 实际使用 VS build `18.11.12328.437` 与 SDK `10.0.26100.0`，准备日志明确最新版仅作参考且退出 0；年龄未成为 CI 门禁。
 
