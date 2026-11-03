@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+完整原版 Gamepad 类/API 与同一 Rust owner 的本机 63 组原生组合已完成连续三轮和独立复核：零输入干扰，7,560 个生命周期、45,360 份即时/持帧图像通过。`7b3a608` 托管 Windows 仍有七组像素失败、FramePool 四项失败，Mac 仍有 21 项失败；Linux 两组件通过，完整 P1 未验收。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 Gamepad 外层构造/析构/connect/connected 补四项来源对应，选定累计为 40 份来源、285 项。历史原生 60 通过/六失败与新增八项本机边界模型记录分开保留，仍未接受完整捕获或 P1，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 Gamepad 截图相关外层宿主生命周期已新增私有实现，复用同一捕获委托；最终 Debug/Release 各 72 个完整原类/API 配对案例及既有 274 例委托回归通过。输入设备和 DLL 查找仍为显式夹具，零真实截图，完整 P1 未验收，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
