@@ -97,6 +97,7 @@ fn side(root: &Path, rust: bool) -> Result<usize> {
             if caller == 0 {
                 caller = row[15];
             }
+            u32::try_from(row[15])?;
             if row[15] != caller {
                 return Err("initialization caller changed".into());
             }
@@ -118,6 +119,13 @@ fn side(root: &Path, rust: bool) -> Result<usize> {
                     let live = &phases[0];
                     let returned = &phases[1];
                     let final_row = &phases[2];
+                    for observed in [live, returned, final_row] {
+                        // Native DWORD thread identities and UINT callback IDs
+                        // remain 32-bit even in the observer's u64 transport.
+                        for field in [5, 6, 9] {
+                            u32::try_from(observed[field])?;
+                        }
+                    }
                     if live[..5] != [1, 1, kind, 1, 0]
                         || live[5] != caller
                         || live[6] != 0

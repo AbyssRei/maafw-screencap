@@ -136,6 +136,8 @@ DesktopDup 初始化现有独立失败/清理矩阵：完整未改 F 类只在 `
 
 `cargo xtask upstream-trace desktop-initialization <外部矩阵> [--check-only]` 使用记录布局二，核对六份原始 ABI/调用/寿命文件、参数违规标记、200 行调用与 480 行寿命；旧开发布局保留原程序/校验器，不重写成新布局。41 个实际数据控制接受四项、拒绝 37 项；25 个真实 Step 输出控制、四组失败后独立继续及三个实际原版/Rust/checker 子进程通过。原类宏入口、Debug/Release CL 命令/读取日志、确切 F 字节、程序前后摘要与 635 个编译器读取路径另行复核；这些路径摘要是执行后的来源审阅，不冒称执行前依赖冻结。工厂析构通知、失败同时写出非空 out 参数、任意创建故障、成功取帧和完整 P1 均未验收，旧完整函数映射保留其快照身份。
 
+另补记录宽度修正：observer 的 u64 传输槽不放宽原生 DWORD 线程 ID 和 UINT 回调 ID 的 32 位宽度。四份实际记录副本分别将原版/Rust 的 caller 或全部阶段回调 ID 改为 `2^32`，同时保留其内部身份一致；旧 `5a65f07` 校验器会误收，新增受检 `u32::try_from` 后均拒收。两份原始 Debug/Release 报告只读回归仍通过，十次旧/新 CLI 控制及工具摘要封存于参考目录 `local/current-desktop-initialization-width-review-path.txt`。未重跑原生创建/捕获、修改原始记录或改变布局二的有效值与既有报告。
+
 首次外部执行遗漏 `mfs_reference_utils.dll`，两个原版进程均以 `0xc0000135` 停在加载，独立 Rust 通过、配对记录拒收；原程序/输出/退出码保持保存。补齐实际 DLL 后另建目录通过。原始布局一数据、一次 Clippy 固定 chunk lint 及外部脚本定位前提错误也各自保留；最终数据显式登记违规标记，Clippy 使用受检 `as_chunks::<5>()`，未抑制 lint 或降低断言。原版/Rust/记录的独立 CI 入口、聚合跳过和完整 initialization 目录上传已接入，托管执行待验证。默认工作区、选定 all-target Clippy、直接库检查和格式均通过；开发/来源审阅由参考目录 `local/current-desktop-initialization-development-path.txt` 和 `local/current-desktop-initialization-source-review-path.txt` 指向，不声称新在线最新依赖解析。预装工具年龄继续仅作 CI 记录。
 
 确切 `d537d1a` 的 [Actions 41652195571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41652195571) DesktopDup 组件现已独立审阅，61/61 检查通过，包含新增 adapter/首帧/记录三项。即时官方 ZIP 的 15,961,236 字节长度、完整 SHA256 与 CRC 均核对；首次超时传输及长路径解压失败保留，后以 HTTP range 恢复同一官方摘要、改用新短路径根完整解压，没有重跑捕获。全部 61 项日志及 2,033 个可用登记输入摘要一致；轻量包原始 610 项完整来源/依赖缺口仍列出，十二份选定源码仅在确切 Git 字节匹配登记摘要后另存 supplement，不冒称下载或完整闭包。
