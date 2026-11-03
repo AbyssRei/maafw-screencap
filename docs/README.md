@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+DesktopDup 初始化失败已有独立原版/Rust 原生对照：Debug/Release 每配置通过 160 次公开拒绝、四十次直接初始化对照和 160 次真实 D3D 析构通知，零截图。记录/编排控制及来源复核通过，创建边界保持默认 hardware 调用；新托管入口待执行，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 基础 `MaaBuffer` helper 新增完整原文件编译和十七项实际原生消费：Debug/Release 各八组 Custom 回归及记录检查通过，新增一百个字符串/780 个图像 owner 的清空、销毁后持有均核对，零桌面截图。选定运行范围为 22/45，其余二十三项 list/rect 仍未验收；三平台 CI 已接入，托管执行及完整 P1 待验证，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 其余 list/rect 的完整顶层 F 字节审阅现记录 744 个 blob、38 份相关文件及通用框架/识别/任务/旧包装边界；选定截图路径未见相关字面使用，五个子模块内容及宏展开不据此验收，未新增 Rust/SDK API，见[逐函数审阅](guides/development.md#逐函数对应审阅)。

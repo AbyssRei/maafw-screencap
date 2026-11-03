@@ -221,6 +221,20 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete Rust real held-acquisition rejection/owner test'
             }
         }
+        if ($Name -in @('desktop-dup-source-initialization','desktop-dup-rust-initialization','desktop-dup-initialization-records') -and $exitCode -eq 0) {
+            $observed=[IO.File]::ReadAllText($logPath)
+            $summary=switch($Name) {
+                'desktop-dup-source-initialization' { 'original DesktopDup initialization cycles=20 public_rejections=80 direct_init_controls=20 native_devices=60 native_factories=20 d3d_notifications=80 captures=0 full_P1_acceptance=0 passed' }
+                'desktop-dup-rust-initialization' { 'native Rust DesktopDup initialization cycles=20 public_rejections=80 direct_init_controls=20 native_devices=60 native_factories=20 d3d_notifications=80 captures=0 full_P1_acceptance=0 passed' }
+                'desktop-dup-initialization-records' { 'DesktopDup initialization public_rejections=160 direct_init_controls=40 native_devices=120 native_factories=40 d3d_notifications=160 captures=0 files=6 full_P1_acceptance=0 passed' }
+            }
+            $leader=if($Name -eq 'desktop-dup-rust-initialization'){'(?:test backends::windows::desktop_dup::tests::initialization::releases_partial_device_context_after_creation_failure_without_capturing \.\.\. )?'}else{''}
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               ($Name -eq 'desktop-dup-rust-initialization' -and
+                [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; [0-9]+ filtered out; finished in [0-9.]+s\r?$').Count -ne 1)){
+                throw 'Expected complete DesktopDup creation-error/direct-init/lifetime matrix; zero tests or partial output is not acceptance'
+            }
+        }
         if ($Name -in @('desktop-dup-source-lifetime','desktop-dup-rust-lifetime','desktop-dup-lifetime-records') -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
             $prefix = switch ($Name) {
@@ -1220,6 +1234,13 @@ try {
             Copy-Item -LiteralPath (Join-Path $build "Release/$name") -Destination $saved;Save-Input $saved
         }
         $env:MFS_D3D_LIFETIME_LIBRARY=Join-Path $artifacts mfs_d3d_lifetime.dll
+        Step desktop-dup-initialization-build $cmake @('--build',$build,'--config','Release','--target','mfs_desktop_initialization_reference','--parallel','4')
+        $desktopInitializationProgram=Join-Path $artifacts mfs_desktop_initialization_reference.exe
+        Copy-Item -LiteralPath (Join-Path $build Release/mfs_desktop_initialization_reference.exe) -Destination $desktopInitializationProgram
+        Save-Input $desktopInitializationProgram
+        $desktopInitializationEvidence=Join-Path $desktopEvidence initialization
+        New-Item -ItemType Directory -Path (Join-Path $desktopInitializationEvidence source)|Out-Null
+        Invoke-FrameCheck desktop-dup-source-initialization $desktopInitializationProgram @((Join-Path $desktopInitializationEvidence source))
         $desktopLifetimeEvidence=Join-Path $desktopEvidence lifetime
         New-Item -ItemType Directory -Path (Join-Path $desktopLifetimeEvidence source)|Out-Null
         Invoke-FrameCheck desktop-dup-source-lifetime (Join-Path $artifacts mfs_desktop_lifetime_reference.exe) @((Join-Path $desktopLifetimeEvidence source))
@@ -1504,6 +1525,8 @@ try {
         $caseSelection += @('--skip', $desktopGeometryCase)
         $desktopMapCase='backends::windows::desktop_dup::tests::native_map::unmaps_and_releases_each_real_acquisition_before_conversion_and_after_map_rejection'
         $desktopLifetimeCase='backends::windows::desktop_dup::tests::native_lifetime::releases_observed_gpu_objects_while_cpu_images_survive_backend_and_window_shutdown'
+        $desktopInitializationCase='backends::windows::desktop_dup::tests::initialization::releases_partial_device_context_after_creation_failure_without_capturing'
+        $caseSelection += @('--skip', $desktopInitializationCase)
         $caseSelection += @('--skip', $desktopLifetimeCase)
         $caseSelection += @('--skip', $desktopMapCase)
         $desktopAcquireCase='backends::windows::desktop_dup::tests::native_acquire::preserves_caller_acquisition_when_native_rejects_capture_and_recovers_after_release'
@@ -1571,6 +1594,9 @@ try {
         }
         if ($DesktopDupParity) {
             $env:MFS_DESKTOP_DUP_REFERENCE_ROOT = $desktopEvidence
+            $env:MFS_DESKTOP_INITIALIZATION_ROOT=$desktopInitializationEvidence
+            Invoke-FrameCheck desktop-dup-rust-initialization cargo ($parityArguments+@('--',$desktopInitializationCase,'--exact','--ignored','--test-threads=1','--nocapture'))
+            Invoke-FrameCheck desktop-dup-initialization-records $ConfigureTool @('upstream-trace','desktop-initialization',$desktopInitializationEvidence)
             $env:MFS_DESKTOP_LIFETIME_ROOT=$desktopLifetimeEvidence
             Invoke-FrameCheck desktop-dup-rust-lifetime cargo ($parityArguments+@('--',$desktopLifetimeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))
             Invoke-FrameCheck desktop-dup-lifetime-records $ConfigureTool @('upstream-trace','desktop-lifetime',$desktopLifetimeEvidence)

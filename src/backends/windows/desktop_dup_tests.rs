@@ -3,6 +3,10 @@
 use super::*;
 
 #[cfg(feature = "prototype-windows")]
+#[path = "desktop_dup_initialization_tests.rs"]
+mod initialization;
+
+#[cfg(feature = "prototype-windows")]
 #[path = "desktop_dup_map_tests.rs"]
 mod native_map;
 

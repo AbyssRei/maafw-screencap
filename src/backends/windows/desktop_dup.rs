@@ -163,7 +163,7 @@ impl DesktopDupCapture {
     fn init(&mut self) -> Result<(), CaptureError> {
         // SAFETY: Original default hardware/flags/feature-level selection, exact
         // owned out-slots. No device migration to a selected adapter in P1.
-        native("D3D11CreateDevice", unsafe {
+        let create_device = || unsafe {
             D3D11CreateDevice(
                 None,
                 D3D_DRIVER_TYPE_HARDWARE,
@@ -175,10 +175,27 @@ impl DesktopDupCapture {
                 None,
                 Some(&mut self.context),
             )
-            .ok()
-        })?;
+        };
+        #[cfg(all(test, feature = "prototype-windows"))]
+        let code = crate::platform::windows::desktop_dup::init_probe::device(create_device);
+        #[cfg(not(all(test, feature = "prototype-windows")))]
+        let code = {
+            let mut create_device = create_device;
+            create_device()
+        };
+        native("D3D11CreateDevice", code.ok())?;
+        #[cfg(all(test, feature = "prototype-windows"))]
+        crate::platform::windows::desktop_dup::init_probe::created(
+            self.device.as_ref(),
+            self.context.as_ref(),
+        );
         // SAFETY: The generated IID adopts one factory reference on this caller.
-        self.factory = Some(native("CreateDXGIFactory", unsafe { CreateDXGIFactory() })?);
+        let create_factory = || unsafe { CreateDXGIFactory() };
+        #[cfg(all(test, feature = "prototype-windows"))]
+        let result = crate::platform::windows::desktop_dup::init_probe::factory(create_factory);
+        #[cfg(not(all(test, feature = "prototype-windows")))]
+        let result = create_factory();
+        self.factory = Some(native("CreateDXGIFactory", result)?);
         Ok(())
     }
     fn ensure_output(&mut self, evidence: &mut Evidence) -> Result<(), CaptureError> {

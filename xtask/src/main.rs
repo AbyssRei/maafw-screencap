@@ -15,6 +15,7 @@ mod dependencies;
 mod desktop_acquire;
 mod desktop_acquire_errors;
 mod desktop_fullscreen;
+mod desktop_initialization;
 mod desktop_lifetime;
 mod desktop_map;
 mod frame_pool_alpha;
@@ -230,6 +231,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace custom-images <external images directory> [--check-only]\n\n\
                       cargo xtask upstream-trace custom-raw <external raw directory> [--check-only]\n\n\
                       cargo xtask upstream-trace custom-buffers <external buffers directory> [--check-only]\n\n\
+                      cargo xtask upstream-trace desktop-initialization <external matrix directory> [--check-only]\n\n\
                       cargo xtask upstream-delegate <win32|win32-native|win32-factory> <external directory> [--check-only]\n\
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
                       cargo xtask upstream-delegate <gamepad-host|gamepad-metadata> <external records> [--check-only]\n\n\
