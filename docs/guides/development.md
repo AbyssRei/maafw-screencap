@@ -128,6 +128,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d537d1a` 的 [Actions 41652195571](https://github.com/AbyssRei/maafw-screencap/actions/runs/41652195571) DesktopDup 组件现已独立审阅，61/61 检查通过，包含新增 adapter/首帧/记录三项。即时官方 ZIP 的 15,961,236 字节长度、完整 SHA256 与 CRC 均核对；首次超时传输及长路径解压失败保留，后以 HTTP range 恢复同一官方摘要、改用新短路径根完整解压，没有重跑捕获。全部 61 项日志及 2,033 个可用登记输入摘要一致；轻量包原始 610 项完整来源/依赖缺口仍列出，十二份选定源码仅在确切 Git 字节匹配登记摘要后另存 supplement，不冒称下载或完整闭包。
+
+实际 pending 数据的四十个原版/Rust 生命周期侧包含 80 次公开取帧、80 个持帧 owner 和 160 份完整 192×128 BGR payload，共 3,932,160 个目标像素逐点核对通过；没有像素 mask/容差。404 行几何/gate 与 200 行独立更新 owner 记录核对：原客户区为 `[0,640,192,768]`，队列释放后恰好一次调整为 `[0,592,192,720]`，无 gate 超时，关闭后的完整持帧不变；更新窗口与前后目标均不重叠，UI 线程不同于挂起目标并共享实际 capture caller。冻结本机 checker 的八组只读验证全部通过，涵盖 pending、受控 Acquire 错误、寿命、Map、held acquisition、geometry、workarea、fullscreen，包内数据/报告未改。实际 MSVC 19.51.36260.0、SDK 26100、CMake 4.4.5 仅按预装身份记录，年龄不作门禁。该有限托管结果不替代下述本机三次零帧 `missing_environment`、历史无输入三轮结论，不接受全局 GPU/任意窗口竞争/完整输入闭包或 P1；审阅由参考目录 `local/current-desktop-pending-hosted-review-path.txt` 指向，初版外部 reader 的输入路径/清单范围/构建日志前提错误分别保留。
+
 DesktopDupWindow 新增独立首帧异步校正测试：直接调用完整未改 F 原类和同一私有 Rust 后端，不预先调用几何 helper。自有目标 UI 队列在首帧前显式挂起，原正常异步校正请求尚未消费时，要求返回原 192×128 客户区图像；直接释放队列后只等待真实消息完成，要求恰好一次移动，再取校正后的图像并保存两类持帧。挂起目标队列时不能用同一 UI owner 的 timer 提供帧，因此另建同输出、不与校正前后目标重叠的 32×32 更新窗口，记录其实际线程、更新进度、错误与关闭。十秒夹具 gate 失败开放仅用于避免遗留挂起窗口，不构成原生取消能力。原生预热/2000ms 等待/全输出转换后裁剪流程未改；原版仅在验收发布边界 clone 目标，新增工作明确保留。
 
 本机预定三轮均在 `SetForegroundWindow` 被拒绝时停止，尚未进入 gate 或调用任何截图；前台为实际 Codex 进程，没有伪造前台、注入输入或改变系统策略。六次测试/记录调用保留实际非零退出，输入监测整批有效、零 armed 事件，最大间隔 69.7507ms，全部 1,355 项冻结输入及副本重新摘要一致，监听已注销。三次属于 `missing_environment`，不接受首帧/像素或完整 P1；没有通过重跑消除该结果。冻结失败批已封存，由参考目录 `local/current-desktop-pending-development-path.txt` 指向。
@@ -136,7 +140,7 @@ DesktopDupWindow 新增独立首帧异步校正测试：直接调用完整未改
 
 `cargo xtask upstream-trace desktop-pending <外部矩阵> [--check-only]` 复用原有精确几何/完整像素/持帧校核，另校核四十个独立更新 owner 及其与 gate 的真实线程关系。十四组记录控制接受三组、拒绝十一组：实际旧 ScreenDC 记录只读回归、实际新入口缺行拒绝，与明确使用旧像素和合成更新记录的 schema 控制分别标注；合成记录不是 DesktopDupWindow 截图证据。三十组实际 Step 输出控制含原始前台拒绝的 `missing_environment` 分类，四组独立继续及一个真实原类适配器子命令通过；首帧成功摘要在控制中明确为 mock，没有冒充原生结果。选定 release 测试程序/严格 all-target Clippy、默认 release、workspace（库 34 通过/6 忽略、interop 4、xtask 132）与格式均通过；首次测试程序缺少仅 ScreenDC 启用的 activate 方法，以及新增线程交叉校核的 signed/u64 编译错误均保留，修正只在夹具 feature 范围与受检窄化。
 
-CI 已接入独立 adapter/capture/records 三项与确切单测试守卫、广泛入口跳过和完整 pending 目录上传；另在 DesktopDup 组件结束后即时上传 `p1-windows-desktop-dup-diagnostics`，避免等待后续长 manager 矩阵，实际新入口托管执行仍待结果。此前 `9c1cf91` 的 Windows DesktopDup 步骤已于 2026-11-03 14:07:54 UTC 成功结束；这只是原生组件步骤状态，新增 Acquire 矩阵的数据、像素和输入闭包仍需其实际归档，不能从单一步骤状态推算记录计数或完整 P1。
+CI 已接入独立 adapter/capture/records 三项与确切单测试守卫、广泛入口跳过和完整 pending 目录上传；另在 DesktopDup 组件结束后即时上传 `p1-windows-desktop-dup-diagnostics`，避免等待后续长 manager 矩阵，确切 `d537d1a` 的执行及数据复核现见上文。此前 `9c1cf91` 的 Windows DesktopDup 步骤已于 2026-11-03 14:07:54 UTC 成功结束；该较早身份仍只保留原生组件步骤状态，不从单一步骤状态推算记录计数或完整 P1。
 
 职责状态另新增参考目录 `local/current-responsibility-status-path.txt`：在保留历史 106 份来源锚点、58 个待验收案例与原映射的前提下，纠正七处把 Xcode 27.2 正式版缺失列作 CI 阻断的过时说明，补入已封存 DesktopDup 受控错误与 Mac manager 对应记录。`reference responsibilities` 对新映射只读通过；这不是全量当前源码锚点刷新或 native/whole-case 验收。预装工具年龄、RC 身份和最新查询失败继续只作参考，本机在线最新依赖策略另行适用。
 

@@ -2,7 +2,7 @@
 
 基础 `MaaBuffer` helper 新增完整原文件编译和十七项实际原生消费：Debug/Release 各八组 Custom 回归及记录检查通过，新增一百个字符串/780 个图像 owner 的清空、销毁后持有均核对，零桌面截图。选定运行范围为 22/45，其余二十三项 list/rect 仍未验收；三平台 CI 已接入，托管执行及完整 P1 待验证，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
-DesktopDupWindow 首帧异步校正入口已实现；本机三次尝试均因前台授权不足在取帧前停止，零截图，未记为通过。独立原类适配器、记录/编排控制及构建检查通过，真实首帧对照仍待原生 CI；职责记录也已纠正预装 Xcode 版本的七处过时阻断说明，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `d537d1a` 的 DesktopDup 托管组件 61/61，新增首帧异步校正的 80 次公开取帧、160 份完整即时/持帧图像和独立更新 owner/几何记录经独立核对。官方 ZIP/全部日志/可用输入及八组只读数据验证通过，610 项完整输入缺口保留；本机三次前台拒绝仍为零帧 `missing_environment`，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 DesktopDup 的三种受控 Acquire 失败已完成原版/Rust 连续三轮无输入验证：360 次公开调用、480 个旧对象和 480 份即时/持帧目标图像独立核对通过；另含十八次共享钩子的 Map/持帧回归。`ACCESS_LOST` 只作部分清理，恢复保留 device/context/factory；未模拟物理设备故障，托管执行及完整 P1 仍待验收，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
