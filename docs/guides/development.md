@@ -130,6 +130,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+针对确切 `318fc5e` 首帧原版侧第零轮的 `9→11`，现增加 `before-create`、`before-hold`、`first-capture`、`corrected`、`second-capture`、`capture-dropped`、`update-joined`、`both-joined` 八阶段日志，记录实际 cycle/side/caller/GDI 数。边界两项复用已有采样，另外六次查询只用于定位；中间阶段可能仍有 UI 绘制，不当作静止资源证据。原生类、转换/裁剪、预热/等待、取帧/几何/持帧断言、布局二的 323 文件和双方关闭后严格计数相等均未改。日志通过现有独立 CI 用例及完整日志上传收集；新代码已完成选定 release 测试编译、严格选定工作区 all-targets Clippy 与格式检查，尚未宣称实际托管分段结果。
+
+另在独立进程执行三个直接 SDK 控制，分别停在默认 hardware device/context、再建工厂、再枚举并创建真实主输出 duplication；各二十轮，保留与 F 相同的设备/工厂参数，但不执行完整 F 或 Rust 捕获类，没有 `AcquireNextFrame`、UI fixture 或截图。六十次设备创建、120 次实际 device/context 析构通知及 660 行阶段采样独立校核，GDI 始终为零、USER 为创建前/关闭后 `1→1`，原始数据未改。首轮进程句柄分别 `68→222`、`62→216`、`62→216`，不能把有限析构通知或零 GDI 扩大为全部句柄/GPU 资源已释放；本机这些创建步骤未复现托管 GDI 增长，仍不能解释托管 `9→11` 或旧 `13→11`。程序/选定源码在执行前保存摘要，另记录执行后的 421 条编译器输入路径和实际 MSVC/SDK 身份，不声称完整预先冻结或新在线最新解析。控制、来源审阅和编译日志由参考目录 `local/current-dd-creation-resource-observation-path.txt` 指向；没有新的无输入捕获结论，完整 P1 仍待完成。
+
 较早的 DesktopDup 寿命、FramePool 寿命及 DesktopDup 受控 Acquire 错误记录校验器补齐原生位宽：caller/attach/callback 的 `DWORD` 线程身份和 `UINT` callback ID 即使通过 `u64` 观察通道传输，仍须可窄化为 `u32`。根据真实表头的三个前缀列，线程在第 8/9 个零基索引，callback ID 是第 12 列；第 13 列是对象指针，保留非零及 64 位身份，时钟也不窄化。没有添加 opaque callback ID 非零要求，实际捕获、原生观察器、布局及已保存报告均未改。
 
 冻结旧工具对三份真实托管报告及 33 份另目录合成控制执行三十六次只读 CLI：十八份把调用/注册线程、完成线程或 callback ID 一致改成 `2^32` 的数据也被接受。新工具对同一三十六项只读验证，明确拒绝全部十八份越界控制，继续接受三份真实报告、十二份零/最大 UINT 合法边界控制和三份加宽 QPC 控制；合计七十二次调用，原始实际数据及各控制目录前后摘要不变。合法边界是合成数据，不冒称驱动实际返回零或最大 ID。归档离线 lock 与原资源边界开发批一致，xtask release 构建、133 项测试、严格 all-targets Clippy 和格式通过；首次外部准备误引用不存在的主输出根 lock，在构建前停止，随后核对确切已归档 lock。来源/控制及日志由参考目录 `local/current-native-lifetime-width-path.txt` 指向；本批没有原生执行、新在线依赖解析或全部数值字段审计，也不改变历史失败和完整 P1 状态。

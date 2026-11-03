@@ -22,6 +22,15 @@ fn resource_count(adapter: &Adapter) -> Result<u32, Box<dyn Error>> {
         .map_err(|error| format!("GetGuiResources failed: {error}").into())
 }
 
+fn log_resource_stage(cycle: u32, side: &str, stage: &str, objects: u32) {
+    // Intermediate counts may include paint work on either UI owner. Only the
+    // existing before-create/after-both-joins rows are the strict balance gate.
+    eprintln!(
+        "desktop_pending_resource cycle={cycle} side={side} stage={stage} caller={} gdi={objects}",
+        caller_thread()
+    );
+}
+
 fn save(root: &Path, name: &str, image: &Image) -> Result<(), Box<dyn Error>> {
     let mut pixels = OpenOptions::new()
         .write(true)
@@ -227,6 +236,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
             // Both owned UI workers from the preceding side have joined.
             // Sample before starting either renderer, never during timer paint.
             let baseline = resource_count(&adapter)?;
+            log_resource_stage(cycle, side, "before-create", baseline);
             let baseline_caller = caller_thread();
             let mut fixture = adapter.render_fixture(192, 128)?;
             let mut background = adapter.render_fixture(32, 32)?;
@@ -279,6 +289,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
             assert_eq!(visible[3], visible[4], "actual foreground before hold");
             assert_eq!(visible[6], visible[7], "target is visible at its center");
             assert_eq!(visible[8..10], [0, 0], "not cloaked");
+            log_resource_stage(cycle, side, "before-hold", resource_count(&adapter)?);
             let gate = fixture.hold_queue()?;
             let entered = gate.state()?;
             writeln!(records, "{cycle}\t{side}\tentered\t{entered:?}")?;
@@ -327,6 +338,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
             );
             assert_eq!(image.dimensions(), (192, 128));
             assert_eq!(first_nonfixture_pixel(&image), None, "first pending pixels");
+            log_resource_stage(cycle, side, "first-capture", resource_count(&adapter)?);
             let released = gate.release()?;
             writeln!(records, "{cycle}\t{side}\treleased\t{released:?}")?;
             assert_eq!(released[..5], [1, 1, 1, 1, 0]);
@@ -364,6 +376,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
                 0x14,
                 "native NOZORDER/NOACTIVATE flags"
             );
+            log_resource_stage(cycle, side, "corrected", resource_count(&adapter)?);
             fixture.geometry([2, 0, 0, 0, 0, 0])?;
             assert_eq!(adapter.screen_present()?, [1, 0]);
             let final_image = if side == "source" {
@@ -395,16 +408,19 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
                 None,
                 "completed pixels"
             );
+            log_resource_stage(cycle, side, "second-capture", resource_count(&adapter)?);
             let final_geometry = fixture.geometry([0; 6])?;
             writeln!(records, "{cycle}\t{side}\tfinal\t{final_geometry:?}")?;
             assert_eq!(final_geometry[20], completed[20], "no repeated adjustment");
             drop(original);
             drop(capture);
+            log_resource_stage(cycle, side, "capture-dropped", resource_count(&adapter)?);
             let update_after = background.desktop_update_info()?;
             assert_eq!(update_after[0], update_before[0]);
             assert!(update_after[1] > update_before[1] && update_after[2] == 0);
             writeln!(updates, "{cycle}\t{side}\tafter\t{update_after:?}")?;
             background.close()?;
+            log_resource_stage(cycle, side, "update-joined", resource_count(&adapter)?);
             writeln!(updates, "{cycle}\t{side}\tclosed\t[1]")?;
             updates.flush()?;
             fixture.close()?;
@@ -413,6 +429,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
             let target_valid = SystemWindow.valid(target_window);
             let update_valid = SystemWindow.valid(update_window);
             let objects = resource_count(&adapter)?;
+            log_resource_stage(cycle, side, "both-joined", objects);
             writeln!(
                 resources,
                 "{cycle}\t{side}\tclosed\t{:?}",
