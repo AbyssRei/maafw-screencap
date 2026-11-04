@@ -163,10 +163,7 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64, complete: b
     writeln!(calls, "0\t{}\t{}", connected[0], connected[1])?;
     calls.flush()?;
     let selected = if complete && side == "source" {
-        // Complete original class has no winner-observation hook. A single
-        // known method bit binds its configuration; it is explicitly labelled
-        // as such, never presented as an observed mixed-method winner.
-        if method == 64 { 0 } else { method }
+        inspector.as_mut().unwrap().selected(1, unit)?
     } else if let Some(host) = &host {
         host.selected()
     } else {
@@ -179,6 +176,9 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64, complete: b
     };
     let mut image = ops.image();
     let captured = outcome(boundary.capture(&mut loader, &view, &mut image))?;
+    if let Some(inspector) = &mut inspector {
+        assert_eq!(inspector.selected(2, unit)?, selected);
+    }
     record(&mut states, 6)?;
     writeln!(calls, "1\t{}\t{}", captured[0], captured[1])?;
     calls.flush()?;
@@ -205,6 +205,7 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64, complete: b
     writeln!(calls, "2\t{}\t{}", inactive[0], inactive[1])?;
     calls.flush()?;
     if let Some(mut inspector) = inspector.take() {
+        assert_eq!(inspector.selected(3, unit)?, selected);
         inspector.finish(unit)?;
     }
     drop(view);
@@ -267,7 +268,6 @@ fn run(complete: bool) -> Result<()> {
     ));
     assert!([1, 2, 4].contains(&dpi));
     assert!([0, 1, 2, 4, 8, 16, 32, 63, 64].contains(&method));
-    assert!(!complete || method != 63);
     if let Ok(side) = std::env::var("MFS_DELEGATE_CONTEXT_SIDE") {
         child(&root, &side, &mode, dpi, method, complete)?;
         println!("Win32 host child side={side} mode={mode} dpi={dpi} method={method} completed");
@@ -311,7 +311,7 @@ fn run(complete: bool) -> Result<()> {
     }
     if complete {
         println!(
-            "Win32 whole host processes mode={mode} dpi={dpi} method={method} sides=2 original_class_api=1 input_none=1 completed; independent records required"
+            "Win32 whole host processes mode={mode} dpi={dpi} method={method} sides=2 original_class_api=1 selection_observer=1 input_none=1 completed; independent records required"
         );
     } else {
         println!(

@@ -52,7 +52,6 @@ fn run_variant(args: &[String], complete: bool) -> Result<()> {
     let method: i64 = mask.parse()?;
     let dpi: i64 = dpi.parse()?;
     if ![0, 1, 2, 4, 8, 16, 32, 63, 64].contains(&method)
-        || complete && method == 63
         || ![1, 2, 4].contains(&dpi)
         || !matches!(
             mode.as_str(),
@@ -62,6 +61,10 @@ fn run_variant(args: &[String], complete: bool) -> Result<()> {
         return Err("Unknown host-context case".into());
     }
     let root = records::external_root(Path::new(path))?;
+    let observed_selection = complete && root.join("source/whole-source-selected.tsv").is_file();
+    if complete && method == 63 && !observed_selection {
+        return Err("Mixed complete-class method requires native winner observations".into());
+    }
     let mut artifacts = Vec::new();
     let mut observations = Vec::new();
     let mut previous = None;
@@ -251,11 +254,37 @@ fn run_variant(args: &[String], complete: bool) -> Result<()> {
                     return Err("Complete original Win32 class or exclusion counters differ".into());
                 }
             }
+            let configuration = if observed_selection {
+                let selection = table(&directory.join("whole-source-selected.tsv"), 4, 6)?;
+                let pointer = selection[1][4];
+                for (stage, row) in selection.iter().enumerate() {
+                    u32::try_from(row[5])?;
+                    usize::try_from(row[4])?;
+                    if row[..3] != [i64::try_from(stage)?, 0x4d465353, 1]
+                        || row[5] != caller
+                        || row[3] != if stage == 0 { 0 } else { selected }
+                        || row[4] != if stage == 0 { 0 } else { pointer }
+                        || (row[3] == 0) != (row[4] == 0)
+                        || row[4] % 8 != 0
+                    {
+                        return Err("Original selected backend/type/pointer/thread changed".into());
+                    }
+                }
+                artifacts.push(records::artifact(
+                    &root,
+                    &directory.join("whole-source-selected.tsv"),
+                )?);
+                format!(
+                    "configured_mask={method}\nselection_observer=1\noriginal_class_api=1\ninput_none=1\n"
+                )
+            } else {
+                format!(
+                    "single_method_mask={method}\nselection_observer=0\noriginal_class_api=1\ninput_none=1\n"
+                )
+            };
             if types[0][1..] != types[1][1..]
                 || fs::read_to_string(directory.join("whole-source-selection.txt"))?
-                    != format!(
-                        "single_method_mask={method}\nselection_observer=0\noriginal_class_api=1\ninput_none=1\n"
-                    )
+                    != configuration
             {
                 return Err("Original whole-class configuration evidence differs".into());
             }
@@ -289,6 +318,12 @@ fn run_variant(args: &[String], complete: bool) -> Result<()> {
         report["source_selection_evidence"] =
             "single_method_configuration_not_winner_observation".into();
         report["scope"] = "Fresh same-binary source/Rust processes consume the complete unchanged original F Win32ControlUnitMgr and API translation units/headers with Input=None, six actual capture backends and complete actual BackgroundManagedKeyInput, versus the same private Rust manager/factory. Native RTTI matches the actual original class, excluded non-None input/application boundaries are never invoked, fourteen COM/DPI snapshots and complete known/held images match. Source single-bit selection is configuration evidence; no actual mixed-method winner observer is claimed. No original input/application action support, compatible macro, physical mixed DPI, producer/drain or full P1 acceptance.".into();
+        if observed_selection {
+            report["layout_version"] = 2.into();
+            report["source_selection_evidence"] = "actual_owned_backend_RTTI_and_pointer".into();
+            report["source_selection_observations"] = 4.into();
+            report["scope"]="Complete unchanged original F Win32 class/header/API and actual six capture methods/empty BackgroundManagedKeyInput versus the same Rust manager/factory, Input=None. A native typed member pointer borrows the original owned backend at four serialized boundaries; exact dynamic type and identity are observed without copying its owner, changing original code or calling/pumping native capture. Cold owner is empty; connected/captured/inactive owner and selected type agree with saved full-target/held bytes. Mixed-mask winners may differ with actual measured timings in fresh processes; each winner must belong to its configured mask. Native RTTI/exclusion counters and fourteen COM/DPI snapshots remain required. No input/application actions, compatible macro, physical mixed DPI, producer/drain or full P1 acceptance.".into();
+        }
         root.join("manager-whole-host-context-validation.json")
     } else {
         root.join("manager-host-context-validation.json")

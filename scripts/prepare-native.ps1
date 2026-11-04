@@ -727,10 +727,10 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             & $ConfigureTool upstream-delegate win32-destroy $env:MFS_DELEGATE_DESTROY_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual consumed-object cleanup records failed independent verification'}
         }
-        if($Name -match '^manager-whole-host-context-(uninitialized|mta|mta-dispatcher|sta)-(1|2|4)-(0|1|2|4|8|16|32|64)$' -and $exitCode -eq 0) {
+        if($Name -match '^manager-whole-host-context-(uninitialized|mta|mta-dispatcher|sta)-(1|2|4)-(0|1|2|4|8|16|32|63|64)$' -and $exitCode -eq 0) {
             $contextMode=$Matches[1];$contextDpi=$Matches[2];$contextMask=$Matches[3]
             $observed=Get-Content -LiteralPath $logPath -Raw
-            $summary="Win32 whole host processes mode=$contextMode dpi=$contextDpi method=$contextMask sides=2 original_class_api=1 input_none=1 completed; independent records required"
+            $summary="Win32 whole host processes mode=$contextMode dpi=$contextDpi method=$contextMask sides=2 original_class_api=1 selection_observer=1 input_none=1 completed; independent records required"
             if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
                [regex]::Matches($observed,'(?m)^Win32 whole host processes.*\r?$').Count -ne 1 -or
                [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
@@ -1765,7 +1765,7 @@ try {
             catch {$failed=$true;Write-Host $_.Exception.Message}
             foreach($wholeContextMode in @('uninitialized','mta','mta-dispatcher','sta')) {
                 foreach($wholeContextDpi in @(1,2,4)) {
-                    foreach($wholeContextMask in @(0,1,2,4,8,16,32,64)) {
+                    foreach($wholeContextMask in @(0,1,2,4,8,16,32,63,64)) {
                         $env:MFS_DELEGATE_CONTEXT_MODE=$wholeContextMode
                         $env:MFS_DELEGATE_CONTEXT_DPI=[string]$wholeContextDpi
                         $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$wholeContextMask

@@ -1,7 +1,8 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Nonowning diagnostics on a live original class, with an independent code
-// lease ending before the original unit/loader. No class-layout field access.
+// lease ending before the original unit/loader. Native diagnostics use typed
+// member access; Rust never assumes class layout or retains a native field.
 use super::*;
 use std::ffi::{CStr, c_char};
 type Inspect = unsafe extern "C" fn(*mut c_void, *mut u64, usize) -> i32;
@@ -41,6 +42,25 @@ impl Probe {
         assert!(values[5] >= 8 && values[6] == 8);
         assert_eq!(
             values[7],
+            u64::from(crate::platform::windows::manager::probe::thread())
+        );
+        values
+    }
+    pub(super) fn selected(&self, unit: NonNull<c_void>) -> [u64; 5] {
+        // SAFETY: Exact private declaration in the retained diagnostic module.
+        let selected: Inspect = unsafe { self._module.symbol(c"mfs_whole_selected").unwrap() };
+        let mut values = [0_u64; 5];
+        // SAFETY: Caller keeps this unit alive, serializes native operations,
+        // and supplies five initialized outputs; no native owner is retained.
+        assert_eq!(
+            unsafe { selected(unit.as_ptr(), values.as_mut_ptr(), values.len()) },
+            0
+        );
+        assert_eq!(&values[..2], &[0x4d465353, 1]);
+        assert!([0, 1, 2, 4, 8, 16, 32].contains(&values[2]));
+        assert_eq!(values[2] == 0, values[3] == 0);
+        assert_eq!(
+            values[4],
             u64::from(crate::platform::windows::manager::probe::thread())
         );
         values
