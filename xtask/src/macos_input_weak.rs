@@ -1,7 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Weak observations of actual submitted native objects, separate from Blocks.
-use super::{Event, LateObservation};
+use super::{BlockLeaseObservation, Event, LateObservation};
 use crate::Result;
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -75,6 +75,7 @@ pub(super) fn analyze(
     text: &str,
     events: &[Event],
     late: &[LateObservation],
+    blocks: &[BlockLeaseObservation],
 ) -> Result<Option<Analysis>> {
     let mut registrations = BTreeMap::new();
     let mut phases: Vec<Phase> = Vec::new();
@@ -187,9 +188,29 @@ pub(super) fn analyze(
         {
             return Err("native input weak registration channel differs".into());
         }
+        if events.iter().any(|e| {
+            e.request == request && e.stage == "sample_callback" && row.end_ns > e.monotonic_ns
+        }) {
+            return Err("native input weak registration followed its native callback".into());
+        }
     }
     if phases.len() != late.len() {
         return Err("native input weak late phase coverage differs".into());
+    }
+    if let [begin, end] = phases.as_slice() {
+        let origin = blocks.first().map_or(late[0].monotonic_ns, |block| {
+            block.monotonic_ns.max(late[0].monotonic_ns)
+        });
+        let unresolved = late[1].pending != 0
+            || late[1].semaphore_pending != 0
+            || blocks.last().is_some_and(|block| block.live != 0);
+        let elapsed = end
+            .begin_ns
+            .checked_sub(origin)
+            .ok_or("native input weak end query preceded its observation window")?;
+        if end.begin_ns < begin.end_ns || (unresolved && elapsed < late[1].budget_ns) {
+            return Err("native input weak end query overlapped or ended before its budget".into());
+        }
     }
     let mut previous: BTreeMap<_, _> = registrations
         .iter()
@@ -297,24 +318,31 @@ mod tests {
     #[test]
     fn accepts_observed_release_or_retention_without_inventing_disposal() {
         let text = fixture();
-        let first = analyze(&text, &[source()], &callbacks()).unwrap().unwrap();
+        let first = analyze(&text, &[source()], &callbacks(), &[])
+            .unwrap()
+            .unwrap();
         assert_eq!(first.late[1].rows[0].filter, 0);
         let retained = text.replace("filter=0 config=0", "filter=4096 config=8192");
         assert_ne!(
-            analyze(&retained, &[source()], &callbacks())
+            analyze(&retained, &[source()], &callbacks(), &[])
                 .unwrap()
                 .unwrap(),
             first
         );
         assert!(
-            analyze("historical data", &[source()], &[])
+            analyze("historical data", &[source()], &[], &[])
                 .unwrap()
                 .is_none()
         );
         assert!(
-            analyze(&row("registered", 20, 30, 4096, 8192, 9), &[source()], &[])
-                .unwrap()
-                .is_some()
+            analyze(
+                &row("registered", 20, 30, 4096, 8192, 9),
+                &[source()],
+                &[],
+                &[]
+            )
+            .unwrap()
+            .is_some()
         );
     }
     #[test]
@@ -346,11 +374,70 @@ mod tests {
             ),
         ] {
             assert!(
-                analyze(&bad, &[source()], &callbacks()).is_err(),
+                analyze(&bad, &[source()], &callbacks(), &[]).is_err(),
                 "accepted {bad}"
             );
         }
-        assert!(analyze(&good, &[], &callbacks()).is_err());
-        assert!(analyze(&good, &[source()], &callbacks()[..1]).is_err());
+        assert!(analyze(&good, &[], &callbacks(), &[]).is_err());
+        assert!(analyze(&good, &[source()], &callbacks()[..1], &[]).is_err());
+    }
+    #[test]
+    fn refuses_reordered_or_early_end_queries_and_registration_after_callback() {
+        let good = fixture();
+        let overlapping = good
+            .replace(
+                "begin_ns=15000000100 end_ns=15000000180",
+                "begin_ns=50 end_ns=80",
+            )
+            .replace(
+                "begin_ns=15000000120 end_ns=15000000140",
+                "begin_ns=60 end_ns=70",
+            );
+        let early = good
+            .replace(
+                "begin_ns=15000000100 end_ns=15000000180",
+                "begin_ns=110 end_ns=180",
+            )
+            .replace(
+                "begin_ns=15000000120 end_ns=15000000140",
+                "begin_ns=120 end_ns=140",
+            );
+        for text in [&overlapping, &early] {
+            assert!(analyze(text, &[source()], &callbacks(), &[]).is_err());
+        }
+        let mut completed = callbacks();
+        completed[1].pending = 0;
+        completed[1].semaphore_pending = 0;
+        assert!(analyze(&early, &[source()], &completed, &[]).is_ok());
+        let blocks = [
+            BlockLeaseObservation {
+                phase: "begin".into(),
+                monotonic_ns: 101,
+                thread: 7,
+                acquired: 6,
+                released: 5,
+                live: 1,
+                budget_ns: 15_000_000_000,
+            },
+            BlockLeaseObservation {
+                phase: "end".into(),
+                monotonic_ns: 15_000_000_201,
+                thread: 7,
+                acquired: 6,
+                released: 5,
+                live: 1,
+                budget_ns: 15_000_000_000,
+            },
+        ];
+        assert!(analyze(&early, &[source()], &completed, &blocks).is_err());
+        let full_budget = good.replace(
+            "begin_ns=15000000100 end_ns=15000000180",
+            "begin_ns=15000000101 end_ns=15000000180",
+        );
+        assert!(analyze(&full_budget, &[source()], &completed, &blocks).is_ok());
+        let mut callback = source();
+        callback.stage = "sample_callback".into();
+        callback.monotonic_ns = 25;
+        assert!(analyze(&good, &[source(), callback], &callbacks(), &[]).is_err());
     }
 }

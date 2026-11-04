@@ -322,7 +322,8 @@ fn analyze(text: &str) -> Result<Summary> {
     }
     let late_observations = late_observations(text)?;
     let block_lease_observations = block_lease_observations(text, &late_observations)?;
-    let input_weak_observations = input_weak::analyze(text, &events, &late_observations)?;
+    let input_weak_observations =
+        input_weak::analyze(text, &events, &late_observations, &block_lease_observations)?;
     let mut summary = Summary {
         events,
         content_submissions: 0,
