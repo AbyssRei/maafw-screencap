@@ -66,17 +66,30 @@ void completion_inputs() {
 }
 void input_weak_control() {
     MfsMacObserve::InputWeakRegistry registry;
+    const auto trace=[](const char* stage,uint64_t request,const MfsMacObserve::InputWeakSnapshot& row,int64_t count) {
+        std::cout<<"macOS native input weak stage="<<stage<<" request="<<request
+            <<" row_request="<<row.request<<" registered_filter="<<row.registered_filter
+            <<" registered_config="<<row.registered_config<<" filter="<<row.filter
+            <<" config="<<row.config<<" valid="<<row.valid<<" begin_ns="<<row.begin_ns
+            <<" end_ns="<<row.end_ns<<" thread_error="<<row.thread_error
+            <<" registry_count="<<count<<" deallocated="<<mfs_completion_deallocated.load()<<std::endl;
+    };
     for(uint64_t request=1;request<=2;++request) {
         auto* filter=[MfsCompletionOwnerProbe new];auto* config=[MfsCompletionOwnerProbe new];
         const auto first=registry.bind(request,filter,config);
+        trace("bound",request,first,-1); // This boundary has no registry-count query.
         require(first.valid && first.filter==first.registered_filter && first.config==first.registered_config
             && first.filter!=0 && first.config!=0 && first.begin_ns<=first.end_ns && first.thread_error==0);
         auto* filter_alias=[filter retain];auto* config_alias=[config retain];
         std::thread worker([filter,config] {[filter release];[config release];});worker.join();
-        auto held=registry.snapshot();require(held.valid && held.count==request);
+        auto held=registry.snapshot();
+        trace("originals_released",request,held.rows[request-1],held.count);
+        require(held.valid && held.count==request);
         require(held.rows[request-1].filter==first.filter && held.rows[request-1].config==first.config);
         [filter_alias release];[config_alias release];
-        auto released=registry.snapshot();require(released.valid && released.count==request);
+        auto released=registry.snapshot();
+        trace("aliases_released",request,released.rows[request-1],released.count);
+        require(released.valid && released.count==request);
         for(unsigned i=0;i<released.count;++i) {require(!released.rows[i].filter && !released.rows[i].config);}
     }
     std::cout<<"macOS native input weak control pairs=2 objects=4 joined_worker_releases=4 alias_keeps_live=2 zero_after_final_release=4 native_capture=0 passed\n";

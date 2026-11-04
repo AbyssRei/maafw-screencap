@@ -1,0 +1,32 @@
+name: Native macOS Foundation ownership control
+
+on:
+  push:
+    branches: ['**']
+    paths:
+      - '.github/workflows/macos-foundation.yml'
+      - 'scripts/check-macos-foundation.ps1'
+      - 'tests/upstream-parity/macos-screencap/block-lease-control.mm'
+      - 'tests/upstream-parity/macos-screencap/callback-ledger.hpp'
+      - 'tests/upstream-parity/macos-screencap/input-weak-observer.hpp'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v7
+      - name: Compile and run the native Foundation and Blocks control
+        shell: pwsh
+        run: ./scripts/check-macos-foundation.ps1
+      - name: Upload native control evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p1-macos-foundation-diagnostics
+          path: ../maafw-screencap-reference/runs/p1-macos-foundation-*/**
+          if-no-files-found: error
+          retention-days: 90
