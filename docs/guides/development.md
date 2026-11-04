@@ -140,6 +140,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+新增完整客户区 `client-band` 场景现已沿原版完整 Gamepad manager/C 工厂、捕获范围 Win32 facade、实际 DLL/后端虚调用，以及同一 Rust GamepadCapture/Native/manager 路径配对运行。复用既有运行体，原默认场景保留；可选场景以原生窗口非客户区容纳六像素边带，完整客户区仍为 96×64。它沿用六种方法、测速/选择、等待/回放、转换、三次取帧、受控宿主重连失败和模块关闭后的持帧断言；不新增隐私 setter、目标 inset、遮罩或容差。每侧每配置另记录 120 组公开 connect/capture/reconnect/inactive 的前后外矩形、客户区及屏幕原点。查询在调用方直接读取 Win32 几何，不处理/排空 UI 消息，也不构成原子快照、调用期间观察、style 稳定或隐私 getter 证明。
+
+本机单方法 1/2/4/8/16/32 与混合 63 完成有效连续三轮，21 次原生测试均通过，包含 840 个两侧 manager 生命周期和 2,520 次显式公开取帧。独立 reader 与 Python 复算 5,040 份完整即时/持帧文件、30,965,760 个已知目标像素位置、2,520 对完整持帧字节及 5,040 组几何边界；DesktopDup 保留整屏原输出，仅自有完整客户区有已知颜色 oracle，其他桌面像素继续核对完整 span 和持帧字节。四路鼠标/键盘监听记录零输入，最大观察间隔 81.8902ms，观察线程返回、全部注销及 22,292 行日志写入/线程 join 均验证；1,830 份程序、实际原生编译/链接及源码输入冻结并复核，未声称新的物理输入正向控制。
+
+本机原始 42 步控制器保留二十一项记录步骤失败：外部编排在基础 verifier JSON 尚未生成时先传 `--check-only`，原始 Win32 像素检查通过后因所需报告不存在而失败。后续按正常生成、再只读校验的顺序复算全部二十一份同批记录，原始图像/日志字节未变，没有重跑取帧或把原控制器失败写成通过。严格 reader 另以一份明确标注的合成几何/历史像素组合控制通过、十四份边缘/几何/次序/范围/缺失/host 记录破坏拒收，并保持两份旧报告不变；十三项实际 Step mock 为两通过/十一拒收，均继续独立后续步骤。默认工作区 36+4+148 项测试、相关测试编译、严格 Clippy、Release 和格式检查通过；本轮使用归档离线依赖，nightly 已检查更新，未声明新的在线原生依赖解析。
+
+`cargo xtask upstream-parity manager` 保留旧场景全部 63 种方法组合，并另行编排新场景全部 63 种组合，逐项保留失败并继续；CI 单独上传新目录。`cargo xtask upstream-delegate gamepad-client-band-runtime <mask> <external records>` 先执行全部旧像素、owner、native/宿主事件校验，再校验新几何并生成独立报告；保存报告齐备后可加 `--check-only`。外部 `local/current-manager-client-band-development-path.txt` 指向该批材料；本机七种配置不等于全部 63 种托管验收。旧场景及其失败保持，原生生产者/会话 drain、其他窗口/环境矩阵和完整 P1 仍待验收。
+
 确切 `ff3ccda` 的独立 [Actions 41859109236](https://github.com/AbyssRei/maafw-screencap/actions/runs/41859109236) 在全新 Windows 桌面执行 FramePool 组件。新增 `client-band` 两项检查通过：独立复算全部 27 张完整 96×64 BGR/165,888 像素、十二次准备几何及 54 次调用边界观测，真实六像素非客户区边带与客户区工作区位置均匹配，没有目标 inset、遮罩或容差。实际默认 getter 和额外 true setter 后的 getter 均为 true，未增加 false setter；本批 extended style 始终为 8，未观察到本机的 8→0 变化。不据此确定边缘像素生产者或接受 Rust/完整 manager 的新场景对照。
 
 该组件实际为 116 项、110 通过/六失败：全新在线准备比旧共享离线组件多二十二项、少五项 replay，另增加两项新场景，不能假定总数仍为 99。四项原版 pseudo 失败仍为完整黑图；Rust alpha 序列及其 pair reader 新失败。实际失败位于持续会话 phase 2（alpha=255）：等待 2.000461 秒，792 次 poll 未取到帧，记录回放黑图、零转换/一次 clone、无该阶段 raw，6144 个目标像素均为零；同阶段原版结果和独立 PrintWindow 内容见证符合完整已知图样。原生关闭及二十张 Rust 持帧文件已写完后，测试在 `positive_controls` 断言失败。保存图像确认这次 alpha-sequence 差异，不能混同旧 alpha-poll 失败或推断原因；本批 alpha-poll 另通过。

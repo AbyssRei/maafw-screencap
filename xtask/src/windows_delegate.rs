@@ -64,6 +64,12 @@ pub(crate) fn verify_runtime(args: &[String]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args
+        .first()
+        .is_some_and(|arg| arg == "gamepad-client-band-runtime")
+    {
+        return crate::manager_client_band::run(&args[1..]);
+    }
     if args.first().is_some_and(|arg| arg == "gamepad-metadata") {
         return crate::gamepad_metadata::run(&args[1..]);
     }

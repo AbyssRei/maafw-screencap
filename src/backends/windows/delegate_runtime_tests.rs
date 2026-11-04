@@ -7,6 +7,9 @@ use crate::platform::windows::window_api::{Point, SystemWindow, WindowApi};
 use crate::test_support::windows_capture_host::{HostDispatcher, HostInitialization, host as com};
 use std::fmt::Write;
 
+#[path = "delegate_runtime_band_tests.rs"]
+mod band;
+
 fn geometry(window: *mut c_void, selected: u64) -> Result<[i32; 4], Box<dyn std::error::Error>> {
     let output = if selected == 4 {
         let monitor = SystemWindow
@@ -67,6 +70,17 @@ fn pixels(image: &Image, scope: [i32; 4]) -> bool {
 #[ignore = "explicit isolated real source/Rust native factory capture; requires renderer and current desktop"]
 fn captures_selected_method_through_original_and_rust_factories()
 -> Result<(), Box<dyn std::error::Error>> {
+    run(false)
+}
+
+#[test]
+#[ignore = "explicit separate complete-client nonclient-band source/Rust manager matrix"]
+fn captures_complete_client_band_through_original_and_rust_factories()
+-> Result<(), Box<dyn std::error::Error>> {
+    run(true)
+}
+
+fn run(client_band: bool) -> Result<(), Box<dyn std::error::Error>> {
     let method: u64 = std::env::var("MFS_DELEGATE_CAPTURE_METHOD")?.parse()?;
     // Exercise every nonempty subset of the six original method bits. Native
     // timing may choose different winners on each side; validate each output
@@ -97,16 +111,18 @@ fn captures_selected_method_through_original_and_rust_factories()
         build.join("mfs_delegate_rust.dll"),
         rust.join("MaaWin32ControlUnit.dll"),
     )?;
-    let output = std::process::Command::new(build.join("mfs_delegate_runtime_source.exe"))
-        .current_dir(&root)
-        .args([
-            source.as_os_str(),
-            renderer.as_os_str(),
-            source.as_os_str(),
-            std::ffi::OsStr::new(&method.to_string()),
-            std::ffi::OsStr::new("20"),
-        ])
-        .output()?;
+    let mut command = std::process::Command::new(build.join("mfs_delegate_runtime_source.exe"));
+    command.current_dir(&root).args([
+        source.as_os_str(),
+        renderer.as_os_str(),
+        source.as_os_str(),
+        std::ffi::OsStr::new(&method.to_string()),
+        std::ffi::OsStr::new("20"),
+    ]);
+    if client_band {
+        command.arg("client-band");
+    }
+    let output = command.output()?;
     std::fs::write(root.join("source.stdout"), &output.stdout)?;
     std::fs::write(root.join("source.stderr"), &output.stderr)?;
     let source_passed = output.status.success();
@@ -136,6 +152,11 @@ fn captures_selected_method_through_original_and_rust_factories()
     let owners_before = adapter.image_owners()?;
     let objects_before = adapter.objects();
     let mut fixture = adapter.render_fixture(96, 64)?;
+    let mut band = if client_band {
+        Some(band::Band::prepare(&fixture, &rust)?)
+    } else {
+        None
+    };
     let ui = fixture.thread_info()?;
     if method & 12 != 0 {
         fixture.start_desktop_updates()?;
@@ -155,9 +176,16 @@ fn captures_selected_method_through_original_and_rust_factories()
             method,
         );
         assert!(!capture.connected());
+        let before = band
+            .as_ref()
+            .map(|_| band::snapshot(fixture.hwnd()))
+            .transpose()?;
         let initialized = capture
             .connect()
             .map_err(|error| format!("Rust runtime init {error:?}"))?;
+        if let (Some(band), Some(before)) = (&mut band, before) {
+            band.record(fixture.hwnd(), cycle, 0, before)?;
+        }
         if !initialized || !capture.connected() {
             return Err(format!(
                 "Rust runtime initialization false: {initialized:?}; source_passed={source_passed}"
@@ -171,26 +199,47 @@ fn captures_selected_method_through_original_and_rust_factories()
             if shot == 1 {
                 let mode = u32::try_from(cycle % 3 + 1).unwrap();
                 gamepad.mode(mode);
+                let before = band
+                    .as_ref()
+                    .map(|_| band::snapshot(fixture.hwnd()))
+                    .transpose()?;
                 let result = match capture.connect() {
                     Ok(value) => i32::from(value),
                     Err(GamepadError::Host(_)) => 2,
                     Err(error) => return Err(format!("unexpected capture init {error:?}").into()),
                 };
+                if let (Some(band), Some(before)) = (&mut band, before) {
+                    band.record(fixture.hwnd(), cycle, 2, before)?;
+                }
                 assert_eq!(result, if mode == 1 { 0 } else { 2 });
                 assert!(!capture.connected());
             }
             let mut image = ops.image();
+            let before = band
+                .as_ref()
+                .map(|_| band::snapshot(fixture.hwnd()))
+                .transpose()?;
             if !capture
                 .capture(&mut image)
                 .map_err(|error| format!("Rust runtime capture {error:?}"))?
             {
                 return Err("Rust runtime capture false".into());
             }
+            if let (Some(band), Some(before)) = (&mut band, before) {
+                band.record(fixture.hwnd(), cycle, [1, 3, 4][shot], before)?;
+            }
             std::fs::write(rust.join(format!("rust-{cycle}-{shot}.bgr")), image.bytes())?;
             mismatch |= !pixels(&image, scope);
             held.push((image, scope));
         }
+        let before = band
+            .as_ref()
+            .map(|_| band::snapshot(fixture.hwnd()))
+            .transpose()?;
         assert_eq!(capture.inactive(), Ok(true));
+        if let (Some(band), Some(before)) = (&mut band, before) {
+            band.record(fixture.hwnd(), cycle, 5, before)?;
+        }
         drop(capture);
         let unloaded = !library::loaded(&rust.join("MaaWin32ControlUnit.dll"));
         assert!(unloaded);
@@ -208,6 +257,7 @@ fn captures_selected_method_through_original_and_rust_factories()
     }
     assert!(gamepad.closed());
     gamepad.save()?;
+    let band_valid = band.map(band::Band::finish).transpose()?.unwrap_or(true);
     fixture.close()?;
     drop(fixture);
     let objects_after = adapter.objects();
@@ -248,7 +298,7 @@ fn captures_selected_method_through_original_and_rust_factories()
             ui[1]
         ),
     )?;
-    if !source_passed || mismatch {
+    if !source_passed || mismatch || !band_valid {
         return Err(format!(
             "runtime method={method} failed: source_passed={source_passed}, Rust_known_pixels={}",
             !mismatch
@@ -261,5 +311,10 @@ fn captures_selected_method_through_original_and_rust_factories()
     println!(
         "Gamepad native outer method={method} cycles_per_side=20 failed_reconnects_per_side=20 original_class_api=1 same_Rust_delegate=1 input_actions=0 full_P1_acceptance=0 passed"
     );
+    if client_band {
+        println!(
+            "Manager client band method={method} full_client=96x64 nonclient_band=6 boundary_rows_per_side=120 target_inset=0 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }
