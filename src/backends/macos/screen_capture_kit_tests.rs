@@ -439,23 +439,16 @@ fn drained(trace: &Trace, sample: bool) {
 }
 fn bgr(bytes: &[u8]) {
     assert_eq!(bytes.len(), 47 * 31 * 3);
-    for y in 2..29 {
-        for x in 2..45 {
-            assert_eq!(&bytes[(y * 47 + x) * 3..(y * 47 + x + 1) * 3], &[0, 255, 0]);
-        }
+    for pixel in bytes.as_chunks::<3>().0 {
+        assert_eq!(pixel, &[0, 255, 0]);
     }
 }
 fn raw(sample: &Sample) {
     assert_eq!((sample.width, sample.height), (47, 31));
     assert!(sample.native_stride >= 47 * 4);
     assert_eq!(sample.pixels().len(), 47 * 31 * 4);
-    for y in 2..29 {
-        for x in 2..45 {
-            assert_eq!(
-                &sample.pixels()[(y * 47 + x) * 4..(y * 47 + x + 1) * 4],
-                &[0, 255, 0, 255]
-            );
-        }
+    for pixel in sample.pixels().as_chunks::<4>().0 {
+        assert_eq!(pixel, &[0, 255, 0, 255]);
     }
 }
 fn warm_capture(adapter: &Arc<Adapter>) {

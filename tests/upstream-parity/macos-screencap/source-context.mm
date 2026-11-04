@@ -95,10 +95,10 @@ void pixels(const cv::Mat& image,int colour) {
     require(image.type()==CV_8UC3 && image.cols==width && image.rows==height,
         "original macOS controlled-window layout mismatch");
     const std::array<cv::Vec3b,3> expected={cv::Vec3b(0,255,0),cv::Vec3b(0,0,255),cv::Vec3b(255,0,0)};
-    // Match the explicit P0 fixture premise: edge geometry is separately pending.
-    for(int y=2;y<height-2;++y) { for(int x=2;x<width-2;++x) {
+    // This owned, borderless fixture defines every target pixel, including edges.
+    for(int y=0;y<height;++y) { for(int x=0;x<width;++x) {
         require(image.at<cv::Vec3b>(y,x)==expected[static_cast<size_t>(colour%3)],
-            "original macOS known interior pixel mismatch");
+            "original macOS known target pixel mismatch");
     } }
 }
 void save(const cv::Mat& image,const std::filesystem::path& path) {
