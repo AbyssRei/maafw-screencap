@@ -14,7 +14,8 @@ typedef struct MfsPrintFixture {
 } MfsPrintFixture;
 // Acceptance fixture only: disable DWM transitions before first visibility.
 // Existing PrintWindow modes 0/1/2 retain their original setup. This flag is
-// restricted to the no-popup top-level ScreenDC scene, never product capture.
+// reserved for selected top-level acceptance fixtures without an owned popup.
+// It is not a product capture option.
 #define MFS_RENDER_DISABLE_TRANSITIONS 0x100u
 // Independent visible-scene fixture premise; does not grant foreground rights.
 #define MFS_RENDER_TOPMOST 0x200u

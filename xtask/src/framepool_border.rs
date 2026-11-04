@@ -77,8 +77,12 @@ fn summary(text: &str) -> Result<BTreeMap<String, u64>> {
             return Err("Duplicate border summary field".into());
         }
     }
+    let schema = *result.get("schema").ok_or("Missing border schema")?;
+    if !matches!(schema, 1 | 2) {
+        return Err("Unknown border observation schema".into());
+    }
     let mut expected = BTreeMap::from([
-        ("schema".into(), 1),
+        ("schema".into(), schema),
         ("shots".into(), 27),
         ("closed_windows".into(), 4),
         ("dispatcher_completed".into(), 1),
@@ -93,6 +97,17 @@ fn summary(text: &str) -> Result<BTreeMap<String, u64>> {
         ("full_P1_acceptance".into(), 0),
         ("cv_8u".into(), 0),
     ]);
+    if schema == 2 {
+        let case = *result
+            .get("fixture_case")
+            .ok_or("Missing matched border fixture case")?;
+        if case > 1 {
+            return Err("Unknown matched border fixture case".into());
+        }
+        expected.insert("fixture_case".into(), case);
+        expected.insert("fixture_geometry_calls".into(), 12);
+        expected.insert("fixture_boundary_observations".into(), 54);
+    }
     for field in ["qpc_frequency", "cv_cn_shift", "cv_8uc3"] {
         expected.insert(
             field.into(),
@@ -207,7 +222,155 @@ fn owners_and_drivers(
     Ok(())
 }
 
-fn inventory(root: &Path) -> Result<()> {
+fn signed_numbers(text: &str) -> Result<Vec<Vec<i64>>> {
+    text.lines()
+        .map(|line| {
+            line.split('\t')
+                .map(|field| {
+                    let value = field.parse::<i64>()?;
+                    if value.to_string() != field {
+                        return Err("Noncanonical matched fixture geometry".into());
+                    }
+                    Ok(value)
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .collect::<Result<Vec<_>>>()
+}
+
+fn fixture_geometries(text: &str, case: u64) -> Result<serde_json::Value> {
+    let rows = signed_numbers(text)?;
+    if rows.len() != 4 || rows.iter().any(|row| row.len() != 63) || case > 1 {
+        return Err("Incomplete matched fixture geometry".into());
+    }
+    let mut result = Vec::new();
+    for (arm, row) in rows.iter().enumerate() {
+        let before = &row[1..32];
+        let after = &row[32..];
+        let style = 0x9400_0000_i64 | if case == 1 { 0x00c0_0000 } else { 0 };
+        let coordinates_valid = before[..18]
+            .iter()
+            .chain(&after[..18])
+            .all(|value| i32::try_from(*value).is_ok());
+        let native_fields_valid = [before, after].into_iter().all(|geometry| {
+            [18, 19, 25, 26]
+                .into_iter()
+                .all(|index| u32::try_from(geometry[index]).is_ok())
+                && [21, 22, 23, 24, 27, 28, 29, 30]
+                    .into_iter()
+                    .all(|index| i32::try_from(geometry[index]).is_ok())
+                && geometry[26] > 0
+                && geometry[20] >= 0
+                && geometry[0] <= geometry[4]
+                && geometry[1] <= geometry[5]
+                && geometry[2] >= geometry[6]
+                && geometry[3] >= geometry[7]
+                && geometry[2] > geometry[0]
+                && geometry[3] > geometry[1]
+        });
+        if row[0] != i64::try_from(arm)?
+            || !coordinates_valid
+            || !native_fields_valid
+            || before[..8] != after[..8]
+            || after[..8] != rows[0][32..40]
+            || before[12..16] != [0, 0, 96, 64]
+            || after[12..16] != [0, 0, 96, 64]
+            || after[6] - after[4] < 224
+            || after[7] - after[5] < 192
+            || after[16] != after[4] + 64
+            || after[17] != after[5] + 64
+            || after[18] != style
+            || after[19] & 8 != 8
+            || after[20] < before[20]
+            || after[26] != before[26]
+            || after[27..29] != [1, 0]
+            || after[29] != after[10] - after[8]
+            || after[30] != after[11] - after[9]
+        {
+            return Err(
+                "Matched fixture style/full-client/work-area/native geometry differs".into(),
+            );
+        }
+        let client = [after[16], after[17], after[16] + 96, after[17] + 64];
+        let outer = &after[8..12];
+        let insets = [
+            client[0] - outer[0],
+            client[1] - outer[1],
+            outer[2] - client[2],
+            outer[3] - client[3],
+        ];
+        if outer[0] < after[4]
+            || outer[1] < after[5]
+            || outer[2] > after[6]
+            || outer[3] > after[7]
+            || (case == 0 && insets != [0; 4])
+            || (case == 1 && insets.iter().any(|value| *value <= 0))
+        {
+            return Err("Matched fixture outer/client separation differs".into());
+        }
+        result.push(serde_json::json!({"arm":arm,"before":before,"after":after,
+            "client_screen":client,"outer_client_insets":insets,"target_inset":0}));
+    }
+    Ok(
+        serde_json::json!({"case":case,"geometry_calls":12,"full_client_width":96,
+        "full_client_height":64,"target_inset":0,"observations":result}),
+    )
+}
+
+fn fixture_boundaries(
+    text: &str,
+    geometries: &str,
+    states: &[Vec<u64>],
+) -> Result<serde_json::Value> {
+    let rows = signed_numbers(text)?;
+    let geometry = signed_numbers(geometries)?;
+    if rows.len() != 27
+        || rows.iter().any(|row| row.len() != 25)
+        || geometry.len() != 4
+        || geometry.iter().any(|row| row.len() != 63)
+        || states.len() != 27
+        || states.iter().any(|row| row.len() != 13)
+    {
+        return Err("Incomplete matched fixture call-boundary geometry".into());
+    }
+    let mut result = Vec::new();
+    for (index, phase) in phases().iter().enumerate() {
+        let row = &rows[index];
+        let prepared = &geometry[usize::try_from(phase.arm)?][32..];
+        let expected = [
+            prepared[18],
+            prepared[8],
+            prepared[9],
+            prepared[10],
+            prepared[11],
+            prepared[12],
+            prepared[13],
+            prepared[14],
+            prepared[15],
+            prepared[16],
+            prepared[17],
+            prepared[19],
+        ];
+        let ex_style = u64::try_from(expected[11])?;
+        let state = &states[index];
+        if row[0] != i64::try_from(index)?
+            || row[1..13] != expected
+            || row[13..] != expected
+            || state[0] != u64::try_from(index)?
+            || [1, 7]
+                .into_iter()
+                .any(|start| state[start] != ex_style || state[start + 1..start + 3] != [255, 0])
+        {
+            return Err(
+                "Actual capture boundary changed matched style/outer/full-client geometry".into(),
+            );
+        }
+        result.push(serde_json::json!({"slot":index,"arm":phase.arm,"before":&row[1..13],"after":&row[13..]}));
+    }
+    Ok(serde_json::json!({"observations":54,"boundaries":result,"during_call_unobserved":true}))
+}
+
+fn inventory(root: &Path, matched: bool) -> Result<()> {
     let mut actual = 0;
     for entry in fs::read_dir(root)? {
         let entry = entry?;
@@ -220,7 +383,7 @@ fn inventory(root: &Path) -> Result<()> {
             continue;
         }
         if kind.is_file()
-            && [
+            && ([
                 "summary.txt",
                 "shots.tsv",
                 "states.tsv",
@@ -230,6 +393,9 @@ fn inventory(root: &Path) -> Result<()> {
                 "frame-drivers.tsv",
             ]
             .contains(&name.as_str())
+                || matched
+                    && ["fixture-geometries.tsv", "fixture-boundaries.tsv"]
+                        .contains(&name.as_str()))
         {
             actual += 1;
         } else if kind.is_dir() && (0..27).any(|i| name == format!("shot-{i}")) {
@@ -248,7 +414,7 @@ fn inventory(root: &Path) -> Result<()> {
             return Err("Unexpected border root entry/link".into());
         }
     }
-    if actual != FILES {
+    if actual != FILES + 2 * usize::from(matched) {
         return Err("Border observation file inventory differs".into());
     }
     Ok(())
@@ -268,7 +434,6 @@ pub fn run(args: &[String]) -> Result<()> {
         return Err("Border observations must already exist".into());
     }
     let root = records::external_root(Path::new(path))?;
-    inventory(&root)?;
     let mut inputs = Vec::new();
     let mut read = |name: &str| -> Result<Vec<u8>> {
         let path = root.join(name);
@@ -276,12 +441,27 @@ pub fn run(args: &[String]) -> Result<()> {
         Ok(fs::read(path)?)
     };
     let contract = summary(std::str::from_utf8(&read("summary.txt")?)?)?;
+    let matched = contract["schema"] == 2;
+    let files = FILES + 2 * usize::from(matched);
+    inventory(&root, matched)?;
     let windows = numbers(std::str::from_utf8(&read("windows.tsv")?)?, 4, 7)?;
     let owners = numbers(std::str::from_utf8(&read("owners.tsv")?)?, 4, 3)?;
     let drivers = numbers(std::str::from_utf8(&read("frame-drivers.tsv")?)?, 4, 10)?;
     owners_and_drivers(&windows, &owners, &drivers)?;
     let properties = properties(std::str::from_utf8(&read("properties.tsv")?)?)?;
     let states = numbers(std::str::from_utf8(&read("states.tsv")?)?, 27, 13)?;
+    let fixture = if matched {
+        let geometries = String::from_utf8(read("fixture-geometries.tsv")?)?;
+        let mut fixture = fixture_geometries(&geometries, contract["fixture_case"])?;
+        fixture["call_boundaries"] = fixture_boundaries(
+            std::str::from_utf8(&read("fixture-boundaries.tsv")?)?,
+            &geometries,
+            &states,
+        )?;
+        Some(fixture)
+    } else {
+        None
+    };
     let shots = String::from_utf8(read("shots.tsv")?)?;
     let mut lines = shots.lines();
     if lines.next() != Some(HEADER) {
@@ -372,15 +552,19 @@ pub fn run(args: &[String]) -> Result<()> {
             "engaged":row[7]==1,"known_scene":known,"different_pixels":differences.len(),
             "exact_outer_three_pixel_difference":image && differences==perimeter,"fnv64":fnv,"begin_qpc":row[5],"end_qpc":row[6]}));
     }
-    if lines.next().is_some() || inputs.len() != FILES {
+    if lines.next().is_some() || inputs.len() != files {
         return Err("Extra border call or incomplete inputs".into());
     }
     inputs.sort_by(|a, b| a.path.cmp(&b.path));
-    let report = serde_json::json!({"layout_version":1,"actual_source_calls":27,"owned_windows_closed":4,
-        "positive_control_calls":13,"registered_files":FILES,"native_cv_contract":contract,"windows":windows,
+    let mut report = serde_json::json!({"layout_version":1,"actual_source_calls":27,"owned_windows_closed":4,
+        "positive_control_calls":13,"registered_files":files,"native_cv_contract":contract,"windows":windows,
         "object_boundaries":owners,"window_states":states,"frame_drivers":drivers,"properties":properties,
         "observations":observations,"inputs":inputs,"producer_proved":false,"capture_acceptance":false,"full_P1_accepted":false,
         "scope":"Original-only four-arm property/device diagnostic with extra CPU snapshots and a same-output, nonoverlapping owned marker. Only the added true setter is a treatment; original false request is unchanged. A false getter does not prove an invisible system indicator. Fixed post-destruction calls are observations, not retries or native session/callback quiescence. No Rust/manager parity, producer proof, historical failure reclassification or P1 acceptance."});
+    if let Some(fixture) = fixture {
+        report["layout_version"] = 2.into();
+        report["matched_fixture"] = fixture;
+    }
     let output = root.join("border-validation.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -390,14 +574,186 @@ pub fn run(args: &[String]) -> Result<()> {
         records::create_json(&output, &report)?;
     }
     println!(
-        "source border records calls=27 windows_closed=4 positive_controls=13 files=61 producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed"
+        "source border records calls=27 windows_closed=4 positive_controls=13 files={files} producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed"
     );
+    if matched {
+        println!(
+            "matched border records case={} geometry_calls=12 boundary_observations=54 full_client=96x64 target_inset=0 producer_proved=0 passed",
+            contract["fixture_case"]
+        );
+    }
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn matched_rows(case: u64) -> Vec<Vec<i64>> {
+        let before = vec![
+            0,
+            0,
+            1920,
+            1080,
+            0,
+            0,
+            1920,
+            1040,
+            128,
+            128,
+            224,
+            192,
+            0,
+            0,
+            96,
+            64,
+            128,
+            128,
+            0x9400_0000,
+            8,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            96,
+            0,
+            0,
+            0,
+            0,
+        ];
+        let mut after = before.clone();
+        after[16..18].copy_from_slice(&[64, 64]);
+        after[20] = 1;
+        after[25] = 0x34;
+        after[27] = 1;
+        let outer = if case == 0 {
+            [64, 64, 160, 128]
+        } else {
+            after[18] |= 0x00c0_0000;
+            [61, 38, 163, 131]
+        };
+        after[8..12].copy_from_slice(&outer);
+        after[21..25].copy_from_slice(&[
+            outer[0],
+            outer[1],
+            outer[2] - outer[0],
+            outer[3] - outer[1],
+        ]);
+        after[29] = outer[2] - outer[0];
+        after[30] = outer[3] - outer[1];
+        (0..4)
+            .map(|arm| [vec![arm], before.clone(), after.clone()].concat())
+            .collect()
+    }
+
+    fn geometry_text(rows: &[Vec<i64>]) -> String {
+        rows.iter()
+            .map(|row| {
+                row.iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\t")
+                    + "\n"
+            })
+            .collect()
+    }
+
+    #[test]
+    fn rejects_changed_or_missing_full_client_call_boundaries() {
+        let geometry = matched_rows(1);
+        let rows = phases()
+            .iter()
+            .enumerate()
+            .map(|(slot, phase)| {
+                let g = &geometry[usize::try_from(phase.arm).unwrap()][32..];
+                let boundary = vec![
+                    g[18], g[8], g[9], g[10], g[11], g[12], g[13], g[14], g[15], g[16], g[17],
+                    g[19],
+                ];
+                [
+                    vec![i64::try_from(slot).unwrap()],
+                    boundary.clone(),
+                    boundary,
+                ]
+                .concat()
+            })
+            .collect::<Vec<_>>();
+        let states = (0..27)
+            .map(|slot| vec![slot, 8, 255, 0, 1, 96, 64, 8, 255, 0, 1, 96, 64])
+            .collect::<Vec<_>>();
+        fixture_boundaries(&geometry_text(&rows), &geometry_text(&geometry), &states).unwrap();
+        for column in [0, 1, 5, 8, 10, 12, 13, 17, 20, 22, 24] {
+            let mut invalid = rows.clone();
+            invalid[10][column] += 1;
+            assert!(
+                fixture_boundaries(&geometry_text(&invalid), &geometry_text(&geometry), &states)
+                    .is_err()
+            );
+        }
+        assert!(
+            fixture_boundaries(
+                &geometry_text(&rows[..26]),
+                &geometry_text(&geometry),
+                &states
+            )
+            .is_err()
+        );
+        let mut invalid = states.clone();
+        invalid[10][1] = 0;
+        assert!(
+            fixture_boundaries(&geometry_text(&rows), &geometry_text(&geometry), &invalid).is_err()
+        );
+    }
+
+    #[test]
+    fn rejects_changed_client_style_native_width_and_invented_nonclient_geometry() {
+        for case in 0..=1 {
+            fixture_geometries(&geometry_text(&matched_rows(case)), case).unwrap();
+        }
+        for (field, value) in [
+            (0, 99),
+            (32 + 14, 97),
+            (32 + 16, 65),
+            (32 + 18, 0x9400_0000),
+            (32 + 19, 0),
+            (32 + 26, 1_i64 << 32),
+            (32 + 21, 1_i64 << 32),
+            (1 + 27, 1_i64 << 32),
+            (1 + 30, 1_i64 << 32),
+            (32 + 27, 0),
+            (32 + 28, -1),
+            (32 + 29, 96),
+            (32 + 8, 64),
+            (32, i64::MIN),
+        ] {
+            let mut invalid = matched_rows(1);
+            invalid[0][field] = value;
+            assert!(fixture_geometries(&geometry_text(&invalid), 1).is_err());
+        }
+        let valid = geometry_text(&matched_rows(0));
+        assert!(fixture_geometries(&valid, 1).is_err());
+        assert!(fixture_geometries(&valid, 2).is_err());
+        assert!(fixture_geometries(&valid.replacen("0\t", "-0\t", 1), 0).is_err());
+        assert!(fixture_geometries(&geometry_text(&matched_rows(0)[..3]), 0).is_err());
+    }
+
+    #[test]
+    fn retains_negative_desktop_coordinates_without_changing_full_client_scope() {
+        let mut rows = matched_rows(1);
+        for row in &mut rows {
+            for start in [1, 32] {
+                for index in [0, 2, 4, 6, 8, 10, 16] {
+                    row[start + index] -= 2560;
+                }
+                for index in [1, 3, 5, 7, 9, 11, 17] {
+                    row[start + index] -= 1080;
+                }
+            }
+        }
+        fixture_geometries(&geometry_text(&rows), 1).unwrap();
+    }
 
     #[test]
     fn rejects_missing_session_getter_setter_and_invented_inactive_calls() {

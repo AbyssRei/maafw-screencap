@@ -132,6 +132,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+原版 border 四臂诊断新增两种匹配夹具：`mfs_framepool_border_reference.exe <外部空目录> popup` 与 `caption` 分别使用自有 `WS_POPUP`、`WS_POPUP|WS_CAPTION` 窗口，均保留 visible/clip-siblings/topmost，客户区完整为 96×64，左上角固定在本机 work-area 原点加 `(64,64)`。两种设置均在创建捕获对象前完成；四臂、27 次原版取帧、十三项严格正控制、等待/回放、原类函数体及转换位置不变。旧无第三参数入口及 schema1 的 61 份数据保持兼容；schema2 增加四组准备前/后的 31 字段几何和每次取帧前后共 54 份实际样式/外框/客户区记录，合计 63 份原始文件。校验器绑定准备、实际边界与原生状态表，拒收客户区裁剪、样式/坐标/alpha/iconic 变化、字段越界和不完整记录；调用内部变化仍未观察。外框取自 GetWindowRect，不能据此推断 DWM 的可见边框宽度或系统指示器像素。
+
+VS2026/MSBuild、SDK 28000 目录及明确归档依赖下，新 executable 已完成本机连续三轮，legacy/popup/caption 各三组原生与记录入口，共十八次执行。独立复核完整 243 份 BGR、1,492,992 个像素、324 次匹配边界、36 个目标/36 个独立更新窗口关闭；图样全部已知。popup 的实际外框/客户区差为零，caption 为 `(8,31,8,8)`，仅表示该次 GetWindowRect 观察。本机三轮默认 getter 均为 false，额外 true 设置前 false、设置后 true，未复现托管默认 true 条件，亦未证明实际指示器状态、历史 924 点生产者、缓存分支或原生 callback/session 排空。四路监听零输入、最大采样间隔 86.7422ms、正常注销/写线程退出；本次没有新物理正控制，不能重用旧注册的物理事件作新控制。
+
+捕获前冻结并核对 1,594 份输入及实际 CL/link 命令，26 个 CL/link 主输入中的四份原始 F 编译单元与固定 Git body 一致；969 个实际原生依赖路径另存。捕获后、进一步编辑前再次匹配全部输入和归档副本。后续记录审阅补齐 LONG/enum/HRESULT 字段位宽，三份被捕获时 reader 误收的明确合成 `2^32` 值现拒收；最终 reader 只读接受同一九份原生记录，没有重新取帧。工作区测试（含 141 项 xtask）、默认 Release、严格工作区 Clippy/最终 xtask Clippy 及格式检查通过；nightly 已更新检查，依赖是显式离线重放。31 个记录控制接受十项、拒绝二十一项，包含四份旧原生记录的只读兼容；44 个真实 Step mock 及同数失败后继续执行控制通过，另有两个真实校验子进程消费明确合成记录通过。初次 Clippy 常量表达式提示和 Step 控制脚本引用错误数据目录的失败均保留，后者发生在四十四项 mock 已完成后，不是原生失败或重试截图。
+
+四个独立 `frame-pool-source-border-{popup,caption}`／对应 records 检查及 `source-border-matched/**` 即时上传已接入；任何模式失败仍保留非通过总状态，其他独立模式继续，缺 API 的明确前置停止单列。新的托管原生结果待验证，预装工具年龄继续只作记录。完整开发/输入/数据/源身份材料由 `local/current-framepool-matched-fixture-development-path.txt` 指向；原 Windows 十四项、Mac 二十一项及其他历史失败不改，完整 P1 未通过。
+
 确切 `d39d38c` 的完整官方 Windows 工程归档已闭合其轻量包缺少的全部 4,762 个不同输入路径。2,003,767,832 字节 ZIP 的发布摘要、CRC、安全路径及其中 7,820,681,216 字节 tar 均核对；65,264 份恢复文件、63,449 个登记路径、23 份清单全部匹配。二十二份每份 586 个文件的普通源码快照与一份明确受控快照分开验证，固定 F 的 76 份来源、U/F 的 741/744 个完整 tracked blobs 及 736/739 个实际存储对象均核对。七个组件登记的 CMake/F/工具链上下文、158 份保存数据只读入口和完整 reference verifier 通过；全部 33,172 份轻量恢复文件与完整包对应，十四项原生失败和 438/452 结果不改。
 
 首次完整校验后观察到两份恢复副本的 Git index 字节刷新。前后版本全部保留，U/F 的 746/749 个暂存路径、模式、对象及 stage 值完全一致，完整 `ls-files --debug` 输出仅 ctime/mtime 行变化；其他恢复文件未变。仅在该恢复副本中将这两份 index 还原为原 tar 字节，再以 `GIT_OPTIONAL_LOCKS=0` 完整校验通过，最终全部恢复字节摘要重新匹配原包并封存。早期两次部分传输及首次封存拒收保留，不重标为原生测试结果。Windows tar 对普通源码也标作 0755，未声称 Unix mode 等价；完整 CL 命令行仍未从该包验证。外部入口为 `local/current-d39-windows-full-source-review-path.txt`，来源闭包不接受原有像素失败、回调排空或完整 P1，预装工具年龄仍只作记录。

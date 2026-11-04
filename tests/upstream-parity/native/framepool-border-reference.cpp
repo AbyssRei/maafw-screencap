@@ -7,8 +7,10 @@
 #undef wmain
 #include "Screencap/DesktopDupWindowScreencap.h"
 #include <winrt/Windows.Foundation.Metadata.h>
+#include <dwmapi.h>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <vector>
 
 namespace mfs_border_observation {
@@ -73,6 +75,7 @@ struct BorderShot {
     bool wgc_alive = false, device_only_alive = false, engaged = false;
     int64_t begin = 0, end = 0;
     WindowState before {}, after {};
+    std::array<int64_t, 12> fixture_before {}, fixture_after {};
     cv::Mat image;
 };
 int64_t qpc()
@@ -93,15 +96,31 @@ bool known(const cv::Mat& image)
     }
     return true;
 }
+std::array<int64_t, 12> fixture_boundary(HWND window)
+{
+    RECT outer {}, client {};
+    POINT origin {};
+    if (!GetWindowRect(window, &outer) || !GetClientRect(window, &client)
+        || !ClientToScreen(window, &origin)) {
+        throw std::runtime_error("border fixture call-boundary geometry query failed");
+    }
+    return { static_cast<uint32_t>(GetWindowLongPtrW(window, GWL_STYLE)),
+        outer.left, outer.top, outer.right, outer.bottom,
+        client.left, client.top, client.right, client.bottom, origin.x, origin.y,
+        static_cast<uint32_t>(GetWindowLongPtrW(window, GWL_EXSTYLE)) };
+}
 template<class Source> void take(std::vector<BorderShot>& shots, uint64_t arm,
-    const char* phase, uint64_t kind, Source& source, HWND window, bool wgc, bool device)
+    const char* phase, uint64_t kind, Source& source, HWND window, bool wgc, bool device, int scene)
 {
     BorderShot shot;
     shot.arm = arm; shot.slot = shots.size(); shot.phase = phase; shot.kind = kind;
     shot.wgc_alive = wgc; shot.device_only_alive = device;
-    shot.before = window_state(window); shot.begin = qpc();
+    shot.before = window_state(window);
+    if (scene >= 0) { shot.fixture_before = fixture_boundary(window); }
+    shot.begin = qpc();
     auto image = source.screencap(); // One unchanged operation; no retry loop.
     shot.end = qpc(); shot.after = window_state(window); shot.engaged = image.has_value();
+    if (scene >= 0) { shot.fixture_after = fixture_boundary(window); }
     // Snapshot before native object teardown; original results may share cache.
     if (image && !image->empty()) { shot.image = image->clone(); }
     shots.push_back(std::move(shot));
@@ -151,11 +170,50 @@ void save_shot(const BorderShot& shot, const std::filesystem::path& root)
            << shot.image.type() << '\t' << row << '\n';
     bytes.close(); layout.close();
 }
+
+std::array<int64_t, 63> prepare_fixture_geometry(Fixture& fixture, uint64_t arm, int scene)
+{
+    // Two matched controls alter only this owned fixture before any capture
+    // object exists. Both retain the entire 96x64 client at the same work-area
+    // offset. There is no target-pixel inset or post-capture preparation.
+    std::array<int64_t, 63> result {};
+    std::array<int64_t, 31> before {}, after {};
+    const int64_t query[6] {};
+    if (mfs_print_thread_geometry(fixture.value.owner, query, 6, before.data(), before.size())) {
+        throw std::runtime_error("border fixture initial geometry query failed");
+    }
+    if (before[6] - before[4] < 224 || before[7] - before[5] < 192) {
+        throw std::runtime_error("border matched fixture work area too small");
+    }
+    const DWORD style = WS_VISIBLE | WS_POPUP | WS_CLIPSIBLINGS | (scene == 1 ? WS_CAPTION : 0);
+    const int64_t input[6] { 1, style, before[4] + 64, before[5] + 64, 96, 64 };
+    if (mfs_print_thread_geometry(fixture.value.owner, input, 6, after.data(), after.size())) {
+        throw std::runtime_error("border matched fixture geometry setup failed");
+    }
+    const int64_t repaint[6] { 2, 0, 0, 0, 0, 0 };
+    if (mfs_print_thread_geometry(fixture.value.owner, repaint, 6, after.data(), after.size())
+        || after[12] != 0 || after[13] != 0 || after[14] != 96 || after[15] != 64
+        || after[16] != input[2] || after[17] != input[3]
+        || after[18] != style || after[27] != DWMWCP_DONOTROUND || after[28] != 0) {
+        throw std::runtime_error("border matched fixture full-client premise failed");
+    }
+    result[0] = static_cast<int64_t>(arm);
+    std::copy(before.begin(), before.end(), result.begin() + 1);
+    std::copy(after.begin(), after.end(), result.begin() + 32);
+    return result;
+}
 } // namespace mfs_border_observation
 
 int wmain(int argc, wchar_t** argv)
 {
-    if (argc != 2) { return 64; }
+    if (argc != 2 && argc != 3) { return 64; }
+    int scene = -1;
+    if (argc == 3) {
+        const std::wstring_view requested(argv[2]);
+        if (requested == L"popup") { scene = 0; }
+        else if (requested == L"caption") { scene = 1; }
+        else { return 64; }
+    }
     const std::filesystem::path root(argv[1]);
     if (!root.is_absolute() || !std::filesystem::is_directory(root) || !std::filesystem::is_empty(root)) { return 64; }
     using namespace mfs_border_observation;
@@ -179,6 +237,7 @@ int wmain(int argc, wchar_t** argv)
         std::array<std::array<int64_t, 2>, 4> destroyed {};
         std::array<std::array<uint64_t, 6>, 4> windows {};
         std::array<std::array<uint64_t, 10>, 4> drivers {};
+        std::array<std::array<int64_t, 63>, 4> geometries {};
         uint64_t closed = 0;
         // Default source session; source session then require=true treatment;
         // exact source D3D device/swapchain fragment only; final no-WGC control.
@@ -189,6 +248,7 @@ int wmain(int argc, wchar_t** argv)
                 throw std::runtime_error("border owned window creation failed");
             }
             const auto hwnd = static_cast<HWND>(fixture.value.hwnd);
+            if (scene >= 0) { geometries[arm] = prepare_fixture_geometry(fixture, arm, scene); }
             windows[arm][0] = reinterpret_cast<uintptr_t>(hwnd);
             if (mfs_print_thread_info(fixture.value.owner, windows[arm].data() + 1, 4)) {
                 throw std::runtime_error("border window identity failed");
@@ -211,16 +271,16 @@ int wmain(int argc, wchar_t** argv)
             auto& driver = drivers[arm]; driver = { arm, update[0], marker_thread, marker_pid, update[1], 0, 0, 1, 1, 0 };
             {
                 Dup duplicate(hwnd); std::unique_ptr<Wgc> wgc; std::unique_ptr<DeviceOnly> device;
-                take(shots, arm, "dd-before-warm", 0, duplicate, hwnd, false, false);
-                take(shots, arm, "dd-before-test", 0, duplicate, hwnd, false, false);
+                take(shots, arm, "dd-before-warm", 0, duplicate, hwnd, false, false, scene);
+                take(shots, arm, "dd-before-test", 0, duplicate, hwnd, false, false, scene);
                 if (arm < 2) {
                     wgc = std::make_unique<Wgc>(hwnd);
-                    take(shots, arm, "wgc-default", 1, *wgc, hwnd, true, false);
+                    take(shots, arm, "wgc-default", 1, *wgc, hwnd, true, false, scene);
                     properties[arm].arm = arm;
                     auto& initial_session = (*wgc).*member(SessionMember {});
                     properties[arm].session = reinterpret_cast<uintptr_t>(winrt::get_abi(initial_session));
                     if (arm == 0) { observe_property(properties[arm], *wgc, false); }
-                    take(shots, arm, "dd-with-default", 0, duplicate, hwnd, true, false);
+                    take(shots, arm, "dd-with-default", 0, duplicate, hwnd, true, false, scene);
                     if (arm == 1) {
                         // Positive native control: require the system indicator.
                         // This test never adds a false setter or host consent change.
@@ -228,18 +288,18 @@ int wmain(int argc, wchar_t** argv)
                         observe_property(required, *wgc, true);
                         if (required.session != properties[arm].session) { throw std::runtime_error("border session changed"); }
                         properties[arm] = required;
-                        take(shots, arm, "dd-with-required", 0, duplicate, hwnd, true, false);
+                        take(shots, arm, "dd-with-required", 0, duplicate, hwnd, true, false, scene);
                     }
                 } else if (arm == 2) {
                     device = std::make_unique<DeviceOnly>(hwnd);
-                    take(shots, arm, "dd-with-device", 0, duplicate, hwnd, false, true);
-                    take(shots, arm, "dd-with-device-test", 0, duplicate, hwnd, false, true);
+                    take(shots, arm, "dd-with-device", 0, duplicate, hwnd, false, true, scene);
+                    take(shots, arm, "dd-with-device-test", 0, duplicate, hwnd, false, true, scene);
                 }
                 destroyed[arm][0] = qpc(); wgc.reset(); device.reset(); destroyed[arm][1] = qpc();
                 // Three fixed observations, not retries toward a pixel outcome.
                 for (unsigned call = 0; call < 3; ++call) {
                     const auto phase = "dd-post-" + std::to_string(call);
-                    take(shots, arm, phase.c_str(), 0, duplicate, hwnd, false, false);
+                    take(shots, arm, phase.c_str(), 0, duplicate, hwnd, false, false, scene);
                 }
             }
             if (mfs_desktop_fixture_update_info(fixture.value.owner, update.data(), update.size())
@@ -276,14 +336,34 @@ int wmain(int argc, wchar_t** argv)
             for (size_t i = 0; i < drivers[arm].size(); ++i) { if (i) { frame_drivers << '\t'; } frame_drivers << drivers[arm][i]; } frame_drivers << '\n';
         }
         rows.close(); states.close(); props.close(); owners.close(); targets.close(); frame_drivers.close();
+        if (scene >= 0) {
+            std::ofstream geometry(root / "fixture-geometries.tsv");
+            geometry.exceptions(std::ios::badbit | std::ios::failbit);
+            for (const auto& row : geometries) {
+                for (size_t i = 0; i < row.size(); ++i) { if (i) { geometry << '\t'; } geometry << row[i]; }
+                geometry << '\n';
+            }
+            geometry.close();
+            std::ofstream boundaries(root / "fixture-boundaries.tsv");
+            boundaries.exceptions(std::ios::badbit | std::ios::failbit);
+            for (const auto& shot : shots) {
+                boundaries << shot.slot;
+                for (auto value : shot.fixture_before) { boundaries << '\t' << value; }
+                for (auto value : shot.fixture_after) { boundaries << '\t' << value; }
+                boundaries << '\n';
+            }
+            boundaries.close();
+        }
         std::ofstream summary(root / "summary.txt"); summary.exceptions(std::ios::badbit | std::ios::failbit);
-        summary << "schema=1\nshots=" << shots.size() << "\nclosed_windows=" << closed << "\nqpc_frequency=" << frequency.QuadPart
+        summary << "schema=" << (scene < 0 ? 1 : 2) << "\nshots=" << shots.size() << "\nclosed_windows=" << closed << "\nqpc_frequency=" << frequency.QuadPart
                 << "\ndispatcher_completed=1\ndispatcher_within_budget=" << dispatcher_ok << "\ncaller_dpi_restored=" << dpi_ok
                 << "\npositive_controls=" << controls << "\ncv_8u=" << CV_8U << "\ncv_8uc3=" << CV_8UC3 << "\ncv_cn_shift=" << CV_CN_SHIFT
                 << "\nsource_bodies_unchanged=1\nextra_cpu_snapshots=1\nrequired_true_setters=1\nadded_false_setters=0\noriginal_failure_reclassified=0\nfull_P1_acceptance=0\n";
+        if (scene >= 0) { summary << "fixture_case=" << scene << "\nfixture_geometry_calls=12\nfixture_boundary_observations=54\n"; }
         summary.close();
         std::cout << "source border diagnostic shots=" << shots.size() << " windows_closed=" << closed << " positive_controls=" << controls
                   << " required_true_setters=1 added_false_setters=0 source_bodies_unchanged=1 full_P1_acceptance=0\n";
+        if (scene >= 0) { std::cout << "matched border fixture case=" << scene << " full_client=96x64 geometry_calls=12 boundary_observations=54 target_inset=0\n"; }
         return controls ? 0 : 5;
     } catch (const winrt::hresult_error& error) { std::cerr << "border source hresult=" << error.code().value << '\n'; return 3; }
     catch (const std::exception& error) { std::cerr << "border diagnostic failure=" << error.what() << '\n'; return 3; }
