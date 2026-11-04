@@ -46,7 +46,8 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $queryBuild=Join-Path $build manager-queries
     $env:MFS_MAC_MANAGER_QUERY_LIBRARY=Join-Path $queryBuild libmfs_macos_manager_queries.dylib
     $env:MFS_MAC_MANAGER_QUERY_RECORDS=Join-Path $RunRoot macos-arm64/reference-u/artifacts/manager-queries
-    foreach($name in @('libmfs_macos_manager_queries.dylib','macos-factory-source.inc','macos-manager-source.inc','macos-info-source.inc')) {
+    $env:MFS_MAC_MANAGER_HOST_RECORDS=Join-Path $RunRoot macos-arm64/reference-u/artifacts/manager-host
+    foreach($name in @('libmfs_macos_manager_queries.dylib','macos-factory-source.inc','macos-manager-source.inc','macos-info-source.inc','manager-host-scope.txt')) {
         $saved=Join-Path $refInputs ("query-"+$name)
         Copy-Item -LiteralPath (Join-Path $queryBuild $name) -Destination $saved;Save $saved
     }

@@ -21,7 +21,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/macos-base-source.cm
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/macos-manager-source.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/manager-metadata-source.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/macos-manager-query-source.cmake")
-add_library(mfs_macos_manager_queries SHARED consumer.cpp)
+add_library(mfs_macos_manager_queries SHARED consumer.cpp host.cpp)
 target_include_directories(mfs_macos_manager_queries PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/overlay"
     "${CMAKE_CURRENT_SOURCE_DIR}/../macos-screencap/overlay"
@@ -29,6 +29,8 @@ target_include_directories(mfs_macos_manager_queries PRIVATE
     "${MFS_UPSTREAM_ROOT}/include" "${MFS_MEOJSON_INCLUDE}" ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(mfs_macos_manager_queries PRIVATE ${OpenCV_LIBS})
 set_target_properties(mfs_macos_manager_queries PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/manager-host-scope.txt"
+    "Separate host.cpp compiles the exact fixed manager constructor/connect/connected/request_uuid/get_features/screencap/inactive/get_info bodies with explicitly controlled availability, capture and host input-owner types. Input models expose only construction/destruction/features and execute no input actions. Each case compares the same Rust manager's complete two-connect state/events/metadata and output retention. This portable model is not real macOS input construction, screenshot, native OS rejection, arbitrary allocation exhaustion, callback drainage or full P1 acceptance. Existing native Input=None query/capture paths remain separate.\n")
 if(APPLE)
     if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
         message(FATAL_ERROR "Current native macOS query gate requires arm64")

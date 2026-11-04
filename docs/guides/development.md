@@ -130,6 +130,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+macOS manager 已沿同一私有实现补齐非 None 配置对截图路径的宿主生命周期影响：原生默认入口仍为 `Input=None`，另可显式提供只含 owner/features 的宿主类型和构造器。连接先清 connected，按原可用性条件构造并替换捕获 owner，再按精确 GlobalEvent/PostToPid selector 构造输入 owner；捕获构造失败保留旧捕获与输入，输入构造失败则保留新捕获和旧输入，connected 仍为 false。None/未知 selector 保留原成功结束语义；截图转发不增加 connected 门禁，inactive 仍不调用两个 owner。features 每次查询保留的输入 owner 并掩码原两位，metadata 记录两个 selector 的 signed64 解释，析构先捕获后输入。新增原生宿主 helper 复用原 `Capture` 与真实版本谓词；不实现输入动作、原生 GlobalEvent/PostToPid 构造或公开 SDK。
+
+新的 `host.cpp` 在独立 translation unit 编译 F 的七个完整 manager 函数体及 get_info，原语句不改，只显式替换可用性、捕获类和输入 owner 模型。Windows VS2026/MSBuild 的 Debug/Release 每配置实际完成 19,200 个原版/Rust 配对案例、38,400 份报告：原版各 4,800 次捕获构造尝试／2,400 次完整 owner 析构，12,480 次输入构造尝试／6,240 次完整 owner 析构，其余是明确受控的构造失败。原版每配置 4,500 次模型捕获调用及 11,010 次 features 查询与 Rust 完整对应，包含三十例替换捕获后输入失败、1,650 次在 disconnected 且保留输入 owner 时的观察。全部构造、查询、捕获和析构事件及 metadata/输出 token 逐项一致；这是 C++ Mat/宿主模型，零真实输入动作、零桌面取帧，也不声称任意分配故障或 native callback 排空。旧原始接口查询另在每配置完成 66 案例和完整记录复核，默认路径输出不变。
+
+`cargo xtask upstream-macos-manager-host <外部目录> [--check-only]` 独立核对完整矩阵、原生位宽、精确事件顺序、失败后 owner、动态掩码、输出保留、目录和实际库摘要。十九项真实记录控制接受两份实际矩阵及一份复制控制、拒绝十六份损坏数据；实际 Step 的 22 组输出 mock、三个只读 checker 子进程及两组失败后继续检查通过。独立源/数据审阅核对八个 F 函数体、当前库与边界源文件及全部 owner 事件；原 Rust 泛型命名冲突、C++ 缺 meojson 声明、首个外部 reader 的字段名错误分别保留。工作区测试和 136 项 xtask 测试、严格选定 Windows Clippy、格式通过；已安装 macOS target 的 Rust 类型检查/Clippy 也通过，但它们是在 Windows 上交叉检查，不等同于原生 Mac 编译、加载或取帧。本批沿用明确归档离线依赖，nightly 更新检查未改变实际版本，不声称新在线依赖解析。新测试与独立记录 Step 已接入 macOS 原生编排，完整输出沿既有 artifact 路径收集；原生执行待后续批次。记录由参考目录 `local/current-macos-manager-host-development-path.txt` 指向，旧逐函数清单保留其历史 Input=None 范围，不据本模型增长为完整 input/framework/P1 验收。
+
 确切 `d39d38c` 的 [Actions 41751187485](https://github.com/AbyssRei/maafw-screencap/actions/runs/41751187485) DesktopDup 组件现为 96/96：首帧、首帧记录与零取帧准备三项从失败转为通过，其余九十三项名称/状态不变。官方 22,048,276 字节 ZIP 的完整摘要/CRC、96 份日志及 2,147 条可用登记输入核对，八份选定来源与确切 Git 字节相符，仍缺 629 个不同完整输入。十八组保存数据校验只读通过，包含新的布局三初始化证据；全部解压原字节不变。初版独立 reader 误把请求样式当作含 `WS_VISIBLE` 的实际样式，停止后原文保留，修正后的独立目录只读核对实际 `0x14cf0000`，没有重跑原生测试或修改数据。材料由参考目录 `local/current-d39-desktop-hosted-review-path.txt` 指向。
 
 新托管首帧实际完成四十个原版/Rust 生命周期、80 次取帧和 80 张保留图像，160 份完整目标图逐点核验 3,932,160 像素。初始化 owner/几何/关闭计数与第一基线及调用方绑定；四十组捕获和二十组零取帧准备均严格 `11→11`，两侧窗口共 120 次关闭/join 及失效证据核对。320 条中间资源采样仍仅作诊断。既有查找和主输出失败矩阵的 400/320 次拒绝及 800/640 次 D3D 通知也通过复算，不能把这些受控失败当作真实驱动复制成功。此处是 hosted 组件通过，没有本机输入事件监听结论，也不替代下述本机三轮证据，不追认旧 hosted 字体句柄身份或接受完整 Windows job/P1。

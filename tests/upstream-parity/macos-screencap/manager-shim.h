@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Screenshot-only class surface for the extracted exact function bodies.
 // Include inside the chosen private namespace after defining ScreencapBase,
-// ScreenCaptureKitScreencap and mfs_mac_input_attempt. Input=None is mandatory.
+// ScreenCaptureKitScreencap and mfs_mac_input_attempt. Existing consumers require
+// Input=None. A separately declared host model supplies only owner/features types.
+#ifndef MFS_MAC_HOST_INPUT_TYPES
 struct InputBase {
     virtual ~InputBase()=default;
     // Input=None must never reach this acceptance-only boundary.
@@ -14,6 +16,7 @@ struct GlobalEventInput : InputBase {
 struct PostToPidInput : InputBase {
     explicit PostToPidInput(uint32_t) { mfs_mac_input_attempt();throw std::logic_error("input excluded"); }
 };
+#endif
 struct MacOSControlUnitMgr {
     MacOSControlUnitMgr(uint32_t,MaaMacOSScreencapMethod,MaaMacOSInputMethod);
     bool connect();

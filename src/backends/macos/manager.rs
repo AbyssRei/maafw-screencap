@@ -1,31 +1,65 @@
 // Copyright (C) 2026 AbyssRei (Rust migration)
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//! Fixed macOS manager screenshot path, with Input=None. No SDK API or input.
+//! Fixed macOS manager screenshot path and host-owned input lifetime boundary.
+//! No input actions, native input implementation or public SDK API.
 use std::{collections::TryReserveError, fmt::Write};
 
 // Fixed MaaDef.h values, private U selectors rather than finalized SDK ABI.
 pub(crate) const NONE: u64 = 0;
 pub(crate) const SCREEN_CAPTURE_KIT: u64 = 1;
+const GLOBAL_EVENT: u64 = 1;
+const POST_TO_PID: u64 = 2;
 
-pub(crate) struct Manager<B> {
+pub(crate) trait InputFeatures {
+    fn features(&self) -> u64;
+}
+pub(crate) enum NoInput {}
+impl InputFeatures for NoInput {
+    fn features(&self) -> u64 {
+        match *self {}
+    }
+}
+
+pub(crate) struct Manager<B, I = NoInput> {
     window_id: u32,
     method: u64,
+    input_method: u64,
     connected: bool,
+    // Rust fields drop in declaration order. The source's reverse C++ member
+    // order releases screencap_ before input_; keep that owner order here.
     selected: Option<B>,
+    input: Option<I>,
 }
-impl<B> Manager<B> {
+impl<B> Manager<B, NoInput> {
     pub const fn new(window_id: u32, method: u64) -> Self {
-        Self {
-            window_id,
-            method,
-            connected: false,
-            selected: None,
-        }
+        Self::with_host_input(window_id, method, NONE)
     }
     pub fn connect_with<E>(
         &mut self,
         available: bool,
         create: impl FnOnce(u32) -> Result<B, E>,
+    ) -> Result<bool, E> {
+        self.connect_with_host_input(available, create, |_, _| {
+            unreachable!("Input=None cannot construct a host input")
+        })
+    }
+}
+impl<B, I: InputFeatures> Manager<B, I> {
+    pub const fn with_host_input(window_id: u32, method: u64, input_method: u64) -> Self {
+        Self {
+            window_id,
+            method,
+            input_method,
+            connected: false,
+            selected: None,
+            input: None,
+        }
+    }
+    pub fn connect_with_host_input<E>(
+        &mut self,
+        available: bool,
+        create: impl FnOnce(u32) -> Result<B, E>,
+        create_input: impl FnOnce(u32, u64) -> Result<I, E>,
     ) -> Result<bool, E> {
         self.connected = false;
         if self.method == SCREEN_CAPTURE_KIT {
@@ -36,17 +70,22 @@ impl<B> Manager<B> {
             // unavailable OS leaves that owner live, while connected is false.
             self.selected = Some(create(self.window_id)?);
         }
-        // Source None/unknown only logs; Input=None then reaches this success.
+        if matches!(self.input_method, GLOBAL_EVENT | POST_TO_PID) {
+            // Input construction follows capture replacement. An input error
+            // retains the new capture and any old input with connected=false.
+            self.input = Some(create_input(self.window_id, self.input_method)?);
+        }
+        // Both None/unknown switches only log; existing owners remain live.
         self.connected = true;
         Ok(true)
     }
     pub const fn connected(&self) -> bool {
         self.connected
     }
-    pub const fn get_features(&self) -> u64 {
-        // The fixed source masks features from its retained input owner only.
-        // This capture-only manager has Input=None for its entire lifetime.
-        0
+    pub fn get_features(&self) -> u64 {
+        // Query the retained host owner, including after failed reconnect.
+        // These two original feature bits are not finalized SDK capabilities.
+        self.input.as_ref().map_or(0, I::features) & 3
     }
     pub fn get_info(&self) -> Result<String, TryReserveError> {
         let mut value = String::new();
@@ -54,7 +93,8 @@ impl<B> Manager<B> {
         // Preserve the source's uint64 -> int64 metadata conversion as a bit
         // interpretation; selectors remain u64 for actual method selection.
         let method = i64::from_ne_bytes(self.method.to_ne_bytes());
-        write!(&mut value,"{{\"input_method\":0,\"screencap_method\":{method},\"type\":\"macos\",\"window_id\":{}}}",self.window_id).expect("String formatting cannot fail");
+        let input = i64::from_ne_bytes(self.input_method.to_ne_bytes());
+        write!(&mut value,"{{\"input_method\":{input},\"screencap_method\":{method},\"type\":\"macos\",\"window_id\":{}}}",self.window_id).expect("String formatting cannot fail");
         Ok(value)
     }
     pub fn request_uuid(&self, output: &mut String) -> Result<bool, TryReserveError> {
@@ -64,10 +104,10 @@ impl<B> Manager<B> {
         *output = value;
         Ok(true)
     }
-    pub fn capture_with<I, E>(
+    pub fn capture_with<Image, E>(
         &self,
-        output: &mut I,
-        capture: impl FnOnce(&B) -> Result<Option<I>, E>,
+        output: &mut Image,
+        capture: impl FnOnce(&B) -> Result<Option<Image>, E>,
     ) -> Result<bool, E> {
         let Some(unit) = &self.selected else {
             return Ok(false);
@@ -221,3 +261,14 @@ mod tests {
 ))]
 #[path = "../../../tests/upstream-parity/macos-manager-queries/compare.rs"]
 mod query_tests;
+
+#[cfg(all(
+    test,
+    any(
+        all(target_os = "windows", feature = "prototype-windows"),
+        target_os = "linux",
+        all(target_os = "macos", feature = "macos-manager")
+    )
+))]
+#[path = "../../../tests/upstream-parity/macos-manager-queries/host.rs"]
+mod host_tests;

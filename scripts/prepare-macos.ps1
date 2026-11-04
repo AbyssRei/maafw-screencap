@@ -63,6 +63,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             throw "$Name exited with $code ($status); see $log"
         }
         $observed=Get-Content -LiteralPath $log -Raw
+        if($Name -eq 'rust-macos-manager-host' -and (
+            [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+            $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
+            [regex]::Matches($observed,[regex]::Escape('macOS manager host cases=19200 paired_reports=38400 exact_events=1 input_actions=0 native_screenshots=0 passed')).Count -ne 1)) {
+            $status='failed';throw 'Expected one complete exact-body manager host test, without input actions or native screenshots'
+        }
+        if($Name -eq 'macos-manager-host-records' -and [regex]::Matches($observed,[regex]::Escape('macOS manager host cases=19200 paired_reports=38400 exact_events=1 input_actions=0 native_screenshots=0 full_P1_acceptance=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete manager host records or lifecycle evidence'
+        }
         if($Name -eq 'rust-macos-live-sample' -and (
             $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
             [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
@@ -329,6 +338,10 @@ try {
         try { Step rust-macos-manager-metadata cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::tests::metadata_matches_original_signed_selectors_and_window_identity','--','--exact','--ignored','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-macos-manager-queries cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::query_tests::consumes_original_virtual_queries_and_retains_cpu_snapshots_after_unload','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-macos-manager-host cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::manager::host_tests::preserves_host_input_construction_features_and_partial_manager_owners','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step macos-manager-host-records $ConfigureTool @('upstream-macos-manager-host',$env:MFS_MAC_MANAGER_HOST_RECORDS) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $env:MFS_P1_MACOS_MANAGER_SCRIPTS=Join-Path $referenceArtifacts manager-scripts
         try { Step rust-macos-manager-scripts cargo @('test','--release','--locked','--lib','--features',$features,'backends::macos::screen_capture_kit::tests::matches_original_manager_connect_forwarding_output_and_owner_scripts','--','--exact','--ignored','--test-threads=1','--nocapture') }
