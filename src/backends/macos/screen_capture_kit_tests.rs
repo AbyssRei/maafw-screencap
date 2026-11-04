@@ -6,6 +6,9 @@ use super::*;
 mod display_geometry;
 #[path = "screen_capture_kit_display_tests.rs"]
 mod display_patch;
+#[cfg(feature = "macos-manager")]
+#[path = "screen_capture_kit_native_host_tests.rs"]
+mod native_host;
 #[path = "screen_capture_kit_same_binary_tests.rs"]
 mod same_binary;
 #[path = "screen_capture_kit_sample_tests.rs"]

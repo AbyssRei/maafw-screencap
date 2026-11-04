@@ -56,7 +56,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 }
             }
         }
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','rust-macos-live-sample') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','rust-macos-live-sample','rust-macos-native-host','rust-macos-native-host-original-oracle') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -71,6 +71,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         }
         if($Name -eq 'macos-manager-host-records' -and [regex]::Matches($observed,[regex]::Escape('macOS manager host cases=19200 paired_reports=38400 exact_events=1 input_actions=0 native_screenshots=0 full_P1_acceptance=0 passed')).Count -ne 1) {
             $status='failed';throw 'Incomplete manager host records or lifecycle evidence'
+        }
+        if($Name -eq 'rust-macos-native-host' -and (
+            [regex]::Matches($observed,'(?m)^running 1 test\r?$').Count -ne 1 -or
+            [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1 -or
+            [regex]::Matches($observed,[regex]::Escape('macOS native host cases=20 captures=120 input_failure_captures=40 retained_bgr=120 input_actions=0 source_module_pinned=1 passed')).Count -ne 1)) {
+            $status='failed';throw 'Expected one complete native host capture composition test'
+        }
+        if($Name -eq 'macos-native-host-records' -and [regex]::Matches($observed,[regex]::Escape('macOS native host cases=20 captures=120 input_failure_captures=40 retained_bgr=120 input_actions=0 source_module_pinned=1 files=306 full_P1_acceptance=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete native host capture records'
         }
         if($Name -eq 'rust-macos-live-sample' -and (
             $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -360,11 +369,14 @@ try {
             @('rust-macos-display-appkit-consumer','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
             @('rust-macos-display-appkit-scene','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
             @('rust-macos-display-cg-scene','display_patch::captures_first_display_owned_patch_and_keeps_pixels_after_scene_shutdown'),
-            @('rust-macos-manager','forwards_manager_captures_and_keeps_outputs_through_manager_and_window_shutdown')
+            @('rust-macos-manager','forwards_manager_captures_and_keeps_outputs_through_manager_and_window_shutdown'),
+            @('rust-macos-native-host','native_host::captures_after_host_input_failure_and_retains_images_after_native_manager_shutdown')
         )){
             try { Run-RustMacosProbe $probe[0] ('backends::macos::screen_capture_kit::tests::'+$probe[1]) $executable $rustArtifacts }
             catch { $failed=$true;Write-Host $_.Exception.Message }
         }
+        try { Step macos-native-host-records $ConfigureTool @('upstream-trace','macos-native-host',(Join-Path $rustArtifacts rust-macos-native-host/native-host)) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
         Run-MacosSameBinaryProbes $rustArtifacts
         Run-MacosFullDisplayProbes $rustArtifacts
         Run-MacosFullDisplayWitnessProbes $rustArtifacts

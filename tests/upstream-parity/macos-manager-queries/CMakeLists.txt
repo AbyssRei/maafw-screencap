@@ -40,7 +40,10 @@ if(APPLE)
     set_property(TARGET mfs_macos_manager_queries PROPERTY OBJCXX_STANDARD_REQUIRED ON)
     set_source_files_properties(consumer.cpp PROPERTIES LANGUAGE OBJCXX)
     target_sources(mfs_macos_manager_queries PRIVATE
+        native-host.mm
         "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit/Screencap/ScreenCaptureKitScreencap.mm")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/native-host-scope.txt"
+        "Separate native-host.mm composes the exact fixed manager bodies and real original ScreenCaptureKit class/runtime availability with controlled input owners. No input actions or native input classes are constructed. The source module remains pinned until process exit because original native block disposal is unobserved; original semaphore create references are not reclaimed. Source Mat owners are checked after manager destruction; same Rust native helper captures through failed input replacement and retains images after scene shutdown. This is not source callback drainage, module/global resource closure, arbitrary failure or complete P1 acceptance. Native compilation/execution is established only by its actual checks.\n")
     target_include_directories(mfs_macos_manager_queries PRIVATE "${MFS_UPSTREAM_ROOT}/source/MaaMacOSControlUnit")
     target_compile_options(mfs_macos_manager_queries PRIVATE -fno-objc-arc -fblocks -Wall -Wextra)
     foreach(_framework AppKit ApplicationServices CoreFoundation CoreMedia CoreVideo ScreenCaptureKit)

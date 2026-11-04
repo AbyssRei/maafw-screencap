@@ -48,6 +48,7 @@ mod macos_live_sample;
 mod macos_manager_host;
 mod macos_manager_queries;
 mod macos_maximum_level;
+mod macos_native_host;
 mod macos_native_sample;
 mod macos_same_binary;
 mod macos_sample_cases;

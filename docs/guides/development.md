@@ -132,6 +132,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+macOS 新增独立 `rust-macos-native-host` 入口，把同一 manager 的宿主输入 owner 边界接到真实原版 SCK 类及 Rust `connect_native_with_host_input`/`capture_native`。原版七个 manager 函数体、get_info、实际版本谓词及 SCK 源文件均不改；仅输入构造/析构/features 为明确夹具，不执行输入动作。计划二十组生命周期，分别经历成功连接、输入构造失败和再次成功连接；每侧六十次矩阵取帧，其中各二十次在 connected=false 且保留旧输入时执行。动态 features、metadata、输入事件及原版捕获先于输入的替换/析构顺序另存记录，不用像素推断不可见的所有权事件。
+
+新用例要求原版/Rust 各六十份当前及持有 BGR 的完整字节一致，并与六十份 Rust 原始 BGRA 转换对应，已知绿色内区沿用现有窗口夹具。原版 Mat 检查发生在 manager 销毁之后；Rust 图像在明确窗口关闭后再检查。矩阵之外另有既有原版单图 oracle 与一次 Rust capture 准备，Rust 夹具只在已观察 owner 结束后回收这六十一次 create 引用。原版没有 block-dispose 排空证据，因此其测试模块明确保留至进程退出，原有 semaphore create 引用也保留；不把这些描述成模块卸载、原版 callback 排空或全局资源闭合。默认 Input=None、旧探针及原像素断言保持各自结果。
+
+`cargo xtask upstream-trace macos-native-host <外部 native-host 目录> [--check-only]` 独立检查完整 306 份输入、配对状态、全事件和全图字节；编排拒绝零/多测试、缺失/重复摘要、部分结果和非零退出，失败后仍执行独立记录检查。当前仅在 Windows 做交叉类型/Clippy 检查，尚未原生编译/执行新 Objective-C++ 文件或取帧。实际 CLI 控制接受两份明确合成记录，拒绝十九份破坏；合成图像与旧 ARM64 库只用于记录控制，不是新原生程序的验证。二十个 Step mock、两个实际合成记录子进程和两项继续执行控制通过。本机更新 nightly 后，工作区测试（含 138 项 xtask）、默认 Release、严格 Clippy 和格式检查通过；依赖为明确归档离线输入，不是新在线最新版解析。初次默认镜像 DNS 失败、首轮新 Clippy 提示及合成记录 CRLF 失败均保留，修正分别使用官方源、数组分块和 LF 控制输入。外部记录由 `local/current-macos-native-host-development-path.txt` 指向；新原生 CI 与完整 P1 仍待验收。
+
 确切 `f6870ee` 的 [Actions 41761271603](https://github.com/AbyssRei/maafw-screencap/actions/runs/41761271603) 已在原生 ARM64 执行新增 `rust-macos-manager-host` 和 `macos-manager-host-records`，两项均通过，原 159 项名称/状态不变。组件为 140/161，保留原 21 项像素、nullopt、metadata/callback 及其下游记录失败。实际预装 Xcode 27.1（27A9275）按 `preinstalled` 记录并通过能力准备；较新发布身份只作升级参考，不构成版本年龄门禁。
 
 新增模型实际核对 19,200 个原函数体/Rust 配对场景、38,400 份报告，原版侧有 4,500 次受控 capture 调用和 11,010 次 features 查询。独立重放全部 owner 事件，确认 2,400 个成功 capture owner 与 6,240 个成功 input owner 均释放；30 个场景在 input 构造失败后保留新 capture/旧 input。另有 1,650 个 disconnected 且保留 input 的连接后观察，不将它们重计为独立 features 调用。双方完整 TSV 与 Windows Debug、Release 的四份 TSV 逐字节相同，实际 dylib 为 arm64 Mach-O。这里使用显式 capture/input-owner/可用性模型，零真实输入动作、零截图，不证明原生输入构造、真实可用性故障、任意分配失败、callback 排空或完整 manager。
