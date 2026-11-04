@@ -140,6 +140,16 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `ff3ccda` 的独立 [Actions 41859109236](https://github.com/AbyssRei/maafw-screencap/actions/runs/41859109236) 在全新 Windows 桌面执行 FramePool 组件。新增 `client-band` 两项检查通过：独立复算全部 27 张完整 96×64 BGR/165,888 像素、十二次准备几何及 54 次调用边界观测，真实六像素非客户区边带与客户区工作区位置均匹配，没有目标 inset、遮罩或容差。实际默认 getter 和额外 true setter 后的 getter 均为 true，未增加 false setter；本批 extended style 始终为 8，未观察到本机的 8→0 变化。不据此确定边缘像素生产者或接受 Rust/完整 manager 的新场景对照。
+
+该组件实际为 116 项、110 通过/六失败：全新在线准备比旧共享离线组件多二十二项、少五项 replay，另增加两项新场景，不能假定总数仍为 99。四项原版 pseudo 失败仍为完整黑图；Rust alpha 序列及其 pair reader 新失败。实际失败位于持续会话 phase 2（alpha=255）：等待 2.000461 秒，792 次 poll 未取到帧，记录回放黑图、零转换/一次 clone、无该阶段 raw，6144 个目标像素均为零；同阶段原版结果和独立 PrintWindow 内容见证符合完整已知图样。原生关闭及二十张 Rust 持帧文件已写完后，测试在 `positive_controls` 断言失败。保存图像确认这次 alpha-sequence 差异，不能混同旧 alpha-poll 失败或推断原因；本批 alpha-poll 另通过。
+
+官方 1,942,403 字节诊断 ZIP 的整体摘要/CRC、安全路径及 3,618 份原始文件均核对；108 张边缘诊断完整图像、四十张 alpha 即时图和三十张持帧比较独立复算。旧 popup 另在首次 post-reset 观测保留 924 像素差异，其他 legacy/popup/caption 实际差异继续逐项保存，未用新场景覆盖。十五份保存报告由支持 case 2 的冻结 reader 只读通过，失败 alpha pair 继续拒收，九份确切 Git 源码补充匹配登记身份。完整 3,662 份文件封存并回读，由外部 `local/current-ff3-independent-framepool-final-review-path.txt` 指向；轻量包的 699 项完整输入缺口已由下述同批完整工程包单独补齐。这不是新本机捕获或无输入复测，不接受原生 drain、旧失败恢复或完整 P1。
+
+同一独立 run 的 324,514,126 字节完整工程 ZIP 已通过官方整体摘要与 tar CRC 核对。最初传输的十一段完成记录及后续最后一段网络失败均保留；仅复用重新校验的 HTTP 分段，最终 155 段组成整个官方摘要。恢复 12,473 份文件、10,920 个登记路径、三份清单和三份 598 文件产品快照；全部 3,618 份轻量文件匹配，699 项来源缺口全部关闭。固定 F 的 76 份来源、U/F 的 741/744 个 tracked blob、736/739 个实际存储对象及无 alternates/commondir 的本地对象查询均核对。十五份只读报告和完整 reference verifier 通过，失败 alpha pair 继续拒收，全部恢复字节及 Git 元数据未变。完整 12,527 份文件封存回读，由 `local/current-ff3-independent-full-final-review-path.txt` 指向。
+
+实际 CMake/F/VS/MSVC/SDK 上下文和七条边带/alpha 原生源码编译记录另经核对；预装 VS 18.11.12328.437、MSVC 19.51.36260.0、SDK 10.0.26100.0 按实际身份记录，不按年龄加 CI 门禁。设备控制片段首次因假定原始字节相等而拒收，后续明确记录 671 字节 CRLF 与 649 字节 LF 的两个摘要后，验证完整源码文本相同且只有一次原 D3D 创建调用；初次失败保留，没有改写片段。未宣称完整 CL 命令/编译器头文件解析追踪。该来源闭包不把六项原生失败改为通过，也不接受新场景 Rust/完整 manager 对照、像素生产者、原生 drain 或完整 P1。
+
 确切 `fa76a07` 的 [Actions 41841543022](https://github.com/AbyssRei/maafw-screencap/actions/runs/41841543022) 完整 Mac 官方工程包已闭合初次轻量复核缺少的全部 662 项输入。367,857,141 字节 ZIP 从零下载，351 份 HTTP 206 分段及整体官方摘要、tar 成员 CRC、安全路径均验证；本次未复用旧流或旧批来源。恢复 32,071 份文件、30,514 个登记路径及十二份 manifest，全部 12,331 份轻量数据与完整包身份匹配。十一份每份 598 文件的普通产品快照及一份受控构建失败快照分别核对，固定 F 的 76 份来源、U/F 的 741/744 个 tracked blob 和 736/739 个实际存储对象完整验证，Mac tar 的可执行模式与 Git 声明相符。
 
 十三份原生控制相关源码（含新增创建引用 helper 和 Rust 捕获实现）的完整原文均与确切 Git/native 输入匹配；六次原版类编译、observer、回调记账及原生 Blocks 控制的九条实际构建日志、记录的编译器/SDK 上下文和已验证 ARM64 程序身份也一致。二十一份保存报告继续只读通过，失败 observer 的 late/token 双策略仍严格要求。完整 reference verifier 通过，前后所有恢复文件和 Git 元数据字节未变；另清除进程级对象目录覆盖、禁用 replace objects、确认无 alternates/commondir，再核对本地对象可用性。外部 `local/current-fa76-macos-full-final-review-path.txt` 指向 32,141 份文件的完整长路径封存及独立读回。该批原生仍为 147/168，原二十一项失败保留；完整源码/输入核验不证明失败 SCK 请求的实际未调用析构、原生会话排空、全部头文件解析轨迹或完整 P1。
@@ -152,7 +162,7 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 外部实验的三轮连续本机测试均为零输入，最大观察间隔 73.5262ms，四路监听及关闭证据验证，未声称新的物理输入正向控制。81 张完整 BGR/497,664 像素、十二份实际准备几何及 81 组前后客户区边界独立核对；本机默认 getter 三轮均为 false，不能代替 hosted true 条件。每轮首次调用前后均观察到 extended style 的置顶位 8→0，几何保持不变，原因未证明。原记录校验三次先因硬编码 `CV_8UC3=16` 失败（真实值为 64），修正 reader 又因假定所有 style 不变而拒收；两版失败和原生退出码均保留，后续只读 reader 分别验证实际类型和明确单列的置顶位变化，没有重跑取帧。完整实验 2,453 份文件封存，由 `local/current-nonclient-band-local-review-path.txt` 指向。
 
-仓库现接入该独立场景及 `upstream-trace framepool-border` 的 case 2。它要求全部二十七次调用的完整客户区均符合已知图样，原两种 matched case 的报告格式与严格边界不变；case 2 仅允许每个窗口置顶位单向清除并保存实际转变，其他位或客户区/外矩形变化继续拒收。三份真实本机记录及三份旧托管报告只读通过，九份破坏数据（含同步更新摘要的非控制边缘错误、错误边带、无关 style/恢复置顶、类型和缺图）均拒收。工作区测试、严格 Clippy、默认 Release、格式/脚本检查与新 Step 摘要/独立继续控制通过；按归档离线依赖验证，未声明新的在线依赖解析。新托管执行及 Rust/完整 manager 对照仍待验证；本次不接受旧失败恢复、原生会话排空或完整 P1。
+仓库现接入该独立场景及 `upstream-trace framepool-border` 的 case 2。它要求全部二十七次调用的完整客户区均符合已知图样，原两种 matched case 的报告格式与严格边界不变；case 2 仅允许每个窗口置顶位单向清除并保存实际转变，其他位或客户区/外矩形变化继续拒收。三份真实本机记录及三份旧托管报告只读通过，九份破坏数据（含同步更新摘要的非控制边缘错误、错误边带、无关 style/恢复置顶、类型和缺图）均拒收。工作区测试、严格 Clippy、默认 Release、格式/脚本检查与新 Step 摘要/独立继续控制通过；按归档离线依赖验证，未声明新的在线依赖解析。原版新托管执行已由上文独立批次验证，Rust/完整 manager 对照仍待验证；本次不接受旧失败恢复、原生会话排空或完整 P1。
 
 确切 `fa76a07` 的 [Actions 41841543022](https://github.com/AbyssRei/maafw-screencap/actions/runs/41841543022) 已在原生 ARM64 通过新增所有权控制。MRC 模型的调用/未调用两支观察到四个 NSObject 的实际 `dealloc`，其中两个创建引用仅由测试在最后 block alias 结束后回收；Rust 对同两支执行十次原生弱引用检查和真实 RcBlock alias，精确一项测试通过，并同样单独回收未调用分支的两个测试引用。原四组 Blocks 控制继续通过。登记程序的 ARM64 Mach-O、真实 Blocks imports、Foundation 链接、实际编译条目及十三份相关源码身份均核对。这些控制使用真实 NSObject，尚未直接观察失败请求中实际 SCK filter/config 的未调用析构，不据此接受请求或会话排空。
 
