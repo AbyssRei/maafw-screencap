@@ -132,11 +132,17 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
-macOS 新增独立 `rust-macos-native-host` 入口，把同一 manager 的宿主输入 owner 边界接到真实原版 SCK 类及 Rust `connect_native_with_host_input`/`capture_native`。原版七个 manager 函数体、get_info、实际版本谓词及 SCK 源文件均不改；仅输入构造/析构/features 为明确夹具，不执行输入动作。计划二十组生命周期，分别经历成功连接、输入构造失败和再次成功连接；每侧六十次矩阵取帧，其中各二十次在 connected=false 且保留旧输入时执行。动态 features、metadata、输入事件及原版捕获先于输入的替换/析构顺序另存记录，不用像素推断不可见的所有权事件。
+确切 `55b96ed` 的 [Actions 41767659599](https://github.com/AbyssRei/maafw-screencap/actions/runs/41767659599) 已在 ARM64 编译、执行新的真实宿主组合入口：原版 oracle、Rust 配对测试、场景停止及独立记录四项均通过；原 161 项名称/状态不变，组件 144/165，原 21 项失败保留。独立 owner-set 重放核对原版六十个捕获 owner、四十个成功输入 owner 的释放及二十次受控输入构造失败，原版/Rust 输入事件和每侧八十次 features 查询一致。完整 240 份当前/持有 BGR、60 份原始 BGRA、349,680 个保存的 BGR 像素位置全部对应；六十张原版矩阵图也逐字节等于独立原版 oracle。实际加载副本的 arm64 Mach-O 与导出 `mfs_mh_native_run`、目标窗口身份及正常关闭均已核对。源码 helper 的输入替换失败控制没有执行真实输入动作；模块 pin、原版 callback 排空及全局资源仍保留下述限制。
+
+本次官方轻量 ZIP 为 45,510,845 字节，发布摘要、CRC、安全路径、165 份日志及 21,479 个可用登记输入项（12,160 个不同路径）核对通过。二十五份确切 Git 源码补充与二十份保存数据只读检查通过，原始数据不变；仍缺 658 个不同的完整输入，本次不声称完整编译输入闭包。复核分别位于 `local/current-55b-macos-focused-review-path.txt` 与 `local/current-55b-native-host-events-review-path.txt`，前一批完整闭包及失败结果保持各自来源身份。
+
+确切 `f6870ee` 的完整官方 Mac 工程包现已补齐其轻量包缺少的全部 653 个输入。365,616,658 字节 ZIP 的发布摘要/CRC、安全路径及其中 1,929,873,920 字节 tar 已核对；31,649 份恢复文件、30,092 个登记路径、十二份清单、十一份每份 590 文件的普通快照和一份明确受控快照全部匹配。另核对 76 份固定 F 来源、完整 U/F 的 741/744 个 Git 文件与原 tar mode、736/739 个实际存储 blob、六处原类编译上下文以及新增宿主模型的 ARM64 编译项；实际生成的七个 manager 函数体和 get_info 与固定 F 一致。十九份保存数据只读复核及完整 reference verifier 通过，恢复文件与 Git 元数据不变。组件仍为 140/161，原 21 项失败不变；这项来源闭包不执行后续 `55b96ed` 的真实宿主组合测试，不证明 source callback 排空或完整 P1。完整记录见 `local/current-f687-macos-full-source-review-path.txt`，早先轻量包审阅保留原有缺口范围。
+
+macOS 独立 `rust-macos-native-host` 入口把同一 manager 的宿主输入 owner 边界接到真实原版 SCK 类及 Rust `connect_native_with_host_input`/`capture_native`。原版七个 manager 函数体、get_info、实际版本谓词及 SCK 源文件均不改；仅输入构造/析构/features 为明确夹具，不执行输入动作。已完成二十组生命周期，分别经历成功连接、输入构造失败和再次成功连接；每侧六十次矩阵取帧，其中各二十次在 connected=false 且保留旧输入时执行。动态 features、metadata、输入事件及原版捕获先于输入的替换/析构顺序另存记录，不用像素推断不可见的所有权事件。
 
 新用例要求原版/Rust 各六十份当前及持有 BGR 的完整字节一致，并与六十份 Rust 原始 BGRA 转换对应，已知绿色内区沿用现有窗口夹具。原版 Mat 检查发生在 manager 销毁之后；Rust 图像在明确窗口关闭后再检查。矩阵之外另有既有原版单图 oracle 与一次 Rust capture 准备，Rust 夹具只在已观察 owner 结束后回收这六十一次 create 引用。原版没有 block-dispose 排空证据，因此其测试模块明确保留至进程退出，原有 semaphore create 引用也保留；不把这些描述成模块卸载、原版 callback 排空或全局资源闭合。默认 Input=None、旧探针及原像素断言保持各自结果。
 
-`cargo xtask upstream-trace macos-native-host <外部 native-host 目录> [--check-only]` 独立检查完整 306 份输入、配对状态、全事件和全图字节；编排拒绝零/多测试、缺失/重复摘要、部分结果和非零退出，失败后仍执行独立记录检查。当前仅在 Windows 做交叉类型/Clippy 检查，尚未原生编译/执行新 Objective-C++ 文件或取帧。实际 CLI 控制接受两份明确合成记录，拒绝十九份破坏；合成图像与旧 ARM64 库只用于记录控制，不是新原生程序的验证。二十个 Step mock、两个实际合成记录子进程和两项继续执行控制通过。本机更新 nightly 后，工作区测试（含 138 项 xtask）、默认 Release、严格 Clippy 和格式检查通过；依赖为明确归档离线输入，不是新在线最新版解析。初次默认镜像 DNS 失败、首轮新 Clippy 提示及合成记录 CRLF 失败均保留，修正分别使用官方源、数组分块和 LF 控制输入。外部记录由 `local/current-macos-native-host-development-path.txt` 指向；新原生 CI 与完整 P1 仍待验收。
+`cargo xtask upstream-trace macos-native-host <外部 native-host 目录> [--check-only]` 独立检查完整 306 份输入、配对状态、全事件和全图字节；编排拒绝零/多测试、缺失/重复摘要、部分结果和非零退出，失败后仍执行独立记录检查。本机 Windows 的类型/Clippy 检查属于交叉检查，后续 ARM64 原生执行另见上面的确切批次。实际 CLI 控制接受两份明确合成记录，拒绝十九份破坏；合成图像与旧 ARM64 库只用于记录控制。二十个 Step mock、两个实际合成记录子进程和两项继续执行控制通过。本机更新 nightly 后，工作区测试（含 138 项 xtask）、默认 Release、严格 Clippy 和格式检查通过；依赖为明确归档离线输入，不是新在线最新版解析。初次默认镜像 DNS 失败、首轮新 Clippy 提示及合成记录 CRLF 失败均保留，修正分别使用官方源、数组分块和 LF 控制输入。外部开发记录由 `local/current-macos-native-host-development-path.txt` 指向，完整 P1 仍待验收。
 
 确切 `f6870ee` 的 [Actions 41761271603](https://github.com/AbyssRei/maafw-screencap/actions/runs/41761271603) 已在原生 ARM64 执行新增 `rust-macos-manager-host` 和 `macos-manager-host-records`，两项均通过，原 159 项名称/状态不变。组件为 140/161，保留原 21 项像素、nullopt、metadata/callback 及其下游记录失败。实际预装 Xcode 27.1（27A9275）按 `preinstalled` 记录并通过能力准备；较新发布身份只作升级参考，不构成版本年龄门禁。
 
