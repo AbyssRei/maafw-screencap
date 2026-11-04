@@ -252,6 +252,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-delegate gamepad-client-band-runtime <mask> <external records> [--check-only]\n\
                       cargo xtask upstream-delegate win32-host-context <mask> <mode> <dpi> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate win32-whole-host-context <single mask> <mode> <dpi> <external records> [--check-only]\n\n\
+                      cargo xtask upstream-delegate win32-whole-queries <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate win32-destroy <external records> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool-pair <source directory> <Rust directory> [--check-only]\n\n\

@@ -59,16 +59,20 @@ int32_t mfs_dn_inactive(void* unit,int32_t* output) noexcept {
     try { *output=static_cast<MaaWin32ControlUnitHandle>(unit)->inactive();return 0; }
     catch(const std::bad_alloc&) { return 3; } catch(...) { return 2; }
 }
-int32_t mfs_dn_query(void* unit,MfsDnQueryResult* output) noexcept {
+static int32_t query_impl(void* unit,MfsDnQueryResult* output,bool observe) noexcept {
     if(!unit || !output) { return 1; }
     try {
         auto* api=static_cast<MaaWin32ControlUnitHandle>(unit);
         MfsDnQueryResult result={};
         result.connected=api->connected();
+        if(observe) {mfs_dn_event(20,reinterpret_cast<uintptr_t>(unit),result.connected,0,0);}
         std::string uuid="caller sentinel";
         result.uuid_success=api->request_uuid(uuid);
+        if(observe) {mfs_dn_event(21,reinterpret_cast<uintptr_t>(unit),result.uuid_success,uuid.size(),0);}
         result.features=api->get_features();
+        if(observe) {mfs_dn_event(22,reinterpret_cast<uintptr_t>(unit),result.features,0,0);}
         const auto info=json::value(api->get_info()).to_string();
+        if(observe) {mfs_dn_event(23,reinterpret_cast<uintptr_t>(unit),info.size(),0,0);}
         if(uuid.size()>std::size(result.uuid) || info.size()>std::size(result.info)) { return 4; }
         result.uuid_length=uuid.size();result.info_length=info.size();
         std::copy(uuid.begin(),uuid.end(),result.uuid);
@@ -78,6 +82,8 @@ int32_t mfs_dn_query(void* unit,MfsDnQueryResult* output) noexcept {
         *output=result;return 0;
     } catch(const std::bad_alloc&) { return 3; } catch(...) { return 2; }
 }
+int32_t mfs_dn_query(void* unit,MfsDnQueryResult* output) noexcept {return query_impl(unit,output,false);}
+int32_t mfs_dn_query_observed(void* unit,MfsDnQueryResult* output) noexcept {return query_impl(unit,output,true);}
 uintptr_t mfs_dn_query_window_create() noexcept {
     // Message-only STATIC window: real HWND lifetime, no visible desktop or
     // capture fixture. The calling thread owns creation and destruction.

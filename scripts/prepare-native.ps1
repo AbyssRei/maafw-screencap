@@ -39,6 +39,7 @@ $delegateRuntimeEvidence = ''
 $delegateBandRuntimeEvidence = ''
 $gamepadMetadataEvidence = ''
 $delegateQueryEvidence = ''
+$delegateWholeQueryEvidence = ''
 $delegateDestroyEvidence = ''
 if ($PrintWindowParity -and -not $GdiParity) { throw 'PrintWindow parity requires the shared explicit GDI adapter/regression target.' }
 if ($ScreenDcParity -and -not $GdiParity) { throw 'ScreenDC parity requires the shared explicit GDI adapter/regression target.' }
@@ -583,6 +584,19 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             & $ConfigureTool upstream-metadata win32-identity (Join-Path $env:MFS_P1_MANAGER_METADATA_ARTIFACTS win32-identity) >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Windows UUID/features artifact validation failed'}
+        }
+        if($Name -eq 'manager-whole-virtual-queries' -and $exitCode -eq 0) {
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary='whole original Win32 queries units=256 snapshots=500 calls=2000 observed_call_events=2000 original_rtti=256 window_lifetimes=80 retained_after_unload=500 captures=0 input_none=1 passed'
+            $leader='(?:test backends::windows::delegate_native::tests::queries::consumes_queries_through_complete_original_win32_class_and_rust_factory \.\.\. )?'
+            if([regex]::Matches($observed,'(?m)^'+$leader+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^'+$leader+'whole original Win32 queries.*\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$') {
+                throw 'Expected exactly one complete original-class virtual-query consumer and all returned-call/type observations'
+            }
+            & $ConfigureTool upstream-delegate win32-whole-queries $env:MFS_DELEGATE_QUERY_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Complete original-class query bytes, observed calls or lifetimes differ'}
         }
         if($Name -eq 'manager-virtual-queries' -and $exitCode -eq 0) {
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -1304,6 +1318,7 @@ try {
         $env:MFS_DELEGATE_FACTORY_RECORDS=$delegateFactoryEvidence
         $delegateQueryEvidence=Join-Path $artifacts windows-delegate-queries
         $env:MFS_DELEGATE_QUERY_RECORDS=$delegateQueryEvidence
+        $delegateWholeQueryEvidence=Join-Path $artifacts windows-delegate-whole-queries
         $delegateDestroyEvidence=Join-Path $artifacts windows-delegate-destroy
         $env:MFS_DELEGATE_DESTROY_RECORDS=$delegateDestroyEvidence
         $delegateRuntimeEvidence=Join-Path $artifacts windows-delegate-runtime
@@ -1716,7 +1731,9 @@ try {
             $delegateWholeContextCase='backends::windows::delegate_native::tests::host_context::compares_whole_original_win32_class_and_rust_capture_under_host_contexts'
             $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
             $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
+            $managerWholeQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_complete_original_win32_class_and_rust_factory'
             $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
+            $caseSelection+=@('--skip',$managerWholeQueryCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
             $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase,'--skip',$gamepadMetadataCase)
             $caseSelection+=@('--skip',$delegateBandRuntimeCase)
@@ -1734,11 +1751,13 @@ try {
                 @{name='manager-factory-construction';arguments=($parityArguments + @('--',$delegateFactoryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-delegate-destroy';arguments=($parityArguments + @('--',$delegateDestroyCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-virtual-queries';arguments=($parityArguments + @('--',$managerQueryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
+                @{name='manager-whole-virtual-queries';arguments=($parityArguments + @('--',$managerWholeQueryCase,'--exact','--ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-source-scripts';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_selection_calls_quantization_failures_outputs_and_owner_release','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-gdi-lifecycles';arguments=($parityArguments + @('--','backends::windows::manager::tests::matches_source_gdi_manager_across_twenty_complete_lifecycles','--exact','--include-ignored','--test-threads=1','--nocapture'))},
                 @{name='manager-native-size-rejection';arguments=($parityArguments + @('--',$managerSizeCase,'--exact','--include-ignored','--test-threads=1','--nocapture'))}
             )
             foreach ($check in $managerChecks) {
+                $env:MFS_DELEGATE_QUERY_RECORDS=if($check.name -eq 'manager-whole-virtual-queries') {$delegateWholeQueryEvidence} else {$delegateQueryEvidence}
                 try { Step $check.name cargo $check.arguments }
                 catch { $failed=$true; Write-Host $_.Exception.Message }
             }
@@ -1941,6 +1960,7 @@ finally {
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateQueryEvidence -and (Test-Path -LiteralPath $delegateQueryEvidence)) {Get-ChildItem -LiteralPath $delegateQueryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
+    if($delegateWholeQueryEvidence -and (Test-Path -LiteralPath $delegateWholeQueryEvidence)) {Get-ChildItem -LiteralPath $delegateWholeQueryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateDestroyEvidence -and (Test-Path -LiteralPath $delegateDestroyEvidence)) {Get-ChildItem -LiteralPath $delegateDestroyEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateEvidence -and (Test-Path -LiteralPath $delegateEvidence)) {Get-ChildItem -LiteralPath $delegateEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($customEvidence -and (Test-Path -LiteralPath $customEvidence)) {Get-ChildItem -LiteralPath $customEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}

@@ -1,6 +1,7 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Real original virtual consumers; scoped source/Rust capture-only facades.
+use super::whole_probe::Probe;
 use super::*;
 use crate::backends::manager_metadata::case_matrix;
 use std::{
@@ -69,6 +70,27 @@ struct Recorder {
     rows: Vec<Row>,
     output: BufWriter<fs::File>,
 }
+fn original_type(
+    output: &mut Option<BufWriter<fs::File>>,
+    probe: Option<&Probe>,
+    kind: &str,
+    case: usize,
+    stage: u32,
+    unit: NonNull<c_void>,
+) -> std::io::Result<()> {
+    if let Some(probe) = probe {
+        let values = probe.inspect(unit);
+        let output = output.as_mut().unwrap();
+        writeln!(
+            output,
+            "{kind}\t{case}\t{stage}\t{}\t{}",
+            unit.as_ptr() as usize,
+            values.map(|v| v.to_string()).join("\t")
+        )?;
+        output.flush()?;
+    }
+    Ok(())
+}
 impl Recorder {
     fn record(&mut self, unit: NonNull<c_void>, mut row: Row, connected: bool) {
         // SAFETY: The caller retains its loader/unit/module through this whole
@@ -108,6 +130,17 @@ impl Recorder {
 #[ignore = "explicit real DLL/virtual queries and owned message-window lifetimes; no screen capture"]
 fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
 -> Result<(), Box<dyn std::error::Error>> {
+    run(false)
+}
+
+#[test]
+#[ignore = "explicit complete original Win32 class/API queries and message-window lifetimes; no screenshot"]
+fn consumes_queries_through_complete_original_win32_class_and_rust_factory()
+-> Result<(), Box<dyn std::error::Error>> {
+    run(true)
+}
+
+fn run(complete: bool) -> Result<(), Box<dyn std::error::Error>> {
     let build = fs::canonicalize(PathBuf::from(
         std::env::var_os("MFS_DELEGATE_NATIVE_BUILD").ok_or("native query build required")?,
     ))?;
@@ -129,7 +162,13 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
     }
     let _dpi = Dpi(previous);
     // SAFETY: All addresses belong to the checked bridge kept by ops.
-    let query: Query = unsafe { ops.module.symbol(c"mfs_dn_query")? };
+    let query: Query = unsafe {
+        ops.module.symbol(if complete {
+            c"mfs_dn_query_observed"
+        } else {
+            c"mfs_dn_query"
+        })?
+    };
     let create: WindowCreate = unsafe { ops.module.symbol(c"mfs_dn_query_window_create")? };
     let destroy: WindowCall = unsafe { ops.module.symbol(c"mfs_dn_query_window_destroy")? };
     let valid: WindowCall = unsafe { ops.module.symbol(c"mfs_dn_query_window_valid")? };
@@ -139,11 +178,23 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
         output: BufWriter::new(fs::File::create_new(root.join("queries.tsv"))?),
     };
     let mut lifetimes = String::new();
+    let mut types = if complete {
+        Some(BufWriter::new(fs::File::create_new(
+            root.join("original-types.tsv"),
+        )?))
+    } else {
+        None
+    };
     for side in ["source", "rust"] {
         let directory = root.join(side);
         fs::create_dir(&directory)?;
         let module = directory.join("MaaWin32ControlUnit.dll");
-        fs::copy(build.join(format!("mfs_delegate_{side}.dll")), &module)?;
+        let binary = if complete && side == "source" {
+            "mfs_delegate_whole_source.dll".to_owned()
+        } else {
+            format!("mfs_delegate_{side}.dll")
+        };
+        fs::copy(build.join(binary), &module)?;
         for (case, (hwnd, method)) in case_matrix("win32").unwrap().into_iter().enumerate() {
             let hwnd = usize::try_from(hwnd)?;
             assert!(!library::loaded(&module));
@@ -154,6 +205,12 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
                 .create(&mut loader, hwnd, method, 0, 0)
                 .unwrap()
                 .unwrap();
+            let probe = if complete && side == "source" {
+                Some(Probe::load(&module)?)
+            } else {
+                None
+            };
+            original_type(&mut types, probe.as_ref(), "raw", case, 0, unit)?;
             let mut row = Row {
                 side,
                 kind: "raw",
@@ -174,6 +231,8 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
                 row.phase = "inactive";
                 recorder.record(unit, row, true);
             }
+            original_type(&mut types, probe.as_ref(), "raw", case, 1, unit)?;
+            drop(probe);
             drop(loader);
             assert!(!library::loaded(&module));
             use std::fmt::Write;
@@ -196,6 +255,12 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
                 .create(&mut loader, hwnd, method, 0, 0)
                 .unwrap()
                 .unwrap();
+            let probe = if complete && side == "source" {
+                Some(Probe::load(&module)?)
+            } else {
+                None
+            };
+            original_type(&mut types, probe.as_ref(), "window", case, 0, unit)?;
             let view = boundary.view(&loader, unit).unwrap();
             let mut row = Row {
                 side,
@@ -219,6 +284,8 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
             assert!(boundary.inactive(&mut loader, &view).unwrap());
             row.phase = "inactive";
             recorder.record(unit, row, false);
+            original_type(&mut types, probe.as_ref(), "window", case, 1, unit)?;
+            drop(probe);
             drop(loader);
             assert!(!library::loaded(&module));
             use std::fmt::Write;
@@ -226,13 +293,17 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
         }
     }
     fs::write(root.join("lifetimes.tsv"), lifetimes)?;
+    if let Some(types) = types.as_mut() {
+        types.flush()?;
+    }
     recorder.output.flush()?;
     assert_eq!(recorder.rows.len(), 500);
     assert_eq!(host.counts(), [128, 128, 0, 0, 41]);
     assert_eq!(host.query_counts(), [250; 4]);
     let (events, owners) = ops.events();
     assert_eq!(owners, 0);
-    assert_eq!(events.len(), 2836);
+    let event_count = if complete { 3498 } else { 2836 };
+    assert_eq!(events.len(), event_count);
     let thread = crate::platform::windows::manager::probe::thread();
     let mut table = String::new();
     for event in events {
@@ -265,11 +336,17 @@ fn consumes_queries_through_real_factories_and_preserves_values_after_unload()
     fs::write(
         root.join("summary.json"),
         format!(
-            "{{\"layout_version\":1,\"thread\":{thread},\"units\":256,\"raw_units\":176,\"window_units\":80,\"snapshots\":500,\"virtual_queries\":2000,\"events\":2836,\"host_created\":128,\"host_destroyed\":128,\"host_queries\":[250,250,250,250],\"host_captures\":0,\"host_conversions\":0,\"host_inactive\":41,\"retained_snapshots\":500,\"actual_captures\":0}}\n"
+            "{{\"layout_version\":1,\"thread\":{thread},\"units\":256,\"raw_units\":176,\"window_units\":80,\"snapshots\":500,\"virtual_queries\":2000,\"events\":{event_count},\"host_created\":128,\"host_destroyed\":128,\"host_queries\":[250,250,250,250],\"host_captures\":0,\"host_conversions\":0,\"host_inactive\":41,\"retained_snapshots\":500,\"actual_captures\":0}}\n"
         ),
     )?;
-    println!(
-        "real virtual manager queries units=256 snapshots=500 calls=2000 host_queries=1000 window_lifetimes=80 retained_after_unload=500 captures=0 input_none=1 passed"
-    );
+    if complete {
+        println!(
+            "whole original Win32 queries units=256 snapshots=500 calls=2000 observed_call_events=2000 original_rtti=256 window_lifetimes=80 retained_after_unload=500 captures=0 input_none=1 passed"
+        );
+    } else {
+        println!(
+            "real virtual manager queries units=256 snapshots=500 calls=2000 host_queries=1000 window_lifetimes=80 retained_after_unload=500 captures=0 input_none=1 passed"
+        );
+    }
     Ok(())
 }

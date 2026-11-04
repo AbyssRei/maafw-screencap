@@ -45,6 +45,8 @@ MFS_DN int32_t mfs_dn_connect(void*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_capture(void*,MfsDnImage*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_inactive(void*,int32_t*) noexcept;
 MFS_DN int32_t mfs_dn_query(void*,MfsDnQueryResult*) noexcept;
+// Opt-in returned-call observations; the original unobserved entry is unchanged.
+MFS_DN int32_t mfs_dn_query_observed(void*,MfsDnQueryResult*) noexcept;
 MFS_DN uintptr_t mfs_dn_query_window_create() noexcept;
 MFS_DN int32_t mfs_dn_query_window_destroy(uintptr_t) noexcept;
 MFS_DN int32_t mfs_dn_query_window_valid(uintptr_t) noexcept;

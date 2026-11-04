@@ -26,6 +26,8 @@ mod queries;
 #[cfg(feature = "prototype-windows-com")]
 #[path = "delegate_runtime_tests.rs"]
 mod runtime;
+#[path = "delegate_whole_probe_tests.rs"]
+mod whole_probe;
 #[derive(Default)]
 #[repr(C)]
 struct QueryValue {
