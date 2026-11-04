@@ -42,7 +42,11 @@ fn run_kind(args: &[String], desktop: bool) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if desktop && report.layout_version == 2 {
+    if desktop && report.layout_version == 3 {
+        println!(
+            "DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=324 quiescent_counts=40 initialized_fixture=1 full_P1_acceptance=0 passed"
+        );
+    } else if desktop && report.layout_version == 2 {
         println!(
             "DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=323 quiescent_counts=40 full_P1_acceptance=0 passed"
         );
@@ -166,6 +170,15 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
         }
     }
     let resource_layout = rows.contains_key(&(-1, "fixture", "resources"));
+    let resource_version = if resource_layout {
+        let version = array(rows[&(-1, "fixture", "resources")], 1)?[0];
+        if !desktop || !matches!(version, 2 | 3) {
+            return Err("unknown desktop resource boundary layout".into());
+        }
+        u32::try_from(version)?
+    } else {
+        1
+    };
     if rows.len() != 404 + usize::from(resource_layout) || (resource_layout && !desktop) {
         return Err("incomplete or additional pending matrix".into());
     }
@@ -183,7 +196,7 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
     let work = take(-1, "fixture", "work", 4)?;
     let before = take(-1, "fixture", "before", 4)?;
     let after = take(-1, "fixture", "after", 4)?;
-    if resource_layout && take(-1, "fixture", "resources", 1)? != [2] {
+    if resource_layout && take(-1, "fixture", "resources", 1)? != [i64::from(resource_version)] {
         return Err("unknown desktop resource boundary layout".into());
     }
     for rectangle in [&monitor, &work, &before, &after] {
@@ -232,6 +245,23 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
         }
         None
     };
+    let initialization = if resource_version == 3 {
+        let path = root.join("initialization.tsv");
+        let initialized =
+            validate_initialization_text(&fs::read_to_string(&path)?, &monitor, &work, &before)?;
+        let first = &resource_boundaries
+            .as_ref()
+            .ok_or("missing resource boundaries")?[0];
+        if first.before != initialized.closed_count || first.caller != initialized.caller {
+            return Err(
+                "first capture baseline differs from completed fixture initialization".into(),
+            );
+        }
+        inputs.push(records::artifact(root, &path)?);
+        Some(initialized)
+    } else {
+        None
+    };
     for cycle in 0..20 {
         for side in ["source", "rust"] {
             let setup = take(cycle, side, "setup", 31)?;
@@ -266,6 +296,12 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
                     return Err(
                         "resource boundary differs from actual capture/update owners".into(),
                     );
+                }
+                if initialization
+                    .as_ref()
+                    .is_some_and(|initialized| initialized.caller != resource.caller)
+                {
+                    return Err("capture caller differs from fixture initialization".into());
                 }
             }
             for geometry in [&setup, &completed, &final_geometry] {
@@ -334,7 +370,11 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
         }
     }
     if !rows.is_empty()
-        || inputs.len() != 321 + usize::from(desktop) + usize::from(resource_boundaries.is_some())
+        || inputs.len()
+            != 321
+                + usize::from(desktop)
+                + usize::from(resource_boundaries.is_some())
+                + usize::from(initialization.is_some())
     {
         return Err("additional pending records".into());
     }
@@ -352,19 +392,97 @@ fn validate(root: &Path, desktop: bool) -> Result<Report> {
     }
     inputs.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(Report {
-        layout_version: if resource_boundaries.is_some() { 2 } else { 1 },
+        layout_version: resource_version,
         cases: 40,
         captures: 80,
         retained_images: 80,
         queue_timeouts: 0,
         inputs,
-        scope: if resource_boundaries.is_some() {
+        scope: if initialization.is_some() {
+            "Original whole F DesktopDupWindow/Rust first capture with unchanged native calls and independent update owner. One existing geometry fixture first exercises the matching caption style and closes/joins before accounting, with explicit native geometry, owner, validity and diagnostic counts. Strict resource equality still surrounds every capture/fixture lifecycle; no count allowance, capture warmup, historical failure reclassification, arbitrary races, global GPU, input-free execution or full P1 acceptance follows."
+        } else if resource_boundaries.is_some() {
             "Original whole F DesktopDupWindow/Rust first capture with a held target UI queue, unchanged native capture and independent nonoverlapping update owner. Strict GDI counts surround both fixture lifetimes: before create and after checked close/worker join, with actual invalid HWND and cross-bound caller/owner observations. Complete target pixels, one queued correction and post-close CPU owners. No historical failure reclassification, arbitrary races, global GPU, input-free execution or full P1 acceptance follows."
         } else if desktop {
             "Original whole F DesktopDupWindow/Rust first capture with a held target UI queue, real asynchronous correction and a distinct nonoverlapping same-output update owner. Native warmups/waits/full-output conversion/crop remain unchanged; source target clone occurs only at acceptance publication. Known complete target pixels, one movement after direct release, retained CPU owners and explicit update-owner close. No arbitrary foreign-window races, in-flight driver fault, global GPU, input-free execution or full P1 acceptance follows."
         } else {
             "Original/Rust capture with a fixture-held UI queue and real asynchronous geometry request, known pixels, one native correction after direct release and post-close owners. Does not prove arbitrary foreign-window races, DesktopDupWindow, input-free execution or full P1 acceptance."
         },
+    })
+}
+
+struct FixtureInitialization {
+    closed_count: u32,
+    caller: u32,
+}
+fn validate_initialization_text(
+    text: &str,
+    monitor: &[i64],
+    work: &[i64],
+    before: &[i64],
+) -> Result<FixtureInitialization> {
+    let mut lines = text.lines();
+    if lines.next() != Some("stage\tvalues") {
+        return Err("fixture initialization header differs".into());
+    }
+    let mut take = |stage: &str| -> Result<&str> {
+        let line = lines.next().ok_or("missing fixture initialization")?;
+        let (name, values) = line.split_once('\t').ok_or("invalid initialization row")?;
+        if name != stage {
+            return Err("fixture initialization order differs".into());
+        }
+        Ok(values)
+    };
+    let owner: [u64; 6] = serde_json::from_str(take("owner")?)?;
+    let geometry = array(take("geometry")?, 31)?;
+    let closed: [u64; 5] = serde_json::from_str(take("closed")?)?;
+    for field in &owner[1..5] {
+        u32::try_from(*field)?;
+    }
+    for field in &closed[..4] {
+        u32::try_from(*field)?;
+    }
+    native_coordinates(&geometry[..18])?;
+    native_coordinates(&geometry[21..25])?;
+    native_coordinates(&geometry[29..31])?;
+    u32::try_from(geometry[18])?;
+    u32::try_from(geometry[19])?;
+    u32::try_from(geometry[26])?;
+    if owner[0] == 0
+        || owner[1] == 0
+        || owner[2] == 0
+        || owner[4] == 0
+        || owner[1] != owner[3]
+        || owner[1] == owner[2]
+        || owner[5] != 1
+        || closed[3] != owner[2]
+        || closed[4] != 0
+        || geometry[..4] != *monitor
+        || geometry[4..8] != *work
+        || screen(&geometry) != before
+        || geometry[18] & 0x10cf_0000 != 0x10cf_0000
+        || geometry[18] & 0x8000_0000 != 0
+        || geometry[19] & 8 == 0
+        || geometry[20] < 1
+        || geometry[21..25]
+            != [
+                geometry[8],
+                geometry[9],
+                geometry[10] - geometry[8],
+                geometry[11] - geometry[9],
+            ]
+        || geometry[25] & 0x34 != 0x34
+        || geometry[26] == 0
+        || geometry[27..29] != [1, 0]
+        || geometry[29..31] != [geometry[10] - geometry[8], geometry[11] - geometry[9]]
+        || lines.next().is_some()
+    {
+        return Err("fixture initialization geometry/owner/checked close differs".into());
+    }
+    // Initial/styled counts may include owner-thread drawing. Only the closed
+    // count binds the first baseline. No expected delta or count is subtracted.
+    Ok(FixtureInitialization {
+        closed_count: u32::try_from(closed[2])?,
+        caller: u32::try_from(owner[2])?,
     })
 }
 
@@ -544,6 +662,142 @@ fn validate_resource_text(text: &str) -> Result<Vec<ResourceBoundary>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn rejects_unclosed_wrong_style_or_foreign_fixture_initialization() {
+        let monitor = [0, 0, 1920, 1080];
+        let work = [0, 0, 1920, 1032];
+        let before = [0, 952, 192, 1080];
+        let geometry = [
+            0,
+            0,
+            1920,
+            1080,
+            0,
+            0,
+            1920,
+            1032,
+            -8,
+            921,
+            200,
+            1088,
+            0,
+            0,
+            192,
+            128,
+            0,
+            952,
+            0x14cf_0000,
+            0x108,
+            1,
+            -8,
+            921,
+            208,
+            167,
+            0x34,
+            96,
+            1,
+            0,
+            208,
+            167,
+        ];
+        let owner = [101_u64, 10, 20, 10, 30, 1];
+        let closed = [9_u64, 11, 11, 20, 0];
+        let text = |geometry: &[i64], owner: &[u64], closed: &[u64]| {
+            format!(
+                "stage\tvalues\nowner\t{}\ngeometry\t{}\nclosed\t{}\n",
+                serde_json::to_string(owner).unwrap(),
+                serde_json::to_string(geometry).unwrap(),
+                serde_json::to_string(closed).unwrap(),
+            )
+        };
+        let valid = text(&geometry, &owner, &closed);
+        let result = validate_initialization_text(&valid, &monitor, &work, &before).unwrap();
+        assert_eq!((result.closed_count, result.caller), (11, 20));
+        // No required count/delta, HWND narrowing, or particular UI thread id.
+        let boundary = text(
+            &geometry,
+            &[
+                u64::MAX,
+                u64::from(u32::MAX),
+                20,
+                u64::from(u32::MAX),
+                30,
+                1,
+            ],
+            &[u64::from(u32::MAX), 0, 0, 20, 0],
+        );
+        assert!(validate_initialization_text(&boundary, &monitor, &work, &before).is_ok());
+        for (index, value) in [
+            (0, 0),
+            (1, 20),
+            (2, 0),
+            (3, 11),
+            (4, 0),
+            (4, 1 << 32),
+            (5, 0),
+        ] {
+            let mut wrong = owner;
+            wrong[index] = value;
+            assert!(
+                validate_initialization_text(
+                    &text(&geometry, &wrong, &closed),
+                    &monitor,
+                    &work,
+                    &before
+                )
+                .is_err()
+            );
+        }
+        for (index, value) in [(0, 1 << 32), (1, 1 << 32), (2, 1 << 32), (3, 21), (4, 1)] {
+            let mut wrong = closed;
+            wrong[index] = value;
+            assert!(
+                validate_initialization_text(
+                    &text(&geometry, &owner, &wrong),
+                    &monitor,
+                    &work,
+                    &before
+                )
+                .is_err()
+            );
+        }
+        for (index, value) in [
+            (0, 1),
+            (4, 1),
+            (14, 191),
+            (16, 1),
+            (18, 0x9000_0000),
+            (19, 0),
+            (20, 0),
+            (21, 1 << 31),
+            (25, 0),
+            (26, 0),
+            (26, 1 << 32),
+            (27, 2),
+            (28, -1),
+            (29, 1),
+        ] {
+            let mut wrong = geometry;
+            wrong[index] = value;
+            assert!(
+                validate_initialization_text(
+                    &text(&wrong, &owner, &closed),
+                    &monitor,
+                    &work,
+                    &before
+                )
+                .is_err()
+            );
+        }
+        for wrong in [
+            valid.replace("owner\t", "foreign\t"),
+            valid.replace("closed\t", "owner\t"),
+            valid.clone() + "closed\t[9,11,11,20,0]\n",
+            text(&geometry[..30], &owner, &closed),
+        ] {
+            assert!(validate_initialization_text(&wrong, &monitor, &work, &before).is_err());
+        }
+    }
     #[test]
     fn rejects_resource_leaks_live_windows_invalid_native_ids_and_incomplete_boundaries() {
         let mut valid = String::from("cycle\tside\tstage\tvalues\n");

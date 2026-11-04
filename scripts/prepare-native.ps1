@@ -326,15 +326,15 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
         if ($Name -in @('desktop-dup-pending','desktop-dup-pending-records','desktop-dup-pending-adapter','desktop-dup-resource-fixtures','desktop-dup-resource-preparation') -and $exitCode -eq 0) {
             $observed=[IO.File]::ReadAllText($logPath)
             $summary=if($Name -eq 'desktop-dup-pending') {
-                'desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 quiescent_counts=40 full_P1_acceptance=0 passed'
+                'desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 quiescent_counts=40 initialized_fixture=1 full_P1_acceptance=0 passed'
             } elseif($Name -eq 'desktop-dup-pending-adapter') {
                 'DesktopDupWindow original adapter owners=20 null_window_calls=20 failure_outputs_empty=20 owners_destroyed=20 native_frames=0 passed'
             } elseif($Name -eq 'desktop-dup-resource-fixtures') {
                 'desktop_resource_fixture_cases=20 joined_workers=40 invalid_windows=40 capture_calls=0 passed'
             } elseif($Name -eq 'desktop-dup-resource-preparation') {
-                'desktop_preparation_cases=20 joined_workers=40 invalid_windows=40 resource_mismatches=0 capture_calls=0 full_P1_acceptance=0 passed'
+                'desktop_preparation_cases=20 joined_workers=40 invalid_windows=40 resource_mismatches=0 capture_calls=0 initialized_fixture=1 full_P1_acceptance=0 passed'
             } else {
-                'DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=323 quiescent_counts=40 full_P1_acceptance=0 passed'
+                'DesktopDupWindow queued adjustment cases=40 captures=80 retained_images=80 queue_timeouts=0 independent_update_owners=40 actual_files=324 quiescent_counts=40 initialized_fixture=1 full_P1_acceptance=0 passed'
             }
             $leader=if($Name -eq 'desktop-dup-pending') {
                 '(?:test backends::windows::desktop_dup::tests::pending::captures_first_client_before_queued_adjustment_and_after_exactly_one_move \.\.\. )?'

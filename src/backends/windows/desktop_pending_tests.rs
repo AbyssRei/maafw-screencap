@@ -5,6 +5,7 @@
 mod preparation;
 
 use crate::backends::windows::desktop_dup_window::DesktopDupWindowCapture;
+use crate::backends::windows::parity_adapter::screen_fixture::Fixture;
 use crate::backends::windows::parity_adapter::{Adapter, Image};
 use crate::platform::windows::window_api::{Point, SystemWindow, Window, WindowApi};
 use std::{
@@ -32,6 +33,66 @@ fn log_resource_stage(cycle: u32, side: &str, stage: &str, objects: u32) {
         "desktop_pending_resource cycle={cycle} side={side} stage={stage} caller={} gdi={objects}",
         caller_thread()
     );
+}
+
+fn finish_fixture_initialization(
+    adapter: &Adapter,
+    fixture: &mut Fixture,
+    before: [i64; 4],
+    root: &Path,
+) -> Result<(), Box<dyn Error>> {
+    // The original geometry fixture must exercise the actual caption style
+    // before accounting. Same-DLL zero-capture observations identified native
+    // UxTheme caption fonts retained after the creating worker joins. There is
+    // no fixed count allowance or capture warmup; record this one setup/close.
+    let mut records = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("initialization.tsv"))?;
+    writeln!(records, "stage\tvalues")?;
+    let window = fixture.hwnd();
+    let threads = fixture.thread_info()?;
+    let valid = SystemWindow.valid(window);
+    writeln!(
+        records,
+        "owner\t{:?}",
+        [
+            window as usize as u64,
+            threads[0],
+            threads[1],
+            threads[2],
+            threads[3],
+            u64::from(valid),
+        ]
+    )?;
+    records.flush()?;
+    assert!(valid);
+    assert_eq!(threads[0], threads[2]);
+    assert_eq!(threads[1], caller_thread());
+    assert_ne!(threads[0], threads[1]);
+    let initial_count = resource_count(adapter)?;
+    let geometry = fixture.geometry([1, 0x10cf_0000, before[0], before[1], 192, 128])?;
+    writeln!(records, "geometry\t{geometry:?}")?;
+    records.flush()?;
+    assert_eq!(client(&geometry), before);
+    let styled_count = resource_count(adapter)?;
+    fixture.close()?;
+    let valid = SystemWindow.valid(window);
+    let closed_count = resource_count(adapter)?;
+    writeln!(
+        records,
+        "closed\t{:?}",
+        [
+            u64::from(initial_count),
+            u64::from(styled_count),
+            u64::from(closed_count),
+            caller_thread(),
+            u64::from(valid),
+        ]
+    )?;
+    records.flush()?;
+    assert!(!valid);
+    Ok(())
 }
 
 fn save(root: &Path, name: &str, image: &Image) -> Result<(), Box<dyn Error>> {
@@ -177,7 +238,6 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
     let adapter = Adapter::load()?;
     let mut fixture = adapter.render_fixture(192, 128)?;
     let initial = fixture.geometry([0; 6])?;
-    fixture.close()?;
     let monitor: [i64; 4] = initial[..4].try_into()?;
     let work: [i64; 4] = initial[4..8].try_into()?;
     if work[2] - work[0] < 192 || work[3] - work[1] < 128 {
@@ -205,11 +265,12 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
     let top = before[1].clamp(work[1], work[3] - 128);
     let after = [left, top, left + 192, top + 128];
     assert_ne!(before, after);
+    finish_fixture_initialization(&adapter, &mut fixture, before, &root)?;
     writeln!(records, "-1\tfixture\tmonitor\t{monitor:?}")?;
     writeln!(records, "-1\tfixture\twork\t{work:?}")?;
     writeln!(records, "-1\tfixture\tbefore\t{before:?}")?;
     writeln!(records, "-1\tfixture\tafter\t{after:?}")?;
-    writeln!(records, "-1\tfixture\tresources\t[2]")?;
+    writeln!(records, "-1\tfixture\tresources\t[3]")?;
     records.flush()?;
     let mut updates = OpenOptions::new()
         .write(true)
@@ -465,7 +526,7 @@ fn captures_first_client_before_queued_adjustment_and_after_exactly_one_move()
         );
     }
     println!(
-        "desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 quiescent_counts=40 full_P1_acceptance=0 passed"
+        "desktop_pending_cases=40 first_captures=40 final_captures=40 held=80 queue_timeouts=0 independent_update_owners=40 quiescent_counts=40 initialized_fixture=1 full_P1_acceptance=0 passed"
     );
     Ok(())
 }

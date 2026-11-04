@@ -1,7 +1,10 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Zero-capture diagnostic of the pending test's full pre-hold fixture path.
-use super::{Adapter, SystemWindow, WindowApi, caller_thread, client, resource_count};
+use super::{
+    Adapter, SystemWindow, WindowApi, caller_thread, client, finish_fixture_initialization,
+    resource_count,
+};
 use std::{error::Error, fmt::Debug, fs::OpenOptions, io::Write, path::PathBuf};
 
 fn observe(
@@ -36,11 +39,10 @@ fn observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins()
         .open(root.join("preparation.tsv"))?;
     writeln!(records, "cycle\tstage\tgdi\tcaller\tvalues")?;
     let adapter = Adapter::load()?;
-    // This is the same single initial geometry fixture as the capture test,
-    // before accounting starts. No additional baseline warmup is performed.
+    // Use the capture test's single matching geometry/style initialization.
+    // Its checked close and observed counts are explicit, without a capture.
     let mut fixture = adapter.render_fixture(192, 128)?;
     let initial = fixture.geometry([0; 6])?;
-    fixture.close()?;
     let monitor: [i64; 4] = initial[..4].try_into()?;
     let work: [i64; 4] = initial[4..8].try_into()?;
     if work[2] - work[0] < 192 || work[3] - work[1] < 128 {
@@ -68,6 +70,7 @@ fn observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins()
     let top = before[1].clamp(work[1], work[3] - 128);
     let after = [left, top, left + 192, top + 128];
     assert_ne!(before, after);
+    finish_fixture_initialization(&adapter, &mut fixture, before, &root)?;
     let overlaps =
         |a: [i64; 4], b: [i64; 4]| a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
     let update_rect = [
@@ -244,7 +247,7 @@ fn observes_full_pre_capture_fixture_counts_and_checks_both_worker_joins()
         return Err(format!("full fixture resource mismatches: {mismatches:?}").into());
     }
     println!(
-        "desktop_preparation_cases=20 joined_workers=40 invalid_windows=40 resource_mismatches=0 capture_calls=0 full_P1_acceptance=0 passed"
+        "desktop_preparation_cases=20 joined_workers=40 invalid_windows=40 resource_mismatches=0 capture_calls=0 initialized_fixture=1 full_P1_acceptance=0 passed"
     );
     Ok(())
 }
