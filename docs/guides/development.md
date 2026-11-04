@@ -140,13 +140,19 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `fa76a07` 的 [Actions 41841543022](https://github.com/AbyssRei/maafw-screencap/actions/runs/41841543022) 已在原生 ARM64 通过新增所有权控制。MRC 模型的调用/未调用两支观察到四个 NSObject 的实际 `dealloc`，其中两个创建引用仅由测试在最后 block alias 结束后回收；Rust 对同两支执行十次原生弱引用检查和真实 RcBlock alias，精确一项测试通过，并同样单独回收未调用分支的两个测试引用。原四组 Blocks 控制继续通过。登记程序的 ARM64 Mach-O、真实 Blocks imports、Foundation 链接、实际编译条目及十三份相关源码身份均核对。这些控制使用真实 NSObject，尚未直接观察失败请求中实际 SCK filter/config 的未调用析构，不据此接受请求或会话排空。
+
+官方 45,544,221 字节轻量 ZIP 的整体摘要/CRC、安全路径、12,331 份原始文件、33 份确切 Git 补充和二十一份只读报告均验证；247 张完整 BGR 与 60 张 BGRA 的已知颜色/alpha 继续通过。组件为 147/168，全部 167 项旧名称/状态不变、原二十一项失败保留，仍有 662 项完整输入缺口。失败 observer 的 sample 请求 4 在 15.000225042 秒观察后仍未出现完成回调，handler/semaphore pending 均为一，token 快照均为 12/12/live=0；原等待返回 49、持续 5.053923417 秒。外部 `local/current-fa76-macos-focused-review-path.txt` 和 `local/current-fa76-native-ownership-evidence-path.txt` 指向封存复核；该批预装 Xcode 27.1 的年龄继续只作记录。
+
+同一批次的十项固定 F 原始函数/嵌套 block 对应现已刷新至三份确切 Rust 源码，加入 `CompletionInputs::new/release/drop`，保留创建引用与 block 副本两份职责。严格 function-map reader 核对原 F 字节/Git 身份、Rust 字节范围与行号，并完整保留 168 项原生状态。三份 Rust 源码与原生清单登记摘要一致；轻量包未恢复其完整原生输入原文或编译器输入闭包。两次外部 Python parser 遍历崩溃原记录保留，成功索引仅用字节位置计算行号；一次路径前缀序列化错误另以只读复核修正，源字节/断言未改。选定并集仍为 43 份来源/306 项/十八组，其他组保留各自历史快照范围；MaaBuffer 的 22 项原生验收 helper 与 23 项截图范围外框架工具继续独立登记，没有填成 Rust 实现对应。完整 P1 仍未验收。
+
 确切 `4b54ae5` 的 [Actions 41832445913](https://github.com/AbyssRei/maafw-screencap/actions/runs/41832445913) 已执行实际 ARM64 Blocks 控制：四组情形累计十二次捕获对象获取/释放，最终 live=0，原便携 2,000 组 callback 与 4,000 组 token 控制也通过。官方轻量 ZIP 摘要/CRC、安全路径、12,330 份原始文件、32 份确切 Git 源码补充和二十一份只读报告均核对；程序的 Mach-O 身份、实际 Blocks imports、Foundation 链接、登记哈希及真实编译条目独立验证。247 张完整 BGR 和 60 张 BGRA 的已知颜色/alpha 复算通过。组件为 146/167，全部 166 个旧名称/状态不变、二十一项失败保留，仍有 661 项完整来源输入缺口；没有把旧完整归档的来源闭包挪用于本批。
 
 该批失败 observer 的 sample 请求 4 仍无完成回调；handler pending 与 semaphore pending 均为一，实际另观察 15.000179250 秒，而两份 token 快照均为 acquired=12/released=12/live=0，间隔 15.000196125 秒。原等待返回 49、持续 5.125473917 秒，consumer exit=1。它说明“handler 未返回”不等于“仍保留这些诊断捕获对象”；全局 token 包含局部/栈副本，也不能归属于单个原生请求或证明原 completion、请求、session 的析构、取消或排空。外部 `local/current-4b-macos-focused-review-path.txt` 和 `local/current-4b-native-block-evidence-path.txt` 指向两份封存复核。该批二十一份已保存 Rust display 调用均完成且无 late 文件，不能据此声称观察到 Rust 未调用 block 析构。
 
 随后逐语句核对固定 F 的 MRC 窗口/显示器 sample handler，确认 filter/config 的 create +1 仅在完成回调内释放。旧 Rust `Mutex<Option<Retained pair>>` 会在未调用 block 析构时自动释放这两个引用，提前修复了原版的泄漏。现在私有 `CompletionInputs` 仅由完成路径释放创建引用；未调用时保留原 +1，block 自己复制的两个引用仍正常释放，缺失 screenshot 类的同步释放分支不变。按 [Clang 的 Objective-C Blocks 捕获规则](https://clang.llvm.org/docs/BlockLanguageSpec.html#objective-c-extensions)，block 捕获引用和创建引用是两份责任；本修正不移动转换/五秒等待/信号顺序，也不往 Trace 增加原生对象或声明其 Send/Sync。
 
-两项便携所有权控制分别检查完成前释放、block 副本存续，以及未调用析构保留原 +1；测试在已知最后副本结束后单独回收泄漏的测试 owner。新增原生控制另以 MRC NSObject 子类的实际 dealloc、Rust NSObject 的原生弱引用和真实 RcBlock heap alias 检查调用/未调用两支；C++ 只复现相同的 release 语句形状，不冒充完整 F 类执行。它们不请求截图权限，新摘要缺失或断言失败仍使 job 失败并继续独立捕获。便携控制、严格 macOS 交叉检查通过；新增原生所有权控制执行仍待本次提交的 CI，不追认旧捕获失败或完整 P1。
+两项便携所有权控制分别检查完成前释放、block 副本存续，以及未调用析构保留原 +1；测试在已知最后副本结束后单独回收泄漏的测试 owner。新增原生控制另以 MRC NSObject 子类的实际 dealloc、Rust NSObject 的原生弱引用和真实 RcBlock heap alias 检查调用/未调用两支；C++ 只复现相同的 release 语句形状，不冒充完整 F 类执行。它们不请求截图权限，新摘要缺失或断言失败仍使 job 失败并继续独立捕获。便携控制、严格 macOS 交叉检查通过；新增控制的实际原生执行已由上文确切 `fa76a07` 验证，旧捕获失败及完整 P1 状态保持。
 
 确切 `aeadac4` 的完整官方 Windows 工程包现已补齐轻量包缺少的全部 4,832 个不同输入路径。2,009,403,719 字节 ZIP 的官方整体摘要、CRC 和安全路径均核对；首次传输的 54 个有效大分段与 186 项 HTTP 失败记录保留，随后重新核对旧片段，以 959 个小分段完成续传及整体摘要验证，不声称复用不存在的前缀。恢复 65,632 份文件、63,817 个登记路径及二十三份清单，全部 33,310 份轻量数据与完整包逐字节身份匹配。
 
