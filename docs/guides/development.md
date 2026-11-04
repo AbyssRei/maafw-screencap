@@ -140,6 +140,16 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d9f25d0` 的 [Actions 41820596076](https://github.com/AbyssRei/maafw-screencap/actions/runs/41820596076) Windows 已终态失败，七组件合计 443/456；相对 `aeadac4`，manager 掩码 30、58 从通过变为失败，其余 454 项状态不变，原四项 FramePool pseudo 与七组 manager 失败均保留。527,157,839 字节官方轻量包的整体摘要、CRC、安全路径及 33,306 份原始文件验证；原传输的 42 份有效分段与 210 项 HTTP 失败记录保留，重新核对旧片段后以 503 份小分段恢复完整包，其中 84 份由已验证数据拆分复用，不声称不存在的前缀续传。
+
+162 份已保存报告只读复算通过，九组失败 manager 的十八次独立 reader 检查仍拒收；全部 7,560 份即时/持帧对字节相同。97 张异常目标图（原版 49/Rust 48）均仅在外三像素圈的 924 个位置不同，且每份 ROI 与本批保存的边缘对照完整相同；它不确定像素生产者、取样时间或缓存分支。带标题窗口除三次 WGC 存续观测外，首次对象 reset 后的采集也仍有 440 像素差异，后续固定调用单列，没有以重试抹去它。原四张 pseudo 失败图均全黑；当前 alpha 的 70 份 BGR/20 份 BGRA 继续通过，旧 alpha 失败保留。4,832 项完整来源输入缺口尚存；外部 `local/current-d9f-windows-final-review-path.txt` 指向含 33,524 份文件的封存复核。该轻量包及本轮结果不继承旧批完整来源闭包，也不接受完整 P1。
+
+针对客户区边缘差异，新增独立 `client-band` 自有窗口：按 [WM_NCCALCSIZE](https://learn.microsoft.com/en-us/windows/win32/winmsg/wm-nccalcsize) 实际保留六像素非客户区边带，窗口外矩形随之增加，但完整 `GetClientRect` 仍严格为 96×64、同一工作区位置。原版截图/裁剪/转换/等待和隐私指示请求不改，不对目标像素加 inset、遮罩或容差；旧 legacy/popup/caption 场景保留。四组原版 WGC/设备/无 WGC 控制仍按固定顺序各调用一次，额外 `IsBorderRequired(true)` 保留，未新增 false setter。
+
+外部实验的三轮连续本机测试均为零输入，最大观察间隔 73.5262ms，四路监听及关闭证据验证，未声称新的物理输入正向控制。81 张完整 BGR/497,664 像素、十二份实际准备几何及 81 组前后客户区边界独立核对；本机默认 getter 三轮均为 false，不能代替 hosted true 条件。每轮首次调用前后均观察到 extended style 的置顶位 8→0，几何保持不变，原因未证明。原记录校验三次先因硬编码 `CV_8UC3=16` 失败（真实值为 64），修正 reader 又因假定所有 style 不变而拒收；两版失败和原生退出码均保留，后续只读 reader 分别验证实际类型和明确单列的置顶位变化，没有重跑取帧。完整实验 2,453 份文件封存，由 `local/current-nonclient-band-local-review-path.txt` 指向。
+
+仓库现接入该独立场景及 `upstream-trace framepool-border` 的 case 2。它要求全部二十七次调用的完整客户区均符合已知图样，原两种 matched case 的报告格式与严格边界不变；case 2 仅允许每个窗口置顶位单向清除并保存实际转变，其他位或客户区/外矩形变化继续拒收。三份真实本机记录及三份旧托管报告只读通过，九份破坏数据（含同步更新摘要的非控制边缘错误、错误边带、无关 style/恢复置顶、类型和缺图）均拒收。工作区测试、严格 Clippy、默认 Release、格式/脚本检查与新 Step 摘要/独立继续控制通过；按归档离线依赖验证，未声明新的在线依赖解析。新托管执行及 Rust/完整 manager 对照仍待验证；本次不接受旧失败恢复、原生会话排空或完整 P1。
+
 确切 `fa76a07` 的 [Actions 41841543022](https://github.com/AbyssRei/maafw-screencap/actions/runs/41841543022) 已在原生 ARM64 通过新增所有权控制。MRC 模型的调用/未调用两支观察到四个 NSObject 的实际 `dealloc`，其中两个创建引用仅由测试在最后 block alias 结束后回收；Rust 对同两支执行十次原生弱引用检查和真实 RcBlock alias，精确一项测试通过，并同样单独回收未调用分支的两个测试引用。原四组 Blocks 控制继续通过。登记程序的 ARM64 Mach-O、真实 Blocks imports、Foundation 链接、实际编译条目及十三份相关源码身份均核对。这些控制使用真实 NSObject，尚未直接观察失败请求中实际 SCK filter/config 的未调用析构，不据此接受请求或会话排空。
 
 官方 45,544,221 字节轻量 ZIP 的整体摘要/CRC、安全路径、12,331 份原始文件、33 份确切 Git 补充和二十一份只读报告均验证；247 张完整 BGR 与 60 张 BGRA 的已知颜色/alpha 继续通过。组件为 147/168，全部 167 项旧名称/状态不变、原二十一项失败保留，仍有 662 项完整输入缺口。失败 observer 的 sample 请求 4 在 15.000225042 秒观察后仍未出现完成回调，handler/semaphore pending 均为一，token 快照均为 12/12/live=0；原等待返回 49、持续 5.053923417 秒。外部 `local/current-fa76-macos-focused-review-path.txt` 和 `local/current-fa76-native-ownership-evidence-path.txt` 指向封存复核；该批预装 Xcode 27.1 的年龄继续只作记录。

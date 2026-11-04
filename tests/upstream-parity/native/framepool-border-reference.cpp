@@ -186,7 +186,7 @@ std::array<int64_t, 63> prepare_fixture_geometry(Fixture& fixture, uint64_t arm,
         throw std::runtime_error("border matched fixture work area too small");
     }
     const DWORD style = WS_VISIBLE | WS_POPUP | WS_CLIPSIBLINGS | (scene == 1 ? WS_CAPTION : 0);
-    const int64_t input[6] { 1, style, before[4] + 64, before[5] + 64, 96, 64 };
+    const int64_t input[6] { scene == 2 ? 4 : 1, style, before[4] + 64, before[5] + 64, 96, 64 };
     if (mfs_print_thread_geometry(fixture.value.owner, input, 6, after.data(), after.size())) {
         throw std::runtime_error("border matched fixture geometry setup failed");
     }
@@ -212,6 +212,7 @@ int wmain(int argc, wchar_t** argv)
         const std::wstring_view requested(argv[2]);
         if (requested == L"popup") { scene = 0; }
         else if (requested == L"caption") { scene = 1; }
+        else if (requested == L"client-band") { scene = 2; }
         else { return 64; }
     }
     const std::filesystem::path root(argv[1]);

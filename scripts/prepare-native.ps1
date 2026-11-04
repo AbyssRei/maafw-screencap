@@ -194,7 +194,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete successful-capture FramePool lifetime matrix distinguishing uninit, owning drop and explicit holds'
             }
         }
-        if ($Name -in @('frame-pool-source-border','frame-pool-source-border-popup','frame-pool-source-border-caption')) {
+        if ($Name -in @('frame-pool-source-border','frame-pool-source-border-popup','frame-pool-source-border-caption','frame-pool-source-border-client-band')) {
             $observed = [IO.File]::ReadAllText($logPath)
             if ($exitCode -eq 77 -and $observed -match '(?m)^border environment missing before_capture=1 property_unavailable=1\r?$') {
                 $status = 'missing_environment'
@@ -206,7 +206,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected all four original-only border/device arms, 27 fixed calls and actual native positive controls'
             }
             if ($exitCode -eq 0 -and $Name -ne 'frame-pool-source-border') {
-                $fixtureCase=if($Name.EndsWith('-popup')){0}else{1}
+                $fixtureCase=if($Name.EndsWith('-popup')){0}elseif($Name.EndsWith('-caption')){1}else{2}
                 if ([regex]::Matches($observed,'(?m)^matched border fixture case='+$fixtureCase+' full_client=96x64 geometry_calls=12 boundary_observations=54 target_inset=0\r?$').Count -ne 1 -or
                     [regex]::Matches($observed,'(?m)^matched border fixture.*\r?$').Count -ne 1 -or
                     [regex]::Matches($observed,'(?m)^source border diagnostic.*\r?$').Count -ne 1) {
@@ -218,14 +218,17 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             [regex]::Matches([IO.File]::ReadAllText($logPath), '(?m)^source border records calls=27 windows_closed=4 positive_controls=13 files=61 producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed\r?$').Count -ne 1) {
             throw 'Expected the complete border native property/owner/pixel records, without producer or capture acceptance'
         }
-        if ($Name -in @('frame-pool-border-popup-records','frame-pool-border-caption-records') -and $exitCode -eq 0) {
-            $fixtureCase=if($Name -eq 'frame-pool-border-popup-records'){0}else{1}
+        if ($Name -in @('frame-pool-border-popup-records','frame-pool-border-caption-records','frame-pool-border-client-band-records') -and $exitCode -eq 0) {
+            $fixtureCase=if($Name -eq 'frame-pool-border-popup-records'){0}elseif($Name -eq 'frame-pool-border-caption-records'){1}else{2}
             $observed=[IO.File]::ReadAllText($logPath)
             if ([regex]::Matches($observed,'(?m)^source border records calls=27 windows_closed=4 positive_controls=13 files=63 producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed\r?$').Count -ne 1 -or
                 [regex]::Matches($observed,'(?m)^matched border records case='+$fixtureCase+' geometry_calls=12 boundary_observations=54 full_client=96x64 target_inset=0 producer_proved=0 passed\r?$').Count -ne 1 -or
                 [regex]::Matches($observed,'(?m)^matched border records.*\r?$').Count -ne 1 -or
                 [regex]::Matches($observed,'(?m)^source border records.*\r?$').Count -ne 1) {
                 throw 'Expected all63 matched border files, exact style and complete client scope'
+            }
+            if ($fixtureCase -eq 2 -and [regex]::Matches($observed,'(?m)^client band records nonclient_pixels=6 strict_target_images=27 target_inset=0 privacy_disabled=0 native_owner_drain=0 passed\r?$').Count -ne 1) {
+                throw 'Expected all27 full-client targets for the native nonclient-band fixture'
             }
         }
         if ($Name -eq 'desktop-dup-source-held-acquisition' -and $exitCode -eq 0 -and
@@ -1409,7 +1412,7 @@ try {
                 if ($checks[-1].status -ne 'missing_environment') {
                     Invoke-FrameCheck frame-pool-border-records $ConfigureTool @('upstream-trace','framepool-border',$borderEvidence)
                 }
-                foreach($fixtureStyle in @('popup','caption')) {
+                foreach($fixtureStyle in @('popup','caption','client-band')) {
                     $caseEvidence=Join-Path $matchedBorderEvidence $fixtureStyle
                     New-Item -ItemType Directory -Path $caseEvidence|Out-Null
                     Invoke-FrameCheck "frame-pool-source-border-$fixtureStyle" $borderProgram @($caseEvidence,$fixtureStyle)

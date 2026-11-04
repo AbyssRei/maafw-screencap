@@ -101,7 +101,7 @@ fn summary(text: &str) -> Result<BTreeMap<String, u64>> {
         let case = *result
             .get("fixture_case")
             .ok_or("Missing matched border fixture case")?;
-        if case > 1 {
+        if case > 2 {
             return Err("Unknown matched border fixture case".into());
         }
         expected.insert("fixture_case".into(), case);
@@ -240,7 +240,7 @@ fn signed_numbers(text: &str) -> Result<Vec<Vec<i64>>> {
 
 fn fixture_geometries(text: &str, case: u64) -> Result<serde_json::Value> {
     let rows = signed_numbers(text)?;
-    if rows.len() != 4 || rows.iter().any(|row| row.len() != 63) || case > 1 {
+    if rows.len() != 4 || rows.iter().any(|row| row.len() != 63) || case > 2 {
         return Err("Incomplete matched fixture geometry".into());
     }
     let mut result = Vec::new();
@@ -305,6 +305,7 @@ fn fixture_geometries(text: &str, case: u64) -> Result<serde_json::Value> {
             || outer[3] > after[7]
             || (case == 0 && insets != [0; 4])
             || (case == 1 && insets.iter().any(|value| *value <= 0))
+            || (case == 2 && insets != [6; 4])
         {
             return Err("Matched fixture outer/client separation differs".into());
         }
@@ -321,6 +322,7 @@ fn fixture_boundaries(
     text: &str,
     geometries: &str,
     states: &[Vec<u64>],
+    case: u64,
 ) -> Result<serde_json::Value> {
     let rows = signed_numbers(text)?;
     let geometry = signed_numbers(geometries)?;
@@ -330,14 +332,17 @@ fn fixture_boundaries(
         || geometry.iter().any(|row| row.len() != 63)
         || states.len() != 27
         || states.iter().any(|row| row.len() != 13)
+        || case > 2
     {
         return Err("Incomplete matched fixture call-boundary geometry".into());
     }
     let mut result = Vec::new();
+    let mut styles: Vec<_> = geometry.iter().map(|row| row[32 + 19]).collect();
+    let mut transitions = Vec::new();
     for (index, phase) in phases().iter().enumerate() {
         let row = &rows[index];
         let prepared = &geometry[usize::try_from(phase.arm)?][32..];
-        let expected = [
+        let mut expected = [
             prepared[18],
             prepared[8],
             prepared[9],
@@ -351,23 +356,47 @@ fn fixture_boundaries(
             prepared[17],
             prepared[19],
         ];
-        let ex_style = u64::try_from(expected[11])?;
+        if case == 2 {
+            expected[11] = styles[usize::try_from(phase.arm)?];
+        }
+        let before_style = u64::from(u32::try_from(expected[11])?);
+        let after_style = u64::from(u32::try_from(row[24])?);
+        // This independent scene records a possible topmost clear during an
+        // original call; all other bits, client pixels and geometry
+        // remain strict. Track each window, so reintroducing the bit is refused.
+        let valid_style = row[24] == expected[11]
+            || case == 2 && expected[11] & 8 != 0 && row[24] == (expected[11] & !8);
         let state = &states[index];
         if row[0] != i64::try_from(index)?
             || row[1..13] != expected
-            || row[13..] != expected
+            || row[13..24] != expected[..11]
+            || !valid_style
             || state[0] != u64::try_from(index)?
+            || state[1] != before_style
+            || state[7] != after_style
             || [1, 7]
                 .into_iter()
-                .any(|start| state[start] != ex_style || state[start + 1..start + 3] != [255, 0])
+                .any(|start| state[start + 1..start + 3] != [255, 0])
         {
             return Err(
                 "Actual capture boundary changed matched style/outer/full-client geometry".into(),
             );
         }
+        if row[12] != row[24] {
+            transitions.push(serde_json::json!({"slot":index,"arm":phase.arm,
+                "before_exstyle":row[12],"after_exstyle":row[24]}));
+        }
+        styles[usize::try_from(phase.arm)?] = row[24];
         result.push(serde_json::json!({"slot":index,"arm":phase.arm,"before":&row[1..13],"after":&row[13..]}));
     }
-    Ok(serde_json::json!({"observations":54,"boundaries":result,"during_call_unobserved":true}))
+    let mut report =
+        serde_json::json!({"observations":54,"boundaries":result,"during_call_unobserved":true});
+    if case == 2 {
+        report["nonclient_band_pixels"] = 6.into();
+        report["extended_style_transitions"] = transitions.into();
+        report["transition_cause_proved"] = false.into();
+    }
+    Ok(report)
 }
 
 fn inventory(root: &Path, matched: bool) -> Result<()> {
@@ -442,6 +471,7 @@ pub fn run(args: &[String]) -> Result<()> {
     };
     let contract = summary(std::str::from_utf8(&read("summary.txt")?)?)?;
     let matched = contract["schema"] == 2;
+    let client_band = matched && contract["fixture_case"] == 2;
     let files = FILES + 2 * usize::from(matched);
     inventory(&root, matched)?;
     let windows = numbers(std::str::from_utf8(&read("windows.tsv")?)?, 4, 7)?;
@@ -457,6 +487,7 @@ pub fn run(args: &[String]) -> Result<()> {
             std::str::from_utf8(&read("fixture-boundaries.tsv")?)?,
             &geometries,
             &states,
+            contract["fixture_case"],
         )?;
         Some(fixture)
     } else {
@@ -530,7 +561,10 @@ pub fn run(args: &[String]) -> Result<()> {
             (v ^ u64::from(*b)).wrapping_mul(0x100000001b3)
         });
         let known = pixels == expected;
-        if fnv != row[11] || known != (row[10] == 1) || (phase.control && (row[7] != 1 || !known)) {
+        if fnv != row[11]
+            || known != (row[10] == 1)
+            || ((phase.control || client_band) && (row[7] != 1 || !known))
+        {
             return Err("Border pixel digest/known-scene/positive control differs".into());
         }
         let differences: Vec<_> = pixels
@@ -565,6 +599,10 @@ pub fn run(args: &[String]) -> Result<()> {
         report["layout_version"] = 2.into();
         report["matched_fixture"] = fixture;
     }
+    if client_band {
+        report["full_client_images_known"] = 27.into();
+        report["scope"] = "Original-only six-pixel native nonclient-band fixture; every complete96x64client payload is required known. Record native extended-style transitions, with only a monotonic topmost-bit clear allowed; no cause or Rust/manager parity is inferred. Existing source capture, privacy requests and old scenes/failures are unchanged. No target-pixel inset/mask, producer or native-drain/P1 acceptance.".into();
+    }
     let output = root.join("border-validation.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -580,6 +618,11 @@ pub fn run(args: &[String]) -> Result<()> {
         println!(
             "matched border records case={} geometry_calls=12 boundary_observations=54 full_client=96x64 target_inset=0 producer_proved=0 passed",
             contract["fixture_case"]
+        );
+    }
+    if client_band {
+        println!(
+            "client band records nonclient_pixels=6 strict_target_images=27 target_inset=0 privacy_disabled=0 native_owner_drain=0 passed"
         );
     }
     Ok(())
@@ -683,27 +726,39 @@ mod tests {
         let states = (0..27)
             .map(|slot| vec![slot, 8, 255, 0, 1, 96, 64, 8, 255, 0, 1, 96, 64])
             .collect::<Vec<_>>();
-        fixture_boundaries(&geometry_text(&rows), &geometry_text(&geometry), &states).unwrap();
+        fixture_boundaries(&geometry_text(&rows), &geometry_text(&geometry), &states, 1).unwrap();
         for column in [0, 1, 5, 8, 10, 12, 13, 17, 20, 22, 24] {
             let mut invalid = rows.clone();
             invalid[10][column] += 1;
             assert!(
-                fixture_boundaries(&geometry_text(&invalid), &geometry_text(&geometry), &states)
-                    .is_err()
+                fixture_boundaries(
+                    &geometry_text(&invalid),
+                    &geometry_text(&geometry),
+                    &states,
+                    1
+                )
+                .is_err()
             );
         }
         assert!(
             fixture_boundaries(
                 &geometry_text(&rows[..26]),
                 &geometry_text(&geometry),
-                &states
+                &states,
+                1,
             )
             .is_err()
         );
         let mut invalid = states.clone();
         invalid[10][1] = 0;
         assert!(
-            fixture_boundaries(&geometry_text(&rows), &geometry_text(&geometry), &invalid).is_err()
+            fixture_boundaries(
+                &geometry_text(&rows),
+                &geometry_text(&geometry),
+                &invalid,
+                1
+            )
+            .is_err()
         );
     }
 

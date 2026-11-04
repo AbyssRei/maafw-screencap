@@ -29,6 +29,7 @@ struct Pattern {
     int64_t geometry_messages = 0;
     std::array<int64_t, 5> last_position {};
     POINT geometry_max_track {};
+    LONG geometry_client_band = 0;
 };
 struct Fixture {
     HINSTANCE module = nullptr;
@@ -112,6 +113,25 @@ LRESULT CALLBACK window_proc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lpar
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
     }
     auto* pattern = reinterpret_cast<Pattern*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (pattern && pattern->geometry_client_band && message == WM_NCCALCSIZE && lparam) {
+        // Independent owned fixture only: preserve the default frame, then
+        // reserve six more actual nonclient pixels. The target remains the
+        // complete native GetClientRect; capture never gets a target inset.
+        DefWindowProcW(hwnd, message, wparam, lparam);
+        auto& area = wparam ? reinterpret_cast<NCCALCSIZE_PARAMS*>(lparam)->rgrc[0]
+                           : *reinterpret_cast<RECT*>(lparam);
+        const int64_t band = pattern->geometry_client_band;
+        if (static_cast<int64_t>(area.right) - area.left <= band * 2
+            || static_cast<int64_t>(area.bottom) - area.top <= band * 2) {
+            pattern->failed = true; return 0;
+        }
+        // The ordered endpoints and full two-band span prove LONG bounds.
+        area.left = static_cast<LONG>(static_cast<int64_t>(area.left) + band);
+        area.top = static_cast<LONG>(static_cast<int64_t>(area.top) + band);
+        area.right = static_cast<LONG>(static_cast<int64_t>(area.right) - band);
+        area.bottom = static_cast<LONG>(static_cast<int64_t>(area.bottom) - band);
+        return 0;
+    }
     if (pattern && message == WM_GETMINMAXINFO && lparam
         && pattern->geometry_max_track.x > 0 && pattern->geometry_max_track.y > 0) {
         DefWindowProcW(hwnd, message, wparam, lparam);
@@ -168,7 +188,7 @@ int32_t mfs_print_parity_geometry(void* context, const int64_t* input, size_t co
     const HWND window = fixture.main;
     if (!window || fixture.child || fixture.popup
         || GetCurrentThreadId() != GetWindowThreadProcessId(window, nullptr)) { return 1; }
-    if (input[0] == 1 || input[0] == 3) {
+    if (input[0] == 1 || input[0] == 3 || input[0] == 4) {
         const bool zero_client = input[0] == 3;
         if (input[1] < 0 || input[1] > UINT32_MAX || input[4] < 0 || input[5] < 0
             || (!zero_client && (!input[4] || !input[5]))
@@ -180,9 +200,11 @@ int32_t mfs_print_parity_geometry(void* context, const int64_t* input, size_t co
         const DWORD extended = static_cast<DWORD>(GetWindowLongPtrW(window, GWL_EXSTYLE));
         RECT outer { 0, 0, static_cast<LONG>(input[4]), static_cast<LONG>(input[5]) };
         if (!AdjustWindowRectExForDpi(&outer, style, FALSE, extended, GetDpiForWindow(window))) { return 1; }
-        const std::array<int64_t, 4> position { input[2] + outer.left, input[3] + outer.top,
-            static_cast<int64_t>(outer.right) - outer.left, static_cast<int64_t>(outer.bottom) - outer.top };
+        const int64_t band = input[0] == 4 ? 6 : 0;
+        const std::array<int64_t, 4> position { input[2] + outer.left - band, input[3] + outer.top - band,
+            static_cast<int64_t>(outer.right) - outer.left + band * 2, static_cast<int64_t>(outer.bottom) - outer.top + band * 2 };
         for (const auto value : position) { if (value < INT32_MIN || value > INT32_MAX) { return 1; } }
+        fixture.main_pattern.geometry_client_band = static_cast<LONG>(band);
         // Only this explicitly configured fixture opts into a larger native
         // tracking limit. Otherwise an ordinary framed window can be clamped
         // before the capture helper ever receives the requested client size.
