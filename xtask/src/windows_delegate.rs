@@ -64,6 +64,9 @@ pub(crate) fn verify_runtime(args: &[String]) -> Result<()> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    if args.first().is_some_and(|arg| arg == "win32-host-context") {
+        return crate::manager_host_context::run(&args[1..]);
+    }
     if args
         .first()
         .is_some_and(|arg| arg == "gamepad-client-band-runtime")

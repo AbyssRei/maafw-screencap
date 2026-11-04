@@ -140,6 +140,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+Win32 工厂新增独立宿主环境对照：相同测试 executable 为原版和 Rust 分别启动新进程，经同一 C++ ABI 桥接和私有 Rust loader 消费实际 Create/Destroy、捕获范围 manager facade 及 connect/screencap/inactive 虚调用。四种 COM 环境为未初始化、MTA、MTA 加当前线程 dispatcher、STA；线程 DPI 为 Unaware、System、Per-Monitor V2；方法为六个单独位、混合 63、None 和未知位 64。自有窗口保持完整 96×64 客户区，非客户区另有六像素边带。每侧十四份原生快照覆盖准备、DLL 加载、创建、连接、捕获、停用、销毁/卸载、窗口 join、CPU owner 释放及宿主退出。原版在 connect 后留下的 Per-Monitor V2 和实际 COM apartment 变化原样比较；测试只配平自己取得的显式 COM 引用，并在最后恢复自己的 DPI。dispatcher 仅在捕获 owner 结束后为 shutdown 处理消息。
+
+本机 108 种配置连续三轮共 324 组配对、648 次生命周期及显式截图调用全部通过；六个单方法及混合配置共取得 504 次成功捕获，None/未知位控制的 144 次调用分别保存空输出和实际 connect 结果。最终 reader 与独立 Python 复算 1,296 份即时/持帧文件（1,008 份非空）、648 对完整持帧字节、6,193,152 个已知目标像素位置和 9,072 份 COM/DPI 快照。四路监听记录零输入，最大观察间隔 87.246ms，全部注销、观察线程返回及 11,916 行日志写入/线程 join 验证；2,446 个冻结输入复核，未声称新的物理输入正向控制。本轮明确重放已归档的 native 程序与依赖，nightly 更新检查无变化；默认工作区测试、相关测试编译、严格 Clippy、Release、格式检查通过。
+
+`cargo xtask upstream-delegate win32-host-context <mask> <mode> <dpi> <external records> [--check-only]` 校验双方调用结果、原生宽度、宿主快照、完整像素与关闭记录。最终控制为三份实际记录通过、十八份破坏数据拒收；十三项 Step mock 保留十二项预期失败并全部继续，实际编排语句另验证父目录创建、108 个唯一配置和故障后继续。`upstream-parity manager` 已接入这 108 种配置及单独 CI 上传，托管执行待验证。外部 `local/current-manager-host-context-development-path.txt` 指向封存批次；职责表也按后续有限证据更新，保留原 106 个源码锚点和 58 个历史 case 身份。当前为单输出/96 DPI 上的线程上下文对照；兼容宏分支、实际多输出/混合缩放、完整 Win32 输入 manager、原生 producer/drain 和旧 Windows/macOS 失败仍按各自范围处理，完整 P1 未通过。
+
 确切 `ff3ccda` 的完整矩阵 [Actions 41856803788](https://github.com/AbyssRei/maafw-screencap/actions/runs/41856803788) Mac 轻量包现已独立复核，组件为 147/168，全部 168 项旧名称/状态与前批一致、二十一项失败保持。官方 45,544,394 字节 ZIP 的整体摘要/CRC、安全路径、12,331 份原始文件、33 份确切 Git 补充和二十一份只读报告均核对；247 张完整 47×31 BGR 与 60 张 BGRA 的已知颜色和 alpha 另行逐字节复算。实际 ARM64 Blocks 程序、注册摘要、导入/链接及编译条目验证，MRC NSObject 的四次真实 dealloc、Rust 原生弱引用/heap alias 和既有十二份诊断捕获控制通过。它们仍为所有权模型控制，未直接观察失败请求中实际 SCK filter/config 的未调用析构。
 
 本批失败 observer 的 sample 请求仍有一份未观察到的 handler/semaphore，另观察 15.000455709 秒后 pending 保持一；两份 token 快照均为 acquired=12/released=12/live=0，间隔 15.000476917 秒。原等待返回 49、持续 5.143870833 秒，consumer 保持失败；不能由诊断 token 已释放推断原 completion/request/session 排空。预装 Xcode 27.1/27A9275 按实际身份记录，工具年龄不作门禁。外部 `local/current-ff3-macos-focused-review-path.txt` 和 `local/current-ff3-native-ownership-evidence-path.txt` 指向两份封存复核；本批仍有 662 个完整输入缺口，不借用旧 `fa76a07` 完整包的来源闭包，也不接受新的 Windows manager 场景或完整 P1。

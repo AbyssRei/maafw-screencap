@@ -55,6 +55,7 @@ mod macos_sample_cases;
 mod macos_sample_matrix;
 mod macos_source_ast;
 mod manager_client_band;
+mod manager_host_context;
 mod manager_metadata;
 mod manager_size;
 mod native;
@@ -248,7 +249,8 @@ fn run() -> Result<()> {
                       cargo xtask upstream-delegate win32-runtime <mask> <external case> [--check-only]\n\n\
                       cargo xtask upstream-delegate <gamepad-host|gamepad-metadata> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate gamepad-runtime <mask> <external records> [--check-only]\n\n\
-                      cargo xtask upstream-delegate gamepad-client-band-runtime <mask> <external records> [--check-only]\n\n\
+                      cargo xtask upstream-delegate gamepad-client-band-runtime <mask> <external records> [--check-only]\n\
+                      cargo xtask upstream-delegate win32-host-context <mask> <mode> <dpi> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate win32-destroy <external records> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool <external directory> [--check-only]\n\n\
                       cargo xtask upstream-alpha frame-pool-pair <source directory> <Rust directory> [--check-only]\n\n\

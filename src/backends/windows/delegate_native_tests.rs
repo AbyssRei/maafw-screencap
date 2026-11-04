@@ -18,6 +18,9 @@ mod destroy;
 mod gamepad_host;
 #[path = "delegate_native_host_tests.rs"]
 mod host;
+#[cfg(feature = "prototype-windows-com")]
+#[path = "delegate_host_context_tests.rs"]
+mod host_context;
 #[path = "delegate_query_tests.rs"]
 mod queries;
 #[cfg(feature = "prototype-windows-com")]

@@ -713,6 +713,19 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             & $ConfigureTool upstream-delegate win32-destroy $env:MFS_DELEGATE_DESTROY_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual consumed-object cleanup records failed independent verification'}
         }
+        if($Name -match '^manager-host-context-(uninitialized|mta|mta-dispatcher|sta)-(1|2|4)-(0|1|2|4|8|16|32|63|64)$' -and $exitCode -eq 0) {
+            $contextMode=$Matches[1];$contextDpi=$Matches[2];$contextMask=$Matches[3]
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary="Win32 host processes mode=$contextMode dpi=$contextDpi method=$contextMask sides=2 completed; independent records required"
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^Win32 host processes.*\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$') {
+                throw 'Expected one isolated paired Win32 host-context test and both completed child processes'
+            }
+            & $ConfigureTool upstream-delegate win32-host-context $contextMask $contextMode $contextDpi $env:MFS_DELEGATE_CONTEXT_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Original/Rust native COM/DPI effects, call results or complete images differ'}
+        }
         if($Name -match '^manager-(?:delegate|client-band)-runtime-([1-9]|[1-5][0-9]|6[0-3])$' -and $exitCode -eq 0) {
             $runtimeMask=$Matches[1]
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -1280,6 +1293,8 @@ try {
         New-Item -ItemType Directory -Path $delegateRuntimeEvidence | Out-Null
         $delegateBandRuntimeEvidence=Join-Path $artifacts windows-delegate-client-band-runtime
         New-Item -ItemType Directory -Path $delegateBandRuntimeEvidence | Out-Null
+        $delegateContextEvidence=Join-Path $artifacts windows-delegate-host-context
+        New-Item -ItemType Directory -Path $delegateContextEvidence | Out-Null
     }
     if ($PipeWireControl) {
         Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
@@ -1678,12 +1693,14 @@ try {
             $delegateDestroyCase='backends::windows::delegate_native::tests::destroy::retains_module_and_first_error_after_consumed_unit_reports_cleanup_failure'
             $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
             $delegateBandRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_complete_client_band_through_original_and_rust_factories'
+            $delegateContextCase='backends::windows::delegate_native::tests::host_context::compares_real_factory_calls_and_caller_com_dpi_effects'
             $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
             $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
             $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
             $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase,'--skip',$gamepadMetadataCase)
             $caseSelection+=@('--skip',$delegateBandRuntimeCase)
+            $caseSelection+=@('--skip',$delegateContextCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
@@ -1706,6 +1723,18 @@ try {
             }
             try {Step 'manager-size-records' $ConfigureTool @('upstream-trace','manager-size',$managerSizeEvidence)}
             catch {$failed=$true;Write-Host $_.Exception.Message}
+            foreach($contextMode in @('uninitialized','mta','mta-dispatcher','sta')) {
+                foreach($contextDpi in @(1,2,4)) {
+                    foreach($contextMask in @(0,1,2,4,8,16,32,63,64)) {
+                        $env:MFS_DELEGATE_CONTEXT_MODE=$contextMode
+                        $env:MFS_DELEGATE_CONTEXT_DPI=[string]$contextDpi
+                        $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$contextMask
+                        $env:MFS_DELEGATE_CONTEXT_RECORDS=Join-Path $delegateContextEvidence "$contextMode-dpi-$contextDpi-method-$contextMask"
+                        try {Step "manager-host-context-$contextMode-$contextDpi-$contextMask" cargo ($parityArguments+@('--',$delegateContextCase,'--exact','--ignored','--test-threads=1','--nocapture'))}
+                        catch {$failed=$true;Write-Host $_.Exception.Message}
+                    }
+                }
+            }
             foreach($runtimeMask in 1..63) {
                 $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$runtimeMask
                 $env:MFS_DELEGATE_RUNTIME_RECORDS=Join-Path $delegateRuntimeEvidence "method-$runtimeMask"

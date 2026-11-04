@@ -10,7 +10,10 @@ use std::fmt::Write;
 #[path = "delegate_runtime_band_tests.rs"]
 mod band;
 
-fn geometry(window: *mut c_void, selected: u64) -> Result<[i32; 4], Box<dyn std::error::Error>> {
+pub(super) fn geometry(
+    window: *mut c_void,
+    selected: u64,
+) -> Result<[i32; 4], Box<dyn std::error::Error>> {
     let output = if selected == 4 {
         let monitor = SystemWindow
             .monitor_rects(SystemWindow.monitor(window))
@@ -40,7 +43,7 @@ fn geometry(window: *mut c_void, selected: u64) -> Result<[i32; 4], Box<dyn std:
     }
     Ok(output)
 }
-fn pixels(image: &Image, scope: [i32; 4]) -> bool {
+pub(super) fn pixels(image: &Image, scope: [i32; 4]) -> bool {
     if (image.span.width, image.span.height) != (scope[0], scope[1]) {
         return false;
     }
