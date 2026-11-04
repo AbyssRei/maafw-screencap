@@ -4,6 +4,8 @@
 
 ## 逐函数对应审阅
 
+macOS manager 的二十二项对应现已关联确切 `f6870ee` 的宿主 owner 实现与原生 ARM64 证据，仍保留十三项应用/输入动作排除。构造、部分替换失败、动态 features、两个 signed64 selector 和 capture 先于 input 释放分别定位到当前 Rust 函数及完整成员声明；旧固定 F 函数身份和排除项不变。十项历史 bc90 原生 Input=None、四项本机 Windows 受控模型、两项本次 ARM64 受控模型分别登记，十六项通过不能作为同一原生截图批次的通过率。原只读校验器接受当前映射；十六组清单去重仍为四十份来源/300 项，四份未进入 Rust 对应的来源保持显式列出。外部记录见 `local/current-macos-manager-functions-path.txt` 与 `local/current-function-census-union.json`；函数身份和文件出现均不代表完整语义或 P1 验收。
+
 `MaaBuffer.cpp` 新增基础字符串/图像 helper 原生消费验证：完整未修改 F 文件现在作为独立 translation unit 编译一次，实际公共 `MaaBuffer.h` 一同归档；旧五体生成片段仅保留为来源比较输入，不再 include。新增八个 StringBuffer 与九个 ImageBuffer helper 的实际调用，连同原五项操作，选定原生运行范围为 22/45；其余二十三项 list/rect 函数逐一登记为仅编译、未运行验收。没有把这些原生 API 填成 Rust 产品实现或最终 SDK ABI，Rust 函数对应并集不因此增长；较早五体审阅保留原批身份。
 
 Windows 显式归档离线依赖下，Debug/Release 各通过八组 Custom 原生测试和八组记录校核。新增每配置二十轮、一百个独立字符串 owner、780 个独立图像 owner，覆盖嵌入 NUL、空值、非 UTF-8 字节、十三个实际深度和 1/3/4 通道。原 buffer clear/destroy、输入覆盖后完整保留 240 字符串字节和 45,120 图像字节，最终 owner 归零；释放后的 Mat 通道/type 元数据按实际来源保留，不假定 reset 为默认类型。这是 CPU helper/所有权验证，零桌面截图，也不定案 SDK 字符串编码。
@@ -129,6 +131,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 该对应记录的两份 Rust 主体与已封存 `a5cfa2e` 和 `c564306` 的 Git 内容相同，49 项既有构建/模型/原生/记录检查按实际通过状态引用。真实清单通过只读入口，15 组损坏数据被拒绝；没有新截图。记录明确保留当时待测的 mmap fd 寿命、旧缓冲清理失败叠加新分配失败、共享快照下原版立即断开，以及 Rust 保留原通道的安全适配；不会将前缀干预或源行为中的 stride/方向缺陷改作产品正确性。随后 mmap 差异已原生复现并进入修正，见下节；旧记录仍对应 `c564306`，没有直接推广到新 Rust owner。累计八份来源、93 项历史函数/闭包及声明对应已登记；其余来源家族、当前实现的对应更新、原生失败及完整 P1 继续待完成。
 
 ## 本轮原生与 CI 复核
+
+确切 `f6870ee` 的 [Actions 41761271603](https://github.com/AbyssRei/maafw-screencap/actions/runs/41761271603) 已在原生 ARM64 执行新增 `rust-macos-manager-host` 和 `macos-manager-host-records`，两项均通过，原 159 项名称/状态不变。组件为 140/161，保留原 21 项像素、nullopt、metadata/callback 及其下游记录失败。实际预装 Xcode 27.1（27A9275）按 `preinstalled` 记录并通过能力准备；较新发布身份只作升级参考，不构成版本年龄门禁。
+
+新增模型实际核对 19,200 个原函数体/Rust 配对场景、38,400 份报告，原版侧有 4,500 次受控 capture 调用和 11,010 次 features 查询。独立重放全部 owner 事件，确认 2,400 个成功 capture owner 与 6,240 个成功 input owner 均释放；30 个场景在 input 构造失败后保留新 capture/旧 input。另有 1,650 个 disconnected 且保留 input 的连接后观察，不将它们重计为独立 features 调用。双方完整 TSV 与 Windows Debug、Release 的四份 TSV 逐字节相同，实际 dylib 为 arm64 Mach-O。这里使用显式 capture/input-owner/可用性模型，零真实输入动作、零截图，不证明原生输入构造、真实可用性故障、任意分配失败、callback 排空或完整 manager。
+
+官方轻量 ZIP 的发布 SHA256、CRC 和安全路径已核对；161 份原始日志、21,161 个可用登记输入项（11,844 个不同路径）、十九份确切 Git 源码补充及十九个只读保存数据检查全部通过，原始数据不变。仍缺 653 个不同的完整输入，不声称本次完整编译输入闭包。参考目录 `local/current-f687-macos-focused-review-path.txt` 与 `local/current-f687-macos-host-events-review-path.txt` 分别指向组件/数据与独立事件复核；旧真实失败、本机无输入多轮结论和完整 P1 边界均保留。
 
 macOS manager 已沿同一私有实现补齐非 None 配置对截图路径的宿主生命周期影响：原生默认入口仍为 `Input=None`，另可显式提供只含 owner/features 的宿主类型和构造器。连接先清 connected，按原可用性条件构造并替换捕获 owner，再按精确 GlobalEvent/PostToPid selector 构造输入 owner；捕获构造失败保留旧捕获与输入，输入构造失败则保留新捕获和旧输入，connected 仍为 false。None/未知 selector 保留原成功结束语义；截图转发不增加 connected 门禁，inactive 仍不调用两个 owner。features 每次查询保留的输入 owner 并掩码原两位，metadata 记录两个 selector 的 signed64 解释，析构先捕获后输入。新增原生宿主 helper 复用原 `Capture` 与真实版本谓词；不实现输入动作、原生 GlobalEvent/PostToPid 构造或公开 SDK。
 
