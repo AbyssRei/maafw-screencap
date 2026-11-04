@@ -35,10 +35,15 @@ public:
         filter_pointer_=reinterpret_cast<uintptr_t>(filter);
         config_pointer_=reinterpret_cast<uintptr_t>(config);
         const auto options=static_cast<NSPointerFunctionsOptions>(NSHashTableWeakMemory|NSHashTableObjectPointerPersonality);
-        filter_=[[NSHashTable alloc] initWithOptions:options capacity:1];
-        config_=[[NSHashTable alloc] initWithOptions:options capacity:1];
-        valid_=filter_!=nil && config_!=nil;
-        [filter_ addObject:filter];[config_ addObject:config];
+        // Registration can also create autoreleased temporary owners inside
+        // Foundation. Drain those before returning to the capture caller, as
+        // snapshot() does for its reads; the alloc/init tables stay owned here.
+        @autoreleasepool {
+            filter_=[[NSHashTable alloc] initWithOptions:options capacity:1];
+            config_=[[NSHashTable alloc] initWithOptions:options capacity:1];
+            valid_=filter_!=nil && config_!=nil;
+            [filter_ addObject:filter];[config_ addObject:config];
+        }
     }
     InputWeakSnapshot snapshot() const {
         InputWeakSnapshot result;
