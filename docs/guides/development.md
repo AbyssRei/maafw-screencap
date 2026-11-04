@@ -4,7 +4,9 @@
 
 ## 逐函数对应审阅
 
-macOS manager 的二十二项对应现已关联确切 `f6870ee` 的宿主 owner 实现与原生 ARM64 证据，仍保留十三项应用/输入动作排除。构造、部分替换失败、动态 features、两个 signed64 selector 和 capture 先于 input 释放分别定位到当前 Rust 函数及完整成员声明；旧固定 F 函数身份和排除项不变。十项历史 bc90 原生 Input=None、四项本机 Windows 受控模型、两项本次 ARM64 受控模型分别登记，十六项通过不能作为同一原生截图批次的通过率。原只读校验器接受当前映射；十六组清单去重仍为四十份来源/300 项，四份未进入 Rust 对应的来源保持显式列出。外部记录见 `local/current-macos-manager-functions-path.txt` 与 `local/current-function-census-union.json`；函数身份和文件出现均不代表完整语义或 P1 验收。
+Linux 的完整 `KWinControlUnitCompat.cpp`、`WlRootsControlUnitCompat.cpp` 补四项 Create/Destroy 职责对应，复用既有 `Config::from_legacy_kwin`、`from_legacy_wlr`、C-string 截断、`Manager::new` 与 Drop。保留 Wlr 仅拒绝空指针而接受空字符串、KWin 的设备/输入尺寸检查、两个真实输入 selector，以及 Portal create/open/fd/node/destroy 顺序；Open 失败后的 helper 残留仍属于宿主记录。配置与 manager 的两份当前 Rust 文件、四份编排/夹具和两份完整 F 文件分别匹配原生登记输入。历史三项配置检查和 120 组保存数据只读核验通过，含 38 次创建、六个失败残留；该配置 corpus 不执行 Rust manager 的捕获或资源关闭，既有 owner 证据仍见独立 Linux manager 映射。四项对应不构成旧 opaque-handle C ABI、真实 Portal 授权、输入动作、任意异常或回调排空验收。两个字面 `GetVersion` 体另存为未选范围，不冒充输入排除。外部 `local/current-linux-compat-functions-path.txt`、`local/current-linux-compat-function-union-path.txt` 保留完整来源、范围及旧并集副本；本轮零原生重跑，十七组清单去重为四十二份来源/304 项，Rust 对应之外仍列 `MaaBuffer.cpp` 与 Gamepad API。完整 P1 未通过。
+
+macOS manager 的二十二项对应现已关联确切 `f6870ee` 的宿主 owner 实现与原生 ARM64 证据，仍保留十三项应用/输入动作排除。构造、部分替换失败、动态 features、两个 signed64 selector 和 capture 先于 input 释放分别定位到当前 Rust 函数及完整成员声明；旧固定 F 函数身份和排除项不变。十项历史 bc90 原生 Input=None、四项本机 Windows 受控模型、两项本次 ARM64 受控模型分别登记，十六项通过不能作为同一原生截图批次的通过率。原只读校验器接受当前映射；该 Mac 更新时的十六组清单去重为四十份来源/300 项，本轮新增 Linux 兼容工厂后的并集见上段。外部记录见 `local/current-macos-manager-functions-path.txt` 与 `local/current-function-census-union.json`；函数身份和文件出现均不代表完整语义或 P1 验收。
 
 `MaaBuffer.cpp` 新增基础字符串/图像 helper 原生消费验证：完整未修改 F 文件现在作为独立 translation unit 编译一次，实际公共 `MaaBuffer.h` 一同归档；旧五体生成片段仅保留为来源比较输入，不再 include。新增八个 StringBuffer 与九个 ImageBuffer helper 的实际调用，连同原五项操作，选定原生运行范围为 22/45；其余二十三项 list/rect 函数逐一登记为仅编译、未运行验收。没有把这些原生 API 填成 Rust 产品实现或最终 SDK ABI，Rust 函数对应并集不因此增长；较早五体审阅保留原批身份。
 
