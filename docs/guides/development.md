@@ -132,6 +132,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d39d38c` 的 [Actions 41751187485](https://github.com/AbyssRei/maafw-screencap/actions/runs/41751187485) Windows 已终态失败，七个组件合计 438/452：Custom 44/44、DesktopDup 96/96、FramePool 89/93、manager 99/109、PipeWire control 30/30、PrintWindow 47/47、ScreenDC 33/33。四项原版 pseudo-stop/inactive/layered-stop/layered-inactive 都返回 96×64 图像，完整 6,144 像素均全黑；visible 控制完整匹配图样。原日志记录已知颜色拒收、正常夹具/COM 关闭、关闭后持帧及退出 5；不将这些像素失败改作工具链缺失。
+
+manager 的 63 个 mask、每侧二十个生命周期与三次调用共 7,560 张当前图及 7,560 张持有图，全部完整字节两两一致。107 张异常目标 ROI（原版 55、Rust 52）每张恰有 924 个不同像素，严格限于 96×64 目标的外三像素圈，均为选择 DesktopDup 或 DesktopDupWindow 的输出；103 张是 shot 0、四张是 shot 1，不能概括为全是首帧。选择 FramePool 的两侧各六十张均已知。mask 6/10/14/22/26/30/38/42/46/62 仍失败，实际只读校验器继续接受其余 53 组、拒收这十组；两侧失败集合不完全相同，时序基准选出的 winner 仍按各自几何检验。
+
+已有四臂 border 诊断的 27 张图中，24 张完整匹配图样；slots 3/10/11 的全部 18,432 字节相同，也与上述 107 张异常 ROI 完全一致。这三张分别来自默认 WGC 存活与额外 require=true 的观察；同机默认 getter 和额外设置后的 getter 都为 true，不能声称已执行 false→true 的因果干预。独立 device/swapchain-only、无 WGC、WGC 自身窗口图及各次对象关闭后观察均已知；C++ 对象关闭不证明原生 session/callback 排空。保存数据未提供当时 native frame 时间或缓存分支，尚不能区分旧帧与延迟的合成界面变化；没有新增等待、像素 mask、容差、权限修改或截图重跑。
+
+官方 Windows 组件 ZIP 的 501,223,583 字节、发布 SHA-256/CRC、安全路径、全部 33,172 份恢复文件和 452 份日志再次核对。37,723 个输入登记项中，32,935 项可用（32,497 个不同路径）全部摘要一致，无冲突登记；该轻量包仍缺 4,762 个不同完整输入路径，完整来源闭包另行审阅。独立分析、63 次只读 reader、四项黑图核对及 79 份审阅文件的 seal 读回均通过，原始字节和失败状态不改。外部入口为 `local/current-d39-windows-final-review-path.txt`；本机无输入连续复测、其他批次和完整 P1 保持各自范围。预装工具政策控制也再次通过，版本年龄不设门禁。
+
 确切 `55b96ed` 的 [Actions 41767659599](https://github.com/AbyssRei/maafw-screencap/actions/runs/41767659599) 已在 ARM64 编译、执行新的真实宿主组合入口：原版 oracle、Rust 配对测试、场景停止及独立记录四项均通过；原 161 项名称/状态不变，组件 144/165，原 21 项失败保留。独立 owner-set 重放核对原版六十个捕获 owner、四十个成功输入 owner 的释放及二十次受控输入构造失败，原版/Rust 输入事件和每侧八十次 features 查询一致。完整 240 份当前/持有 BGR、60 份原始 BGRA、349,680 个保存的 BGR 像素位置全部对应；六十张原版矩阵图也逐字节等于独立原版 oracle。实际加载副本的 arm64 Mach-O 与导出 `mfs_mh_native_run`、目标窗口身份及正常关闭均已核对。源码 helper 的输入替换失败控制没有执行真实输入动作；模块 pin、原版 callback 排空及全局资源仍保留下述限制。
 
 本次官方轻量 ZIP 为 45,510,845 字节，发布摘要、CRC、安全路径、165 份日志及 21,479 个可用登记输入项（12,160 个不同路径）核对通过。二十五份确切 Git 源码补充与二十份保存数据只读检查通过，原始数据不变；仍缺 658 个不同的完整输入，本次不声称完整编译输入闭包。复核分别位于 `local/current-55b-macos-focused-review-path.txt` 与 `local/current-55b-native-host-events-review-path.txt`，前一批完整闭包及失败结果保持各自来源身份。
