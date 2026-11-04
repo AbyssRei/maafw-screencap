@@ -4,12 +4,17 @@
 use crate::{Result, records, windows_delegate};
 use std::{fs, path::Path};
 
-fn expected() -> String {
+fn expected(uninstrumented: bool) -> String {
     use std::fmt::Write;
     let mut out = String::new();
     let mut next = 0;
     for cycle in 0..20 {
         let mut event = |name: String, mode, created, destroyed, captures, loaded| {
+            let (created, destroyed, captures) = if uninstrumented {
+                (0, 0, 0)
+            } else {
+                (created, destroyed, captures)
+            };
             writeln!(
                 out,
                 "{name}\t{mode}\t{created}\t{destroyed}\t{captures}\t{loaded}"
@@ -103,6 +108,12 @@ fn expected() -> String {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_variant(args, false)
+}
+pub fn run_whole(args: &[String]) -> Result<()> {
+    run_variant(args, true)
+}
+fn run_variant(args: &[String], whole: bool) -> Result<()> {
     let (mask, path, check) = match args {
         [mask, path] => (mask, path, false),
         [mask, path, flag] if flag == "--check-only" => (mask, path, true),
@@ -119,13 +130,22 @@ pub fn run(args: &[String]) -> Result<()> {
     // host-control success must never substitute for those actual checks.
     let root = records::external_root(Path::new(path))?;
     let mut base_args = vec![mask.clone(), path.clone()];
-    if check || root.join("delegate-runtime-validation.json").exists() {
+    let base_report = if whole {
+        "delegate-whole-runtime-validation.json"
+    } else {
+        "delegate-runtime-validation.json"
+    };
+    if check || root.join(base_report).exists() {
         base_args.push("--check-only".into());
     }
-    windows_delegate::verify_runtime(&base_args)?;
-    let wanted = expected();
+    if whole {
+        windows_delegate::verify_whole_runtime(&base_args)?;
+    } else {
+        windows_delegate::verify_runtime(&base_args)?;
+    }
     let mut artifacts = Vec::new();
     for side in ["source", "rust"] {
+        let wanted = expected(whole && side == "source");
         let file = root.join(format!("{side}/{side}-gamepad-host.tsv"));
         if fs::read_to_string(&file)?.replace("\r\n", "\n") != wanted {
             return Err(format!(
@@ -135,13 +155,14 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         artifacts.push(records::artifact(&root, &file)?);
     }
-    artifacts.push(records::artifact(
-        &root,
-        &root.join("delegate-runtime-validation.json"),
-    )?);
-    let report = serde_json::json!({"layout_version":1,"method":method,"cycles_per_side":20,"failed_reconnects_per_side":20,"host_rows_per_side":182,"input_actions":0,"full_P1_accepted":false,"artifacts":artifacts,
+    artifacts.push(records::artifact(&root, &root.join(base_report))?);
+    let mut report = serde_json::json!({"layout_version":1,"method":method,"cycles_per_side":20,"failed_reconnects_per_side":20,"host_rows_per_side":182,"input_actions":0,"full_P1_accepted":false,"artifacts":artifacts,
         "scope":"Complete unchanged F Gamepad class/header/C factories with an explicit opaque input-owner and identified directory boundary, versus the same Rust GamepadCapture/Native delegate. Actual provider DLL/factory/virtual capture and original 240-image, selected-scope, held-output and native-owner assertions are recomputed first without changes. Each cycle captures before and twice after one host false/connect-error/create-error; native counter snapshots require no delegate replacement, reset while its module/unit are live, then input release after unit destruction/module unload. ViGEm/input actions, arbitrary reset/destructor failures, full callbacks/host matrices and complete P1 remain unaccepted."});
-    let output = root.join("gamepad-runtime-validation.json");
+    let output = root.join(if whole {
+        report["source_native_counter_instrumentation"] = false.into();
+        report["scope"]="Actual complete original Gamepad and Win32 classes/API with real loader/factory capture, versus the same Rust Gamepad/native manager. Input constructor/connect/create failure controls retain original Win32 owner/backend/module through later captures; reset still occurs with module loaded and input drop after original native unload. Actual source host event names/modes/module snapshots and160typed class/owner/selection observations replace absent source facade event counters. Empty source counters do not assert zero native owners. Rust counters/host events and all full-pixel/held/current/scope assertions remain strict. No input actions/arbitrary faults/native callback drain or fullP1 acceptance.".into();
+        "gamepad-whole-runtime-validation.json"
+    } else { "gamepad-runtime-validation.json" });
     if check && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
             return Err("Saved Gamepad native runtime report differs".into());
@@ -149,8 +170,14 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "Gamepad native outer records method={method} cycles_per_side=20 failed_reconnects_per_side=20 host_rows_per_side=182 native_counter_snapshots=1 files=3 input_actions=0 full_P1_acceptance=0 passed"
-    );
+    if whole {
+        println!(
+            "Gamepad whole chain records method={method} cycles_per_side=20 failed_reconnects_per_side=20 host_rows_per_side=182 source_facade_counters=0 actual_source_owner_observations=160 input_actions=0 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "Gamepad native outer records method={method} cycles_per_side=20 failed_reconnects_per_side=20 host_rows_per_side=182 native_counter_snapshots=1 files=3 input_actions=0 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }

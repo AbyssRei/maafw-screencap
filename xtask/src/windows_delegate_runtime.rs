@@ -3,6 +3,8 @@
 //! Recompute actual original/Rust native factory images and lifecycle evidence.
 use crate::{Result, records};
 use std::{collections::BTreeMap, fs, path::Path};
+#[path = "windows_delegate_whole_chain.rs"]
+mod whole_chain;
 fn fields(path: &Path) -> Result<BTreeMap<String, u64>> {
     let mut output = BTreeMap::new();
     for line in fs::read_to_string(path)?.lines() {
@@ -172,6 +174,12 @@ fn events(
     Ok(())
 }
 pub fn run(args: &[String]) -> Result<()> {
+    run_variant(args, false)
+}
+pub fn run_whole(args: &[String]) -> Result<()> {
+    run_variant(args, true)
+}
+fn run_variant(args: &[String], whole: bool) -> Result<()> {
     let (mask, path, check_only) =
         match args {
             [mask, path] => (mask, path, false),
@@ -213,13 +221,28 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     let source_selected = selections(&root.join("source/source-cycles.tsv"), mask)?;
     let rust_selected = selections(&root.join("rust/rust-cycles.tsv"), mask)?;
-    events(
-        &root.join("source/source-events.tsv"),
-        mask,
-        true,
-        &source_selected,
-        None,
-    )?;
+    if whole {
+        if !fs::read(root.join("source/source-events.tsv"))?.is_empty() {
+            return Err(
+                "Whole original source unexpectedly used facade event instrumentation".into(),
+            );
+        }
+        whole_chain::verify(
+            &root.join("source/source-whole-chain.tsv"),
+            &source_selected
+                .iter()
+                .map(|cycle| cycle.selected)
+                .collect::<Vec<_>>(),
+        )?;
+    } else {
+        events(
+            &root.join("source/source-events.tsv"),
+            mask,
+            true,
+            &source_selected,
+            None,
+        )?;
+    }
     events(
         &root.join("rust/rust-events.tsv"),
         mask,
@@ -262,9 +285,23 @@ pub fn run(args: &[String]) -> Result<()> {
     for name in ["source.stdout", "source.stderr"] {
         artifacts.push(records::artifact(&root, &root.join(name))?);
     }
-    let report = serde_json::json!({"layout_version":1,"method":mask,"lifecycles":40,"images":240,"artifacts":artifacts,
+    if whole {
+        for name in [
+            "source/source-whole-chain.tsv",
+            "source/MaaWin32ControlUnit.dll",
+            "rust/MaaWin32ControlUnit.dll",
+        ] {
+            artifacts.push(records::artifact(&root, &root.join(name))?);
+        }
+    }
+    let mut report = serde_json::json!({"layout_version":1,"method":mask,"lifecycles":40,"images":240,"artifacts":artifacts,
         "scope":"Actual fixed-source Boost/LibraryHolder/outer delegation, original Create/Destroy bodies and original manager/backend virtual calls versus the private Rust manager/factory through a real DLL/class facade. Each side owns an independent known-pattern 96x64 UI-thread window, MTA/current-thread dispatcher, 20 native unit/module lifecycles and 60 independent CPU frames retained across later captures and complete window/module closure. DesktopDup preserves the ENTIRE monitor output; its explicit native monitor/client geometry selects only the owned-window ROI for known-color validation. Other monitor pixels have full byte-span and retained-identity checks, not a deterministic ambient-desktop color oracle. Other methods preserve window-only output. Native measured winners may differ; both must be inside the requested mask. Source type identity and all native unit/caller/selector events are recomputed. Rust GDI counts are recorded observations, not zero-delta assertions or source resource parity. Original waiting/cache/selection implementation remains unchanged. This visible-target/unrotated-output slice does not prove all host/format/failure/pseudo-minimize/resource matrices or complete P1. Extra boundary safety copies remain explicit."});
-    let output = root.join("delegate-runtime-validation.json");
+    let output = root.join(if whole {
+        report["source_whole_chain_observations"] = 160.into();
+        report["source_facade_event_instrumentation"] = false.into();
+        report["scope"]="Complete unchanged original F Gamepad class/header/API and real LibraryHolder/Win32 loader consume the complete unchanged original Win32 class/header/API/empty background-key owner and six actual backends, versus the same Rust Gamepad/native manager. Input owner and directory remain explicit host boundaries. Typed readonly observations prove actual outer/inner class identity, selected native backend, no inner owner before connect, retained inner/module/backend through controlled input reconnect failure and three captures, then module absence after each outer destruction. Source bridge counters are uninstrumented and empty, not evidence of zero native owners; Rust events remain strict. All original240current/held image, actual selected monitor/window scope and full known target assertions apply. Extra source Mat clone and Rust boundary safety copies remain explicit; original waits/conversion/defaults unchanged. No input actions, arbitrary faults/native drain or full P1 acceptance.".into();
+        "delegate-whole-runtime-validation.json"
+    } else { "delegate-runtime-validation.json" });
     if check_only && output.exists() {
         let saved: serde_json::Value = records::read(&output)?;
         if saved != report {
@@ -273,8 +310,14 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "Win32 actual factory runtime method={mask} source_lifecycles=20 Rust_lifecycles=20 images=240 native_events_and_owners_verified=1 full_P1_acceptance=0 passed"
-    );
+    if whole {
+        println!(
+            "Win32 whole chain runtime method={mask} source_lifecycles=20 Rust_lifecycles=20 images=240 source_owner_observations=160 Rust_events_verified=1 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "Win32 actual factory runtime method={mask} source_lifecycles=20 Rust_lifecycles=20 images=240 native_events_and_owners_verified=1 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }

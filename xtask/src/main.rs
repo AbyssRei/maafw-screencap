@@ -250,6 +250,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-delegate <gamepad-host|gamepad-metadata> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate gamepad-runtime <mask> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate gamepad-client-band-runtime <mask> <external records> [--check-only]\n\
+                      cargo xtask upstream-delegate gamepad-whole-client-band-runtime <mask> <external records> [--check-only]\n\
                       cargo xtask upstream-delegate win32-host-context <mask> <mode> <dpi> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate win32-whole-host-context <mask> <mode> <dpi> <external records> [--check-only]\n\n\
                       cargo xtask upstream-delegate win32-whole-queries <external records> [--check-only]\n\n\

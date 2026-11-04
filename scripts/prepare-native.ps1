@@ -37,6 +37,7 @@ $delegateNativeEvidence = ''
 $delegateFactoryEvidence = ''
 $delegateRuntimeEvidence = ''
 $delegateBandRuntimeEvidence = ''
+$delegateWholeChainEvidence = ''
 $gamepadMetadataEvidence = ''
 $delegateQueryEvidence = ''
 $delegateWholeQueryEvidence = ''
@@ -753,7 +754,7 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             & $ConfigureTool upstream-delegate win32-host-context $contextMask $contextMode $contextDpi $env:MFS_DELEGATE_CONTEXT_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Original/Rust native COM/DPI effects, call results or complete images differ'}
         }
-        if($Name -match '^manager-(?:delegate|client-band)-runtime-([1-9]|[1-5][0-9]|6[0-3])$' -and $exitCode -eq 0) {
+        if($Name -match '^manager-(?:delegate|client-band|whole-client-band)-runtime-([1-9]|[1-5][0-9]|6[0-3])$' -and $exitCode -eq 0) {
             $runtimeMask=$Matches[1]
             $observed=Get-Content -LiteralPath $logPath -Raw
             if($observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;' -or
@@ -767,13 +768,22 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected the complete original outer Gamepad and retained real native capture after controlled host failures'
             }
             $runtimeReader='gamepad-runtime'
-            if($Name.StartsWith('manager-client-band-')) {
+            if($Name.StartsWith('manager-client-band-') -or $Name.StartsWith('manager-whole-client-band-')) {
                 $bandSummary="Manager client band method=$runtimeMask full_client=96x64 nonclient_band=6 boundary_rows_per_side=120 target_inset=0 full_P1_acceptance=0 passed"
                 if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($bandSummary)+'\r?$').Count -ne 1 -or
                    [regex]::Matches($observed,'(?m)^Manager client band.*\r?$').Count -ne 1) {
                     throw 'Expected the separate complete-client band native matrix'
                 }
                 $runtimeReader='gamepad-client-band-runtime'
+            }
+            if($Name.StartsWith('manager-whole-client-band-')) {
+                $wholeSummary="Gamepad whole native chain method=$runtimeMask cycles_per_side=20 original_outer_class=1 original_Win32_class=1 source_owner_observations=160 input_actions=0 full_P1_acceptance=0 passed"
+                if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($wholeSummary)+'\r?$').Count -ne 1 -or
+                   [regex]::Matches($observed,'(?m)^Gamepad whole native chain.*\r?$').Count -ne 1 -or
+                   $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$') {
+                    throw 'Expected actual complete original outer/Win32 chain and all160owner observations'
+                }
+                $runtimeReader='gamepad-whole-client-band-runtime'
             }
             & $ConfigureTool upstream-delegate $runtimeReader $runtimeMask $env:MFS_DELEGATE_RUNTIME_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual native runtime images/owners/events failed independent verification'}
@@ -1302,6 +1312,7 @@ try {
         if($offline) {
             Save-Input (Prepared-File gamepad-runtime-scope.txt)
             Save-Input (Prepared-File windows-delegate-whole-source-scope.txt)
+            Save-Input (Prepared-File whole-gamepad-runtime-scope.txt)
         } else {
             $gamepadRuntimeScope=Join-Path $inputsRoot gamepad-runtime-scope.txt
             Copy-Item -LiteralPath (Join-Path $delegateBuild gamepad-runtime-scope.txt) -Destination $gamepadRuntimeScope
@@ -1309,6 +1320,9 @@ try {
             $wholeSourceScope=Join-Path $inputsRoot windows-delegate-whole-source-scope.txt
             Copy-Item -LiteralPath (Join-Path $delegateBuild whole-source-scope.txt) -Destination $wholeSourceScope
             Save-Input $wholeSourceScope
+            $wholeGamepadScope=Join-Path $inputsRoot whole-gamepad-runtime-scope.txt
+            Copy-Item -LiteralPath (Join-Path $delegateBuild whole-gamepad-runtime-scope.txt) -Destination $wholeGamepadScope
+            Save-Input $wholeGamepadScope
         }
         $delegateEvidence=Join-Path $artifacts windows-delegate
         $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS=$delegateEvidence
@@ -1325,6 +1339,8 @@ try {
         New-Item -ItemType Directory -Path $delegateRuntimeEvidence | Out-Null
         $delegateBandRuntimeEvidence=Join-Path $artifacts windows-delegate-client-band-runtime
         New-Item -ItemType Directory -Path $delegateBandRuntimeEvidence | Out-Null
+        $delegateWholeChainEvidence=Join-Path $artifacts windows-delegate-whole-client-band-runtime
+        New-Item -ItemType Directory -Path $delegateWholeChainEvidence | Out-Null
         $delegateContextEvidence=Join-Path $artifacts windows-delegate-host-context
         New-Item -ItemType Directory -Path $delegateContextEvidence | Out-Null
         $delegateWholeContextEvidence=Join-Path $artifacts windows-delegate-whole-host-context
@@ -1727,6 +1743,7 @@ try {
             $delegateDestroyCase='backends::windows::delegate_native::tests::destroy::retains_module_and_first_error_after_consumed_unit_reports_cleanup_failure'
             $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
             $delegateBandRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_complete_client_band_through_original_and_rust_factories'
+            $delegateWholeChainCase='backends::windows::delegate_native::tests::runtime::captures_through_complete_original_gamepad_and_win32_classes'
             $delegateContextCase='backends::windows::delegate_native::tests::host_context::compares_real_factory_calls_and_caller_com_dpi_effects'
             $delegateWholeContextCase='backends::windows::delegate_native::tests::host_context::compares_whole_original_win32_class_and_rust_capture_under_host_contexts'
             $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
@@ -1737,6 +1754,7 @@ try {
             $caseSelection+=@('--skip',$delegateCase,'--skip',$delegateNativeCase,'--skip',$delegateFactoryCase,'--skip',$delegateRuntimeCase)
             $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase,'--skip',$gamepadMetadataCase)
             $caseSelection+=@('--skip',$delegateBandRuntimeCase)
+            $caseSelection+=@('--skip',$delegateWholeChainCase)
             $caseSelection+=@('--skip',$delegateContextCase)
             $caseSelection+=@('--skip',$delegateWholeContextCase)
             $managerChecks = @(
@@ -1797,6 +1815,12 @@ try {
                 $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$runtimeMask
                 $env:MFS_DELEGATE_RUNTIME_RECORDS=Join-Path $delegateBandRuntimeEvidence "method-$runtimeMask"
                 try {Step "manager-client-band-runtime-$runtimeMask" cargo ($parityArguments+@('--',$delegateBandRuntimeCase,'--exact','--ignored','--test-threads=1','--nocapture'))}
+                catch {$failed=$true;Write-Host $_.Exception.Message}
+            }
+            foreach($runtimeMask in @(1,2,4,8,16,32,63)) {
+                $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$runtimeMask
+                $env:MFS_DELEGATE_RUNTIME_RECORDS=Join-Path $delegateWholeChainEvidence "method-$runtimeMask"
+                try {Step "manager-whole-client-band-runtime-$runtimeMask" cargo ($parityArguments+@('--',$delegateWholeChainCase,'--exact','--ignored','--test-threads=1','--nocapture'))}
                 catch {$failed=$true;Write-Host $_.Exception.Message}
             }
         } else {
@@ -1957,6 +1981,7 @@ finally {
     if($gamepadMetadataEvidence -and (Test-Path -LiteralPath $gamepadMetadataEvidence)) {Get-ChildItem -LiteralPath $gamepadMetadataEvidence -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateRuntimeEvidence -and (Test-Path -LiteralPath $delegateRuntimeEvidence)) {Get-ChildItem -LiteralPath $delegateRuntimeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateBandRuntimeEvidence -and (Test-Path -LiteralPath $delegateBandRuntimeEvidence)) {Get-ChildItem -LiteralPath $delegateBandRuntimeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
+    if($delegateWholeChainEvidence -and (Test-Path -LiteralPath $delegateWholeChainEvidence)) {Get-ChildItem -LiteralPath $delegateWholeChainEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateFactoryEvidence -and (Test-Path -LiteralPath $delegateFactoryEvidence)) {Get-ChildItem -LiteralPath $delegateFactoryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateNativeEvidence -and (Test-Path -LiteralPath $delegateNativeEvidence)) {Get-ChildItem -LiteralPath $delegateNativeEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}
     if($delegateQueryEvidence -and (Test-Path -LiteralPath $delegateQueryEvidence)) {Get-ChildItem -LiteralPath $delegateQueryEvidence -Recurse -File|ForEach-Object {Save-Input $_.FullName}}

@@ -73,17 +73,24 @@ pub(super) fn pixels(image: &Image, scope: [i32; 4]) -> bool {
 #[ignore = "explicit isolated real source/Rust native factory capture; requires renderer and current desktop"]
 fn captures_selected_method_through_original_and_rust_factories()
 -> Result<(), Box<dyn std::error::Error>> {
-    run(false)
+    run(false, false)
 }
 
 #[test]
 #[ignore = "explicit separate complete-client nonclient-band source/Rust manager matrix"]
 fn captures_complete_client_band_through_original_and_rust_factories()
 -> Result<(), Box<dyn std::error::Error>> {
-    run(true)
+    run(true, false)
 }
 
-fn run(client_band: bool) -> Result<(), Box<dyn std::error::Error>> {
+#[test]
+#[ignore = "explicit complete original Gamepad and Win32 class chain versus Rust, owned desktop"]
+fn captures_through_complete_original_gamepad_and_win32_classes()
+-> Result<(), Box<dyn std::error::Error>> {
+    run(true, true)
+}
+
+fn run(client_band: bool, whole_chain: bool) -> Result<(), Box<dyn std::error::Error>> {
     let method: u64 = std::env::var("MFS_DELEGATE_CAPTURE_METHOD")?.parse()?;
     // Exercise every nonempty subset of the six original method bits. Native
     // timing may choose different winners on each side; validate each output
@@ -107,7 +114,11 @@ fn run(client_band: bool) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir(&source)?;
     std::fs::create_dir(&rust)?;
     std::fs::copy(
-        build.join("mfs_delegate_source.dll"),
+        build.join(if whole_chain {
+            "mfs_delegate_whole_source.dll"
+        } else {
+            "mfs_delegate_source.dll"
+        }),
         source.join("MaaWin32ControlUnit.dll"),
     )?;
     std::fs::copy(
@@ -123,7 +134,11 @@ fn run(client_band: bool) -> Result<(), Box<dyn std::error::Error>> {
         std::ffi::OsStr::new("20"),
     ]);
     if client_band {
-        command.arg("client-band");
+        command.arg(if whole_chain {
+            "whole-client-band"
+        } else {
+            "client-band"
+        });
     }
     let output = command.output()?;
     std::fs::write(root.join("source.stdout"), &output.stdout)?;
@@ -317,6 +332,11 @@ fn run(client_band: bool) -> Result<(), Box<dyn std::error::Error>> {
     if client_band {
         println!(
             "Manager client band method={method} full_client=96x64 nonclient_band=6 boundary_rows_per_side=120 target_inset=0 full_P1_acceptance=0 passed"
+        );
+    }
+    if whole_chain {
+        println!(
+            "Gamepad whole native chain method={method} cycles_per_side=20 original_outer_class=1 original_Win32_class=1 source_owner_observations=160 input_actions=0 full_P1_acceptance=0 passed"
         );
     }
     Ok(())

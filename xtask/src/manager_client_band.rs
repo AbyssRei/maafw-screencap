@@ -26,6 +26,12 @@ fn numbers(path: &Path, rows: usize, columns: usize) -> Result<Vec<Vec<i64>>> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_variant(args, false)
+}
+pub fn run_whole(args: &[String]) -> Result<()> {
+    run_variant(args, true)
+}
+fn run_variant(args: &[String], whole: bool) -> Result<()> {
     let (mask, path, check) = match args {
         [mask, path] => (mask, path, false),
         [mask, path, flag] if flag == "--check-only" => (mask, path, true),
@@ -38,7 +44,11 @@ pub fn run(args: &[String]) -> Result<()> {
     let root = records::external_root(Path::new(path))?;
     // Keep every original whole-Gamepad, actual DLL/factory, current/held pixel,
     // selected monitor ROI, native event and owner assertion before new data.
-    gamepad_runtime::run(args)?;
+    if whole {
+        gamepad_runtime::run_whole(args)?;
+    } else {
+        gamepad_runtime::run(args)?;
+    }
     let mut artifacts = Vec::new();
     let mut observations = Vec::new();
     let mut shared_desktop = None;
@@ -129,16 +139,27 @@ pub fn run(args: &[String]) -> Result<()> {
             "full_client":[96,64],"outer_client_insets":[6,6,6,6],"target_inset":0}),
         );
     }
-    for name in [
-        "delegate-runtime-validation.json",
-        "gamepad-runtime-validation.json",
-    ] {
+    for name in if whole {
+        [
+            "delegate-whole-runtime-validation.json",
+            "gamepad-whole-runtime-validation.json",
+        ]
+    } else {
+        [
+            "delegate-runtime-validation.json",
+            "gamepad-runtime-validation.json",
+        ]
+    } {
         artifacts.push(records::artifact(&root, &root.join(name))?);
     }
-    let report = serde_json::json!({"layout_version":1,"method":method,"artifacts":artifacts,
+    let mut report = serde_json::json!({"layout_version":1,"method":method,"artifacts":artifacts,
         "observations":observations,"boundary_rows_per_side":120,"full_P1_accepted":false,
         "scope":"Independent six-pixel native nonclient-band fixture through the same original/Rust whole-Gamepad/native capture facades. All original240current/heldimage,selectedscope,nativeunit/event/module/host assertions remain required. Every complete96x64client is known without target inset/mask/tolerance; each side has120public connect/capture/controlled-reconnect/inactive boundary pairs with exact outer/client/origin geometry. Caller-side geometry queries do not drain/pump the UI queue and are not atomic or observations during calls. No indicator setter or capture/default/wait/conversion change. Does not infer actual privacy getter, native pixel producer/drain, per-call style stability or full P1; old scenes/results remain separate."});
-    let output = root.join("manager-client-band-validation.json");
+    let output = root.join(if whole {
+        report["original_whole_Win32_class"] = true.into();
+        report["scope"]="Complete original Gamepad outer class and real loader/factories consume complete original Win32 class and six actual capture methods; same Rust Gamepad/native manager on the other side. All240current/held image/full known96x64target/selectedscope assertions,160original typed owner/class/backend observations, strict Rust native counters and both182host event rows remain required. Each side has120native public-operation geometry pairs, six nonclient pixels and no target inset/mask/tolerance. Input actions/producer/drain/arbitrary faults and fullP1 remain unaccepted; original scenes and facade records retain their own scope.".into();
+        "manager-whole-client-band-validation.json"
+    } else { "manager-client-band-validation.json" });
     if check && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
             return Err("Saved manager band report differs".into());
@@ -146,8 +167,14 @@ pub fn run(args: &[String]) -> Result<()> {
     } else if !check {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "Manager client band records method={method} images=240 full_client=96x64 nonclient_band=6 boundary_rows_per_side=120 target_inset=0 full_P1_acceptance=0 passed"
-    );
+    if whole {
+        println!(
+            "Manager whole client band records method={method} images=240 full_client=96x64 nonclient_band=6 boundary_rows_per_side=120 target_inset=0 original_Win32_class=1 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "Manager client band records method={method} images=240 full_client=96x64 nonclient_band=6 boundary_rows_per_side=120 target_inset=0 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }

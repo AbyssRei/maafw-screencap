@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <limits>
 #include "gamepad-runtime.hpp"
+#include "whole-gamepad-runtime.hpp"
 namespace {
 struct Host {
     bool initialized=false;
@@ -176,7 +177,8 @@ int wmain(int argc,wchar_t** argv) {
     try {
         if(argc!=6 && argc!=7) {throw std::logic_error("expected directory renderer output mask cycles [client-band]");}
         const bool client_band=argc==7;
-        if(client_band && std::wstring_view(argv[6])!=L"client-band") {throw std::logic_error("unknown runtime scene");}
+        const bool whole_chain=client_band && std::wstring_view(argv[6])==L"whole-client-band";
+        if(client_band && !whole_chain && std::wstring_view(argv[6])!=L"client-band") {throw std::logic_error("unknown runtime scene");}
         MaaNS::directory=argv[1];const std::filesystem::path output=argv[3];
         const auto method=std::stoull(argv[4]);const auto cycles=std::stoul(argv[5]);
         if(!method || method>63 || cycles!=20 || !output.is_absolute() || !std::filesystem::is_directory(output)) {throw std::logic_error("runtime arguments");}
@@ -189,6 +191,8 @@ int wmain(int argc,wchar_t** argv) {
             if(method&12) {using Start=int32_t(*)(void*);if(fixture.symbol<Start>("mfs_desktop_fixture_updates")(fixture.span.owner)) {throw std::runtime_error("band desktop update fixture failed");}}
         }
         const auto window=static_cast<HWND>(fixture.span.hwnd);
+        std::unique_ptr<MfsWholeGamepad::Trace> chain;
+        if(whole_chain) {chain=std::make_unique<MfsWholeGamepad::Trace>(MaaNS::directory,output);}
         std::vector<std::pair<cv::Mat,Geometry>> held;held.reserve(60);
         std::ofstream table(output/L"source-cycles.tsv");
         bool mismatch=false;
@@ -199,14 +203,18 @@ int wmain(int argc,wchar_t** argv) {
                 std::unique_ptr<MAA_CTRL_UNIT_NS::GamepadControlUnitAPI,decltype(&MaaGamepadControlUnitDestroy)> manager(
                     MaaGamepadControlUnitCreate(fixture.span.hwnd,cycle%2,method),MaaGamepadControlUnitDestroy);
                 if(!manager || manager->connected()) {throw std::runtime_error("source outer initial state");}
+                if(chain) {chain->record(cycle,0,manager.get());}
                 std::cout<<"source cycle="<<cycle<<" initialize"<<std::endl;
                 auto before=band?ClientBand::snapshot(window):std::array<int64_t,10>{};
                 const bool connected=manager->connect();
                 if(band) {band->record(window,cycle,0,before);}
                 if(!connected || !manager->connected()) {throw std::runtime_error("source runtime outer initialization false");}
-                MfsDnEvent events[4096]{};size_t count=0;uint64_t owners=0;
-                if(mfs_dn_events(events,std::size(events),&count,&owners)) {throw std::runtime_error("source runtime diagnostic overflow");}
-                for(size_t index=0;index<count;++index) {if(events[index].kind==7) {selected=events[index].a;}}
+                if(chain) {selected=chain->record(cycle,1,manager.get());}
+                else {
+                    MfsDnEvent events[4096]{};size_t count=0;uint64_t owners=0;
+                    if(mfs_dn_events(events,std::size(events),&count,&owners)) {throw std::runtime_error("source runtime diagnostic overflow");}
+                    for(size_t index=0;index<count;++index) {if(events[index].kind==7) {selected=events[index].a;}}
+                }
                 if(!selected || (selected&method)!=selected) {throw std::runtime_error("source runtime selected outside mask");}
                 scope=geometry(static_cast<HWND>(fixture.span.hwnd),selected);
                 for(unsigned shot=0;shot<3;++shot) {
@@ -216,10 +224,12 @@ int wmain(int argc,wchar_t** argv) {
                         int status=2;try{status=manager->connect();}catch(const std::runtime_error&){}
                         if(band) {band->record(window,cycle,2,before);}
                         if(status!=(MfsGamepadFixture::mode==1?0:2) || manager->connected()) {throw std::runtime_error("source controlled outer failure differs");}
+                        if(chain && chain->record(cycle,3,manager.get())!=selected) {throw std::runtime_error("actual inner selection changed after outer failure");}
                     }
                     cv::Mat image;
                     before=band?ClientBand::snapshot(window):std::array<int64_t,10>{};
                     if(!manager->screencap(image)) {throw std::runtime_error("source runtime capture false");}
+                    if(chain && chain->record(cycle,shot==0?2:shot+3,manager.get())!=selected) {throw std::runtime_error("actual inner selection changed after capture");}
                     if(band) {band->record(window,cycle,shot==0?1:shot+2,before);}
                     // Extra executable-owned safety clone, before unit/module
                     // destruction. Native conversion remains at original point.
@@ -231,13 +241,16 @@ int wmain(int argc,wchar_t** argv) {
                 const bool inactive=manager->inactive();
                 if(band) {band->record(window,cycle,5,before);}
                 if(!inactive) {throw std::runtime_error("source runtime inactive false");}
+                if(chain && chain->record(cycle,6,manager.get())!=selected) {throw std::runtime_error("actual inner selection changed after inactive");}
             }
+            if(chain) {chain->record(cycle,7,nullptr);}
             const bool unloaded=GetModuleHandleW((MaaNS::directory/L"MaaWin32ControlUnit.dll").c_str())==nullptr;
             table<<cycle<<'\t'<<selected<<'\t'<<unloaded<<'\t'<<scope.width<<'\t'<<scope.height<<'\t'<<scope.x<<'\t'<<scope.y<<'\n';table.flush();
             if(!unloaded) {throw std::runtime_error("source runtime module retained");}
         }
         if(!MfsGamepadFixture::inputs.empty()) {throw std::runtime_error("source outer input owners survived");}
         const bool band_valid=!band || band->finish();
+        if(chain) {chain->finish();}
         fixture.close();
         for(size_t index=0;index<held.size();++index) {
             mismatch|=!pixels(held[index].first,held[index].second);
