@@ -140,6 +140,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `ff3ccda` 的完整矩阵 [Actions 41856803788](https://github.com/AbyssRei/maafw-screencap/actions/runs/41856803788) Mac 轻量包现已独立复核，组件为 147/168，全部 168 项旧名称/状态与前批一致、二十一项失败保持。官方 45,544,394 字节 ZIP 的整体摘要/CRC、安全路径、12,331 份原始文件、33 份确切 Git 补充和二十一份只读报告均核对；247 张完整 47×31 BGR 与 60 张 BGRA 的已知颜色和 alpha 另行逐字节复算。实际 ARM64 Blocks 程序、注册摘要、导入/链接及编译条目验证，MRC NSObject 的四次真实 dealloc、Rust 原生弱引用/heap alias 和既有十二份诊断捕获控制通过。它们仍为所有权模型控制，未直接观察失败请求中实际 SCK filter/config 的未调用析构。
+
+本批失败 observer 的 sample 请求仍有一份未观察到的 handler/semaphore，另观察 15.000455709 秒后 pending 保持一；两份 token 快照均为 acquired=12/released=12/live=0，间隔 15.000476917 秒。原等待返回 49、持续 5.143870833 秒，consumer 保持失败；不能由诊断 token 已释放推断原 completion/request/session 排空。预装 Xcode 27.1/27A9275 按实际身份记录，工具年龄不作门禁。外部 `local/current-ff3-macos-focused-review-path.txt` 和 `local/current-ff3-native-ownership-evidence-path.txt` 指向两份封存复核；本批仍有 662 个完整输入缺口，不借用旧 `fa76a07` 完整包的来源闭包，也不接受新的 Windows manager 场景或完整 P1。
+
 新增完整客户区 `client-band` 场景现已沿原版完整 Gamepad manager/C 工厂、捕获范围 Win32 facade、实际 DLL/后端虚调用，以及同一 Rust GamepadCapture/Native/manager 路径配对运行。复用既有运行体，原默认场景保留；可选场景以原生窗口非客户区容纳六像素边带，完整客户区仍为 96×64。它沿用六种方法、测速/选择、等待/回放、转换、三次取帧、受控宿主重连失败和模块关闭后的持帧断言；不新增隐私 setter、目标 inset、遮罩或容差。每侧每配置另记录 120 组公开 connect/capture/reconnect/inactive 的前后外矩形、客户区及屏幕原点。查询在调用方直接读取 Win32 几何，不处理/排空 UI 消息，也不构成原子快照、调用期间观察、style 稳定或隐私 getter 证明。
 
 本机单方法 1/2/4/8/16/32 与混合 63 完成有效连续三轮，21 次原生测试均通过，包含 840 个两侧 manager 生命周期和 2,520 次显式公开取帧。独立 reader 与 Python 复算 5,040 份完整即时/持帧文件、30,965,760 个已知目标像素位置、2,520 对完整持帧字节及 5,040 组几何边界；DesktopDup 保留整屏原输出，仅自有完整客户区有已知颜色 oracle，其他桌面像素继续核对完整 span 和持帧字节。四路鼠标/键盘监听记录零输入，最大观察间隔 81.8902ms，观察线程返回、全部注销及 22,292 行日志写入/线程 join 均验证；1,830 份程序、实际原生编译/链接及源码输入冻结并复核，未声称新的物理输入正向控制。
