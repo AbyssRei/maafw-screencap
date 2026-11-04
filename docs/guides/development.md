@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`GamepadControlUnitAPI.cpp` 完整 F 文件新增两项创建/销毁职责对应：原工厂不校验 HWND，原样将指针位值及完整 unsigned type/method 交给未连接的 manager；既有 Rust `GamepadCapture::new` 保存相同标量、空 input、connected=false，复用同一 capture delegate。销毁对应既有 Drop/reset 及 delegate 先于 input 的字段退出顺序；空原 handle 的 no-op 与 Rust 没有 owner 分开解释。Rust 返回类型化值 owner，没有导出原堆指针 ABI，也不据此接受任意错误句柄、异常/OOM、输入动作或原生回调排空。字面 `GetVersion` 继续单列未选范围，最终 SDK 版本契约没有在 P1 提前定案。
+
+对应记录引用之后的真实集成批次：primary Rust/C++ Debug、Release 每配置已有 72 组 owner 和 144 组元数据查询，八份原日志全部通过；四组保存数据再次只读校核通过，零新截图/输入动作。当前 `gamepad.rs` 及三份测试/边界文件匹配该批封存 canonical 源码，完整原 API 和两个调用夹具也匹配更早编译时登记输入。较早 owner 批次的 Rust 构造尚未保存两项元数据，测试文件后来也有新增，因此不声称它们整文件未变或直接沿用该批对当前构造的验收。原接口 Create、普通 Destroy、null Destroy 均在实际 CPU 调用程序中消费；旧源码调用和 Rust owner 对应不构成新公共 C 导出。
+
+新清单由 `local/current-gamepad-api-functions-path.txt` 指向；既有只读 `reference function-map` 接受一份来源、两项对应、八个实际状态。`local/current-gamepad-api-function-union-path.txt` 重新核对十八组清单及全部来源身份，当前并集为四十三份来源/306 项，其中 302 项来自既有原始索引、四项是手工补列的声明。该索引共 44 份原文、353 个 callable，另外 51 项分别为 MaaBuffer 的 45 项、三个字面版本入口、三个旧 SDK 分支 stub，均单独列出；MaaBuffer 的 22 项原生消费及 23 项通用框架边界继续引用自己的审阅，不改称 Rust SDK 实现。原始索引的语法/条件分支和宏限制保留，不以有限计数宣布编译器穷尽或完整 P1。最初外部 reader 的 seal 结构、旧构造/测试不变假设及并集合成字段错误均保留，后续只修正材料选择，没有重跑原生测试。
+
 Linux 的完整 `KWinControlUnitCompat.cpp`、`WlRootsControlUnitCompat.cpp` 补四项 Create/Destroy 职责对应，复用既有 `Config::from_legacy_kwin`、`from_legacy_wlr`、C-string 截断、`Manager::new` 与 Drop。保留 Wlr 仅拒绝空指针而接受空字符串、KWin 的设备/输入尺寸检查、两个真实输入 selector，以及 Portal create/open/fd/node/destroy 顺序；Open 失败后的 helper 残留仍属于宿主记录。配置与 manager 的两份当前 Rust 文件、四份编排/夹具和两份完整 F 文件分别匹配原生登记输入。历史三项配置检查和 120 组保存数据只读核验通过，含 38 次创建、六个失败残留；该配置 corpus 不执行 Rust manager 的捕获或资源关闭，既有 owner 证据仍见独立 Linux manager 映射。四项对应不构成旧 opaque-handle C ABI、真实 Portal 授权、输入动作、任意异常或回调排空验收。两个字面 `GetVersion` 体另存为未选范围，不冒充输入排除。外部 `local/current-linux-compat-functions-path.txt`、`local/current-linux-compat-function-union-path.txt` 保留完整来源、范围及旧并集副本；本轮零原生重跑，十七组清单去重为四十二份来源/304 项，Rust 对应之外仍列 `MaaBuffer.cpp` 与 Gamepad API。完整 P1 未通过。
 
 macOS manager 的二十二项对应现已关联确切 `f6870ee` 的宿主 owner 实现与原生 ARM64 证据，仍保留十三项应用/输入动作排除。构造、部分替换失败、动态 features、两个 signed64 selector 和 capture 先于 input 释放分别定位到当前 Rust 函数及完整成员声明；旧固定 F 函数身份和排除项不变。十项历史 bc90 原生 Input=None、四项本机 Windows 受控模型、两项本次 ARM64 受控模型分别登记，十六项通过不能作为同一原生截图批次的通过率。原只读校验器接受当前映射；该 Mac 更新时的十六组清单去重为四十份来源/300 项，本轮新增 Linux 兼容工厂后的并集见上段。外部记录见 `local/current-macos-manager-functions-path.txt` 与 `local/current-function-census-union.json`；函数身份和文件出现均不代表完整语义或 P1 验收。
