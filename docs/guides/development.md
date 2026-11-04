@@ -140,6 +140,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `fa76a07` 的 [Actions 41841543022](https://github.com/AbyssRei/maafw-screencap/actions/runs/41841543022) 完整 Mac 官方工程包已闭合初次轻量复核缺少的全部 662 项输入。367,857,141 字节 ZIP 从零下载，351 份 HTTP 206 分段及整体官方摘要、tar 成员 CRC、安全路径均验证；本次未复用旧流或旧批来源。恢复 32,071 份文件、30,514 个登记路径及十二份 manifest，全部 12,331 份轻量数据与完整包身份匹配。十一份每份 598 文件的普通产品快照及一份受控构建失败快照分别核对，固定 F 的 76 份来源、U/F 的 741/744 个 tracked blob 和 736/739 个实际存储对象完整验证，Mac tar 的可执行模式与 Git 声明相符。
+
+十三份原生控制相关源码（含新增创建引用 helper 和 Rust 捕获实现）的完整原文均与确切 Git/native 输入匹配；六次原版类编译、observer、回调记账及原生 Blocks 控制的九条实际构建日志、记录的编译器/SDK 上下文和已验证 ARM64 程序身份也一致。二十一份保存报告继续只读通过，失败 observer 的 late/token 双策略仍严格要求。完整 reference verifier 通过，前后所有恢复文件和 Git 元数据字节未变；另清除进程级对象目录覆盖、禁用 replace objects、确认无 alternates/commondir，再核对本地对象可用性。外部 `local/current-fa76-macos-full-final-review-path.txt` 指向 32,141 份文件的完整长路径封存及独立读回。该批原生仍为 147/168，原二十一项失败保留；完整源码/输入核验不证明失败 SCK 请求的实际未调用析构、原生会话排空、全部头文件解析轨迹或完整 P1。
+
 确切 `d9f25d0` 的 [Actions 41820596076](https://github.com/AbyssRei/maafw-screencap/actions/runs/41820596076) Windows 已终态失败，七组件合计 443/456；相对 `aeadac4`，manager 掩码 30、58 从通过变为失败，其余 454 项状态不变，原四项 FramePool pseudo 与七组 manager 失败均保留。527,157,839 字节官方轻量包的整体摘要、CRC、安全路径及 33,306 份原始文件验证；原传输的 42 份有效分段与 210 项 HTTP 失败记录保留，重新核对旧片段后以 503 份小分段恢复完整包，其中 84 份由已验证数据拆分复用，不声称不存在的前缀续传。
 
 162 份已保存报告只读复算通过，九组失败 manager 的十八次独立 reader 检查仍拒收；全部 7,560 份即时/持帧对字节相同。97 张异常目标图（原版 49/Rust 48）均仅在外三像素圈的 924 个位置不同，且每份 ROI 与本批保存的边缘对照完整相同；它不确定像素生产者、取样时间或缓存分支。带标题窗口除三次 WGC 存续观测外，首次对象 reset 后的采集也仍有 440 像素差异，后续固定调用单列，没有以重试抹去它。原四张 pseudo 失败图均全黑；当前 alpha 的 70 份 BGR/20 份 BGRA 继续通过，旧 alpha 失败保留。4,832 项完整来源输入缺口尚存；外部 `local/current-d9f-windows-final-review-path.txt` 指向含 33,524 份文件的封存复核。该轻量包及本轮结果不继承旧批完整来源闭包，也不接受完整 P1。
