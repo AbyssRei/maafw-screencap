@@ -140,6 +140,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `aeadac4` 的完整官方 Windows 工程包现已补齐轻量包缺少的全部 4,832 个不同输入路径。2,009,403,719 字节 ZIP 的官方整体摘要、CRC 和安全路径均核对；首次传输的 54 个有效大分段与 186 项 HTTP 失败记录保留，随后重新核对旧片段，以 959 个小分段完成续传及整体摘要验证，不声称复用不存在的前缀。恢复 65,632 份文件、63,817 个登记路径及二十三份清单，全部 33,310 份轻量数据与完整包逐字节身份匹配。
+
+二十二份每份 596 文件的普通产品快照及一份受控构建失败快照分开核对，固定 F 的 76 份来源、U/F 的 741/744 个 tracked blob 和 736/739 个实际存储对象均验证。Git 的长路径 alternates 警告保留；另用完整路径确认无 alternates/commondir 文件，清除进程级对象目录覆盖并禁用 replace objects，重新核对所有对象在该本地存储中可用。Windows tar 把普通源码也标作可执行，未宣称 Unix 模式等价。七组件登记的 CMake/F/工具链上下文、166 份保存报告及完整 reference verifier 通过；校验前后全部恢复字节与 Git 元数据不变，没有刷新再替换 index 的步骤。
+
+完整长路径封存及独立读回覆盖 65,825 份文件，由外部 `local/current-aead-windows-full-final-review-path.txt` 指向。这里完成的是确切批次的源码、输入和保存记录闭包：原生仍为 445/456，四项原版 FramePool pseudo 与七组 manager 失败不改。没有新的本机截图、全量 CL 命令/头文件解析跟踪、原生会话排空或完整 P1 验收；预装工具年龄继续只作记录。较早轻量复核的“缺 4,832 项”保留其当时范围，由本次完整材料补齐。
+
 独立 Mac observer 现用非分配的 C++ 捕获 token 记录构造/复制和析构，依据 [Clang Blocks ABI 的 C++ 捕获规则](https://clang.llvm.org/docs/Block-ABI-Apple.html)。它只持有进程存续的诊断记账指针，不额外持有 filter/config/sample，也不改变固定原类、原五秒等待、转换或返回值。`capture_block_leases` 单独记录 acquired/released/live、线程和时间；计数包含局部 token 与 stack-block 副本，并非原生 block retain count。它与 callback/semaphore 是分开的原子采样，不能把相同 phase 当作同时观察。只有已观察 handler 全返回、原 semaphore 已获信号且 token 全部析构，独立晚到观察才可提前结束；否则沿用完整十五秒诊断预算。
 
 新增 `mfs_mac_block_lease_control` 用真实 `Block_copy`/`Block_release` 检查 stack→heap、heap alias、handler 返回后仍保留捕获、未调用时析构及已 join 工作线程释放四种情形。程序已接入原生构建、严格 Step 摘要和轻量上传；实际 Apple runtime 执行尚待本提交的新 CI。本机 MSVC 的 Debug/Release 只验证便携 C++ 对象记账：每配置八线程完成 4,000 次 token 获取/释放及溢出拒绝，并保留原 2,000 组 callback 记账控制；它不执行 Apple Blocks、ScreenCaptureKit 或截图。原生 block 控制发生运行断言失败时，独立 catch 保留 job 失败并继续原版捕获用例；编译和输入准备仍是严格前置条件。
