@@ -5,6 +5,8 @@
 use crate::{Result, records};
 use serde::Serialize;
 use std::{collections::BTreeMap, fs, path::Path};
+#[path = "macos_input_weak.rs"]
+mod input_weak;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 struct Event {
@@ -33,6 +35,8 @@ struct Summary {
     late_observations: Vec<LateObservation>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     block_lease_observations: Vec<BlockLeaseObservation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    input_weak_observations: Option<input_weak::Analysis>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -60,18 +64,21 @@ struct BlockLeaseObservation {
 
 pub(crate) fn run(args: &[String]) -> Result<()> {
     let (path, flags) = args.split_first().ok_or("missing native stage directory")?;
-    let (mut check_only, mut require_late, mut require_blocks) = (false, false, false);
+    let (mut check_only, mut require_late, mut require_blocks, mut require_inputs) =
+        (false, false, false, false);
     for flag in flags {
         let selected = match flag.as_str() {
             "--check-only" => &mut check_only,
             "--require-late-snapshots" => &mut require_late,
             "--require-block-leases" => &mut require_blocks,
+            "--require-input-weak" => &mut require_inputs,
             _ => return Err("unknown native stage analysis flag".into()),
         };
         if std::mem::replace(selected, true) {
             return Err("duplicate native stage analysis flag".into());
         }
     }
+    require_blocks |= require_inputs;
     require_late |= require_blocks;
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -106,6 +113,9 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
         return Err(
             "current failed diagnostic lacks required block capture lease snapshots".into(),
         );
+    }
+    if require_inputs && consumer.input_weak_observations.is_none() {
+        return Err("current diagnostic lacks actual native input weak observations".into());
     }
     let mut waits = Vec::new();
     for line in consumer_log
@@ -145,6 +155,9 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     if require_blocks {
         report["requires_block_lease_snapshots_on_failure"] = true.into();
     }
+    if require_inputs {
+        report["requires_native_input_weak_observations"] = true.into();
+    }
     let output = root.join("capture-stages-analysis.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -168,6 +181,11 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     if require_blocks {
         println!(
             "macOS block_lease_observation required_on_failure=1 callback_return_is_disposal=0 native_owner_drain=0 recorded"
+        );
+    }
+    if require_inputs {
+        println!(
+            "macOS input_weak_observation required=1 native_object_snapshot_owners_escape=0 native_request_disposal=0 recorded"
         );
     }
     Ok(())
@@ -304,6 +322,7 @@ fn analyze(text: &str) -> Result<Summary> {
     }
     let late_observations = late_observations(text)?;
     let block_lease_observations = block_lease_observations(text, &late_observations)?;
+    let input_weak_observations = input_weak::analyze(text, &events, &late_observations)?;
     let mut summary = Summary {
         events,
         content_submissions: 0,
@@ -313,6 +332,7 @@ fn analyze(text: &str) -> Result<Summary> {
         unobserved_original_handler_returns: Vec::new(),
         late_observations,
         block_lease_observations,
+        input_weak_observations,
     };
     for (request, history) in requests {
         let content = history[0].stage == "content_enter";

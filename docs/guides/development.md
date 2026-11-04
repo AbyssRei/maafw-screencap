@@ -140,6 +140,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+独立 macOS dispatch 观察器新增实际提交的 `SCContentFilter`/`SCStreamConfiguration` 弱引用记录。Foundation 的 [NSHashTable 弱引用](https://developer.apple.com/documentation/foundation/nshashtable/weakobjects%28%29?language=objc)及 [WeakMemory](https://developer.apple.com/documentation/foundation/nspointerfunctions/options/weakmemory?language=objc)用于在末次强引用释放后零化；每个对象各用一个弱表，按指针身份比较，最多三十二对、六十四个进程寿命诊断表。记录器不长期保留捕获参数；`allObjects` 读取产生的临时强引用在独立 autorelease pool 内结束，只返回地址标量、线程和读取起止时间。弱表查询在 stderr 过渡锁之外完成，与回调、信号量及 block token 的快照分别计时，不能把不同快照当作原子观测。
+
+提交边界要求两个实际参数当时存活，随后十五秒观察中的存活或零化均按事实保留，不要求未调用 handler 的原版请求必须释放。新 reader 将每对弱引用绑定到真实 sample request、提交线程和原始地址，核对串行 registry 的完整成员、所有读取区间及禁止已零化对象重新出现；旧记录省略新字段并保持原报告。当前 `--require-input-weak` 同时要求已有 late/block 记录，CI Step 要求相应摘要；原 consumer 失败仍在独立记录检查之后重新抛出。实际 F 调用、参数、五秒等待、图像断言、Rust 捕获实现及已保存的失败结果未改。新增原生 MRC 控制以四个对象验证工作线程释放、额外 alias 保活和最终零化；这部分 Apple 框架编译/执行仍待新的原生 Actions 验证。
+
+本机使用明确归档的离线 Cargo 输入，nightly 更新检查无变化；150 项 xtask 测试、工作区测试、严格 Clippy、默认 Release 及格式检查通过。两份合成数据分别接受释放/继续存活，十七种身份、线程、成员、计时或缺失记录破坏被拒绝；二十项实际 Step mock 控制及故障后继续通过。首个合成夹具因写成 CRLF 而未满足已有逐字节 scope 标记，失败另存；改为 LF 后执行上述控制，未放宽 reader。一份确切 `3c50a97` 的实际旧 stage 报告和六份原文件保持字节不变，只读回归通过，新增当前门禁则拒收其缺失的实际参数观察。`local/current-macos-native-input-weak-development-path.txt` 指向本批记录；这些是记录/编排验证，不是新的原生截图、请求取消、原生 block 释放、P1 或 SDK 验收。
+
 确切 `1649943` 的 [Actions 41877015196](https://github.com/AbyssRei/maafw-screencap/actions/runs/41877015196) Windows 作业已失败结束，其官方轻量包 921,308,131 字节、摘要及 ZIP CRC 核对通过。新增 `client-band` 全部 63 种非空掩码各执行一次原版/Rust 配对，独立复算双方共 2,520 个生命周期、7,560 次捕获、15,120 份完整当前/持帧图像、7,560 对相同持帧字节、92,897,280 个已知目标像素位置及 15,120 对公开调用几何。完整 96×64 客户区与六像素非客户区边带均通过，没有目标 inset、遮罩、容差或隐私指示修改。两侧实际胜者均在配置掩码内；十七个配置的逐周期胜者序列不同，未将实际测速选择误作固定一致的结果。本次是托管单轮矩阵，不重标此前本机七种配置的连续三轮无输入证据。
 
 同包旧场景也逐一核对全部 63 种组合和 15,120 份当前/持帧图像，100 张异常目标图（原版 56、Rust 44）均只在外侧三像素形成 924 像素差异，且完整目标字节与本批保存的边缘对照图一致。旧掩码 6/10/14/22/26/38/42/46 失败；相对 `d9f25d0`，22 新增失败，30/58 本批通过，旧批失败仍按原身份保留，未据图像相似性确定生产者、缓存分支或原生 drain。七组件合计 509/521，另四项原版 FramePool pseudo 失败保持。49,880 份原始文件、所有清单日志与可用输入摘要、354 份保存报告只读通过；旧失败的十六次记录检查均按预期拒绝，原始字节未变。六份确切 Git 源码补充核对，4,860 个轻量输入缺口保留，未声称完整来源闭合或逐一复算所有 FramePool 载荷。`local/current-164-windows-final-review-path.txt` 指向封存复核。

@@ -105,6 +105,9 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'macos-block-lease-control' -and [regex]::Matches($observed,[regex]::Escape('macOS native MRC completion_inputs cases=2 invoked=1 uninvoked=1 heap_alias=2 deallocated=4 fixture_reclaimed_refs=2 capture=0 full_P1_acceptance=0 passed')).Count -ne 1) {
             $status='failed';throw 'Incomplete native MRC create-reference control'
         }
+        if($Name -eq 'macos-block-lease-control' -and [regex]::Matches($observed,[regex]::Escape('macOS native input weak control pairs=2 objects=4 joined_worker_releases=4 alias_keeps_live=2 zero_after_final_release=4 native_capture=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete native weak input identity/lifetime control'
+        }
         if($Name -eq 'rust-macos-completion-inputs' -and (
             [regex]::Matches($observed,'(?m)^running 1 test\r?$').Count -ne 1 -or
             [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
@@ -116,7 +119,8 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             [regex]::Matches($observed,'(?m)^macOS capture_stages consumer_exit=').Count -ne 1 -or
             $observed -notmatch '(?m)^macOS capture_stages consumer_exit=-?\d+ content_submissions=\d+ sample_submissions=\d+ unobserved_content_callbacks=\[[^\r\n]*\] unobserved_sample_callbacks=\[[^\r\n]*\] diagnostic_only=1 source_capture_acceptance=0 paired_acceptance=0 recorded\r?$' -or
             [regex]::Matches($observed,[regex]::Escape('macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded')).Count -ne 1 -or
-            [regex]::Matches($observed,[regex]::Escape('macOS block_lease_observation required_on_failure=1 callback_return_is_disposal=0 native_owner_drain=0 recorded')).Count -ne 1)) {
+            [regex]::Matches($observed,[regex]::Escape('macOS block_lease_observation required_on_failure=1 callback_return_is_disposal=0 native_owner_drain=0 recorded')).Count -ne 1 -or
+            [regex]::Matches($observed,[regex]::Escape('macOS input_weak_observation required=1 native_object_snapshot_owners_escape=0 native_request_disposal=0 recorded')).Count -ne 1)) {
             $status='failed';throw 'Incomplete current callback observation records or required-snapshot policy'
         }
         if($Name -eq 'macos-display-observer-same-path-consumer' -and

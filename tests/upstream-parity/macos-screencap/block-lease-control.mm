@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 // Actual native Blocks ABI only: no ScreenCaptureKit or desktop capture.
 #include "callback-ledger.hpp"
+#include "input-weak-observer.hpp"
 #include <Block.h>
 #import <Foundation/Foundation.h>
 #include <atomic>
@@ -63,6 +64,23 @@ void completion_inputs() {
     require(mfs_completion_deallocated.load()==4);
     std::cout<<"macOS native MRC completion_inputs cases=2 invoked=1 uninvoked=1 heap_alias=2 deallocated=4 fixture_reclaimed_refs=2 capture=0 full_P1_acceptance=0 passed\n";
 }
+void input_weak_control() {
+    MfsMacObserve::InputWeakRegistry registry;
+    for(uint64_t request=1;request<=2;++request) {
+        auto* filter=[MfsCompletionOwnerProbe new];auto* config=[MfsCompletionOwnerProbe new];
+        const auto first=registry.bind(request,filter,config);
+        require(first.valid && first.filter==first.registered_filter && first.config==first.registered_config
+            && first.filter!=0 && first.config!=0 && first.begin_ns<=first.end_ns && first.thread_error==0);
+        auto* filter_alias=[filter retain];auto* config_alias=[config retain];
+        std::thread worker([filter,config] {[filter release];[config release];});worker.join();
+        auto held=registry.snapshot();require(held.valid && held.count==request);
+        require(held.rows[request-1].filter==first.filter && held.rows[request-1].config==first.config);
+        [filter_alias release];[config_alias release];
+        auto released=registry.snapshot();require(released.valid && released.count==request);
+        for(unsigned i=0;i<released.count;++i) {require(!released.rows[i].filter && !released.rows[i].config);}
+    }
+    std::cout<<"macOS native input weak control pairs=2 objects=4 joined_worker_releases=4 alias_keeps_live=2 zero_after_final_release=4 native_capture=0 passed\n";
+}
 }
 int main() {
     try {
@@ -91,6 +109,7 @@ int main() {
         std::thread worker([worker_block] {worker_block();Block_release(worker_block);});
         worker.join();equal(threaded,3,3);require(worker_calls==1);
         completion_inputs();
+        input_weak_control();
         std::cout<<"macOS native block leases cases=4 stack_to_heap=4 heap_alias=1 handler_return_keeps_lease=1 uninvoked_disposal=1 joined_worker_release=1 acquired=12 released=12 live=0 native_callbacks=0 capture=0 passed\n";
         return 0;
     }catch(const std::exception& error) {std::cerr<<error.what()<<'\n';return 1;}

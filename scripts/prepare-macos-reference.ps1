@@ -477,7 +477,7 @@ function Run-ObservedMacosSamePathProbe([string]$Artifacts) {
         }
     }
     $stageFailure=$null
-    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory,'--require-late-snapshots','--require-block-leases')}
+    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory,'--require-late-snapshots','--require-block-leases','--require-input-weak')}
     catch {$stageFailure=$_}
     $recordFailure=$null
     try {Step macos-display-observer-same-path-records $ConfigureTool @('upstream-trace','macos-display-observer-same-path',$directory)}

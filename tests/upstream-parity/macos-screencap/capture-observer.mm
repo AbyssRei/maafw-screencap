@@ -11,11 +11,27 @@
 #include <cstdint>
 #include <cstring>
 #include <pthread.h>
+#include "input-weak-observer.hpp"
 
 namespace {
 std::atomic<uint64_t> next_request{1};
 MfsMacObserve::CallbackLedger callbacks;
 MfsMacObserve::CallbackLedger block_leases;
+MfsMacObserve::InputWeakRegistry& input_weak_registry() {
+    // Bounded process-lifetime diagnostic metadata: at most64 weak tables.
+    // Neither tables nor registry own filter/config objects. Do not tear this
+    // registry down while the native framework may still call the observer.
+    static auto* registry=new MfsMacObserve::InputWeakRegistry;
+    return *registry;
+}
+void input_weak_line(const char* phase,const MfsMacObserve::InputWeakSnapshot& value) noexcept {
+    std::fprintf(stderr,"capture_input_weak schema=1 phase=%s request=%llu registered_filter=%llu registered_config=%llu filter=%llu config=%llu begin_ns=%llu end_ns=%llu thread=%llu thread_error=%d valid=%u\n",
+        phase,static_cast<unsigned long long>(value.request),
+        static_cast<unsigned long long>(value.registered_filter),static_cast<unsigned long long>(value.registered_config),
+        static_cast<unsigned long long>(value.filter),static_cast<unsigned long long>(value.config),
+        static_cast<unsigned long long>(value.begin_ns),static_cast<unsigned long long>(value.end_ns),
+        static_cast<unsigned long long>(value.thread),value.thread_error,static_cast<unsigned>(value.valid));
+}
 struct Evidence {
     bool object=false,error=false;
     int64_t code=0;
@@ -42,6 +58,9 @@ void stage(const char* name,uint64_t request,Evidence evidence={}) noexcept {
 MfsMacObserve::CallbackCounts mfs_mac_pending_capture_callbacks() noexcept {return callbacks.snapshot();}
 MfsMacObserve::CallbackCounts mfs_mac_capture_block_leases() noexcept {return block_leases.snapshot();}
 void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending) noexcept {
+    // Weak Foundation reads may temporarily retain their returned objects.
+    // Complete/drain them before taking stderr's existing transition lock.
+    const auto weak=input_weak_registry().snapshot();
     uint64_t thread=0;const auto thread_error=pthread_threadid_np(nullptr,&thread);
     flockfile(stderr);
     const auto value=callbacks.snapshot();
@@ -58,6 +77,10 @@ void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending)
     std::fprintf(stderr,"capture_block_leases schema=1 phase=%s monotonic_ns=%lld thread=%llu thread_error=%d acquired=%u released=%u live=%u valid=%u budget_ns=15000000000\n",
         phase,static_cast<long long>(lease_now),static_cast<unsigned long long>(thread),thread_error,
         leases.submitted,leases.forwarded,leases.pending,static_cast<unsigned>(leases.valid));
+    std::fprintf(stderr,"capture_input_weak_summary schema=1 phase=%s registered=%u valid=%u capacity=32 begin_ns=%llu end_ns=%llu thread=%llu thread_error=%d\n",
+        phase,weak.count,static_cast<unsigned>(weak.valid),static_cast<unsigned long long>(weak.begin_ns),
+        static_cast<unsigned long long>(weak.end_ns),static_cast<unsigned long long>(weak.thread),weak.thread_error);
+    for(unsigned i=0;i<weak.count;++i) {input_weak_line(phase,weak.rows[i]);}
     funlockfile(stderr);
 }
 
@@ -93,6 +116,8 @@ void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending)
     // owners or a borrowed stack object.
     const auto width=static_cast<uint64_t>(configuration.width),height=static_cast<uint64_t>(configuration.height);
     stage("sample_enter",request,{filter!=nil && configuration!=nil,false,0,0,0,0,width,height});
+    const auto weak=input_weak_registry().bind(request,filter,configuration);
+    flockfile(stderr);input_weak_line("registered",weak);funlockfile(stderr);
     const MfsMacObserve::BlockLease lease(block_leases);
     [SCScreenshotManager captureSampleBufferWithFilter:filter configuration:configuration
         completionHandler:^(CMSampleBufferRef sample,NSError* error) {
