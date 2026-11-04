@@ -66,6 +66,9 @@ set_target_properties(mfs_macos_same_binary_scene PROPERTIES
 # ordinary reference targets and Rust capture calls keep their original selectors.
 add_library(mfs_macos_native_sample_class OBJECT "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
 add_executable(mfs_mac_live_sample_hook_control live-sample-hook-control.cpp)
+add_executable(mfs_mac_callback_ledger_control callback-ledger-control.cpp)
+target_compile_options(mfs_mac_callback_ledger_control PRIVATE -Wall -Wextra -Werror)
+target_link_libraries(mfs_mac_callback_ledger_control PRIVATE Threads::Threads)
 target_compile_options(mfs_mac_live_sample_hook_control PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(mfs_mac_live_sample_hook_control PRIVATE Threads::Threads)
 target_include_directories(mfs_macos_native_sample_class PRIVATE ${_mfs_source_includes})

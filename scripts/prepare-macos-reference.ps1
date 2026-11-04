@@ -128,6 +128,10 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_mac_live_sample_hook_control
     Copy-Item -LiteralPath $hook -Destination $saved;Save $saved
     Step macos-live-sample-hook-control $hook @()
+    $ledger=Join-Path $build mfs_mac_callback_ledger_control
+    $saved=Join-Path $refInputs mfs_mac_callback_ledger_control
+    Copy-Item -LiteralPath $ledger -Destination $saved;Save $saved
+    Step macos-callback-ledger-control $ledger @()
     return $executable
 }
 
@@ -410,7 +414,10 @@ function Run-ObservedMacosSamePathProbe([string]$Artifacts) {
         $server=[Diagnostics.Process]::Start($info)
         $serverOut=$server.StandardOutput.ReadToEndAsync();$serverError=$server.StandardError.ReadToEndAsync()
         $ready=Join-Path $scene ready.json
-        $until=[DateTime]::UtcNow.AddSeconds(20)
+        # Two bounded 8s metadata queries may precede the separate 15s failure
+        # observation. Let that diagnostic exit before the host watchdog fires.
+        # This does not extend either original capture's five-second wait.
+        $until=[DateTime]::UtcNow.AddSeconds(45)
         while(-not(Test-Path -LiteralPath $ready)) {
             if($server.HasExited -or [DateTime]::UtcNow -ge $until){throw 'Same-path observer scene did not publish its owned identity'}
             Start-Sleep -Milliseconds 25
@@ -462,7 +469,7 @@ function Run-ObservedMacosSamePathProbe([string]$Artifacts) {
         }
     }
     $stageFailure=$null
-    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory)}
+    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory,'--require-late-snapshots')}
     catch {$stageFailure=$_}
     $recordFailure=$null
     try {Step macos-display-observer-same-path-records $ConfigureTool @('upstream-trace','macos-display-observer-same-path',$directory)}

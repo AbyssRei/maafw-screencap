@@ -94,6 +94,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'macos-live-sample-hook-control' -and [regex]::Matches($observed,[regex]::Escape('live_sample_hook cases=3 visits=1 releases=3 joined_callback=1 native_samples=0 passed')).Count -ne 1) {
             $status='failed';throw 'Incomplete shared live-sample hook ownership control'
         }
+        if($Name -eq 'macos-callback-ledger-control' -and [regex]::Matches($observed,[regex]::Escape('macOS callback ledger controls transitions=2000 threads=8 native_uint_boundaries=1 invalid_counts_rejected=1 native_callbacks=0 capture=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete portable callback ledger control'
+        }
+        if($Name -eq 'macos-display-observer-same-path-stages' -and (
+            [regex]::Matches($observed,'(?m)^macOS capture_stages consumer_exit=').Count -ne 1 -or
+            $observed -notmatch '(?m)^macOS capture_stages consumer_exit=-?\d+ content_submissions=\d+ sample_submissions=\d+ unobserved_content_callbacks=\[[^\r\n]*\] unobserved_sample_callbacks=\[[^\r\n]*\] diagnostic_only=1 source_capture_acceptance=0 paired_acceptance=0 recorded\r?$' -or
+            [regex]::Matches($observed,[regex]::Escape('macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded')).Count -ne 1)) {
+            $status='failed';throw 'Incomplete current callback observation records or required-snapshot policy'
+        }
         if($Name -eq 'macos-display-observer-same-path-consumer' -and
             (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or
              -not $observed.Contains('event=wait_return slot=0 value=0') -or

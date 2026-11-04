@@ -2,6 +2,12 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 #import <ScreenCaptureKit/ScreenCaptureKit.h>
+#include "callback-ledger.hpp"
+
+// Separate diagnostic query and timestamped snapshots. Pending includes the
+// fixture's metadata requests, even before an original semaphore is created.
+MfsMacObserve::CallbackCounts mfs_mac_pending_capture_callbacks() noexcept;
+void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending) noexcept;
 
 // Only the separate observer target imports these selectors. No method is
 // swizzled or replaced at runtime. The category preserves filter/config and

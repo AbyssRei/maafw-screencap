@@ -9,10 +9,12 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdint>
+#include <cstring>
 #include <pthread.h>
 
 namespace {
 std::atomic<uint64_t> next_request{1};
+MfsMacObserve::CallbackLedger callbacks;
 struct Evidence {
     bool object=false,error=false;
     int64_t code=0;
@@ -23,6 +25,10 @@ void stage(const char* name,uint64_t request,Evidence evidence={}) noexcept {
     const auto now=std::chrono::duration_cast<std::chrono::nanoseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
     flockfile(stderr);
+    // Serialize the transition and its existing stage line with late snapshots.
+    // Native submission/handler execution stay outside this short stdio lock.
+    if(std::strcmp(name,"content_enter")==0 || std::strcmp(name,"sample_enter")==0) {(void)callbacks.submit();}
+    else if(std::strcmp(name,"content_forwarded")==0 || std::strcmp(name,"sample_forwarded")==0) {(void)callbacks.forward();}
     std::fprintf(stderr,"capture_observer stage=%s request=%llu monotonic_ns=%lld thread=%llu thread_error=%d object=%u error=%u error_code=%lld displays=%llu windows=%llu display=%llu width=%llu height=%llu\n",
         name,static_cast<unsigned long long>(request),static_cast<long long>(now),static_cast<unsigned long long>(thread),thread_error,
         static_cast<unsigned>(evidence.object),static_cast<unsigned>(evidence.error),static_cast<long long>(evidence.code),
@@ -30,6 +36,19 @@ void stage(const char* name,uint64_t request,Evidence evidence={}) noexcept {
         static_cast<unsigned long long>(evidence.width),static_cast<unsigned long long>(evidence.height));
     funlockfile(stderr);
 }
+}
+
+MfsMacObserve::CallbackCounts mfs_mac_pending_capture_callbacks() noexcept {return callbacks.snapshot();}
+void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending) noexcept {
+    uint64_t thread=0;const auto thread_error=pthread_threadid_np(nullptr,&thread);
+    flockfile(stderr);
+    const auto value=callbacks.snapshot();
+    const auto now=std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    std::fprintf(stderr,"capture_pending schema=1 phase=%s monotonic_ns=%lld thread=%llu thread_error=%d submitted=%u forwarded=%u pending=%u valid=%u semaphore_pending=%u budget_ns=15000000000\n",
+        phase,static_cast<long long>(now),static_cast<unsigned long long>(thread),thread_error,
+        value.submitted,value.forwarded,value.pending,static_cast<unsigned>(value.valid),semaphore_pending);
+    funlockfile(stderr);
 }
 
 @implementation SCShareableContent (MfsCaptureObservation)

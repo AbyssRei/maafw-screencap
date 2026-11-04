@@ -62,9 +62,17 @@ inline unsigned unsignalled_failed_waits() noexcept {
 template<class Pump> void observe_late(Pump pump) {
     // Fixture observation AFTER the original caller has already failed. No
     // second capture, changed deadline, native cancellation or residual reclaim.
-    const auto until=std::chrono::steady_clock::now()+std::chrono::seconds(15);
     event("late_observation_begin",16,unsignalled_failed_waits());
-    while(unsignalled_failed_waits()!=0 && std::chrono::steady_clock::now()<until) {pump();}
+    mfs_mac_capture_late_snapshot("begin",unsignalled_failed_waits());
+    // Start after the timestamped snapshot, so unresolved work receives the
+    // whole recorded budget, including metadata that has no source semaphore.
+    const auto until=std::chrono::steady_clock::now()+std::chrono::seconds(15);
+    while(std::chrono::steady_clock::now()<until) {
+        const auto callbacks=mfs_mac_pending_capture_callbacks();
+        if(callbacks.valid && callbacks.pending==0 && unsignalled_failed_waits()==0) {break;}
+        pump();
+    }
+    mfs_mac_capture_late_snapshot("end",unsignalled_failed_waits());
     event("late_observation_end",16,unsignalled_failed_waits(),"original_failure_preserved_no_owner_drain_claim");
 }
 struct ErrorLog {

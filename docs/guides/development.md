@@ -134,6 +134,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `46a376a` 的同路径 macOS observer 在夹具 `display_geometry` 的前置查询处超时：原始日志仅有一次 content submission，尚无原版截图 semaphore；旧 `observe_late` 只统计失败 semaphore，begin/end 实际相隔 3,208ns，不能宣称观察了十五秒。这与另一些批次进入原版五秒等待后的失败属于不同边界，不能由相同的 failed 状态推定同因。该原始日志及摘要由外部 `local/current-macos-pending-callback-development-path.txt` 保存。
+
+独立 observer 现用有原生 UINT 边界检查的一份原子状态，记录 content/sample 提交和原 handler 返回；它也覆盖夹具的前置查询。新快照与已有 stage 行共用短 stdio 锁，提交/返回计数按实际前置日志核对；semaphore 值单独作为调用点采样，不声称跨两种状态的原子快照。失败后的原十五秒观察预算在 begin 快照后开始；仅在已提交 handler 全部返回且原 semaphore 已获信号时可提前结束，未完成时必须提供完整预算。同路径 observer 的宿主 ready 看门狗改为 45 秒，覆盖两个各八秒的元数据查询及十五秒失败观察，避免宿主先截断该诊断；它不保证原生调用可取消或任意调度下完成。原版五秒等待、截图、像素转换及返回值没有改动。零 pending 只表示已观察的 handler 返回，不证明 block disposal、注销、取消、模块卸载或资源排空。
+
+`cargo xtask upstream-trace macos-capture-stages <外部 observer 目录> [--require-late-snapshots] [--check-only]` 兼容旧报告；新 CI 显式要求失败 consumer 的 begin/end 快照，拒收短窗口、计数不符、越界、缺失或篡改的要求标记。成功的记录分析仍保留 consumer 原始非零退出，原错误随后照常抛出，既有严格截图记录校验未放宽。新增便携 C++ 记账控制进入 Mac 原生构建及严格 Step 汇总；其实际 macOS 编译、回调窗口和完整 P1 尚待新的原生执行验证。
+
+本机 VS2026/MSBuild 的 Debug/Release 各完成八线程、2,000 组提交/返回记账，含 UINT 最大值及非法计数拒绝；实际 Step 另消费一次同一 Release 程序。workspace、默认 Release、144 项 xtask、严格 Clippy、格式及 PowerShell 语法通过，使用相同归档依赖，nightly 检查仍为 `708c94ef0 (2026-11-03)`。三十三次 CLI 控制接受六项、拒绝二十七项，其中包含一份真实旧报告只读复核，其余新快照均为合成控制；十四个 Step mock、十四次独立后续执行、两个真实校验器子进程、一个便携 C++ 子进程和原 consumer 错误重抛检查通过。本机零 Apple API/桌面捕获，不把模拟时间当作真实等待，也不将这些结果写为旧 Mac 21 项失败恢复。最初外部准备错误地要求已存在的忽略锁文件不存在；该文件与归档逐字节相同，错误保留，未改写依赖输入。
+
 原版 border 四臂诊断新增两种匹配夹具：`mfs_framepool_border_reference.exe <外部空目录> popup` 与 `caption` 分别使用自有 `WS_POPUP`、`WS_POPUP|WS_CAPTION` 窗口，均保留 visible/clip-siblings/topmost，客户区完整为 96×64，左上角固定在本机 work-area 原点加 `(64,64)`。两种设置均在创建捕获对象前完成；四臂、27 次原版取帧、十三项严格正控制、等待/回放、原类函数体及转换位置不变。旧无第三参数入口及 schema1 的 61 份数据保持兼容；schema2 增加四组准备前/后的 31 字段几何和每次取帧前后共 54 份实际样式/外框/客户区记录，合计 63 份原始文件。校验器绑定准备、实际边界与原生状态表，拒收客户区裁剪、样式/坐标/alpha/iconic 变化、字段越界和不完整记录；调用内部变化仍未观察。外框取自 GetWindowRect，不能据此推断 DWM 的可见边框宽度或系统指示器像素。
 
 VS2026/MSBuild、SDK 28000 目录及明确归档依赖下，新 executable 已完成本机连续三轮，legacy/popup/caption 各三组原生与记录入口，共十八次执行。独立复核完整 243 份 BGR、1,492,992 个像素、324 次匹配边界、36 个目标/36 个独立更新窗口关闭；图样全部已知。popup 的实际外框/客户区差为零，caption 为 `(8,31,8,8)`，仅表示该次 GetWindowRect 观察。本机三轮默认 getter 均为 false，额外 true 设置前 false、设置后 true，未复现托管默认 true 条件，亦未证明实际指示器状态、历史 924 点生产者、缓存分支或原生 callback/session 排空。四路监听零输入、最大采样间隔 86.7422ms、正常注销/写线程退出；本次没有新物理正控制，不能重用旧注册的物理事件作新控制。

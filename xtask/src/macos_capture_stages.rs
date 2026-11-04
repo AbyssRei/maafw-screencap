@@ -29,12 +29,28 @@ struct Summary {
     unobserved_content_callbacks: Vec<u64>,
     unobserved_sample_callbacks: Vec<u64>,
     unobserved_original_handler_returns: Vec<u64>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    late_observations: Vec<LateObservation>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct LateObservation {
+    phase: String,
+    monotonic_ns: u64,
+    thread: u64,
+    submitted: u32,
+    forwarded: u32,
+    pending: u32,
+    semaphore_pending: u32,
+    budget_ns: u64,
 }
 
 pub(crate) fn run(args: &[String]) -> Result<()> {
-    let (path,check_only)=match args {
-        [path]=>(path,false),[path,flag] if flag=="--check-only"=>(path,true),
-        _=>return Err("expected upstream-trace macos-capture-stages <external same-path observer directory> [--check-only]".into()),
+    let (path,check_only,require_late)=match args {
+        [path]=>(path,false,false),[path,flag] if flag=="--check-only"=>(path,true,false),
+        [path,flag] if flag=="--require-late-snapshots"=>(path,false,true),
+        [path,required,check] if required=="--require-late-snapshots" && check=="--check-only"=>(path,true,true),
+        _=>return Err("expected upstream-trace macos-capture-stages <external same-path observer directory> [--require-late-snapshots] [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -62,6 +78,9 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     if exit.to_string() != exits[0] {
         return Err("noncanonical diagnostic exit".into());
     }
+    if require_late && exit != 0 && consumer.late_observations.len() != 2 {
+        return Err("current failed diagnostic lacks required late callback snapshots".into());
+    }
     let mut waits = Vec::new();
     for line in consumer_log
         .lines()
@@ -81,9 +100,17 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
             .parse()?;
         waits.push((slot, result));
     }
-    let report = serde_json::json!({"layout_version":1,"diagnostic_only":true,"source_capture_accepted":false,
+    let mut report = serde_json::json!({"layout_version":1,"diagnostic_only":true,"source_capture_accepted":false,
         "paired_acceptance":false,"consumer_exit":exit,"native_wait_returns":waits,"consumer":consumer,"scene":scene,"artifacts":artifacts,
         "scope":"Only actual content-query/sample submission, callback entry and original-handler-return observations from the instrumented executable. Missing callbacks mean unobserved within this recorded process, not proven cancellation, permanent noncompletion or native owner drain. Width/height are first SCDisplay properties for content callbacks or original configured extents for sample calls, never inferred physical pixel dimensions. Callback results/errors and late observations cannot accept a failed original call. This analysis does not independently certify binary identity, target pixels or full P1; those have separate records and strict gates."});
+    if !report["consumer"]["late_observations"].is_null()
+        || !report["scene"]["late_observations"].is_null()
+    {
+        report["late_observation_scope"] = "Timestamped submission/handler-return snapshots include fixture metadata requests before any original semaphore. Outstanding callbacks or an observed unsignalled original wait require the full recorded fifteen-second post-failure observation. Submission/handler-return counts are checked against the preceding native stage lines; the semaphore count is a separate call-site scalar observation. A zero pending count observes handler return only, not native block disposal, unregister, cancellation or capture acceptance. Older logs without these snapshots retain their original analysis and provide no such observation-window evidence.".into();
+    }
+    if require_late {
+        report["requires_late_snapshots_on_failure"] = true.into();
+    }
     let output = root.join("capture-stages-analysis.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -99,6 +126,11 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
         report["consumer"]["unobserved_content_callbacks"],
         report["consumer"]["unobserved_sample_callbacks"]
     );
+    if require_late {
+        println!(
+            "macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded"
+        );
+    }
     Ok(())
 }
 
@@ -238,6 +270,7 @@ fn analyze(text: &str) -> Result<Summary> {
         unobserved_content_callbacks: Vec::new(),
         unobserved_sample_callbacks: Vec::new(),
         unobserved_original_handler_returns: Vec::new(),
+        late_observations: late_observations(text)?,
     };
     for (request, history) in requests {
         let content = history[0].stage == "content_enter";
@@ -257,6 +290,109 @@ fn analyze(text: &str) -> Result<Summary> {
         }
     }
     Ok(summary)
+}
+
+fn late_observations(text: &str) -> Result<Vec<LateObservation>> {
+    let mut submitted = 0_u64;
+    let mut forwarded = 0_u64;
+    let mut observations = Vec::new();
+    for line in text.lines() {
+        if let Some(line) = line.strip_prefix("capture_observer ") {
+            // analyze() has already validated every stage/identity. These two
+            // transitions share the native stderr lock with the snapshots.
+            let stage = line
+                .split(' ')
+                .find_map(|part| part.strip_prefix("stage="))
+                .ok_or("native stage has no operation")?;
+            if matches!(stage, "content_enter" | "sample_enter") {
+                submitted = submitted
+                    .checked_add(1)
+                    .ok_or("submission count overflow")?;
+            } else if matches!(stage, "content_forwarded" | "sample_forwarded") {
+                forwarded = forwarded.checked_add(1).ok_or("handler count overflow")?;
+            }
+            continue;
+        }
+        let Some(line) = line.strip_prefix("capture_pending ") else {
+            continue;
+        };
+        let mut fields = BTreeMap::new();
+        for part in line.split(' ') {
+            let (key, value) = part
+                .split_once('=')
+                .ok_or("invalid callback snapshot field")?;
+            if fields.insert(key, value).is_some() {
+                return Err("duplicate callback snapshot field".into());
+            }
+        }
+        if fields.keys().copied().collect::<Vec<_>>()
+            != [
+                "budget_ns",
+                "forwarded",
+                "monotonic_ns",
+                "pending",
+                "phase",
+                "schema",
+                "semaphore_pending",
+                "submitted",
+                "thread",
+                "thread_error",
+                "valid",
+            ]
+        {
+            return Err("callback snapshot fields differ".into());
+        }
+        let integer = |name: &str| -> Result<u64> {
+            let value: u64 = fields[name].parse()?;
+            if value.to_string() != fields[name] {
+                return Err("noncanonical callback snapshot integer".into());
+            }
+            Ok(value)
+        };
+        let value = LateObservation {
+            phase: fields["phase"].into(),
+            monotonic_ns: integer("monotonic_ns")?,
+            thread: integer("thread")?,
+            submitted: u32::try_from(integer("submitted")?)?,
+            forwarded: u32::try_from(integer("forwarded")?)?,
+            pending: u32::try_from(integer("pending")?)?,
+            semaphore_pending: u32::try_from(integer("semaphore_pending")?)?,
+            budget_ns: integer("budget_ns")?,
+        };
+        if integer("schema")? != 1
+            || integer("valid")? != 1
+            || integer("thread_error")? != 0
+            || value.monotonic_ns == 0
+            || value.thread == 0
+            || value.budget_ns != 15_000_000_000
+            || value.semaphore_pending > 16
+            || u64::from(value.submitted) != submitted
+            || u64::from(value.forwarded) != forwarded
+            || value.submitted.checked_sub(value.forwarded) != Some(value.pending)
+            || observations.len() >= 2
+            || value.phase != ["begin", "end"][observations.len()]
+        {
+            return Err("callback snapshot scope, counts or observation phase differs".into());
+        }
+        observations.push(value);
+    }
+    if !observations.is_empty() {
+        if observations.len() != 2 {
+            return Err("incomplete callback observation window".into());
+        }
+        let begin = &observations[0];
+        let end = &observations[1];
+        let elapsed = end
+            .monotonic_ns
+            .checked_sub(begin.monotonic_ns)
+            .ok_or("callback observation clock reversed")?;
+        if begin.thread != end.thread
+            || ((end.pending != 0 || end.semaphore_pending != 0) && elapsed < end.budget_ns)
+        {
+            return Err("unresolved callback observation ended early or changed caller".into());
+        }
+    }
+    Ok(observations)
 }
 
 #[cfg(test)]
@@ -339,6 +475,88 @@ mod tests {
             good.replace("object=0", "object=2"),
             good.replace("width=0", "width=01"),
             good.replace("windows=0", "windows=0 unknown=1"),
+        ] {
+            assert!(analyze(&bad).is_err(), "accepted {bad}");
+        }
+    }
+
+    fn pending(phase: &str, time: u64, forwarded: u32, semaphore: u32) -> String {
+        format!(
+            "capture_pending schema=1 phase={phase} monotonic_ns={time} thread=7 thread_error=0 submitted=1 forwarded={forwarded} pending={} valid=1 semaphore_pending={semaphore} budget_ns=15000000000\n",
+            1 - forwarded
+        )
+    }
+
+    #[test]
+    fn requires_full_late_metadata_window_without_any_original_semaphore() {
+        let input = event("content_enter", 1, 1)
+            + &pending("begin", 2, 0, 0)
+            + &pending("end", 15_000_000_002, 0, 0);
+        let result = analyze(&input).unwrap();
+        assert_eq!(result.unobserved_content_callbacks, [1]);
+        assert_eq!(result.late_observations.len(), 2);
+        assert!(analyze(&input.replace("15000000002", "15000000001")).is_err());
+        assert!(analyze(&input.replace("15000000002", "3")).is_err());
+        let legacy = analyze(&event("content_enter", 1, 1)).unwrap();
+        assert!(legacy.late_observations.is_empty());
+        assert!(
+            serde_json::to_value(legacy)
+                .unwrap()
+                .get("late_observations")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn permits_early_handler_return_and_retains_unsignalled_wait_observation() {
+        let input = event("content_enter", 1, 1)
+            + &pending("begin", 2, 0, 0)
+            + &event("content_callback", 1, 3)
+            + &event("content_forwarded", 1, 4)
+            + &pending("end", 5, 1, 0);
+        assert!(
+            analyze(&input)
+                .unwrap()
+                .unobserved_content_callbacks
+                .is_empty()
+        );
+        assert!(analyze(&input.replace("semaphore_pending=0", "semaphore_pending=1")).is_err());
+        analyze(
+            &input
+                .replace("semaphore_pending=0", "semaphore_pending=1")
+                .replace(
+                    "phase=end monotonic_ns=5",
+                    "phase=end monotonic_ns=15000000002",
+                ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn rejects_inconsistent_incomplete_or_non_native_callback_snapshots() {
+        let input = event("content_enter", 1, 1)
+            + &pending("begin", 2, 0, 0)
+            + &pending("end", 15_000_000_002, 0, 0);
+        for bad in [
+            input.replace("schema=1", "schema=2"),
+            input.replace("submitted=1", "submitted=2"),
+            input.replace("submitted=1", "submitted=4294967296"),
+            input.replace("forwarded=0", "forwarded=1"),
+            input.replace("pending=1 valid=1", "pending=0 valid=1"),
+            input.replace("valid=1", "valid=0"),
+            input.replace("semaphore_pending=0", "semaphore_pending=17"),
+            input.replace("budget_ns=15000000000", "budget_ns=14999999999"),
+            input.replace("thread_error=0 submitted", "thread_error=1 submitted"),
+            input.replace(
+                "phase=end monotonic_ns=15000000002 thread=7",
+                "phase=end monotonic_ns=15000000002 thread=8",
+            ),
+            input.replace("phase=end", "phase=begin"),
+            input.clone() + &pending("end", 16_000_000_000, 0, 0),
+            input.replace(&pending("end", 15_000_000_002, 0, 0), ""),
+            input.replace("schema=1 phase", "schema=1 schema=1 phase"),
+            input.replace("valid=1", "valid=01"),
+            input.replace("valid=1", "valid=1 extra=0"),
         ] {
             assert!(analyze(&bad).is_err(), "accepted {bad}");
         }
