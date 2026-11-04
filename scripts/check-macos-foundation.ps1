@@ -27,7 +27,10 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -ne 0){throw "$Name exited with $code; see $log"}
+        if($code -ne 0){
+            Get-Content -LiteralPath $log -Tail 60|ForEach-Object {Write-Host $_}
+            throw "$Name exited with $code; see $log"
+        }
         if($Name -eq 'native-foundation-control') {
             $observed=Get-Content -LiteralPath $log -Raw
             foreach($summary in @(

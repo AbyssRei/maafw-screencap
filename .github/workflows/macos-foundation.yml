@@ -19,6 +19,11 @@ jobs:
     runs-on: xcode-27
     steps:
       - uses: actions/checkout@v7
+      - name: Configure the absolute external evidence path
+        shell: pwsh
+        run: |
+          $root=Join-Path (Split-Path -Parent $env:GITHUB_WORKSPACE) maafw-screencap-reference
+          "MFS_FOUNDATION_REFERENCE_ROOT=$root" >> $env:GITHUB_ENV
       - name: Compile and run the native Foundation and Blocks control
         shell: pwsh
         run: ./scripts/check-macos-foundation.ps1
@@ -27,6 +32,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: p1-macos-foundation-diagnostics
-          path: ../maafw-screencap-reference/runs/p1-macos-foundation-*/**
+          path: ${{ env.MFS_FOUNDATION_REFERENCE_ROOT }}/runs/p1-macos-foundation-*/**
           if-no-files-found: error
           retention-days: 90
