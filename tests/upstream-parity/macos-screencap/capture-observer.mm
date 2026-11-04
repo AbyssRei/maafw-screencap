@@ -15,6 +15,7 @@
 namespace {
 std::atomic<uint64_t> next_request{1};
 MfsMacObserve::CallbackLedger callbacks;
+MfsMacObserve::CallbackLedger block_leases;
 struct Evidence {
     bool object=false,error=false;
     int64_t code=0;
@@ -39,6 +40,7 @@ void stage(const char* name,uint64_t request,Evidence evidence={}) noexcept {
 }
 
 MfsMacObserve::CallbackCounts mfs_mac_pending_capture_callbacks() noexcept {return callbacks.snapshot();}
+MfsMacObserve::CallbackCounts mfs_mac_capture_block_leases() noexcept {return block_leases.snapshot();}
 void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending) noexcept {
     uint64_t thread=0;const auto thread_error=pthread_threadid_np(nullptr,&thread);
     flockfile(stderr);
@@ -48,6 +50,14 @@ void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending)
     std::fprintf(stderr,"capture_pending schema=1 phase=%s monotonic_ns=%lld thread=%llu thread_error=%d submitted=%u forwarded=%u pending=%u valid=%u semaphore_pending=%u budget_ns=15000000000\n",
         phase,static_cast<long long>(now),static_cast<unsigned long long>(thread),thread_error,
         value.submitted,value.forwarded,value.pending,static_cast<unsigned>(value.valid),semaphore_pending);
+    // This separate atomic snapshot is not simultaneous with callback/semaphore
+    // counts. It observes only C++ token copies captured by this wrapper block.
+    const auto leases=block_leases.snapshot();
+    const auto lease_now=std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    std::fprintf(stderr,"capture_block_leases schema=1 phase=%s monotonic_ns=%lld thread=%llu thread_error=%d acquired=%u released=%u live=%u valid=%u budget_ns=15000000000\n",
+        phase,static_cast<long long>(lease_now),static_cast<unsigned long long>(thread),thread_error,
+        leases.submitted,leases.forwarded,leases.pending,static_cast<unsigned>(leases.valid));
     funlockfile(stderr);
 }
 
@@ -55,10 +65,12 @@ void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending)
 + (void)mfs_observe_content:(void (^)(SCShareableContent*,NSError*))completion {
     const auto request=next_request.fetch_add(1,std::memory_order_relaxed);
     stage("content_enter",request);
+    const MfsMacObserve::BlockLease lease(block_leases);
     // Copying the native escaping block also copies its captured block under
     // the Clang Blocks ABI. No callback/context is borrowed from this stack,
     // explicitly released early, rescheduled, or retained beyond that wrapper.
     [SCShareableContent getShareableContentWithCompletionHandler:^(SCShareableContent* content,NSError* error) {
+        lease.touch();
         SCDisplay* first=content.displays.count ? content.displays[0] : nil;
         const Evidence evidence{content!=nil,error!=nil,static_cast<int64_t>(error.code),
             static_cast<uint64_t>(content.displays.count),static_cast<uint64_t>(content.windows.count),
@@ -76,12 +88,15 @@ void mfs_mac_capture_late_snapshot(const char* phase,unsigned semaphore_pending)
     completionHandler:(void (^)(CMSampleBufferRef,NSError*))completion {
     const auto request=next_request.fetch_add(1,std::memory_order_relaxed);
     // Read the original configured extents before forwarding. The wrapper
-    // block captures only these values, request ID and received completion,
-    // never additional filter/config/sample owners or a borrowed stack object.
+    // block captures these values, request ID, received completion and the
+    // process-lifetime diagnostic token, never additional filter/config/sample
+    // owners or a borrowed stack object.
     const auto width=static_cast<uint64_t>(configuration.width),height=static_cast<uint64_t>(configuration.height);
     stage("sample_enter",request,{filter!=nil && configuration!=nil,false,0,0,0,0,width,height});
+    const MfsMacObserve::BlockLease lease(block_leases);
     [SCScreenshotManager captureSampleBufferWithFilter:filter configuration:configuration
         completionHandler:^(CMSampleBufferRef sample,NSError* error) {
+            lease.touch();
             const Evidence evidence{sample!=nullptr,error!=nil,static_cast<int64_t>(error.code),0,0,0,width,height};
             stage("sample_callback",request,evidence);
             completion(sample,error);

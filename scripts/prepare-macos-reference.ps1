@@ -132,7 +132,15 @@ function Prepare-MacosReference([string]$FixedUpstream) {
     $saved=Join-Path $refInputs mfs_mac_callback_ledger_control
     Copy-Item -LiteralPath $ledger -Destination $saved;Save $saved
     Step macos-callback-ledger-control $ledger @()
+    $leases=Join-Path $build mfs_mac_block_lease_control
+    $saved=Join-Path $refInputs mfs_mac_block_lease_control
+    Copy-Item -LiteralPath $leases -Destination $saved;Save $saved
+    $script:MacosBlockLeaseControl=$leases
     return $executable
+}
+
+function Run-MacosBlockLeaseControl {
+    Step macos-block-lease-control $script:MacosBlockLeaseControl @()
 }
 
 # Fresh parent/child process pairs; each pair uses exactly the same executable.
@@ -469,7 +477,7 @@ function Run-ObservedMacosSamePathProbe([string]$Artifacts) {
         }
     }
     $stageFailure=$null
-    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory,'--require-late-snapshots')}
+    try {Step macos-display-observer-same-path-stages $ConfigureTool @('upstream-trace','macos-capture-stages',$directory,'--require-late-snapshots','--require-block-leases')}
     catch {$stageFailure=$_}
     $recordFailure=$null
     try {Step macos-display-observer-same-path-records $ConfigureTool @('upstream-trace','macos-display-observer-same-path',$directory)}

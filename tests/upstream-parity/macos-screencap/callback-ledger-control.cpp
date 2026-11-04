@@ -47,7 +47,30 @@ int main() {
         }
         for(auto& worker:workers) {worker.join();}
         require(!fault.load());equal(concurrent,2000,2000);
+        CallbackLedger owners;
+        {
+            MfsMacObserve::BlockLease first(owners);require(first.registered());equal(owners,1,0);
+            {MfsMacObserve::BlockLease second(first);second.touch();equal(owners,2,0);}
+            equal(owners,2,1);
+        }
+        equal(owners,2,2);
+        CallbackLedger exhausted(maximum,maximum);
+        {MfsMacObserve::BlockLease refused(exhausted);require(!refused.registered());}
+        equal(exhausted,maximum,maximum,false);
+        CallbackLedger copied;
+        for(auto& worker:workers) {
+            worker=std::thread([&] {
+                for(unsigned call=0;call<250;++call) {
+                    MfsMacObserve::BlockLease first(copied),second(first);
+                    first.touch();second.touch();
+                    if(!first.registered() || !second.registered() || !copied.snapshot().valid) {fault=true;}
+                }
+            });
+        }
+        for(auto& worker:workers) {worker.join();}
+        require(!fault.load());equal(copied,4000,4000);
         std::cout<<"macOS callback ledger controls transitions=2000 threads=8 native_uint_boundaries=1 invalid_counts_rejected=1 native_callbacks=0 capture=0 passed\n";
+        std::cout<<"macOS capture lease objects acquisitions=4000 releases=4000 threads=8 overflow_rejected=1 native_blocks=0 capture=0 passed\n";
         return 0;
     }catch(const std::exception& error) {std::cerr<<error.what()<<'\n';return 1;}
 }

@@ -69,7 +69,9 @@ template<class Pump> void observe_late(Pump pump) {
     const auto until=std::chrono::steady_clock::now()+std::chrono::seconds(15);
     while(std::chrono::steady_clock::now()<until) {
         const auto callbacks=mfs_mac_pending_capture_callbacks();
-        if(callbacks.valid && callbacks.pending==0 && unsignalled_failed_waits()==0) {break;}
+        const auto leases=mfs_mac_capture_block_leases();
+        if(callbacks.valid && callbacks.pending==0 && leases.valid && leases.pending==0
+            && unsignalled_failed_waits()==0) {break;}
         pump();
     }
     mfs_mac_capture_late_snapshot("end",unsignalled_failed_waits());

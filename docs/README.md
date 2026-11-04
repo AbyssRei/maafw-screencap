@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+独立 Mac observer 已增加 block 捕获对象的复制/析构观测，以及实际原生 Blocks 控制入口。本机便携 C++、记录拒收和独立继续执行检查通过；Apple runtime 执行仍待新 CI，不把 handler 返回、对象析构或旧失败改作会话排空成功。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `d9f25d0` 的完整窗口断言已在原生 Mac 执行，247 张 BGR 和 60 张 BGRA 的完整颜色、边缘及 alpha 独立复算通过；轻量包也已补齐 ARM64 回调记账程序。组件仍为 145/166，原二十一项失败不变，完整 P1 未通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `aeadac4` 的 Windows 已终态为 445/456，保留四项原版 FramePool pseudo 和七组 manager 失败。166 份保存报告通过只读复算，85 张 manager 异常目标图均为同批边缘差异；本批 alpha-poll 通过，旧批失败仍保留。轻量包完整来源尚缺 4,832 项，完整 P1 未通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

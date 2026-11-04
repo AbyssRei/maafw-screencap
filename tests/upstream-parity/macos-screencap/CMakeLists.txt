@@ -67,6 +67,12 @@ set_target_properties(mfs_macos_same_binary_scene PROPERTIES
 add_library(mfs_macos_native_sample_class OBJECT "${_mfs_root}/Screencap/ScreenCaptureKitScreencap.mm")
 add_executable(mfs_mac_live_sample_hook_control live-sample-hook-control.cpp)
 add_executable(mfs_mac_callback_ledger_control callback-ledger-control.cpp)
+add_executable(mfs_mac_block_lease_control block-lease-control.mm)
+
+target_compile_options(mfs_mac_block_lease_control PRIVATE -fno-objc-arc -fblocks -Wall -Wextra -Werror)
+
+find_library(_mfs_Foundation NAMES Foundation REQUIRED)
+target_link_libraries(mfs_mac_block_lease_control PRIVATE Threads::Threads "${_mfs_Foundation}")
 target_compile_options(mfs_mac_callback_ledger_control PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(mfs_mac_callback_ledger_control PRIVATE Threads::Threads)
 target_compile_options(mfs_mac_live_sample_hook_control PRIVATE -Wall -Wextra -Werror)

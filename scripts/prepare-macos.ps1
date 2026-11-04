@@ -94,13 +94,19 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'macos-live-sample-hook-control' -and [regex]::Matches($observed,[regex]::Escape('live_sample_hook cases=3 visits=1 releases=3 joined_callback=1 native_samples=0 passed')).Count -ne 1) {
             $status='failed';throw 'Incomplete shared live-sample hook ownership control'
         }
-        if($Name -eq 'macos-callback-ledger-control' -and [regex]::Matches($observed,[regex]::Escape('macOS callback ledger controls transitions=2000 threads=8 native_uint_boundaries=1 invalid_counts_rejected=1 native_callbacks=0 capture=0 passed')).Count -ne 1) {
+        if($Name -eq 'macos-callback-ledger-control' -and (
+            [regex]::Matches($observed,[regex]::Escape('macOS callback ledger controls transitions=2000 threads=8 native_uint_boundaries=1 invalid_counts_rejected=1 native_callbacks=0 capture=0 passed')).Count -ne 1 -or
+            [regex]::Matches($observed,[regex]::Escape('macOS capture lease objects acquisitions=4000 releases=4000 threads=8 overflow_rejected=1 native_blocks=0 capture=0 passed')).Count -ne 1)) {
             $status='failed';throw 'Incomplete portable callback ledger control'
+        }
+        if($Name -eq 'macos-block-lease-control' -and [regex]::Matches($observed,[regex]::Escape('macOS native block leases cases=4 stack_to_heap=4 heap_alias=1 handler_return_keeps_lease=1 uninvoked_disposal=1 joined_worker_release=1 acquired=12 released=12 live=0 native_callbacks=0 capture=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete native block capture lease control'
         }
         if($Name -eq 'macos-display-observer-same-path-stages' -and (
             [regex]::Matches($observed,'(?m)^macOS capture_stages consumer_exit=').Count -ne 1 -or
             $observed -notmatch '(?m)^macOS capture_stages consumer_exit=-?\d+ content_submissions=\d+ sample_submissions=\d+ unobserved_content_callbacks=\[[^\r\n]*\] unobserved_sample_callbacks=\[[^\r\n]*\] diagnostic_only=1 source_capture_acceptance=0 paired_acceptance=0 recorded\r?$' -or
-            [regex]::Matches($observed,[regex]::Escape('macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded')).Count -ne 1)) {
+            [regex]::Matches($observed,[regex]::Escape('macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded')).Count -ne 1 -or
+            [regex]::Matches($observed,[regex]::Escape('macOS block_lease_observation required_on_failure=1 callback_return_is_disposal=0 native_owner_drain=0 recorded')).Count -ne 1)) {
             $status='failed';throw 'Incomplete current callback observation records or required-snapshot policy'
         }
         if($Name -eq 'macos-display-observer-same-path-consumer' -and
@@ -323,6 +329,8 @@ try {
         }finally{$env:MFS_BUILD_CONFIGURATION=$prototypeConfiguration}
         . (Join-Path $PSScriptRoot prepare-macos-reference.ps1)
         $executable=Prepare-MacosReference $UpstreamRoot
+        try {Run-MacosBlockLeaseControl}
+        catch {$failed=$true;Write-Host $_.Exception.Message}
         $referenceArtifacts=Join-Path $RunRoot macos-arm64/reference-u/artifacts
         . (Join-Path $PSScriptRoot prepare-custom-unix-reference.ps1)
         try { Test-CustomUnixReference $UpstreamRoot $referenceArtifacts }
@@ -330,7 +338,7 @@ try {
         $windows=Join-Path $referenceArtifacts windows
         $display=Join-Path $referenceArtifacts display
         New-Item -ItemType Directory -Path $windows,$display|Out-Null
-        Json (Join-Path $windows geometry.json) ([ordered]@{width=47;height=31;channels=3;row_bytes=141;interior_margin=2;call_colours=@('green','red','blue');scope='Unchanged original source, twenty windows/sixty captures; resource counts observed only, not a balance assertion.'})
+        Json (Join-Path $windows geometry.json) ([ordered]@{width=47;height=31;channels=3;row_bytes=141;interior_margin=0;call_colours=@('green','red','blue');scope='Unchanged original capture class with complete owned-window fixture assertions, twenty windows/sixty captures; resource counts observed only, not a balance assertion.'})
         try { Step original-macos-windows $executable @('windows',$windows) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step original-macos-display $executable @('display',$display) }

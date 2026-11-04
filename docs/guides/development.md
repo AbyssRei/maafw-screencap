@@ -140,6 +140,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+独立 Mac observer 现用非分配的 C++ 捕获 token 记录构造/复制和析构，依据 [Clang Blocks ABI 的 C++ 捕获规则](https://clang.llvm.org/docs/Block-ABI-Apple.html)。它只持有进程存续的诊断记账指针，不额外持有 filter/config/sample，也不改变固定原类、原五秒等待、转换或返回值。`capture_block_leases` 单独记录 acquired/released/live、线程和时间；计数包含局部 token 与 stack-block 副本，并非原生 block retain count。它与 callback/semaphore 是分开的原子采样，不能把相同 phase 当作同时观察。只有已观察 handler 全返回、原 semaphore 已获信号且 token 全部析构，独立晚到观察才可提前结束；否则沿用完整十五秒诊断预算。
+
+新增 `mfs_mac_block_lease_control` 用真实 `Block_copy`/`Block_release` 检查 stack→heap、heap alias、handler 返回后仍保留捕获、未调用时析构及已 join 工作线程释放四种情形。程序已接入原生构建、严格 Step 摘要和轻量上传；实际 Apple runtime 执行尚待本提交的新 CI。本机 MSVC 的 Debug/Release 只验证便携 C++ 对象记账：每配置八线程完成 4,000 次 token 获取/释放及溢出拒绝，并保留原 2,000 组 callback 记账控制；它不执行 Apple Blocks、ScreenCaptureKit 或截图。原生 block 控制发生运行断言失败时，独立 catch 保留 job 失败并继续原版捕获用例；编译和输入准备仍是严格前置条件。
+
+`upstream-trace macos-capture-stages` 新增 `--require-block-leases`，当前失败 consumer 必须同时提供 handler 与 token 的 begin/end 快照。读者严格核对 UINT 边界、checked 差值、字段/phase/线程/时间及原生日志次序；handler 已返回而 token 仍活跃时也不能缩短观察。旧日志仍可按原政策只读核对，显式要求新记录则拒收；token 为零也不改写原 consumer 非零退出或证明整个原生请求排空。当前窗口 geometry 元数据同步为实际完整断言的 margin=0，旧归档 margin=2 原样保留。
+
+归档依赖的本机 workspace、默认 Release、148 项 xtask 测试、严格 Clippy、格式及 PowerShell 语法通过。最终二十六项 CLI 控制接受八项、拒绝十八项，含两份旧真实报告的兼容读取/新政策拒收；两份跨阶段时间或顺序不可能的合成记录由开发前版接受，补充 guard 后拒收，两版程序和记录均保留。十八个 Step mock、十八次独立继续执行、三个最终校验器子进程及实际便携 C++ 子进程核对通过；另以实际便携程序验证不能冒充 Apple Blocks 控制，失败状态保留且后续子进程继续。外部 `local/current-macos-block-lease-development-path.txt` 保存源码、依赖锁、程序、原始输出和各版复核；新原生 block/关闭观察与完整 P1 未验收，原二十一项 Mac 失败不因此改判。
+
 确切 `d9f25d0` 的 [Actions 41820596076](https://github.com/AbyssRei/maafw-screencap/actions/runs/41820596076) Mac 已终态，新的完整窗口断言实际原生执行通过；全部 166 项名称/状态与 `aeadac4` 相同，组件仍为 145/166，原二十一项失败保留。两个实际登记断言来源与本机开发后版本的 Git blob 一致，原生 build 日志包含 `source-context.mm` 编译条目，原版/Rust 窗口及 manager 四份日志均报告各二十轮、六十次取帧。独立复算 247 张完整 47×31 BGR、359,879 个像素及六十张 BGRA、87,420 个像素，按各夹具规定的相位颜色或静态绿色核对，含全部边缘及 alpha=255。它补充此前只有保存数据/CPU 控制的范围，不推及任意窗口、缩放或裁剪。
 
 本批官方轻量 ZIP 的 45,521,646 字节、摘要/CRC、安全路径、12,328 份恢复文件、全部日志与可用输入、三十份 Git 补充源码及二十一份只读报告均核对。已登记的 37,600 字节记账程序现直接包含在轻量包，摘要与输入相同，独立解析为 ARM64 Mach-O executable；原生八线程、2,000 组记账控制通过，未执行 Apple callback 生命周期。same-path 原版捕获仍失败，实际前后快照相隔 15,000,091,750ns，始终 submitted=4/forwarded=3/pending=1/semaphore_pending=1；截至结束仍未观察到 sample 返回。handler 未返回不证明永久不完成、block disposal、排空或原因。新轻量包尚缺 660 个不同完整输入路径，旧 `aeadac4` 的完整来源闭包不自动覆盖本批。材料由外部 `local/current-d9f-macos-focused-review-path.txt` 和 `local/current-d9f-native-window-ledger-review-path.txt` 指向；原生像素/回调失败及完整 P1 状态不变，预装工具年龄仍只作记录。

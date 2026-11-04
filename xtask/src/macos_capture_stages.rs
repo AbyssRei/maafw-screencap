@@ -31,6 +31,8 @@ struct Summary {
     unobserved_original_handler_returns: Vec<u64>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     late_observations: Vec<LateObservation>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    block_lease_observations: Vec<BlockLeaseObservation>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -45,13 +47,32 @@ struct LateObservation {
     budget_ns: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+struct BlockLeaseObservation {
+    phase: String,
+    monotonic_ns: u64,
+    thread: u64,
+    acquired: u32,
+    released: u32,
+    live: u32,
+    budget_ns: u64,
+}
+
 pub(crate) fn run(args: &[String]) -> Result<()> {
-    let (path,check_only,require_late)=match args {
-        [path]=>(path,false,false),[path,flag] if flag=="--check-only"=>(path,true,false),
-        [path,flag] if flag=="--require-late-snapshots"=>(path,false,true),
-        [path,required,check] if required=="--require-late-snapshots" && check=="--check-only"=>(path,true,true),
-        _=>return Err("expected upstream-trace macos-capture-stages <external same-path observer directory> [--require-late-snapshots] [--check-only]".into()),
-    };
+    let (path, flags) = args.split_first().ok_or("missing native stage directory")?;
+    let (mut check_only, mut require_late, mut require_blocks) = (false, false, false);
+    for flag in flags {
+        let selected = match flag.as_str() {
+            "--check-only" => &mut check_only,
+            "--require-late-snapshots" => &mut require_late,
+            "--require-block-leases" => &mut require_blocks,
+            _ => return Err("unknown native stage analysis flag".into()),
+        };
+        if std::mem::replace(selected, true) {
+            return Err("duplicate native stage analysis flag".into());
+        }
+    }
+    require_late |= require_blocks;
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
     let mut read = |name: &str| -> Result<String> {
@@ -80,6 +101,11 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     }
     if require_late && exit != 0 && consumer.late_observations.len() != 2 {
         return Err("current failed diagnostic lacks required late callback snapshots".into());
+    }
+    if require_blocks && exit != 0 && consumer.block_lease_observations.len() != 2 {
+        return Err(
+            "current failed diagnostic lacks required block capture lease snapshots".into(),
+        );
     }
     let mut waits = Vec::new();
     for line in consumer_log
@@ -111,6 +137,14 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     if require_late {
         report["requires_late_snapshots_on_failure"] = true.into();
     }
+    if !report["consumer"]["block_lease_observations"].is_null()
+        || !report["scene"]["block_lease_observations"].is_null()
+    {
+        report["block_lease_observation_scope"] = "Separate atomic counts observe construction/copy/destruction of the diagnostic wrapper's captured C++ token, including local and stack copies. They are not native block reference counts, callback-return counts, cancellation or whole-session drain. Each snapshot is taken separately from callback/semaphore counts; matching phases do not imply simultaneous observations. Original native selectors, caller wait and failure status are unchanged.".into();
+    }
+    if require_blocks {
+        report["requires_block_lease_snapshots_on_failure"] = true.into();
+    }
     let output = root.join("capture-stages-analysis.json");
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
@@ -129,6 +163,11 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     if require_late {
         println!(
             "macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded"
+        );
+    }
+    if require_blocks {
+        println!(
+            "macOS block_lease_observation required_on_failure=1 callback_return_is_disposal=0 native_owner_drain=0 recorded"
         );
     }
     Ok(())
@@ -263,6 +302,8 @@ fn analyze(text: &str) -> Result<Summary> {
     if events.is_empty() {
         return Err("native callback-stage observations absent; older logs do not establish these boundaries".into());
     }
+    let late_observations = late_observations(text)?;
+    let block_lease_observations = block_lease_observations(text, &late_observations)?;
     let mut summary = Summary {
         events,
         content_submissions: 0,
@@ -270,7 +311,8 @@ fn analyze(text: &str) -> Result<Summary> {
         unobserved_content_callbacks: Vec::new(),
         unobserved_sample_callbacks: Vec::new(),
         unobserved_original_handler_returns: Vec::new(),
-        late_observations: late_observations(text)?,
+        late_observations,
+        block_lease_observations,
     };
     for (request, history) in requests {
         let content = history[0].stage == "content_enter";
@@ -390,6 +432,103 @@ fn late_observations(text: &str) -> Result<Vec<LateObservation>> {
             || ((end.pending != 0 || end.semaphore_pending != 0) && elapsed < end.budget_ns)
         {
             return Err("unresolved callback observation ended early or changed caller".into());
+        }
+    }
+    Ok(observations)
+}
+
+fn block_lease_observations(
+    text: &str,
+    late: &[LateObservation],
+) -> Result<Vec<BlockLeaseObservation>> {
+    let mut observations = Vec::new();
+    let mut pending_phase = None;
+    for line in text.lines() {
+        if let Some(line) = line.strip_prefix("capture_pending ") {
+            // late_observations() already checked this line and its field set.
+            pending_phase = line
+                .split(' ')
+                .find_map(|field| field.strip_prefix("phase="));
+            continue;
+        }
+        let Some(line) = line.strip_prefix("capture_block_leases ") else {
+            continue;
+        };
+        let mut fields = BTreeMap::new();
+        for part in line.split(' ') {
+            let (key, value) = part.split_once('=').ok_or("invalid block lease field")?;
+            if fields.insert(key, value).is_some() {
+                return Err("duplicate block lease field".into());
+            }
+        }
+        if fields.keys().copied().collect::<Vec<_>>()
+            != [
+                "acquired",
+                "budget_ns",
+                "live",
+                "monotonic_ns",
+                "phase",
+                "released",
+                "schema",
+                "thread",
+                "thread_error",
+                "valid",
+            ]
+        {
+            return Err("block capture lease fields differ".into());
+        }
+        let integer = |name: &str| -> Result<u64> {
+            let value: u64 = fields[name].parse()?;
+            if value.to_string() != fields[name] {
+                return Err("noncanonical block capture lease integer".into());
+            }
+            Ok(value)
+        };
+        let value = BlockLeaseObservation {
+            phase: fields["phase"].into(),
+            monotonic_ns: integer("monotonic_ns")?,
+            thread: integer("thread")?,
+            acquired: u32::try_from(integer("acquired")?)?,
+            released: u32::try_from(integer("released")?)?,
+            live: u32::try_from(integer("live")?)?,
+            budget_ns: integer("budget_ns")?,
+        };
+        let phase = observations.len();
+        if integer("schema")? != 1
+            || integer("valid")? != 1
+            || integer("thread_error")? != 0
+            || value.thread == 0
+            || value.monotonic_ns == 0
+            || value.budget_ns != 15_000_000_000
+            || value.acquired.checked_sub(value.released) != Some(value.live)
+            || phase >= 2
+            || late.len() != 2
+            || value.phase != ["begin", "end"][phase]
+            || pending_phase != Some(value.phase.as_str())
+            || value.thread != late[phase].thread
+            || value.monotonic_ns < late[phase].monotonic_ns
+        {
+            return Err("block capture lease scope, counts or phase differs".into());
+        }
+        observations.push(value);
+    }
+    if !observations.is_empty() {
+        if observations.len() != 2 {
+            return Err("incomplete block capture lease observation".into());
+        }
+        let begin = &observations[0];
+        let end = &observations[1];
+        let elapsed = end
+            .monotonic_ns
+            .checked_sub(begin.monotonic_ns)
+            .ok_or("block lease observation clock reversed")?;
+        if begin.thread != end.thread
+            || begin.monotonic_ns > late[1].monotonic_ns
+            || end.acquired < begin.acquired
+            || end.released < begin.released
+            || end.live != 0 && elapsed < end.budget_ns
+        {
+            return Err("block capture leases ended early or changed identity/counts".into());
         }
     }
     Ok(observations)
@@ -560,5 +699,125 @@ mod tests {
         ] {
             assert!(analyze(&bad).is_err(), "accepted {bad}");
         }
+    }
+
+    fn leases(phase: &str, time: u64, acquired: u32, released: u32) -> String {
+        format!(
+            "capture_block_leases schema=1 phase={phase} monotonic_ns={time} thread=7 thread_error=0 acquired={acquired} released={released} live={} valid=1 budget_ns=15000000000\n",
+            acquired - released
+        )
+    }
+
+    fn returned_with_live_capture() -> String {
+        event("content_enter", 1, 1)
+            + &event("content_callback", 1, 2)
+            + &event("content_forwarded", 1, 3)
+            + &pending("begin", 10, 1, 0)
+            + &leases("begin", 11, 3, 2)
+            + &pending("end", 15_000_000_010, 1, 0)
+            + &leases("end", 15_000_000_011, 3, 2)
+    }
+
+    #[test]
+    fn observes_a_live_captured_token_after_the_original_handler_returned() {
+        let input = returned_with_live_capture();
+        let summary = analyze(&input).unwrap();
+        assert!(summary.unobserved_original_handler_returns.is_empty());
+        assert_eq!(summary.late_observations[1].pending, 0);
+        assert_eq!(summary.block_lease_observations[1].live, 1);
+        assert!(
+            analyze(
+                &input
+                    .replace("15000000010", "20")
+                    .replace("15000000011", "21")
+            )
+            .is_err()
+        );
+        let disposed = input
+            .replace("15000000010", "20")
+            .replace("15000000011", "21")
+            .replace(&leases("end", 21, 3, 2), &leases("end", 21, 3, 3));
+        assert_eq!(
+            analyze(&disposed).unwrap().block_lease_observations[1].live,
+            0
+        );
+    }
+
+    #[test]
+    fn retains_an_unobserved_handler_when_its_captured_token_has_been_destroyed() {
+        let input = event("content_enter", 1, 1)
+            + &pending("begin", 10, 0, 0)
+            + &leases("begin", 11, 3, 2)
+            + &pending("end", 15_000_000_010, 0, 0)
+            + &leases("end", 15_000_000_011, 3, 3);
+        let summary = analyze(&input).unwrap();
+        assert_eq!(summary.unobserved_content_callbacks, [1]);
+        assert_eq!(summary.block_lease_observations[1].live, 0);
+        let legacy = analyze(&event("content_enter", 1, 1)).unwrap();
+        assert!(
+            serde_json::to_value(legacy)
+                .unwrap()
+                .get("block_lease_observations")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_widths_counts_identity_and_incomplete_block_lease_windows() {
+        let input = returned_with_live_capture();
+        for bad in [
+            input.replace(
+                "capture_block_leases schema=1",
+                "capture_block_leases schema=2",
+            ),
+            input.replace(
+                "acquired=3 released=2 live=1",
+                "acquired=4294967296 released=4294967295 live=1",
+            ),
+            input.replace(
+                "acquired=3 released=2 live=1",
+                "acquired=3 released=4 live=1",
+            ),
+            input.replace(
+                "acquired=3 released=2 live=1",
+                "acquired=3 released=2 live=0",
+            ),
+            input.replace("acquired=3", "acquired=03"),
+            input.replace("live=1 valid=1", "live=1 valid=0"),
+            input.replace("thread_error=0 acquired", "thread_error=1 acquired"),
+            input.replace(
+                "thread=7 thread_error=0 acquired",
+                "thread=8 thread_error=0 acquired",
+            ),
+            input.replace(
+                "capture_block_leases schema=1 phase=end",
+                "capture_block_leases schema=1 phase=begin",
+            ),
+            input.replace(&leases("begin", 11, 3, 2), &leases("begin", 9, 3, 2)),
+            input.replace(
+                &leases("end", 15_000_000_011, 3, 2),
+                &leases("end", 15_000_000_011, 2, 1),
+            ),
+            input.replace(&leases("end", 15_000_000_011, 3, 2), ""),
+            input.clone() + &leases("end", 16_000_000_000, 3, 2),
+            input.replace("acquired=3", "acquired=3 extra=0"),
+            input.replace("live=1 valid", "live=1 live=1 valid"),
+            input.replace(&pending("begin", 10, 1, 0), ""),
+        ] {
+            assert!(analyze(&bad).is_err(), "accepted {bad}");
+        }
+    }
+
+    #[test]
+    fn rejects_lease_snapshots_moved_across_their_native_observation_phases() {
+        let input = returned_with_live_capture();
+        let begin = leases("begin", 11, 3, 2);
+        let end = leases("end", 15_000_000_011, 3, 2);
+        let moved = input.replace(&begin, "").replace(&end, "") + &begin + &end;
+        assert!(analyze(&moved).is_err());
+        let impossible = input
+            .replace(&begin, &leases("begin", 20_000_000_011, 3, 2))
+            .replace(&end, &leases("end", 20_000_000_012, 3, 3));
+        assert!(analyze(&impossible).is_err());
     }
 }

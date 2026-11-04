@@ -52,4 +52,22 @@ public:
         return {submitted,forwarded,forwarded<=submitted ? submitted-forwarded : 0,valid};
     }
 };
+
+// Diagnostic C++ capture only. Its ledger must outlive every copy, including
+// copies in native heap blocks. The observer uses a process-lifetime ledger.
+// Counts include the local token and stack-block copies; they are not a native
+// block retain count, a callback-return count or a whole-session drain proof.
+class BlockLease {
+    CallbackLedger* ledger_;
+    bool registered_;
+public:
+    explicit BlockLease(CallbackLedger& ledger) noexcept
+        : ledger_(&ledger),registered_(ledger_->submit()) {}
+    BlockLease(const BlockLease& other) noexcept
+        : ledger_(other.ledger_),registered_(ledger_->submit()) {}
+    BlockLease& operator=(const BlockLease&)=delete;
+    ~BlockLease() noexcept {if(registered_) {(void)ledger_->forward();}}
+    bool registered() const noexcept {return registered_;}
+    void touch() const noexcept {(void)ledger_->snapshot();}
+};
 }
