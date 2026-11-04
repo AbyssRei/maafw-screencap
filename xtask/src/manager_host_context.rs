@@ -31,6 +31,14 @@ fn table(path: &Path, rows: usize, columns: usize) -> Result<Vec<Vec<i64>>> {
 }
 
 pub fn run(args: &[String]) -> Result<()> {
+    run_variant(args, false)
+}
+
+pub fn run_whole(args: &[String]) -> Result<()> {
+    run_variant(args, true)
+}
+
+fn run_variant(args: &[String], complete: bool) -> Result<()> {
     let (mask, mode, dpi, path, check) = match args {
         [mask, mode, dpi, path] => (mask, mode, dpi, path, false),
         [mask, mode, dpi, path, flag] if flag == "--check-only" => (mask, mode, dpi, path, true),
@@ -44,6 +52,7 @@ pub fn run(args: &[String]) -> Result<()> {
     let method: i64 = mask.parse()?;
     let dpi: i64 = dpi.parse()?;
     if ![0, 1, 2, 4, 8, 16, 32, 63, 64].contains(&method)
+        || complete && method == 63
         || ![1, 2, 4].contains(&dpi)
         || !matches!(
             mode.as_str(),
@@ -230,6 +239,30 @@ pub fn run(args: &[String]) -> Result<()> {
         {
             return Err("Original/Rust call results or COM/DPI boundary effects differ".into());
         }
+        if complete && side == "source" {
+            let types = table(&directory.join("whole-source-types.tsv"), 2, 9)?;
+            for (stage, row) in types.iter().enumerate() {
+                u32::try_from(row[8])?;
+                if row[..6] != [i64::try_from(stage)?, 0x4d465357, 1, 0, 0, 1]
+                    || row[6] < 8
+                    || row[7] != 8
+                    || row[8] != caller
+                {
+                    return Err("Complete original Win32 class or exclusion counters differ".into());
+                }
+            }
+            if types[0][1..] != types[1][1..]
+                || fs::read_to_string(directory.join("whole-source-selection.txt"))?
+                    != format!(
+                        "single_method_mask={method}\nselection_observer=0\noriginal_class_api=1\ninput_none=1\n"
+                    )
+            {
+                return Err("Original whole-class configuration evidence differs".into());
+            }
+            for name in ["whole-source-types.tsv", "whole-source-selection.txt"] {
+                artifacts.push(records::artifact(&root, &directory.join(name))?);
+            }
+        }
         for name in [
             "states.tsv",
             "calls.tsv",
@@ -249,9 +282,17 @@ pub fn run(args: &[String]) -> Result<()> {
         }
         observations.push(serde_json::json!({"side":side,"states":states,"calls":calls,"image":image,"capture_succeeded":selected!=0}));
     }
-    let report = serde_json::json!({"layout_version":1,"method":method,"mode":mode,"dpi":dpi,"artifacts":artifacts,"observations":observations,"full_P1_accepted":false,
+    let mut report = serde_json::json!({"layout_version":1,"method":method,"mode":mode,"dpi":dpi,"artifacts":artifacts,"observations":observations,"full_P1_accepted":false,
         "scope":"Fresh same-binary processes consume real original/Rust Win32 factories, capture-only manager facades and actual virtual calls through the same C++ ABI bridge/Rust loader. Fourteen native COM/DPI boundary observations, exact call outcomes and full target/held bytes; source side effects are preserved rather than repaired. Dispatcher pumping occurs only after capture owners end. Paired rejection is not successful capture. No complete original input manager, compatible-build branch, physical mixed-DPI environment, producer/callback drain or full P1 acceptance."});
-    let output = root.join("manager-host-context-validation.json");
+    let output = if complete {
+        report["original_class_api"] = true.into();
+        report["source_selection_evidence"] =
+            "single_method_configuration_not_winner_observation".into();
+        report["scope"] = "Fresh same-binary source/Rust processes consume the complete unchanged original F Win32ControlUnitMgr and API translation units/headers with Input=None, six actual capture backends and complete actual BackgroundManagedKeyInput, versus the same private Rust manager/factory. Native RTTI matches the actual original class, excluded non-None input/application boundaries are never invoked, fourteen COM/DPI snapshots and complete known/held images match. Source single-bit selection is configuration evidence; no actual mixed-method winner observer is claimed. No original input/application action support, compatible macro, physical mixed DPI, producer/drain or full P1 acceptance.".into();
+        root.join("manager-whole-host-context-validation.json")
+    } else {
+        root.join("manager-host-context-validation.json")
+    };
     if check {
         if records::read::<serde_json::Value>(&output)? != report {
             return Err("Saved host-context report differs".into());
@@ -259,8 +300,14 @@ pub fn run(args: &[String]) -> Result<()> {
     } else {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "Win32 host context mode={mode} dpi={dpi} method={method} sides=2 snapshots_per_side=14 full_P1_acceptance=0 passed"
-    );
+    if complete {
+        println!(
+            "Win32 whole host context mode={mode} dpi={dpi} method={method} sides=2 snapshots_per_side=14 original_class_api=1 input_none=1 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "Win32 host context mode={mode} dpi={dpi} method={method} sides=2 snapshots_per_side=14 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }

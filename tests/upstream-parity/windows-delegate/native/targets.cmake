@@ -78,3 +78,29 @@ file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/native-scope.txt"
     "MaaWin32ControlUnitCreate/Destroy compile the complete fixed original source bodies without rewriting statements. The concrete Win32ControlUnitMgr name denotes the explicitly scoped capture-only source/Rust manager facade with original Win32ControlUnitAPI inheritance; constructor instrumentation and input=None boundary remain explicit. Real std::make_unique/release, pointer forwarding, null-safe virtual delete and exception unwinding are consumed, not handwritten factory algorithm substitutes.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/native-scope.txt"
     "The query consumer additionally invokes actual connected/request_uuid/get_features/get_info virtual slots through these factories. Original bodies retain exact source statements and Input=None owners; Rust uses the same native manager through one synchronous private query callback. UUID text is consumed before the next context call; metadata JSON is explicitly parsed into the original native object representation. Caller-owned fixed CPU snapshots survive native temporaries, unit/provider unload and owned message-window destruction. None/unknown-only connections do not create screenshot backends. This is scoped facade/virtual consumption, not the complete original manager class, input implementation, desktop capture, general exceptions or P1 acceptance.\n")
+
+# A separate complete F class/API target. Only excluded non-None input classes
+# and application conversion have fail-fast headers; BackgroundManagedKeyInput
+# itself, including empty inactive/destruction, is the actual complete F source.
+add_library(mfs_delegate_whole_source SHARED native/whole-source.cpp
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/API/Win32ControlUnitAPI.cpp"
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Manager/Win32ControlUnitMgr.cpp"
+    "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Input/BackgroundManagedKeyInput.cpp")
+foreach(_backend GdiScreencap PrintWindowScreencap ScreenDCScreencap FramePoolScreencap DesktopDupScreencap DesktopDupWindowScreencap PseudoMinimizeHelper)
+    target_sources(mfs_delegate_whole_source PRIVATE "${MFS_UPSTREAM_ROOT}/source/MaaWin32ControlUnit/Screencap/${_backend}.cpp")
+endforeach()
+foreach(_property INCLUDE_DIRECTORIES COMPILE_OPTIONS LINK_LIBRARIES)
+    get_target_property(_value mfs_delegate_source ${_property})
+    set_property(TARGET mfs_delegate_whole_source PROPERTY ${_property} "${_value}")
+endforeach()
+set(_whole_overlay "${CMAKE_CURRENT_BINARY_DIR}/whole-overlay")
+foreach(_input SeizeInput LegacyEventInput InterceptionInput AnchoredTouchInput MessageInput)
+    file(WRITE "${_whole_overlay}/Input/${_input}.h" "#include \"whole-input.hpp\"\n")
+endforeach()
+target_include_directories(mfs_delegate_whole_source BEFORE PRIVATE "${_whole_overlay}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/native/whole-overlay")
+target_compile_definitions(mfs_delegate_whole_source PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN BOOST_ALL_NO_LIB
+    MAA_CONTROL_UNIT_EXPORTS MAA_FRAMEPOOL_SCREENCAP_AVAILABLE=1 MAA_VERSION="mfs-p1-whole-win32-class")
+target_link_libraries(mfs_delegate_whole_source PRIVATE Dwmapi D3D11 Dxgi WindowsApp RuntimeObject CoreMessaging Shell32)
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/whole-source-scope.txt"
+    "Complete unchanged F Win32ControlUnitMgr.cpp/header and Win32ControlUnitAPI.cpp compile directly, with real six capture methods/helper and complete real BackgroundManagedKeyInput.cpp/header. Only Input=None capture/query/empty background-owner lifetimes are exercised. Excluded non-None input classes and application conversion fail fast and expose counters; their actions are not implemented or invoked. Native RTTI verifies the actual manager class. Single method masks bind configured source selection, not an observed native winner; mixed method selection remains in separate original-body facades. No compatible macro, physical mixed DPI, producer/drain or full P1 acceptance.\n")

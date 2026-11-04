@@ -713,6 +713,19 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             & $ConfigureTool upstream-delegate win32-destroy $env:MFS_DELEGATE_DESTROY_RECORDS >> $logPath 2>&1
             if($LASTEXITCODE -ne 0){throw 'Actual consumed-object cleanup records failed independent verification'}
         }
+        if($Name -match '^manager-whole-host-context-(uninitialized|mta|mta-dispatcher|sta)-(1|2|4)-(0|1|2|4|8|16|32|64)$' -and $exitCode -eq 0) {
+            $contextMode=$Matches[1];$contextDpi=$Matches[2];$contextMask=$Matches[3]
+            $observed=Get-Content -LiteralPath $logPath -Raw
+            $summary="Win32 whole host processes mode=$contextMode dpi=$contextDpi method=$contextMask sides=2 original_class_api=1 input_none=1 completed; independent records required"
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($summary)+'\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^Win32 whole host processes.*\r?$').Count -ne 1 -or
+               [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+               $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored; 0 measured; \d+ filtered out; finished in [^\r\n]+\r?$') {
+                throw 'Expected one isolated complete original Win32 class/API and Rust host comparison'
+            }
+            & $ConfigureTool upstream-delegate win32-whole-host-context $contextMask $contextMode $contextDpi $env:MFS_DELEGATE_CONTEXT_RECORDS >> $logPath 2>&1
+            if($LASTEXITCODE -ne 0){throw 'Complete original Win32 class, boundaries, COM/DPI effects or pixels differ'}
+        }
         if($Name -match '^manager-host-context-(uninitialized|mta|mta-dispatcher|sta)-(1|2|4)-(0|1|2|4|8|16|32|63|64)$' -and $exitCode -eq 0) {
             $contextMode=$Matches[1];$contextDpi=$Matches[2];$contextMask=$Matches[3]
             $observed=Get-Content -LiteralPath $logPath -Raw
@@ -1220,7 +1233,7 @@ try {
             Save-Input $env:MFS_P1_GAMEPAD_METADATA_SOURCE
             $env:MFS_P1_GAMEPAD_HOST_MODEL=Prepared-File mfs_gamepad_host_model.exe
             Save-Input $env:MFS_P1_GAMEPAD_HOST_MODEL
-            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','windows-delegate-manager-queries.inc','mfs_delegate_runtime_source.exe')) {Save-Input (Prepared-File $name)}
+            foreach($name in @('mfs_windows_delegate_model.exe','windows-delegate-loader.inc','windows-delegate-source.inc','windows-delegate-condition.inc','windows-delegate-LibraryHolder.h','windows-delegate-scope.txt','windows-delegate-CMakeCache.txt','windows-delegate-toolchain-Release.txt','mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','windows-delegate-native-scope.txt','windows-delegate-native-manager-source.inc','windows-delegate-native-manager-enum.inc','windows-delegate-native-manager-time.inc','windows-delegate-native-toolchain-Release.txt','windows-delegate-factory-create.inc','windows-delegate-factory-destroy.inc','windows-delegate-manager-queries.inc','mfs_delegate_runtime_source.exe','mfs_delegate_whole_source.dll')) {Save-Input (Prepared-File $name)}
             $env:MFS_DELEGATE_NATIVE_BUILD=Split-Path -Parent (Prepared-File mfs_delegate_bridge.dll)
         } else {
             # Adapt the native batch's record helpers without shadowing inputs.
@@ -1235,7 +1248,7 @@ try {
             Save-ManagerMetadataReference $metadataBuild $inputsRoot $metadataEvidence
             $delegateBuild=Join-Path $nativeRoot ('delegate-'+[DateTime]::UtcNow.Ticks)
             Step windows-delegate-configure $cmake (@('-S',(Join-Path $productRoot tests/upstream-parity/windows-delegate),'-B',$delegateBuild,'-DMFS_BUILD_NATIVE_DELEGATE=ON',"-DMFS_UPSTREAM_ROOT=$UpstreamRoot","-DMFS_MAAUTILS_ROOT=$maautils","-DMFS_BOOST_ROOT=$boost","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)","-DOpenCV_DIR=$opencvInstall")+$generator)
-            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_gamepad_host_model','mfs_gamepad_metadata_original','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','--parallel','4')
+            Step windows-delegate-build $cmake @('--build',$delegateBuild,'--config','Release','--target','mfs_windows_delegate_model','mfs_gamepad_host_model','mfs_gamepad_metadata_original','mfs_delegate_bridge','mfs_delegate_source','mfs_delegate_missing_create','mfs_delegate_missing_destroy','mfs_delegate_rust','mfs_delegate_native_source','mfs_delegate_runtime_source','mfs_delegate_whole_source','--parallel','4')
             foreach($item in @(@('delegate-loader.inc','windows-delegate-loader.inc'),@('delegate-source.inc','windows-delegate-source.inc'),@('delegate-condition.inc','windows-delegate-condition.inc'),@('original-LibraryHolder.h','windows-delegate-LibraryHolder.h'),@('source-scope.txt','windows-delegate-scope.txt'),@('CMakeCache.txt','windows-delegate-CMakeCache.txt'),@('toolchain-Release.txt','windows-delegate-toolchain-Release.txt'),@('Release/mfs_windows_delegate_model.exe','mfs_windows_delegate_model.exe'))) {
                 $saved=Join-Path $inputsRoot $item[1]
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
@@ -1246,7 +1259,7 @@ try {
                 Copy-Item -LiteralPath (Join-Path $delegateBuild $item[0]) -Destination $saved
                 Save-Input $saved
             }
-            foreach($name in @('mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','mfs_delegate_runtime_source.exe')) {
+            foreach($name in @('mfs_delegate_bridge.dll','mfs_delegate_source.dll','mfs_delegate_missing_create.dll','mfs_delegate_missing_destroy.dll','mfs_delegate_rust.dll','mfs_delegate_native_source.exe','mfs_delegate_runtime_source.exe','mfs_delegate_whole_source.dll')) {
                 $saved=Join-Path $inputsRoot $name
                 Copy-Item -LiteralPath (Join-Path $delegateBuild "Release/$name") -Destination $saved
                 Save-Input $saved
@@ -1274,10 +1287,14 @@ try {
         $env:MFS_P1_GAMEPAD_HOST_RECORDS=Join-Path $artifacts gamepad-host
         if($offline) {
             Save-Input (Prepared-File gamepad-runtime-scope.txt)
+            Save-Input (Prepared-File windows-delegate-whole-source-scope.txt)
         } else {
             $gamepadRuntimeScope=Join-Path $inputsRoot gamepad-runtime-scope.txt
             Copy-Item -LiteralPath (Join-Path $delegateBuild gamepad-runtime-scope.txt) -Destination $gamepadRuntimeScope
             Save-Input $gamepadRuntimeScope
+            $wholeSourceScope=Join-Path $inputsRoot windows-delegate-whole-source-scope.txt
+            Copy-Item -LiteralPath (Join-Path $delegateBuild whole-source-scope.txt) -Destination $wholeSourceScope
+            Save-Input $wholeSourceScope
         }
         $delegateEvidence=Join-Path $artifacts windows-delegate
         $env:MFS_P1_WINDOWS_DELEGATE_ARTIFACTS=$delegateEvidence
@@ -1295,6 +1312,8 @@ try {
         New-Item -ItemType Directory -Path $delegateBandRuntimeEvidence | Out-Null
         $delegateContextEvidence=Join-Path $artifacts windows-delegate-host-context
         New-Item -ItemType Directory -Path $delegateContextEvidence | Out-Null
+        $delegateWholeContextEvidence=Join-Path $artifacts windows-delegate-whole-host-context
+        New-Item -ItemType Directory -Path $delegateWholeContextEvidence | Out-Null
     }
     if ($PipeWireControl) {
         Step 'pipewire-control-model-build' $cmake @('--build', $build, '--config', 'Release', '--target', 'mfs_pipewire_control_model', '--parallel', '4')
@@ -1694,6 +1713,7 @@ try {
             $delegateRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_selected_method_through_original_and_rust_factories'
             $delegateBandRuntimeCase='backends::windows::delegate_native::tests::runtime::captures_complete_client_band_through_original_and_rust_factories'
             $delegateContextCase='backends::windows::delegate_native::tests::host_context::compares_real_factory_calls_and_caller_com_dpi_effects'
+            $delegateWholeContextCase='backends::windows::delegate_native::tests::host_context::compares_whole_original_win32_class_and_rust_capture_under_host_contexts'
             $managerIdentityCase='backends::windows::manager::tests::identity_matches_original_hwnd_stream_and_input_none_features'
             $managerQueryCase='backends::windows::delegate_native::tests::queries::consumes_queries_through_real_factories_and_preserves_values_after_unload'
             $caseSelection+=@('--skip',$managerIdentityCase,'--skip',$managerQueryCase)
@@ -1701,6 +1721,7 @@ try {
             $caseSelection+=@('--skip',$delegateDestroyCase,'--skip',$gamepadHostCase,'--skip',$gamepadMetadataCase)
             $caseSelection+=@('--skip',$delegateBandRuntimeCase)
             $caseSelection+=@('--skip',$delegateContextCase)
+            $caseSelection+=@('--skip',$delegateWholeContextCase)
             $managerChecks = @(
                 @{name='gdi-original-parity';arguments=($parityArguments + @('--') + $caseSelection)},
                 @{name='gdi-migration-clippy';arguments=($clippyArguments + @('--','-D','warnings'))},
@@ -1723,6 +1744,18 @@ try {
             }
             try {Step 'manager-size-records' $ConfigureTool @('upstream-trace','manager-size',$managerSizeEvidence)}
             catch {$failed=$true;Write-Host $_.Exception.Message}
+            foreach($wholeContextMode in @('uninitialized','mta','mta-dispatcher','sta')) {
+                foreach($wholeContextDpi in @(1,2,4)) {
+                    foreach($wholeContextMask in @(0,1,2,4,8,16,32,64)) {
+                        $env:MFS_DELEGATE_CONTEXT_MODE=$wholeContextMode
+                        $env:MFS_DELEGATE_CONTEXT_DPI=[string]$wholeContextDpi
+                        $env:MFS_DELEGATE_CAPTURE_METHOD=[string]$wholeContextMask
+                        $env:MFS_DELEGATE_CONTEXT_RECORDS=Join-Path $delegateWholeContextEvidence "$wholeContextMode-dpi-$wholeContextDpi-method-$wholeContextMask"
+                        try {Step "manager-whole-host-context-$wholeContextMode-$wholeContextDpi-$wholeContextMask" cargo ($parityArguments+@('--',$delegateWholeContextCase,'--exact','--ignored','--test-threads=1','--nocapture'))}
+                        catch {$failed=$true;Write-Host $_.Exception.Message}
+                    }
+                }
+            }
             foreach($contextMode in @('uninitialized','mta','mta-dispatcher','sta')) {
                 foreach($contextDpi in @(1,2,4)) {
                     foreach($contextMask in @(0,1,2,4,8,16,32,63,64)) {

@@ -7,7 +7,10 @@ use crate::test_support::windows_capture_host::{HostDispatcher, HostInitializati
 use std::{fs, io::Write};
 
 const CASE: &str = "backends::windows::delegate_native::tests::host_context::compares_real_factory_calls_and_caller_com_dpi_effects";
+const WHOLE_CASE: &str = "backends::windows::delegate_native::tests::host_context::compares_whole_original_win32_class_and_rust_capture_under_host_contexts";
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+#[path = "delegate_whole_context_tests.rs"]
+mod whole;
 
 fn snapshot() -> [i64; 5] {
     let mut apartment = com::APTTYPE::default();
@@ -65,7 +68,7 @@ fn outcome(value: std::result::Result<bool, Error>) -> Result<[i32; 2]> {
     }
 }
 
-fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64) -> Result<()> {
+fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64, complete: bool) -> Result<()> {
     assert!(matches!(side, "source" | "rust"));
     let directory = root.join(side);
     fs::create_dir(&directory)?;
@@ -106,7 +109,12 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64) -> Result<(
         std::env::var_os("MFS_DELEGATE_NATIVE_BUILD").ok_or("native build required")?,
     ))?;
     let provider = directory.join("MaaWin32ControlUnit.dll");
-    fs::copy(build.join(format!("mfs_delegate_{side}.dll")), &provider)?;
+    let binary = if complete && side == "source" {
+        "mfs_delegate_whole_source.dll".to_owned()
+    } else {
+        format!("mfs_delegate_{side}.dll")
+    };
+    fs::copy(build.join(binary), &provider)?;
     let ops = Ops::load(&build.join("mfs_delegate_bridge.dll"))?;
     ops.reset();
     ops.mode(5);
@@ -144,12 +152,22 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64) -> Result<(
         .unwrap()
         .unwrap();
     record(&mut states, 4)?;
+    let mut inspector = if complete && side == "source" {
+        Some(whole::Inspector::new(&provider, &directory, unit, method)?)
+    } else {
+        None
+    };
     let view = boundary.view(&loader, unit).unwrap();
     let connected = outcome(boundary.connect(&mut loader, &view))?;
     record(&mut states, 5)?;
     writeln!(calls, "0\t{}\t{}", connected[0], connected[1])?;
     calls.flush()?;
-    let selected = if let Some(host) = &host {
+    let selected = if complete && side == "source" {
+        // Complete original class has no winner-observation hook. A single
+        // known method bit binds its configuration; it is explicitly labelled
+        // as such, never presented as an observed mixed-method winner.
+        if method == 64 { 0 } else { method }
+    } else if let Some(host) = &host {
         host.selected()
     } else {
         ops.events()
@@ -186,6 +204,9 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64) -> Result<(
     record(&mut states, 7)?;
     writeln!(calls, "2\t{}\t{}", inactive[0], inactive[1])?;
     calls.flush()?;
+    if let Some(mut inspector) = inspector.take() {
+        inspector.finish(unit)?;
+    }
     drop(view);
     drop(loader);
     record(&mut states, 8)?;
@@ -222,6 +243,16 @@ fn child(root: &Path, side: &str, mode: &str, dpi: i64, method: u64) -> Result<(
 #[test]
 #[ignore = "explicit fresh-process original/Rust Win32 factory COM/DPI/capture comparison"]
 fn compares_real_factory_calls_and_caller_com_dpi_effects() -> Result<()> {
+    run(false)
+}
+
+#[test]
+#[ignore = "explicit complete original Win32 class/API with Input=None versus Rust capture, fresh host processes"]
+fn compares_whole_original_win32_class_and_rust_capture_under_host_contexts() -> Result<()> {
+    run(true)
+}
+
+fn run(complete: bool) -> Result<()> {
     let root = PathBuf::from(
         std::env::var_os("MFS_DELEGATE_CONTEXT_RECORDS")
             .ok_or("external context records required")?,
@@ -236,8 +267,9 @@ fn compares_real_factory_calls_and_caller_com_dpi_effects() -> Result<()> {
     ));
     assert!([1, 2, 4].contains(&dpi));
     assert!([0, 1, 2, 4, 8, 16, 32, 63, 64].contains(&method));
+    assert!(!complete || method != 63);
     if let Ok(side) = std::env::var("MFS_DELEGATE_CONTEXT_SIDE") {
-        child(&root, &side, &mode, dpi, method)?;
+        child(&root, &side, &mode, dpi, method, complete)?;
         println!("Win32 host child side={side} mode={mode} dpi={dpi} method={method} completed");
         return Ok(());
     }
@@ -246,7 +278,7 @@ fn compares_real_factory_calls_and_caller_com_dpi_effects() -> Result<()> {
     for side in ["source", "rust"] {
         let output = std::process::Command::new(std::env::current_exe()?)
             .args([
-                CASE,
+                if complete { WHOLE_CASE } else { CASE },
                 "--exact",
                 "--ignored",
                 "--test-threads=1",
@@ -277,8 +309,14 @@ fn compares_real_factory_calls_and_caller_com_dpi_effects() -> Result<()> {
     if !passed {
         return Err("host-context child failed; both original results retained".into());
     }
-    println!(
-        "Win32 host processes mode={mode} dpi={dpi} method={method} sides=2 completed; independent records required"
-    );
+    if complete {
+        println!(
+            "Win32 whole host processes mode={mode} dpi={dpi} method={method} sides=2 original_class_api=1 input_none=1 completed; independent records required"
+        );
+    } else {
+        println!(
+            "Win32 host processes mode={mode} dpi={dpi} method={method} sides=2 completed; independent records required"
+        );
+    }
     Ok(())
 }

@@ -140,6 +140,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+新增完整原版 Win32 类的独立验收 DLL，直接编译固定 F 的完整 `Win32ControlUnitMgr.cpp`/头、`Win32ControlUnitAPI.cpp`、`BackgroundManagedKeyInput.cpp`/头及六种捕获方法/helper。manager 和 C 工厂语句未提取、改写或用 facade 替换；后台键盘 owner 的构造、空状态 inactive 和析构也执行真实来源。非 None 输入类与应用字符串转换使用明确失败边界，计数必须为零；本轮只消费 Input=None 捕获链。四种 COM 环境、三种线程 DPI 与六个单方法位、None/未知位共 96 种配置，分别在相同测试程序的新进程中通过实际工厂/C++ ABI 配对原版完整类和同一 Rust manager。源端方法字段明确来自单独位的配置，未伪装为原生混合方法胜者观察。
+
+本机连续三轮共 288 组完整类配对通过：576 次生命周期/显式截图调用中，432 次成功捕获，None/未知位另有 144 次空输出；1,152 份即时/持帧文件（864 份非空）、576 对完整字节、5,308,416 个已知目标像素位置、8,064 份 COM/DPI 快照和 576 次原版类 RTTI 观察均独立复算。三种既有配置另完成九组实际回归，五份旧报告只读通过且原数据/报告字节未变。整批输入为零，最大观察间隔 88.2153ms，四路监听注销、线程返回和 writer join 验证，3,105 份冻结输入重新核对。实际工程十一份 C++ 编译单元、五份新增完整原类/API/owner 来源身份与固定 Git 内容核对；本轮使用归档离线依赖，nightly 更新检查无变化。
+
+另有六个实际原版工厂 owner 的非截图边界控制：五种被排除的输入构造均递增诊断计数并抛出，由桥接保留为 connect 异常；实际输入、应用和截图动作均为零，控制进程将模块持有到退出。完整类 reader 接受一份实际记录、拒绝二十五份像素/类型/计数/配置/宽度破坏；十五项 Step mock 保留十四项预期失败并全部继续，实际编排语句验证 96 个唯一配置、父目录创建和故障后继续。工作区测试、相关测试编译、严格 Clippy、默认 Release 与格式检查通过。
+
+`cargo xtask upstream-delegate win32-whole-host-context <single mask> <mode> <dpi> <external records> [--check-only]` 生成独立报告；既有 `win32-host-context` 格式和默认路径保留。`upstream-parity manager` 接入独立 96 配置及上传目录，新托管执行待验证。外部 `local/current-whole-win32-context-development-path.txt` 指向封存批次。完整类的混合方法胜者观察、兼容宏分支、实际混合 DPI/多输出、原生 producer/drain 及旧 Windows/macOS 失败继续保留各自状态；非 None 输入和应用操作仍在 SDK 范围外，完整 P1 未通过。
+
 Win32 工厂新增独立宿主环境对照：相同测试 executable 为原版和 Rust 分别启动新进程，经同一 C++ ABI 桥接和私有 Rust loader 消费实际 Create/Destroy、捕获范围 manager facade 及 connect/screencap/inactive 虚调用。四种 COM 环境为未初始化、MTA、MTA 加当前线程 dispatcher、STA；线程 DPI 为 Unaware、System、Per-Monitor V2；方法为六个单独位、混合 63、None 和未知位 64。自有窗口保持完整 96×64 客户区，非客户区另有六像素边带。每侧十四份原生快照覆盖准备、DLL 加载、创建、连接、捕获、停用、销毁/卸载、窗口 join、CPU owner 释放及宿主退出。原版在 connect 后留下的 Per-Monitor V2 和实际 COM apartment 变化原样比较；测试只配平自己取得的显式 COM 引用，并在最后恢复自己的 DPI。dispatcher 仅在捕获 owner 结束后为 shutdown 处理消息。
 
 本机 108 种配置连续三轮共 324 组配对、648 次生命周期及显式截图调用全部通过；六个单方法及混合配置共取得 504 次成功捕获，None/未知位控制的 144 次调用分别保存空输出和实际 connect 结果。最终 reader 与独立 Python 复算 1,296 份即时/持帧文件（1,008 份非空）、648 对完整持帧字节、6,193,152 个已知目标像素位置和 9,072 份 COM/DPI 快照。四路监听记录零输入，最大观察间隔 87.246ms，全部注销、观察线程返回及 11,916 行日志写入/线程 join 验证；2,446 个冻结输入复核，未声称新的物理输入正向控制。本轮明确重放已归档的 native 程序与依赖，nightly 更新检查无变化；默认工作区测试、相关测试编译、严格 Clippy、Release、格式检查通过。
