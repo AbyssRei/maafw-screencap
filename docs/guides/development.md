@@ -132,6 +132,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d39d38c` 的完整官方 Windows 工程归档已闭合其轻量包缺少的全部 4,762 个不同输入路径。2,003,767,832 字节 ZIP 的发布摘要、CRC、安全路径及其中 7,820,681,216 字节 tar 均核对；65,264 份恢复文件、63,449 个登记路径、23 份清单全部匹配。二十二份每份 586 个文件的普通源码快照与一份明确受控快照分开验证，固定 F 的 76 份来源、U/F 的 741/744 个完整 tracked blobs 及 736/739 个实际存储对象均核对。七个组件登记的 CMake/F/工具链上下文、158 份保存数据只读入口和完整 reference verifier 通过；全部 33,172 份轻量恢复文件与完整包对应，十四项原生失败和 438/452 结果不改。
+
+首次完整校验后观察到两份恢复副本的 Git index 字节刷新。前后版本全部保留，U/F 的 746/749 个暂存路径、模式、对象及 stage 值完全一致，完整 `ls-files --debug` 输出仅 ctime/mtime 行变化；其他恢复文件未变。仅在该恢复副本中将这两份 index 还原为原 tar 字节，再以 `GIT_OPTIONAL_LOCKS=0` 完整校验通过，最终全部恢复字节摘要重新匹配原包并封存。早期两次部分传输及首次封存拒收保留，不重标为原生测试结果。Windows tar 对普通源码也标作 0755，未声称 Unix mode 等价；完整 CL 命令行仍未从该包验证。外部入口为 `local/current-d39-windows-full-source-review-path.txt`，来源闭包不接受原有像素失败、回调排空或完整 P1，预装工具年龄仍只作记录。
+
+同一确切 `d39d38c` 的 Windows Custom 组件 44/44 已另作 helper 独立复核：八组原生 parity 日志各为实际一项测试通过，八个保存数据只读入口全部接受。新增基础 helper 的一百个字符串 owner、780 个图像 owner 最终为零，完整 240 字符串字节和 45,120 图像字节在当前/持有文件中一致，也分别与此前 Linux、macOS 原生批次的完整数据一致。登记的完整 `MaaBuffer.cpp` 与公共头逐字节或仅换行差异匹配固定 F；八份确切 Git 产品补充输入匹配原登记摘要，9,270 份组件原始文件未变，十八份复核文件 seal 读回通过。轻量包仍未提供完整 CL 命令行，实际构建上下文和完整来源输入另行核对；这不是本次新原生执行、桌面截图、旧 helper 的 Rust SDK API、list/rect 运行验收或完整 P1。外部入口为 `local/current-d39-windows-custom-buffer-review-path.txt`，十四项 Windows 失败保持不变。
+
 确切 `d39d38c` 的 [Actions 41751187485](https://github.com/AbyssRei/maafw-screencap/actions/runs/41751187485) Windows 已终态失败，七个组件合计 438/452：Custom 44/44、DesktopDup 96/96、FramePool 89/93、manager 99/109、PipeWire control 30/30、PrintWindow 47/47、ScreenDC 33/33。四项原版 pseudo-stop/inactive/layered-stop/layered-inactive 都返回 96×64 图像，完整 6,144 像素均全黑；visible 控制完整匹配图样。原日志记录已知颜色拒收、正常夹具/COM 关闭、关闭后持帧及退出 5；不将这些像素失败改作工具链缺失。
 
 manager 的 63 个 mask、每侧二十个生命周期与三次调用共 7,560 张当前图及 7,560 张持有图，全部完整字节两两一致。107 张异常目标 ROI（原版 55、Rust 52）每张恰有 924 个不同像素，严格限于 96×64 目标的外三像素圈，均为选择 DesktopDup 或 DesktopDupWindow 的输出；103 张是 shot 0、四张是 shot 1，不能概括为全是首帧。选择 FramePool 的两侧各六十张均已知。mask 6/10/14/22/26/30/38/42/46/62 仍失败，实际只读校验器继续接受其余 53 组、拒收这十组；两侧失败集合不完全相同，时序基准选出的 winner 仍按各自几何检验。

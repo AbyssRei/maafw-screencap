@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+确切 `d39d38c` 的完整 Windows 工程包已补齐轻量包的 4,762 个输入缺口：来源快照、固定 F、Git 对象、158 份保存数据和完整 reference 校验通过。两份 index 时间缓存刷新的前后版本均保留，暂存条目一致，最终恢复字节匹配原 tar；组件仍为 438/452，十四项原生失败不变，完整 P1 未通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `d39d38c` 的终态 Windows 组件已独立核对为 438/452，保留十组 manager 和四项 FramePool 失败。107 张 manager 异常目标图均仅在外三像素圈不同，并与已有 WGC 生命周期对照图完整一致；尚未证明像素生产者、缓存分支或原生会话排空。四张失败 pseudo 图均全黑；预装工具年龄继续只作记录，完整 P1 未通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 macOS 宿主 owner 的真实捕获组合已在确切 `55b96ed` 原生 ARM64 执行通过：二十组原版/Rust 生命周期完成 120 次取帧，含输入替换失败后的四十次取帧，完整像素、持帧、features 和 owner 事件独立核对。新增四项检查通过，组件为 144/165，原 21 项失败不变，完整 P1 仍未通过。见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
@@ -32,7 +34,7 @@ DesktopDupWindow 首帧测试的 GDI 计数已移至两个窗口创建前、双�
 
 DesktopDup 初始化失败已有独立原版/Rust 原生对照：Debug/Release 每配置通过 160 次公开拒绝、四十次直接初始化对照和 160 次真实 D3D 析构通知，零截图。确切 `5a65f07` 托管新增四项也均通过；组件为 63/65，另一个首帧用例因原版侧 GDI 计数 `13→11` 停止，整批及持帧验证不完整。独立隐藏窗口绘制控制证明临时对象可影响进程计数，尚未确认该历史失败原因；完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
-基础 `MaaBuffer` helper 新增完整原文件编译和十七项实际原生消费：Debug/Release 各八组 Custom 回归及记录检查通过，新增一百个字符串/780 个图像 owner 的清空、销毁后持有均核对，零桌面截图。选定运行范围为 22/45，其余二十三项 list/rect 仍未验收；三平台 CI 已接入，Linux/macOS 已原生通过，Windows 新托管数据及完整 P1 待验证，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
+基础 `MaaBuffer` helper 新增完整原文件编译和十七项实际原生消费：Debug/Release 各八组 Custom 回归及记录检查通过，新增一百个字符串/780 个图像 owner 的清空、销毁后持有均核对，零桌面截图。选定运行范围为 22/45，其余二十三项 list/rect 仍未验收；三平台 CI 已接入，Windows 八组原生/数据结果现也经独立核对，完整 CPU 保留数据与 Linux/macOS 一致，完整 P1 仍未通过。见[逐函数审阅](guides/development.md#逐函数对应审阅)及[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 其余 list/rect 的完整顶层 F 字节审阅现记录 744 个 blob、38 份相关文件及通用框架/识别/任务/旧包装边界；选定截图路径未见相关字面使用，五个子模块内容及宏展开不据此验收，未新增 Rust/SDK API，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
