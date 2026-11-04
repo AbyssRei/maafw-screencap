@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //! Private P1 migration of the fixed one-shot ScreenCaptureKit class. No public
 //! SDK Session, worker, cancellation, cache or target policy is introduced.
+use super::completion_inputs::CompletionInputs;
 use crate::platform::macos::{
     Error,
     pixel_buffer::{self, Sample},
@@ -213,7 +214,7 @@ type CreatedInputs = (Retained<SCContentFilter>, Retained<SCStreamConfiguration>
 struct Inputs {
     // Model the original +1 create owners separately from the copied block's
     // retained references. Release create owners before signalling completion.
-    initial: Mutex<Option<CreatedInputs>>,
+    initial: CompletionInputs<CreatedInputs>,
     filter: Retained<SCContentFilter>,
     config: Retained<SCStreamConfiguration>,
     trace: Arc<Trace>,
@@ -221,12 +222,7 @@ struct Inputs {
 }
 impl Inputs {
     fn release_initial(&self) {
-        let value = self
-            .initial
-            .lock()
-            .unwrap_or_else(|poison| poison.into_inner())
-            .take();
-        drop(value);
+        self.initial.release();
         self.trace.thread(&self.trace.initial_release_thread);
         self.trace
             .initial_inputs_released
@@ -358,7 +354,7 @@ fn content<C: Converter>(
     let inputs = Inputs {
         filter: filter.clone(),
         config: config.clone(),
-        initial: Mutex::new(Some((filter, config))),
+        initial: CompletionInputs::new((filter, config)),
         trace: state.trace.clone(),
         _released: ReleasedInputs(state.trace.clone()),
     };

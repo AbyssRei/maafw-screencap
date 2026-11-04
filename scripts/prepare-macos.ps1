@@ -102,6 +102,16 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'macos-block-lease-control' -and [regex]::Matches($observed,[regex]::Escape('macOS native block leases cases=4 stack_to_heap=4 heap_alias=1 handler_return_keeps_lease=1 uninvoked_disposal=1 joined_worker_release=1 acquired=12 released=12 live=0 native_callbacks=0 capture=0 passed')).Count -ne 1) {
             $status='failed';throw 'Incomplete native block capture lease control'
         }
+        if($Name -eq 'macos-block-lease-control' -and [regex]::Matches($observed,[regex]::Escape('macOS native MRC completion_inputs cases=2 invoked=1 uninvoked=1 heap_alias=2 deallocated=4 fixture_reclaimed_refs=2 capture=0 full_P1_acceptance=0 passed')).Count -ne 1) {
+            $status='failed';throw 'Incomplete native MRC create-reference control'
+        }
+        if($Name -eq 'rust-macos-completion-inputs' -and (
+            [regex]::Matches($observed,'(?m)^running 1 test\r?$').Count -ne 1 -or
+            [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+            [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1 -or
+            [regex]::Matches($observed,[regex]::Escape('native Rust macOS completion_inputs cases=2 invoked=1 uninvoked=1 heap_alias=2 native_weak_checks=10 fixture_reclaimed_refs=2 capture=0 full_P1_acceptance=0 passed')).Count -ne 1)) {
+            $status='failed';throw 'Incomplete native Rust completion create-reference control'
+        }
         if($Name -eq 'macos-display-observer-same-path-stages' -and (
             [regex]::Matches($observed,'(?m)^macOS capture_stages consumer_exit=').Count -ne 1 -or
             $observed -notmatch '(?m)^macOS capture_stages consumer_exit=-?\d+ content_submissions=\d+ sample_submissions=\d+ unobserved_content_callbacks=\[[^\r\n]*\] unobserved_sample_callbacks=\[[^\r\n]*\] diagnostic_only=1 source_capture_acceptance=0 paired_acceptance=0 recorded\r?$' -or
@@ -330,6 +340,9 @@ try {
         . (Join-Path $PSScriptRoot prepare-macos-reference.ps1)
         $executable=Prepare-MacosReference $UpstreamRoot
         try {Run-MacosBlockLeaseControl}
+        catch {$failed=$true;Write-Host $_.Exception.Message}
+        $completionTest='backends::macos::completion_inputs::tests::native_block_disposal_preserves_uninvoked_create_references'
+        try {Step rust-macos-completion-inputs cargo @('test','--release','--locked','--lib','--features','prototype-macos,macos-manager',$completionTest,'--','--exact','--ignored','--test-threads=1','--nocapture')}
         catch {$failed=$true;Write-Host $_.Exception.Message}
         $referenceArtifacts=Join-Path $RunRoot macos-arm64/reference-u/artifacts
         . (Join-Path $PSScriptRoot prepare-custom-unix-reference.ps1)
