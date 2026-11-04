@@ -140,6 +140,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `d9f25d0` 的 [Actions 41820596076](https://github.com/AbyssRei/maafw-screencap/actions/runs/41820596076) Mac 已终态，新的完整窗口断言实际原生执行通过；全部 166 项名称/状态与 `aeadac4` 相同，组件仍为 145/166，原二十一项失败保留。两个实际登记断言来源与本机开发后版本的 Git blob 一致，原生 build 日志包含 `source-context.mm` 编译条目，原版/Rust 窗口及 manager 四份日志均报告各二十轮、六十次取帧。独立复算 247 张完整 47×31 BGR、359,879 个像素及六十张 BGRA、87,420 个像素，按各夹具规定的相位颜色或静态绿色核对，含全部边缘及 alpha=255。它补充此前只有保存数据/CPU 控制的范围，不推及任意窗口、缩放或裁剪。
+
+本批官方轻量 ZIP 的 45,521,646 字节、摘要/CRC、安全路径、12,328 份恢复文件、全部日志与可用输入、三十份 Git 补充源码及二十一份只读报告均核对。已登记的 37,600 字节记账程序现直接包含在轻量包，摘要与输入相同，独立解析为 ARM64 Mach-O executable；原生八线程、2,000 组记账控制通过，未执行 Apple callback 生命周期。same-path 原版捕获仍失败，实际前后快照相隔 15,000,091,750ns，始终 submitted=4/forwarded=3/pending=1/semaphore_pending=1；截至结束仍未观察到 sample 返回。handler 未返回不证明永久不完成、block disposal、排空或原因。新轻量包尚缺 660 个不同完整输入路径，旧 `aeadac4` 的完整来源闭包不自动覆盖本批。材料由外部 `local/current-d9f-macos-focused-review-path.txt` 和 `local/current-d9f-native-window-ledger-review-path.txt` 指向；原生像素/回调失败及完整 P1 状态不变，预装工具年龄仍只作记录。
+
 确切 `aeadac4` 的 [Actions 41800479178](https://github.com/AbyssRei/maafw-screencap/actions/runs/41800479178) Windows 已终态失败，七组件合计 445/456：Custom 44/44、DesktopDup 96/96、FramePool 93/97、manager 102/109、PipeWire control 30/30、PrintWindow 47/47、ScreenDC 33/33。保留原版四项 pseudo 及 manager mask 6/10/14/26/38/42/46 失败。官方轻量 ZIP 的 505,956,882 字节、摘要和 CRC、安全路径、33,310 份文件、七份清单及全部日志/可用输入均核对。166 份已有报告再次只读通过；七组失败在 win32/gamepad 两类记录入口中共十四次仍被拒收，没有补写成功报告或重新取帧。
 
 独立复算 7,560 张即时图与对应持帧，完整字节全部一致。85 张异常目标图为原版 42/Rust 43，84 张在 shot 0、一张在 shot 1；每张都仅在精确外三像素圈的 924 个位置不同，且完整目标 ROI 等于同批 source-border 对照图。三种 border 夹具的 81 张完整图再次核对，popup/legacy 对应三图为 924 点，caption 对应三图为左右两列及底部两行的 440 点；两种匹配夹具共 108 份前后边界一致，默认/额外 true getter 实际均为 true。四张失败 pseudo 图各 6,144 像素全黑，visible 控制匹配。当前 alpha-poll 的二十组记录、70 份 BGR/20 份 BGRA 及转换/持帧复算通过，Rust 最后 opaque phase 实际取得原始帧、未回放；这不撤销 `46a376a` 的黑图回放失败，也不证明改动修复了其原因。两批 mask 42/62 的相反状态变化分别保留。
