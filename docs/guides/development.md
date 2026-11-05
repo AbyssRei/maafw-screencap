@@ -144,6 +144,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `3f1a5ef` 的 PipeWire 原生步骤仍为 219/219。官方轻量包完整摘要通过，50,816 份原始文件、全部日志与可用父层登记输入、1,412 项完整原版 manager 入口输入核对一致；十份 F 原源/头、三个实际 C++ 编译单元及 x86_64 ELF 通过。只读重放再次通过双方 80 个生命周期、360 次捕获、1,080 份即时/持帧、340 份类型化 owner 观察、完整像素/metadata 和 fd/task 清理；其自身 719 项父层轻量输入缺口仍保留，不借用旧批次来源闭包。外部指针为 `current-3f-whole-pipewire-review-path.txt`。同一提交的 macOS 仍为 151/175，175 项状态全部与前批一致；12,488 份原始文件、日志与可用输入及 12 张全显示器图像/36 份即时与持帧独立复核。source-first 六张各有 52 个差异像素、三对图字节相等；Rust-first 原版差异为 32/36/44 个、Rust 为 0/4/12 个，三对图不等，仍位于右上小区域。全部持帧、BGRA→BGR 与 alpha=255 通过；不放宽严格图样断言、不归因窗口生产者，且保留 689 项该批轻量输入缺口。指针为 `current-3f-macos-focused-review-path.txt`；完整 P1 仍未通过。
+
+确切 `8e6673d` 的完整 Linux 官方工程 ZIP 已通过精确长度/摘要，内部 tar CRC、95,909 份实际文件、19 份清单和 94,347 个登记路径也通过，逐项补齐该批 Wlr 轻量包的 719 项父层输入缺口。18 份普通产品快照各含完整 623 个 Git 文件，另有四份批次 `Cargo.lock`；单独准备夹具保留两个明确 `P0_CAPTURE_MUST_NOT_BUILD_DURING_PREPARATION` 编译错误源及其局部 Cargo cache，不把它算作正常产品源码。U/F 的 741/744 份实际 Git blob、F 的 76 个选中来源条目及根 commit/tree 均核对一致；每个 baseline 的五个 gitlink 只记录原 commit，不声称已提供其中全部嵌套源码。初次下载的超时/HTTP 错误、正常 Windows 长路径打开失败及初次非 blob tree 拒绝均保留。跨平台 Git 检查仅在子进程启用长路径、关闭文件模式/自动换行检查；先前 `git status` 刷新的两份 index 已保留并从精确原 tar 恢复，最终设置 `GIT_OPTIONAL_LOCKS=0` 的完整 reference reader 通过，复核后全部 95,909 份文件与归档摘要相同。实际 155/155 与历史外部 UUID 提供者不变，不因此接受新 UUID 接线、整个编译器输入、所有后端语义或 P1。完整记录指针为 `current-8e-linux-full-source-review-path.txt`。
+
 Linux manager/None 的两份函数映射现刷新 29 个条目至确切 `3f1a5ef`，明确将旧 `Input=None=0` 理由替代为固定原版的 legacy features=3；旧映射、census、状态与失败完整保留。另只读链接确切 `0991d0e` 的完整原版 None 调用及 Rust 原生 Debug/Release 三项检查，未重新执行原生捕获。冻结校验器接受两份新映射，整个 18 份映射联合的 43 份 F 来源、306 个身份和 705 个 Rust 引用均复核；705 个归档文件与当前 Git 整文件一致，只有 `NativeFactory::input_features` 这一函数体相对前次映射发生变化。来源身份、职责与原有证据保持，其他历史失败未变；这不接受完整原源码覆盖、一般语义等价或 P1。外部记录指针为 `current-linux-none-function-refresh-path.txt`。
 
 确切 `8e6673d` 的 Wlr 原生步骤现为 155/155，包含新增完整原类的四项检查。完整原版 Linux manager/API/NoneInput 与实际 Wlr/client/buffer/协议链已原生执行；双方 42 个 manager、84 次 connect、120 次捕获、360 份即时/持帧及 140 份源端 owner 观察通过独立只读复算。同一 client 重建不增加 roundtrip，inactive 保持 owner，失败 client 的两次 connect/拒绝捕获保持原行为，完整 UUID/info、features=`3`、线程/fd 和源端弱 client 过期亦核对通过。
@@ -1526,6 +1530,9 @@ DMA-BUF 私有迁移已接入回调的单 plane packed 路径。首个原生批�
 
 
 本轮 UUID 准备共用 MaaUtils 的原 Custom 解析政策：每次查询正式发布，无正式发布时解析维护分支，验证确切 Git commit/缓存清洁度并保存完整源码与许可。Boost 每次查询正式发布，即使命中下载缓存也复核完整资产长度/摘要并在新批次目录重建；不向核心依赖树引入 Boost。当前解析为 MaaUtils `55be777e326db9419f45b4082e2bf2a1ed10e697`、Boost `1.92.0`。本机 VS2026/MSBuild 编译真实 UUID 实现，256 次实际输出的长度、小写格式、version/variant 及唯一性均通过，并由独立 Python UUID 解析和全部 15 个登记输入摘要复核；四份实际 MaaUtils 源/头与此前准备身份逐字节相同。较早 HTTPS clone 的连接失败及后续单独 SSH 获取保留在外部记录。这只验收 Windows CPU UUID 代码与依赖准备，不证明 Linux 捕获、随机值跨进程相同、线程安全或完整 P1。新原生入口将另保存 256 次实际 UUID 输出、原源/头、编译数据库和正式依赖身份；Linux 取帧的旧成功结果不追溯改写。
+
+实际 Boost 头还表明原版 `make_uuid` 持有进程内静态 `random_generator`，其默认 `chacha20_12` 在初始化时由 `std::random_device` 种子化并复用；当前 Rust `buffer_name` 在每次构造名称时调用 `getrandom` 取 16 字节。真实源码与五份相关 Boost 头及这一差异已单独归档。256 个 UUID 的形状通过不证明随机源调用时序、失败路径、生成器状态或线程语义等价；它们仍是 P1 的待核对边界，未为此改产品行为。
+
 
 自有 compositor 的显式 source-client 模式仅额外注册原客户端强制要求的 virtual-keyboard/virtual-pointer manager；不创建输入设备或执行输入动作。参考进程要求 20 次连接/三次截图/关闭生命周期、60 张完整已知 BGR 图像、fd/任务身份配平及关闭后独立持帧。链接器 wrapper 只记录并立即转发真实 wl_display_roundtrip，要求观察到原 Buffer 回调内的递归 roundtrip；不提前把它改为排队或移到回调外。完整 source 失败/格式/客户提前关闭矩阵仍待实现；Rust 递归执行通道的原生验证见下文。独立轻量诊断 artifact 在通用工程归档校验前上传，完整工程包仍为来源/依赖重建依据。
 
