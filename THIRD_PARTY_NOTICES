@@ -38,12 +38,14 @@ CustomControlUnitAPI Create/Destroy bodies and public interface declarations
 through capture-only facades over that same private Rust manager. Full Custom,
 framework forwarding and P1 acceptance remain outstanding.
 
-The explicit OpenCV imgcodecs acceptance build additionally links current
-formal libpng (https://libpng.org/pub/png/libpng.html, libpng-2.0 licence) and
-zlib (https://zlib.net/, Zlib licence) for actual PNG encode/decode. Each batch
-archives their upstream source, exact tag/commit resolution and original
-LICENSE texts, plus the native codec probe and build identity. These are
-acceptance dependencies; default product/core builds do not link them.
+Explicit OpenCV acceptance builds link current formal zlib
+(https://zlib.net/, Zlib licence), including core's compressed FileStorage.
+Builds selecting imgcodecs additionally link current formal libpng
+(https://libpng.org/pub/png/libpng.html, libpng-2.0 licence) for actual PNG
+encode/decode. Each batch archives the selected libraries' upstream source,
+exact tag/commit resolution and original LICENSE texts, plus native codec
+probes and build identity. These are acceptance dependencies; default
+product/core builds do not link them.
 
 src/platform/windows/pseudo_minimize.rs and
 src/backends/windows/print_window_pseudo.rs and frame_pool_pseudo.rs are Rust migrations of:

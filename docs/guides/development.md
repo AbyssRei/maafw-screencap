@@ -144,6 +144,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+共享 OpenCV 准备此前仅在 `imgcodecs` 开启时解析 zlib，遗漏了 `core` 自身的压缩 FileStorage 依赖。确切 `24e117b` 的 Linux 原始 configure 日志实际选择系统 zlib 1.3.1；日志摘要及当时脚本的登记身份均已核对。现有 `core,imgproc` 路径也显式解析最新正式 zlib、构建静态库并执行实际压缩/解压；`libpng` 仍只随 `imgcodecs` 准备。OpenCV 的库路径、头文件路径以及关闭 bundled zlib/zlib-ng 的选项分别检查，身份参与缓存键；没有采用系统库或旧版本回退。该库依赖缺口与 CI 预装编译器/SDK 的年龄政策分开，不重写原生捕获的历史状态。
+
+本机 VS2026/MSBuild 上的 zlib-only 探针及 OpenCV 5 core FileStorage gzip 写入/读回均精确保留 24 个已知字节，独立 gzip 解析及实际链接记录也通过，消费链没有 libpng/imgcodecs。原 PNG 路径逐字节回归通过；两份实际 CMake cache 的十六项正/反控制及真实运行时版本拒收通过。随后当前完整 Custom 入口的 42 项检查全部通过，使用 zlib 1.4/libpng 1.6.59，包含八类原生回调/编码/原始类型/缓冲 helper 与实际接口对照；十二项 Rust 父批检查也通过。独立复核 9,974 个登记输入/日志路径、四份本次构建/探针源码与实际快照，再只读复算八组数据，9,205 份产物字节未变。这里没有桌面取帧或新 Unix 执行，不能据此接受完整 Custom/P1。
+
+初次来源查询的 SSH DNS 失败、第二次准备的 Windows 1455 错误，以及资源受限编译的受控中断均保留。后续用明确的一个 MSVC 编译 worker 及串行开发构建继续，保留 IPP/CPU 优化；未修改截图断言或重试失败捕获。Linux 的 PipeWire/Wlr 及 macOS 即时诊断产物补入 zlib 来源/许可、配置、探针及 OpenCV 选择记录，YAML 和实际文件名匹配检查通过。新的 Unix 原生接线与上传仍待账户账单问题恢复后的 CI；证据指针为 `current-opencv-core-zlib-development-path.txt`，完整 P1 和后续阶段保持未完成。
+
 确切 `24e117b` 的 [Wlr 原生组件](https://github.com/AbyssRei/maafw-screencap/actions/runs/41987817150) 已完成 167/167，原有 159 项状态保持。官方 7,272,694 字节 ZIP 整体摘要、全部 9,650 份文件/日志/可用父层输入、579 项完整 manager 输入、25 份 F 源码及十个 C/C++ 单元核对一致；只读重放仍通过双方 42 个 manager、84 次 connect、120 次捕获、360 份当前/持帧及 140 份类型化 owner 观察，包含同 client 重建、失败 client 保留、像素/metadata 和清理记录。
 
 新增默认熵观察器已在该 Linux/libstdc++ 编译执行：real、controlled、retry 各生成 256 个名称，首次成功初始化消费十二个种子字，warm 调用不再取种子；retry 在第一/第五/第十二个字的三次失败记录分别累计 1/6/18 次调用，成功后总数为 30，各次 FD 数均平衡。独立标量 ChaCha12 读者另复算八种种子的 2,048 个名称及 controlled/retry 的 512 个名称，全部与实际原版文件相符；Rust 的两个显式单测试入口均实际执行通过。原生 observer ELF/包装符号、实际 MaaUtils 编译单元与所选当前 Rust/测试源码身份分别核对。保留该批 725 项父层轻量输入缺口，`std::random_device` 与 `getrandom` 的具体提供者/errno、任意并发、完整来源闭包及 P1 仍未接受。证据指针为 `current-24e-whole-wlr-review-path.txt`。

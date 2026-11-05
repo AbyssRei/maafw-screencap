@@ -112,14 +112,14 @@ function Resolve-PngCodecSource([string]$Repository,[string]$Label,[string]$Dire
 }
 function Prepare-PngCodec {
     param([string]$Directory,[string]$DepsRoot,[string]$CMake='cmake',[string[]]$Generator,[string]$CCompiler,
-          [scriptblock]$Register,[scriptblock]$Replay=$null,[string]$StepPrefix='png-codec',[object]$ToolchainContext=$null)
+          [scriptblock]$Register,[scriptblock]$Replay=$null,[string]$StepPrefix='png-codec',[object]$ToolchainContext=$null,[switch]$ZlibOnly)
     if(-not $Register -or -not $Generator.Count -or -not $CCompiler){throw 'Explicit codec recording, compiler and native generator are required'}
     $CCompiler=(Get-Command -Name $CCompiler -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
     $CMake=(Get-Command -Name $CMake -CommandType Application -ErrorAction Stop|Select-Object -First 1).Source
     $zlib=Resolve-PngCodecSource 'madler/zlib' ZLIB $Directory $DepsRoot $Register $Replay $StepPrefix
-    $png=Resolve-PngCodecSource 'pnggroup/libpng' PNG $Directory $DepsRoot $Register $Replay $StepPrefix
+    $png=if(-not $ZlibOnly){Resolve-PngCodecSource 'pnggroup/libpng' PNG $Directory $DepsRoot $Register $Replay $StepPrefix}else{$null}
     if((Get-Content -LiteralPath (Join-Path $zlib.Source zlib.h) -Raw) -notmatch ('#define ZLIB_VERSION "'+[regex]::Escape($zlib.Version)+'"') -or
-       (Get-Content -LiteralPath (Join-Path $png.Source png.h) -Raw) -notmatch ('#define PNG_LIBPNG_VER_STRING "'+[regex]::Escape($png.Version)+'"')){
+       ($png -and (Get-Content -LiteralPath (Join-Path $png.Source png.h) -Raw) -notmatch ('#define PNG_LIBPNG_VER_STRING "'+[regex]::Escape($png.Version)+'"'))){
         throw 'Resolved codec headers do not match their formal release versions'
     }
     $common=@('-DCMAKE_INSTALL_LIBDIR=lib','-DCMAKE_POSITION_INDEPENDENT_CODE=ON')
@@ -128,15 +128,16 @@ function Prepare-PngCodec {
     if($IsWindows){$common+='-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL'}
     if($IsMacOS){$common+=@('-DCMAKE_OSX_ARCHITECTURES=arm64','-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0',"-DCMAKE_OSX_SYSROOT:PATH=$($env:SDKROOT)")}
     $compilerIdentity=if($IsWindows){[Diagnostics.FileVersionInfo]::GetVersionInfo($CCompiler).FileVersion}else{(& $CCompiler --version|Out-String)}
-    $identity=[ordered]@{zlib=$zlib.Identity;png=$png.Identity;generator=$Generator;c_compiler=$CCompiler;compiler_version=$compilerIdentity;
-        source_locations=[ordered]@{zlib=$zlib.Source;png=$png.Source};
+    $identity=[ordered]@{zlib=$zlib.Identity;png=if($png){$png.Identity}else{$null};generator=$Generator;c_compiler=$CCompiler;compiler_version=$compilerIdentity;
+        source_locations=[ordered]@{zlib=$zlib.Source;png=if($png){$png.Source}else{$null}};
         c_compiler_sha256=(Get-FileHash -LiteralPath $CCompiler -Algorithm SHA256).Hash.ToLowerInvariant();toolchain_context=$ToolchainContext;
         cmake_sha256=(Get-FileHash -LiteralPath $CMake -Algorithm SHA256).Hash.ToLowerInvariant();
         architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString();cmake=(& $CMake --version|Out-String);
         cflags=$env:CFLAGS;ldflags=$env:LDFLAGS;sdkroot=$env:SDKROOT;options=$common;
-        linkage='static, PIC where applicable, native Release; retain PNG hardware optimization defaults'}
+        linkage=if($png){'static, PIC where applicable, native Release; retain PNG hardware optimization defaults'}else{'static zlib only, PIC where applicable, native Release'}}
     $digest=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes(($identity|ConvertTo-Json -Depth 20 -Compress)))).ToLowerInvariant()
-    $native=Join-Path $DepsRoot ("native/png-codec-"+$digest.Substring(0,20))
+    $codecName=$ZlibOnly ? 'zlib-codec' : 'png-codec'
+    $native=Join-Path $DepsRoot ("native/$codecName-"+$digest.Substring(0,20))
     New-Item -ItemType Directory -Path $native -Force|Out-Null
     $identityPath=Join-Path $native identity.json
     $identityJson=$identity|ConvertTo-Json -Depth 20 -Compress
@@ -154,14 +155,19 @@ function Prepare-PngCodec {
     $zlibLibrary=Join-Path $install $zlibArchive
     if(-not(Test-Path -LiteralPath $zlibLibrary -PathType Leaf)){throw 'Expected exact static zlib archive missing; no system fallback'}
     $zargs=@("-DZLIB_INCLUDE_DIR:PATH=$install/include","-DZLIB_LIBRARY:FILEPATH=$zlibLibrary","-DZLIB_LIBRARY_RELEASE:FILEPATH=$zlibLibrary","-DZLIB_LIBRARY_DEBUG:FILEPATH=$zlibLibrary",'-DZLIB_USE_STATIC_LIBS=ON')
-    Step "$StepPrefix-png-configure" $CMake (@('-S',$png.Source,'-B',$pbuild,"-DCMAKE_INSTALL_PREFIX=$install",'-DPNG_SHARED=OFF','-DPNG_STATIC=ON','-DPNG_FRAMEWORK=OFF','-DPNG_TESTS=OFF','-DPNG_TOOLS=OFF','-DPNG_HARDWARE_OPTIMIZATIONS=ON')+$Generator+$common+$zargs)
-    Step "$StepPrefix-png-install" $CMake @('--build',$pbuild,'--config','Release','--target','install','--parallel','4')
-    $pngVersion=[version]$png.Version
-    $abi="$($pngVersion.Major)$($pngVersion.Minor)"
-    $pngLibrary=Join-Path $install ($IsWindows ? "lib/libpng${abi}_static.lib" : "lib/libpng${abi}.a")
-    if(-not(Test-Path -LiteralPath $pngLibrary -PathType Leaf)){throw 'Expected exact static libpng archive missing; no system fallback'}
-    $pngArgs=@("-DPNG_PNG_INCLUDE_DIR:PATH=$install/include","-DPNG_LIBRARY:FILEPATH=$pngLibrary","-DPNG_LIBRARY_RELEASE:FILEPATH=$pngLibrary","-DPNG_LIBRARY_DEBUG:FILEPATH=$pngLibrary")
-    $options=@('-DWITH_PNG=ON','-DWITH_SPNG=OFF','-DBUILD_PNG=OFF','-DBUILD_ZLIB=OFF','-DWITH_ZLIB_NG=OFF')+$pngArgs+$zargs
+    $pngLibrary=$null
+    $pngArgs=@()
+    $options=@('-DBUILD_ZLIB=OFF','-DWITH_ZLIB_NG=OFF')+$zargs
+    if($png){
+        Step "$StepPrefix-png-configure" $CMake (@('-S',$png.Source,'-B',$pbuild,"-DCMAKE_INSTALL_PREFIX=$install",'-DPNG_SHARED=OFF','-DPNG_STATIC=ON','-DPNG_FRAMEWORK=OFF','-DPNG_TESTS=OFF','-DPNG_TOOLS=OFF','-DPNG_HARDWARE_OPTIMIZATIONS=ON')+$Generator+$common+$zargs)
+        Step "$StepPrefix-png-install" $CMake @('--build',$pbuild,'--config','Release','--target','install','--parallel','4')
+        $pngVersion=[version]$png.Version
+        $abi="$($pngVersion.Major)$($pngVersion.Minor)"
+        $pngLibrary=Join-Path $install ($IsWindows ? "lib/libpng${abi}_static.lib" : "lib/libpng${abi}.a")
+        if(-not(Test-Path -LiteralPath $pngLibrary -PathType Leaf)){throw 'Expected exact static libpng archive missing; no system fallback'}
+        $pngArgs=@("-DPNG_PNG_INCLUDE_DIR:PATH=$install/include","-DPNG_LIBRARY:FILEPATH=$pngLibrary","-DPNG_LIBRARY_RELEASE:FILEPATH=$pngLibrary","-DPNG_LIBRARY_DEBUG:FILEPATH=$pngLibrary")
+        $options=@('-DWITH_PNG=ON','-DWITH_SPNG=OFF','-DBUILD_PNG=OFF','-DBUILD_ZLIB=OFF','-DWITH_ZLIB_NG=OFF')+$pngArgs+$zargs
+    }
     $probeSource=[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../tests/upstream-parity/png-codec'))
     $probeIdentity=[ordered]@{source=$probeSource;
         cmake_sha256=(Get-FileHash -LiteralPath (Join-Path $probeSource CMakeLists.txt) -Algorithm SHA256).Hash.ToLowerInvariant();
@@ -169,21 +175,39 @@ function Prepare-PngCodec {
     $probeKey=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes(($probeIdentity|ConvertTo-Json -Compress)))).ToLowerInvariant()
     $probe=Join-Path $native ("probe-"+$probeKey.Substring(0,20))
     $probeCommon=@($common|Where-Object{$_ -notlike '-DCMAKE_INSTALL_LIBDIR=*'})
+    if($ZlibOnly){$probeCommon+='-DMFS_ZLIB_ONLY=ON'}
     Step "$StepPrefix-probe-configure" $CMake (@('-S',$probeSource,'-B',$probe)+$Generator+$probeCommon+$pngArgs+$zargs)
     Step "$StepPrefix-probe-build" $CMake @('--build',$probe,'--config','Release','--parallel','4')
-    $program=Join-Path $probe ($IsWindows ? 'Release/png_codec_probe.exe' : 'png_codec_probe')
-    Step "$StepPrefix-runtime" $program @($png.Version,$zlib.Version)
-    foreach($entry in @(@('zlib-CMakeCache.txt',(Join-Path $zbuild CMakeCache.txt)),@('png-CMakeCache.txt',(Join-Path $pbuild CMakeCache.txt)),
-        @('png-codec-probe-CMakeCache.txt',(Join-Path $probe CMakeCache.txt)),@('png-codec-probe.bin',$program))){
+    $programName=$ZlibOnly ? 'zlib_codec_probe' : 'png_codec_probe'
+    $program=Join-Path $probe ($IsWindows ? "Release/$programName.exe" : $programName)
+    $runtimeArgs=if($png){@($png.Version,$zlib.Version)}else{@($zlib.Version)}
+    Step "$StepPrefix-runtime" $program $runtimeArgs
+    $saved=@(@('zlib-CMakeCache.txt',(Join-Path $zbuild CMakeCache.txt)),
+        @("$codecName-probe-CMakeCache.txt",(Join-Path $probe CMakeCache.txt)),@("$codecName-probe.bin",$program))
+    if($png){$saved+=,@('png-CMakeCache.txt',(Join-Path $pbuild CMakeCache.txt))}
+    foreach($entry in $saved){
         $saved=Join-Path $Directory $entry[0];Copy-Item -LiteralPath $entry[1] -Destination $saved;& $Register $saved
     }
     $record=[ordered]@{identity=$identity;install=$install;png_library=$pngLibrary;zlib_library=$zlibLibrary;
-        png_library_sha256=(Get-FileHash -LiteralPath $pngLibrary -Algorithm SHA256).Hash.ToLowerInvariant();zlib_library_sha256=(Get-FileHash -LiteralPath $zlibLibrary -Algorithm SHA256).Hash.ToLowerInvariant();
+        png_library_sha256=if($pngLibrary){(Get-FileHash -LiteralPath $pngLibrary -Algorithm SHA256).Hash.ToLowerInvariant()}else{$null};zlib_library_sha256=(Get-FileHash -LiteralPath $zlibLibrary -Algorithm SHA256).Hash.ToLowerInvariant();
         probe_source=$probeIdentity;actual_probe=$program;actual_probe_sha256=(Get-FileHash -LiteralPath $program -Algorithm SHA256).Hash.ToLowerInvariant();opencv_options=$options}
-    Write-PngCodecRecord (Join-Path $Directory png-codec-configuration.json) $record $Register
-    return [pscustomobject]@{Identity=$identity;Options=$options;PngVersion=$png.Version;ZlibVersion=$zlib.Version;PngLibrary=$pngLibrary;ZlibLibrary=$zlibLibrary;Install=$install}
+    Write-PngCodecRecord (Join-Path $Directory "$codecName-configuration.json") $record $Register
+    return [pscustomobject]@{Identity=$identity;Options=$options;PngVersion=if($png){$png.Version}else{$null};ZlibVersion=$zlib.Version;PngLibrary=$pngLibrary;ZlibLibrary=$zlibLibrary;Install=$install}
+}
+function Assert-OpenCvZlibCodec([string]$Cache,[object]$Codec) {
+    $cacheText=Get-Content -LiteralPath $Cache -Raw
+    foreach($flag in @('BUILD_ZLIB','WITH_ZLIB_NG')){
+        if($cacheText -notmatch ('(?m)^'+$flag+':BOOL=OFF\r?$')){throw "OpenCV did not disable the $flag alternative"}
+    }
+    foreach($entry in @(@('ZLIB_LIBRARY_RELEASE',$Codec.ZlibLibrary),@('ZLIB_INCLUDE_DIR',(Join-Path $Codec.Install include)))){
+        $match=[regex]::Match($cacheText,('(?m)^'+$entry[0]+':(?:FILEPATH|PATH)=([^\r\n]+)\r?$'))
+        if(-not $match.Success -or [IO.Path]::GetFullPath($match.Groups[1].Value) -ne [IO.Path]::GetFullPath($entry[1])){
+            throw "OpenCV did not use the exact prepared $($entry[0]); no bundled/system fallback"
+        }
+    }
 }
 function Assert-OpenCvPngCodec([string]$Cache,[string]$Configuration,[object]$Codec) {
+    Assert-OpenCvZlibCodec $Cache $Codec
     $cacheText=Get-Content -LiteralPath $Cache -Raw
     $configText=Get-Content -LiteralPath $Configuration -Raw
     if($configText -notmatch '(?m)^#define HAVE_PNG\s*$'){throw 'Selected OpenCV has no real PNG codec'}

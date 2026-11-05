@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+OpenCV core 的 zlib 准备缺口已补齐，本机真实 gzip/PNG 及完整 Custom 入口 42/42 通过并经独立记录复核；新 Unix 接线仍待 GitHub 账单限制解除后的原生 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 原生 PNG 准备已适配 zlib 1.4 的两段正式版本和 MSVC 静态库名，本机真实 codec/OpenCV 编解码及旧批次重放通过；原 CI 准备失败保留，新托管验证和完整 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `24e117b` 的 Wlr 为 167/167，新的 UUID 状态及默认熵观察通过原生执行和独立复算；Wlr/Memfd 的 39 个映射条目、联合 715 个 Rust 引用已同步，完整 P1 仍待完成。后续 zlib 修复已正常推送，GitHub 因账户账单问题未启动新 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

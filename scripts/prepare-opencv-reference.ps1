@@ -42,12 +42,13 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     }
     # Excluded image-I/O modules must not export unbuilt codec archives.
     $unusedCodecs=@('AVIF','JPEG','JPEGXL','WEBP','OPENJPEG','JASPER','OPENEXR','SPNG','TIFF','GDAL','GDCM')
-    $codec=$null
-    if($ImageCodecs){
-        . (Join-Path $PSScriptRoot prepare-png-codec.ps1)
-        $codec=Prepare-PngCodec -Directory $Directory -DepsRoot $DepsRoot -Generator @('-G','Ninja') -CCompiler $env:CC -Register {param($path) Save $path} -StepPrefix "$StepPrefix-png"
-        $options+=$codec.Options
-    }else{$unusedCodecs+='PNG'}
+    # OpenCV core also links zlib for compressed FileStorage. Resolve it even
+    # without imgcodecs; PNG is prepared only when that module is selected.
+    . (Join-Path $PSScriptRoot prepare-png-codec.ps1)
+    $codecPrefix=$ImageCodecs ? "$StepPrefix-png" : "$StepPrefix-zlib"
+    $codec=Prepare-PngCodec -Directory $Directory -DepsRoot $DepsRoot -Generator @('-G','Ninja') -CCompiler $env:CC -Register {param($path) Save $path} -StepPrefix $codecPrefix -ZlibOnly:(-not $ImageCodecs)
+    $options+=$codec.Options
+    if(-not $ImageCodecs){$unusedCodecs+='PNG'}
     $options+=@($unusedCodecs|ForEach-Object{"-DWITH_$($_)=OFF"})
     $options+='-DENABLE_PIC=ON'
     $identityRecord=[ordered]@{
@@ -55,7 +56,7 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
         architecture=[Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture.ToString()
         compiler=(& $env:CXX --version|Out-String);cmake=(& cmake --version|Out-String)
         cflags=$env:CFLAGS;cxxflags=$env:CXXFLAGS;ldflags=$env:LDFLAGS;options=$options
-        png_codec=if($codec){$codec.Identity}else{$null}
+        png_codec=if($ImageCodecs){$codec.Identity}else{$null};zlib_codec=$codec.Identity.zlib
         discovery=[ordered]@{
             pkg_config_path=$env:PKG_CONFIG_PATH;pkg_config_libdir=$env:PKG_CONFIG_LIBDIR
             cmake_prefix_path=$env:CMAKE_PREFIX_PATH;cpath=$env:CPATH
@@ -66,7 +67,7 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     $configuration=Join-Path $Directory native-configuration.json
     Json $configuration ([ordered]@{
         opencv=$identityRecord;context=$Context
-        codec_policy="Modules=$modules; imgcodecs explicitly prepares current formal libpng/zlib and actual PNG encode/decode for ImageBuffer/Custom acceptance. Other image-I/O discovery is disabled. CPU/HAL and PNG hardware optimizations are retained; IPP is required on x64 and inapplicable on Apple arm64. Preparing a codec alone does not accept encoded/resize callback behavior."
+        codec_policy="Modules=$modules; all selections prepare current formal static zlib and actual compression/decompression. imgcodecs additionally prepares libpng and PNG encode/decode for ImageBuffer/Custom acceptance. Other image-I/O discovery is disabled. CPU/HAL and PNG hardware optimizations are retained; IPP is required on x64 and inapplicable on Apple arm64. Preparing a codec alone does not accept encoded/resize callback behavior."
     });Save $configuration
     # Backend context does not alter the OpenCV compilation. Archive it per run
     # but share the exact compiler/source/options cache after fresh resolution.
@@ -78,7 +79,7 @@ function Prepare-OpenCvReference([string]$Directory,[System.Collections.IDiction
     Copy-Item -LiteralPath (Join-Path $build CMakeCache.txt) -Destination $cache;Save $cache
     $config=Join-Path $Directory opencv-cvconfig.h
     Copy-Item -LiteralPath (Join-Path $build cvconfig.h) -Destination $config;Save $config
-    if($codec){Assert-OpenCvPngCodec $cache $config $codec}
+    if($ImageCodecs){Assert-OpenCvPngCodec $cache $config $codec}else{Assert-OpenCvZlibCodec $cache $codec}
     if((-not $appleArm -and (Get-Content -LiteralPath $config -Raw) -notmatch '(?m)^#define HAVE_IPP\s*$') -or
        (Get-Content -LiteralPath $cache -Raw) -notmatch '(?m)^CV_DISABLE_OPTIMIZATION:BOOL=OFF\s*$' -or
        (Get-Content -LiteralPath $cache -Raw) -notmatch '(?m)^CPU_DISPATCH:STRING=\S+'){

@@ -1,11 +1,28 @@
 // Copyright (C) 2026 AbyssRei
 // SPDX-License-Identifier: LGPL-3.0-or-later
-#include <png.h>
 #include <zlib.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef MFS_ZLIB_ONLY
+int main(int argc,char** argv) {
+    if(argc!=2)return 1;
+    if(strcmp(argv[1],ZLIB_VERSION) || strcmp(argv[1],zlibVersion())){
+        fprintf(stderr,"ZLIB codec version mismatch: expected=%s header=%s runtime=%s\n",argv[1],ZLIB_VERSION,zlibVersion());return 2;
+    }
+    const unsigned char pixels[24]={1,7,19,31,43,59,71,83,97,109,127,139,151,163,179,191,211,223,239,251,3,13,23,37};
+    unsigned char encoded[128]={0},decoded[24]={0};
+    uLongf encoded_size=sizeof(encoded),decoded_size=sizeof(decoded);
+    if(compressBound(sizeof(pixels))>sizeof(encoded))return 3;
+    if(compress2(encoded,&encoded_size,pixels,sizeof(pixels),Z_BEST_COMPRESSION)!=Z_OK)return 4;
+    if(uncompress(decoded,&decoded_size,encoded,encoded_size)!=Z_OK)return 5;
+    if(decoded_size!=sizeof(pixels) || memcmp(decoded,pixels,sizeof(pixels)))return 6;
+    printf("ZLIB codec zlib=%s actual_compress_decompress=1 known_bytes=24 passed\n",zlibVersion());
+    return 0;
+}
+#else
+#include <png.h>
 int main(int argc,char** argv) {
     if(argc!=3)return 1;
     if(strcmp(argv[1],PNG_LIBPNG_VER_STRING) || strcmp(argv[1],png_get_libpng_ver(NULL))
@@ -33,3 +50,4 @@ done:
     if(status)fprintf(stderr,"PNG codec status=%d writer=%s reader=%s\n",status,writer.message,reader.message);
     png_image_free(&reader);png_image_free(&writer);free(encoded);return status;
 }
+#endif
