@@ -188,19 +188,22 @@ fn original_call(
     )
 }
 pub fn run(args: &[String]) -> Result<()> {
-    run_kind(args, false, false, false, false)
+    run_kind(args, false, false, false, false, false)
 }
 pub fn run_full(args: &[String]) -> Result<()> {
-    run_kind(args, true, false, false, false)
+    run_kind(args, true, false, false, false, false)
+}
+pub fn run_full_distinct(args: &[String]) -> Result<()> {
+    run_kind(args, true, false, false, false, true)
 }
 pub fn run_full_witness(args: &[String]) -> Result<()> {
-    run_kind(args, true, true, false, false)
+    run_kind(args, true, true, false, false, false)
 }
 pub fn run_maximum_level(args: &[String]) -> Result<()> {
-    run_kind(args, true, true, true, false)
+    run_kind(args, true, true, true, false, false)
 }
 pub fn run_native_sample(args: &[String]) -> Result<()> {
-    run_kind(args, true, true, false, true)
+    run_kind(args, true, true, false, true, false)
 }
 fn run_kind(
     args: &[String],
@@ -208,6 +211,7 @@ fn run_kind(
     witness: bool,
     maximum: bool,
     native_sample: bool,
+    distinct_scene: bool,
 ) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
@@ -224,9 +228,18 @@ fn run_kind(
     executable(&binary)?;
     let length = u64::try_from(binary.len())?;
     let hash = fnv(&binary);
+    let distinct_binary = root.join("distinct-scene-test-executable");
+    if distinct_scene {
+        if fs::read(&distinct_binary)? != binary {
+            return Err("distinct scene executable bytes differ from consumer".into());
+        }
+    } else if distinct_binary.exists() {
+        return Err("distinct scene requires its separate full-display validator".into());
+    }
     let mut calls = Vec::new();
     let mut arms = Vec::new();
     let mut common_path = None;
+    let mut common_scene_path = None;
     let mut common_schema = None;
     let mut originals = Vec::new();
     let mut order_records = Vec::new();
@@ -235,6 +248,29 @@ fn run_kind(
     let mut native_records = Vec::new();
     for mode in 0..=1 {
         let arm = root.join(format!("mode-{mode}"));
+        if distinct_scene {
+            if fs::read(arm.join("distinct-scene-path.txt"))?
+                != b"schema=1\ndistinct_scene_executable_path=1\nunchanged_full_rgb_oracle=1\n"
+            {
+                return Err("distinct scene selection or full RGB oracle differs".into());
+            }
+            let modes = rows(
+                &fs::read_to_string(arm.join("scene-executable-modes.tsv"))?,
+                3,
+            )?;
+            if modes.len() != 1
+                || modes[0][0] != 1
+                || modes[0][1] != modes[0][2]
+                || modes[0][1] > 0o7777
+                || modes[0][1] & 0o100 == 0
+            {
+                return Err("distinct scene executable modes differ or are not executable".into());
+            }
+        } else if arm.join("distinct-scene-path.txt").exists()
+            || arm.join("scene-executable-modes.tsv").exists()
+        {
+            return Err("distinct scene evidence requires its separate validator".into());
+        }
         if !native_sample
             && (arm.join("native-sample-observer-enabled.txt").exists()
                 || arm.join("original-native-observer-module.txt").exists())
@@ -265,7 +301,7 @@ fn run_kind(
         let producer = fields(&text("scene/same-binary-host.txt")?)?;
         identity(&consumer, "consumer", mode, length, hash)?;
         identity(&producer, "producer", mode, length, hash)?;
-        if consumer["program_path"] != producer["program_path"]
+        if (consumer["program_path"] != producer["program_path"]) != distinct_scene
             || consumer["pid"] == producer["pid"]
             || common_path
                 .as_ref()
@@ -274,13 +310,43 @@ fn run_kind(
             return Err("same-binary producer/consumer executable relation differs".into());
         }
         common_path = Some(consumer["program_path"].clone());
+        if distinct_scene {
+            let native_path = |value: &str| {
+                value.starts_with('/')
+                    && !value.contains(['\\', '\0', '\r', '\n'])
+                    && value
+                        .split('/')
+                        .skip(1)
+                        .all(|part| !matches!(part, "" | "." | ".."))
+            };
+            if !native_path(&consumer["program_path"])
+                || !native_path(&producer["program_path"])
+                || consumer["program_path"].rsplit_once('/').map(|p| p.0)
+                    != producer["program_path"].rsplit_once('/').map(|p| p.0)
+                || common_scene_path
+                    .as_ref()
+                    .is_some_and(|p| *p != producer["program_path"])
+            {
+                return Err(
+                    "distinct scene must use the same actual sibling path in both arms".into(),
+                );
+            }
+            common_scene_path = Some(producer["program_path"].clone());
+        }
         let child = fields(&text("scene-child.txt")?)?;
-        if child.len() != 3 {
+        if child.len() != if distinct_scene { 4 } else { 3 } {
             return Err("same-binary child record fields differ".into());
         }
         expect(&child, "pid", number(&producer, "pid")?)?;
         expect(&child, "mode", mode)?;
-        expect(&child, "same_executable_requested", 1)?;
+        expect(
+            &child,
+            "same_executable_requested",
+            u64::from(!distinct_scene),
+        )?;
+        if distinct_scene {
+            expect(&child, "distinct_executable_requested", 1)?;
+        }
         let done = fields(&text("scene/same-binary-result.txt")?)?;
         if done.len() != 6 {
             return Err("same-binary native completion fields differ".into());
@@ -777,6 +843,7 @@ fn run_kind(
                 || entry.path() == root.join("full-display-witness-validation.json")
                 || entry.path() == root.join("maximum-level-validation.json")
                 || entry.path() == root.join("native-sample-validation.json")
+                || entry.path() == root.join("full-display-distinct-scene-validation.json")
             {
                 continue;
             }
@@ -836,7 +903,15 @@ fn run_kind(
         report["native_sample_observations"] = serde_json::json!(native_records);
         report["scope"] = "Separate original-class selector observation with per-call owned state propagated through real native completions. Twelve before/after CPU copies of six native sample buffers must agree and reproduce every returned original BGR pixel. Added read locks/copies and a post-return observation wait affect timing; they do not replace source return values, native RGB assertions, identify compositor pixel production, prove callback drainage or accept P1. Rust/ordinary source/scenes remain uninstrumented.".into();
     }
-    let output = root.join(if native_sample {
+    if distinct_scene {
+        report["layout_version"] = 7.into();
+        report["distinct_scene_executable_path"] = true.into();
+        report["diagnostic_only"] = true.into();
+        report["scope"] = "Independent distinct-path full-display RGB fixture. Scene and consumer executable bytes/modes must match while actual sibling paths differ; both source/Rust orders retain the original calls, five-second wait, static whole-display RGB oracle, exact twelve full target/held images and complete paired byte equality. The original same-path test and failures remain independent. Scheduling/service state are uncontrolled; this experiment cannot establish identity-collision causality, native callback/block disposal, general display support or full P1 acceptance.".into();
+    }
+    let output = root.join(if distinct_scene {
+        "full-display-distinct-scene-validation.json"
+    } else if native_sample {
         "native-sample-validation.json"
     } else if maximum {
         "maximum-level-validation.json"
@@ -854,7 +929,11 @@ fn run_kind(
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    if native_sample {
+    if distinct_scene {
+        println!(
+            "macOS full_display_distinct_scene arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 identical_scene_bytes_mode=1 distinct_scene_path=1 diagnostic_only=1 full_P1_acceptance=0 passed"
+        );
+    } else if native_sample {
         println!(
             "macOS original_native_sample arms=2 invocations=12 original_native_samples=6 before_after_copies=12 full_native_bgr_equal=6 strict_native_rgb_assertions=1 diagnostic_only=1 full_P1_acceptance=0 observations_verified"
         );

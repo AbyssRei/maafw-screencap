@@ -71,6 +71,11 @@ fn records_all_display_pixels_in_both_implementation_orders() {
     record(true);
 }
 #[test]
+#[ignore = "requires a native single-display Mac and a byte-identical distinct-path scene"]
+fn records_all_display_pixels_with_distinct_scene_path_in_both_orders() {
+    record_scene_config(true, false, false, false, true);
+}
+#[test]
 #[ignore = "requires a native Mac, separate CPU-view/census scene and explicit call order"]
 fn records_full_display_native_witnesses_in_both_orders() {
     record_mode(true, true);
@@ -175,9 +180,20 @@ fn record_config(full: bool, observe: bool, maximum: bool) {
     record_observed_config(full, observe, maximum, false);
 }
 fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sample: bool) {
+    record_scene_config(full, observe, maximum, native_sample, false);
+}
+fn record_scene_config(
+    full: bool,
+    observe: bool,
+    maximum: bool,
+    native_sample: bool,
+    distinct_scene: bool,
+) {
     use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
     assert!(!maximum || (full && observe));
     assert!(!native_sample || (full && observe && !maximum));
+    assert!(!distinct_scene || (full && !observe && !maximum && !native_sample));
     let root = PathBuf::from(env::var_os("MFS_P1_MACOS_SAME_BINARY_ROOT").unwrap());
     let mode = env::var("MFS_P1_MACOS_SAME_BINARY_MODE")
         .unwrap()
@@ -221,9 +237,57 @@ fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sampl
             protocol::fingerprint(&executable).unwrap()
         );
     }
+    let scene_executable = if distinct_scene {
+        let mut name = executable.file_name().unwrap().to_os_string();
+        name.push("-full-display-distinct-scene");
+        let copied = executable.with_file_name(name);
+        if !copied.exists() {
+            let mut input = fs::File::open(&executable).unwrap();
+            let mut output = fs::File::create_new(&copied).unwrap();
+            std::io::copy(&mut input, &mut output).unwrap();
+            output.flush().unwrap();
+            fs::set_permissions(&copied, fs::metadata(&executable).unwrap().permissions()).unwrap();
+        }
+        assert!(
+            fs::read(&copied).unwrap() == fs::read(&executable).unwrap(),
+            "copied scene executable bytes differ"
+        );
+        let consumer_mode = fs::metadata(&executable).unwrap().permissions().mode() & 0o7777;
+        let scene_mode = fs::metadata(&copied).unwrap().permissions().mode() & 0o7777;
+        assert_eq!(consumer_mode, scene_mode);
+        assert_ne!(scene_mode & 0o100, 0);
+        let saved = root
+            .parent()
+            .unwrap()
+            .join("distinct-scene-test-executable");
+        if saved.exists() {
+            assert!(
+                fs::read(&saved).unwrap() == fs::read(&copied).unwrap(),
+                "archived scene executable bytes differ"
+            );
+        } else {
+            let mut input = fs::File::open(&copied).unwrap();
+            let mut output = fs::File::create_new(&saved).unwrap();
+            std::io::copy(&mut input, &mut output).unwrap();
+            output.flush().unwrap();
+        }
+        fs::write(
+            root.join("distinct-scene-path.txt"),
+            b"schema=1\ndistinct_scene_executable_path=1\nunchanged_full_rgb_oracle=1\n",
+        )
+        .unwrap();
+        fs::write(
+            root.join("scene-executable-modes.tsv"),
+            format!("1\t{consumer_mode}\t{scene_mode}\n"),
+        )
+        .unwrap();
+        copied
+    } else {
+        executable.clone()
+    };
     let scene_root = root.join("scene");
     fs::create_dir(&scene_root).unwrap();
-    let mut command = Command::new(&executable);
+    let mut command = Command::new(&scene_executable);
     if maximum {
         command.env("MFS_P1_MACOS_MAXIMUM_LEVEL_FIXTURE", "1");
         fs::write(
@@ -261,8 +325,14 @@ fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sampl
     fs::write(
         root.join("scene-child.txt"),
         format!(
-            "pid={}\nmode={mode}\nsame_executable_requested=1\n",
-            scene.child.id()
+            "pid={}\nmode={mode}\nsame_executable_requested={}\n{}",
+            scene.child.id(),
+            u8::from(!distinct_scene),
+            if distinct_scene {
+                "distinct_executable_requested=1\n"
+            } else {
+                ""
+            }
         ),
     )
     .unwrap();
@@ -289,17 +359,24 @@ fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sampl
     let producer =
         protocol::fields(&fs::read_to_string(scene.root.join("same-binary-host.txt")).unwrap())
             .unwrap();
-    for field in [
-        "program_path",
-        "program_length",
-        "program_fnv64",
-        "mode",
-        "schema",
-    ] {
+    for field in ["program_length", "program_fnv64", "mode", "schema"] {
         assert_eq!(
             consumer[field], producer[field],
             "scene and consumer binary identities differ"
         );
+    }
+    if distinct_scene {
+        assert_ne!(consumer["program_path"], producer["program_path"]);
+        assert_eq!(
+            Path::new(&producer["program_path"]),
+            fs::canonicalize(&scene_executable).unwrap()
+        );
+        assert_eq!(
+            Path::new(&consumer["program_path"]).parent(),
+            Path::new(&producer["program_path"]).parent()
+        );
+    } else {
+        assert_eq!(consumer["program_path"], producer["program_path"]);
     }
     assert_eq!(
         protocol::scalar(&producer["pid"]).unwrap(),
@@ -461,6 +538,20 @@ fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sampl
     {
         std::thread::sleep(Duration::from_millis(5));
     }
+    if distinct_scene {
+        assert!(
+            fs::read(&scene_executable).unwrap() == fs::read(&executable).unwrap(),
+            "scene executable changed during capture"
+        );
+        assert_eq!(
+            fs::metadata(&scene_executable)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777,
+            fs::metadata(&executable).unwrap().permissions().mode() & 0o7777
+        );
+    }
     scene.finish();
     original.finish(&root);
     let mut original_usable = 0;
@@ -557,6 +648,11 @@ fn record_observed_config(full: bool, observe: bool, maximum: bool, native_sampl
         eprintln!(
             "native Rust macOS full_display mode={mode} original_first={} calls=6 known_full_images=6 held_after_scene_close=6 full_rgb=1 no_capture_retry=1 full_P1_acceptance=0 passed",
             u8::from(original_first)
+        );
+    }
+    if distinct_scene {
+        eprintln!(
+            "native Rust macOS full_display_distinct_scene mode={mode} calls=6 known_full_images=6 full_bytes_oracle=1 identical_scene_bytes_mode=1 distinct_scene_path=1 no_capture_retry=1 full_P1_acceptance=0 passed"
         );
     }
     if !full {

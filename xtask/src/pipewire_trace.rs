@@ -94,6 +94,12 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     if args
         .first()
+        .is_some_and(|kind| kind == "macos-full-display-distinct-scene")
+    {
+        return crate::macos_same_binary::run_full_distinct(&args[1..]);
+    }
+    if args
+        .first()
         .is_some_and(|kind| kind == "macos-full-display-witness")
     {
         return crate::macos_same_binary::run_full_witness(&args[1..]);

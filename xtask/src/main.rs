@@ -299,6 +299,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace macos-display-cg-scene <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-same-binary <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-full-display <external matrix> [--check-only]\n\n\
+                      cargo xtask upstream-trace macos-full-display-distinct-scene <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-full-display-witness <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-maximum-level <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-native-sample <external matrix> [--check-only]\n\n\

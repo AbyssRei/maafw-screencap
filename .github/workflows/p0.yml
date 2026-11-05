@@ -110,7 +110,7 @@ jobs:
           $root=Join-Path $env:MFS_REFERENCE_ROOT ('runs/macos-capture-system-'+[DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffffffZ'))
           New-Item -ItemType Directory -Path $root|Out-Null
           $log=Join-Path $root capture-services.log
-          $predicate='process == "mfs_macos_observed_context" OR process == "mfs_macos_source_context" OR process == "replayd" OR process == "screencapture" OR subsystem CONTAINS[c] "ScreenCapture" OR (subsystem == "com.apple.TCC" AND eventMessage CONTAINS[c] "ScreenCapture")'
+          $predicate='process == "mfs_macos_observed_context" OR process == "mfs_macos_source_context" OR process BEGINSWITH "maafw_screencap" OR process == "replayd" OR process == "screencapture" OR subsystem CONTAINS[c] "ScreenCapture" OR (subsystem == "com.apple.TCC" AND eventMessage CONTAINS[c] "ScreenCapture")'
           "program=/usr/bin/log`narguments=show --last 5m --style compact --info --debug --predicate $predicate`ndiagnostic_only=1`ncapture_assertions_unchanged=1"|Set-Content -LiteralPath $log
           & /usr/bin/log show --last 5m --style compact --info --debug --predicate $predicate >> $log 2>&1
           $code=$LASTEXITCODE

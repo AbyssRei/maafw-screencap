@@ -41,7 +41,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         & $Program @Arguments >> $log 2>&1
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
-        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$') {
+        if($code -eq 101 -and $Name -match '^rust-macos-(same-binary|full-display|full-distinct-scene|full-witness|full-max-level|native-sample)-[01]$') {
             # Cargo wraps an exact test process exit77 as exit101. Classify it
             # only with this fresh fixture's explicit pre-capture evidence.
             $sceneRoot=$env:MFS_P1_MACOS_SAME_BINARY_ROOT
@@ -56,7 +56,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 }
             }
         }
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','macos-display-observer-distinct-path-consumer','rust-macos-live-sample','rust-macos-native-host','rust-macos-native-host-original-oracle') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','macos-display-observer-distinct-path-consumer','rust-macos-live-sample','rust-macos-native-host','rust-macos-native-host-original-oracle') -or $Name -match '^rust-macos-(same-binary|full-display|full-distinct-scene|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -234,6 +234,22 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         }
         if($Name -eq 'macos-full-display-records' -and -not $observed.Contains('macOS full_display arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 source_oracle_replaced=0 full_P1_acceptance=0 passed')) {
             $status='failed';throw 'Incomplete full-display RGB paired pixel/order records'
+        }
+        if($Name -match '^rust-macos-full-distinct-scene-([01])$') {
+            $order=$Matches[1];$originalFirst=if($order -eq '0'){1}else{0}
+            $marker="native Rust macOS full_display_distinct_scene mode=$order calls=6 known_full_images=6 full_bytes_oracle=1 identical_scene_bytes_mode=1 distinct_scene_path=1 no_capture_retry=1 full_P1_acceptance=0 passed"
+            if([regex]::Matches($observed,'(?m)^running 1 test\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^native Rust macOS host main_thread=1 appkit_initialized=1 pumped=1 harness_worker_joined=1\r?$').Count -ne 1 -or
+                -not $observed.Contains("native Rust macOS full_display mode=$order original_first=$originalFirst calls=6 known_full_images=6 held_after_scene_close=6 full_rgb=1 no_capture_retry=1 full_P1_acceptance=0 passed") -or
+                [regex]::Matches($observed,('(?m)^'+[regex]::Escape($marker)+'\r?$')).Count -ne 1) {
+                $status='failed';throw 'Incomplete distinct-scene full-display native arm'
+            }
+        }
+        if($Name -eq 'macos-full-distinct-scene-records' -and
+            [regex]::Matches($observed,'(?m)^macOS full_display_distinct_scene arms=2 invocations=12 original_calls=6 rust_calls=6 known_full_images=12 both_orders=1 full_bytes_paired=1 retained_after_close=12 identical_scene_bytes_mode=1 distinct_scene_path=1 diagnostic_only=1 full_P1_acceptance=0 passed\r?$').Count -ne 1) {
+            $status='failed';throw 'Incomplete distinct-scene full-display records'
         }
         if($Name -match '^rust-macos-full-witness-([01])$') {
             $order=$Matches[1];$originalFirst=if($order -eq '0'){1}else{0}
@@ -417,6 +433,7 @@ try {
         catch { $failed=$true;Write-Host $_.Exception.Message }
         Run-MacosSameBinaryProbes $rustArtifacts
         Run-MacosFullDisplayProbes $rustArtifacts
+        Run-MacosFullDisplayProbes $rustArtifacts $true
         Run-MacosFullDisplayWitnessProbes $rustArtifacts
         Run-MacosMaximumLevelProbes $rustArtifacts
         Run-MacosNativeSampleProbes $rustArtifacts

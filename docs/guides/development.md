@@ -144,6 +144,14 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+原有严格整屏 RGB 用例现增加独立的 `records_all_display_pixels_with_distinct_scene_path_in_both_orders`：场景使用同一 libtest 程序的完整字节和 Unix 权限副本，从相邻不同路径启动，消费程序路径、同一工作线程中的原版/Rust 调用、默认五秒等待、绘制及关闭次序不变。两种顺序各执行六次调用，仍要求每张完整目标 RGB、两侧完整 BGR 字节一致、原格式转换和场景关闭后的持帧；不借用仅检查绿色区域的既有成功结果。同路径用例继续独立执行，新用例尚无 Apple 原生捕获结论。
+
+`cargo xtask upstream-trace macos-full-display-distinct-scene <外部矩阵> [--check-only]` 使用独立 schema7 报告，核对实际双进程身份、相邻不同路径、完整相同程序字节/可执行权限，以及原来的全部整屏断言；旧命令拒绝混入新路径记录，新命令拒绝旧同路径数据。CI 每个顺序和记录检查独立保留失败，七组真实编排控制确认先前步骤失败后仍执行其余步骤。既有可失败的服务日志收集另加 Rust 测试进程名前缀，其余 workflow 步骤、原退出码、一分钟收集期限和非阻断属性不变；实际原生日志覆盖仍以运行结果为准。
+
+本机沿明确归档的离线 Cargo/vendor 图完成 Release、工作区测试、Windows 和 macOS 目标的严格 Clippy 及格式检查；nightly 更新检查无变化，没有宣称新在线依赖解析。二十六项实际 CLI 控制接受十项、拒绝十六项，包含完整像素/路径/权限/owner 破坏、报告创建及篡改拒收，其中四份真实旧报告只读兼容核对，所有旧目录字节保持。人工整屏控制沿用先前程序身份，像素、尺寸和时间均为人工数据，不是 Apple 执行。三十三项实际 Step 子进程控制与七组编排控制通过；初次外部 reader 的固定 PID 假设、编排检查的参数下标错误和已有相同 lockfile 的准备断言分别保留，只修正控制程序前提，没有重跑原生捕获。材料由 `local/current-macos-full-distinct-development-path.txt` 指向，原二十一项 Mac 失败、根因和完整 P1 状态不变。
+
+确切 `7aedeb7` 的 Linux 原生 job 已成功结束，官方两份 ZIP 摘要/CRC、安全解压、53,299 份原始文件、358 项检查的状态/日志及全部可用登记输入核对通过。PipeWire 为 207/207，新增 `custom-buffers-parity/records` 两项；原 205 项及 Wlr 151 项名称/状态不变。冻结校验器只读接受 21/7 份保存报告，旧原文未改；新增 buffer helper 记录的二十轮、100 个字符串 owner、780 个图像 owner 及最终零 owner 通过 CPU 数据核验，不能计作截图。两包分别仍缺 708/710 个不同完整输入，五份选定库源码以确切 Git/登记摘要补充，不能宣称完整来源闭合或 P1。`local/current-7aed-linux-record-review-path.txt` 保存封存复核；旧失败仍按各自批次保留，预装工具年龄不作门禁。
+
 独立 macOS dispatch 观察器新增实际提交的 `SCContentFilter`/`SCStreamConfiguration` 弱引用记录。Foundation 的 [NSHashTable 弱引用](https://developer.apple.com/documentation/foundation/nshashtable/weakobjects%28%29?language=objc)及 [WeakMemory](https://developer.apple.com/documentation/foundation/nspointerfunctions/options/weakmemory?language=objc)用于在末次强引用释放后零化；每个对象各用一个弱表，按指针身份比较，最多三十二对、六十四个进程寿命诊断表。字段设计只存弱引用；`allObjects` 读取产生的临时强引用在独立 autorelease pool 内结束，只返回地址标量、线程和读取起止时间。原生控制失败前，尚未接受完整元数据路径不会延长参数寿命的结论。弱表查询在 stderr 过渡锁之外完成，与回调、信号量及 block token 的快照分别计时，不能把不同快照当作原子观测。
 
 提交边界要求两个实际参数当时存活，随后十五秒观察中的存活或零化均按事实保留，不要求未调用 handler 的原版请求必须释放。新 reader 将每对弱引用绑定到真实 sample request、提交线程和原始地址，核对串行 registry 的完整成员、所有读取区间及禁止已零化对象重新出现；旧记录省略新字段并保持原报告。当前 `--require-input-weak` 同时要求已有 late/block 记录，CI Step 要求相应摘要；原 consumer 失败仍在独立记录检查之后重新抛出。实际 F 调用、参数、五秒等待、图像断言、Rust 捕获实现及已保存的失败结果未改。新增原生 MRC 控制以四个对象验证工作线程释放、额外 alias 保活和最终零化；这部分 Apple 框架编译/执行仍待新的原生 Actions 验证。
