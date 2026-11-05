@@ -86,6 +86,7 @@ mod wlr_protocol;
 mod wlr_registry;
 mod wlr_resource_errors;
 mod wlr_retired_channel;
+mod wlr_whole_manager;
 
 #[path = "../../build-support/p0-configuration.rs"]
 mod build_configuration;
@@ -291,6 +292,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace pipewire-host <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace pipewire-whole-manager <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace wlr-host-api <external matrix> [--check-only]\n\n\
+                      cargo xtask upstream-trace wlr-whole-manager <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace wlr-host-construction <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-patch <external directory> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-host-premise <external directory> [--check-only]\n\n\

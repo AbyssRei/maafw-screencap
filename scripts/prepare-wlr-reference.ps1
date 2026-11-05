@@ -44,6 +44,32 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $native -Destination $saved;Save $saved
     Step wlr-native-source-linkage ldd @($native)
     $env:MFS_P1_WLR_NATIVE_SOURCE=$native
+    $whole=Join-Path $build mfs_wlr_whole_native_context
+    $wholeInputs=Join-Path $refInputs whole-native-wlr
+    New-Item -ItemType Directory -Path $wholeInputs|Out-Null
+    foreach($item in @(@($whole,'mfs_wlr_whole_native_context'),
+        @((Join-Path $build whole-native-scope.txt),'scope.txt'),
+        @((Join-Path $build compile_commands.json),'compile-commands.json'))) {
+        $saved=Join-Path $wholeInputs $item[1]
+        Copy-Item -LiteralPath $item[0] -Destination $saved;Save $saved
+    }
+    foreach($relative in @('source/MaaLinuxControlUnit/API/LinuxControlUnitAPI.cpp',
+        'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.cpp','source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h',
+        'source/MaaLinuxControlUnit/Input/NoneInput.cpp','source/MaaLinuxControlUnit/Input/NoneInput.h',
+        'source/MaaLinuxControlUnit/Base/Config.h','include/MaaControlUnit/LinuxControlUnitAPI.h',
+        'include/MaaControlUnit/ControlUnitAPI.h','include/MaaControlUnit/MaaControlUnitDef.h',
+        'include/MaaFramework/MaaDef.h')) {
+        $saved=Join-Path $wholeInputs $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $FixedUpstream $relative) -Destination $saved;Save $saved
+    }
+    foreach($identity in $identities) {
+        $saved=Join-Path $wholeInputs $identity.path
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $FixedUpstream $identity.path) -Destination $saved;Save $saved
+    }
+    Step whole-native-wlr-linkage ldd @($whole)
+    $env:MFS_P1_WLR_WHOLE_SOURCE=$whole
     $declarations=Join-Path $refInputs wlr-native-abi-source
     foreach($relative in @('source/MaaLinuxControlUnit/Compat/WlRootsControlUnitCompat.cpp',
         'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h','source/MaaLinuxControlUnit/Base/UnitBase.h',

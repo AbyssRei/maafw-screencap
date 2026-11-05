@@ -43,6 +43,16 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
         $code=$LASTEXITCODE
         "exit=$code"|Add-Content -LiteralPath $log -Encoding utf8
         if($code -ne 0){Get-Content -LiteralPath $log -Tail 45|ForEach-Object{Write-Host $_};throw "$Name exited with $code; see $log"}
+        if($Name -in @('original-wlr-whole-manager','rust-wlr-whole-manager')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $expected=$Name.StartsWith('original-') ?
+                'original whole Wlr manager objects=21 capture_objects=20 captures=60 connects=42 held=60 owner_observations=140 active_features=3 same_client_reconstruction=20 failed_client_control=1 resources_balanced=1 input_actions=0 full_P1_acceptance=0 passed' :
+                'Rust whole Wlr comparison objects=21 capture_objects=20 captures=60 connects=42 held_bgr=60 held_raw=60 active_features=3 same_client_reconstruction=20 failed_client_control=1 resources_balanced=1 input_actions=0 full_P1_acceptance=0 passed'
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($expected)+'\r?$').Count -ne 1 -or
+                ($Name.StartsWith('rust-') -and [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1)) {
+                throw 'Expected whole original manager/native Wlr/NoneInput and complete Rust capture comparison'
+            }
+        }
         if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
             throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
         }
@@ -418,6 +428,15 @@ try{
         try { Step wlr-retired-channel-records $ConfigureTool @('upstream-trace','wlr-retired-channel',(Join-Path $env:MFS_P1_WLR_RUST_ARTIFACTS early-close),(Join-Path $referenceArtifacts early-close-prefix)) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-manager timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::forwards_native_manager_reconnects_and_retains_images_after_shutdown','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        $wholeMatrix=Join-Path $referenceArtifacts whole-native-manager
+        New-Item -ItemType Directory -Path $wholeMatrix|Out-Null
+        $env:MFS_P1_WLR_WHOLE_MATRIX=$wholeMatrix
+        try { Step original-wlr-whole-manager timeout @('--signal=TERM','--kill-after=5s','90s',$env:MFS_P1_WLR_WHOLE_SOURCE,$socket,(Join-Path $wholeMatrix source),$library) }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step rust-wlr-whole-manager timeout @('--signal=TERM','--kill-after=5s','90s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::compares_whole_manager_none_input_reconstruction_and_retained_client','--','--exact','--ignored','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        try { Step wlr-whole-manager-records $ConfigureTool @('upstream-trace','wlr-whole-manager',$wholeMatrix) }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         $hostMatrix=Join-Path $referenceArtifacts wlr-native-api-matrix
         New-Item -ItemType Directory -Path $hostMatrix|Out-Null

@@ -85,6 +85,31 @@ target_link_libraries(mfs_wlr_native_context PRIVATE
     PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/native-context-scope.txt"
     "Whole fixed original Wlr compatibility cpp and unchanged complete public API/manager/config/base declarations with real original Wlr/Wayland capture sources. Only input construction/init is a controlled capture-only host: it retains the original shared client and five proxy slots (no seat in this fixture), owns an independent socketpair on successful construction and excludes every input action/device. The separate host-create-failure mode throws controlled error98 after copying client/proxy members but before allocating host sockets; the original manager's retained capture must still produce known pixels and release all owners. Original manager capture/UUID/metadata/inactive/features/destruction bodies are exact extractions. Native library identity, final weak client/proxy expiry, last-connected-client destructor order, actual pixels and exact resources are required. This is not original input initialization, allocation-failure recovery, live-client early close or full Wlr/P1 acceptance.\n")
+set(_whole_overlay "${CMAKE_CURRENT_BINARY_DIR}/whole-native-overlay")
+foreach(_name "Input/EiInput.h" "Input/UInput.h" "Input/WlrInput.h" "Input/VkToEvdev.h" "Screencap/PipeWireScreencap.h")
+    get_filename_component(_parent "${_whole_overlay}/${_name}" DIRECTORY)
+    file(MAKE_DIRECTORY "${_parent}")
+    file(WRITE "${_whole_overlay}/${_name}" "#pragma once\n// Unselected rejecting type in whole-native-owner.hpp.\n")
+endforeach()
+add_executable(mfs_wlr_whole_native_context native-context.cpp
+    "${_mfs_root}/API/LinuxControlUnitAPI.cpp" "${_mfs_root}/Input/NoneInput.cpp"
+    "${_mfs_root}/Screencap/WlrScreencap.cpp" "${_mfs_root}/Wayland/WaylandClient.cpp"
+    "${_mfs_root}/Wayland/WaylandHelper.cpp" "${_mfs_root}/Base/MemfdBuffer.cpp"
+    "${_mfs_root}/Wayland/Protocol/wlr-screencopy-priv.c"
+    "${_mfs_root}/Wayland/Protocol/wlr-virtual-pointer-priv.c"
+    "${_mfs_root}/Wayland/Protocol/virtual-keyboard-priv.c")
+target_compile_definitions(mfs_wlr_whole_native_context PRIVATE _GNU_SOURCE MFS_WLR_WHOLE_NATIVE
+    MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-whole-wlr"
+    MFS_WHOLE_LINUX_MANAGER_HEADER="${_mfs_root}/Manager/LinuxControlUnitMgr.h"
+    MFS_WHOLE_LINUX_MANAGER_CPP="${_mfs_root}/Manager/LinuxControlUnitMgr.cpp")
+target_include_directories(mfs_wlr_whole_native_context PRIVATE "${_whole_overlay}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/abi-overlay" "${CMAKE_CURRENT_BINARY_DIR}/config-overlay"
+    "${CMAKE_CURRENT_SOURCE_DIR}/overlay" "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_MEOJSON_INCLUDE}"
+    "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mfs_wlr_whole_native_context PRIVATE PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+target_link_options(mfs_wlr_whole_native_context PRIVATE "LINKER:--wrap=wl_display_roundtrip")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/whole-native-scope.txt"
+    "Complete unchanged original Linux manager/header/C API/NoneInput and real Wlr/Wayland/Memfd/protocol sources. Typed borrowed member pointers observe actual native/input/client owners; weak client witnesses do not retain native resources. Forwarding roundtrip counter observes same-client reconstruction. Other input/PipeWire constructors reject; external UUID name provider/log suppression retained. Owned compositor only, no input actions/general desktop authorization or full P1 acceptance.\n")
 # Reuse the self-owned, header-checked conversion acceptance source. It includes
 # OpenCV only and introduces no PipeWire runtime or capture dependency.
 add_library(mfs_wlr_opencv SHARED ../linux-pipewire/conversion-adapter.cpp)

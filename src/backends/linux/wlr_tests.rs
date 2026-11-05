@@ -313,19 +313,49 @@ impl<'a> crate::backends::linux::manager::native::Converter for ManagerConvert<'
 #[test]
 #[ignore = "requires original native Wlr manager oracle and owned compositor"]
 fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
+    native_manager_context(false);
+}
+#[test]
+#[ignore = "requires complete original Linux manager/NoneInput and owned Wlr compositor"]
+fn compares_whole_manager_none_input_reconstruction_and_retained_client() {
+    native_manager_context(true);
+}
+fn native_manager_context(whole: bool) {
     use crate::backends::linux::manager::{
         self,
         native::{CaptureFailure, Evidence as ManagerEvidence},
     };
     let socket = env::var_os("MFS_P0_WLR_SOCKET").unwrap();
-    let directory =
-        PathBuf::from(env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap()).join("manager");
-    let source = PathBuf::from(env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap()).join("manager");
+    let (directory, source) = if whole {
+        let matrix = PathBuf::from(env::var_os("MFS_P1_WLR_WHOLE_MATRIX").unwrap());
+        (matrix.join("rust"), matrix.join("source"))
+    } else {
+        (
+            PathBuf::from(env::var_os("MFS_P1_WLR_RUST_ARTIFACTS").unwrap()).join("manager"),
+            PathBuf::from(env::var_os("MFS_P1_WLR_SOURCE_ARTIFACTS").unwrap()).join("manager"),
+        )
+    };
     std::fs::create_dir(&directory).unwrap();
     let adapter = Adapter::open();
     warm(&adapter);
     let baseline_fds = fds();
     let baseline_tasks = tasks();
+    let save_task_ids = |path: &Path, ids: &[std::ffi::OsString]| {
+        let text = ids
+            .iter()
+            .map(|id| format!("{}\n", id.to_str().unwrap()))
+            .collect::<String>();
+        std::fs::write(path, text).unwrap();
+    };
+    let mut cases = String::new();
+    if whole {
+        std::fs::write(
+            directory.join("socket-path.txt"),
+            socket.as_os_str().as_bytes(),
+        )
+        .unwrap();
+        save_task_ids(&directory.join("baseline-task-ids.txt"), &baseline_tasks);
+    }
     let mut converter = ManagerConvert {
         adapter: &adapter,
         held: Vec::new(),
@@ -334,15 +364,34 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
     let mut held = Vec::new();
     held.try_reserve_exact(60).unwrap();
     for cycle in 0..20 {
-        let mut manager = manager::NativeManager::new(manager::Config {
+        let config = manager::Config {
             method: manager::WLR,
             wlr_socket: socket.as_os_str().as_bytes().to_vec(),
             pipewire_fd: -1,
             pipewire_node: 0,
             ..manager::Config::default()
-        });
+        };
+        let mut manager = if whole {
+            let json = config.info().unwrap();
+            manager::NativeManager::from_config_json(Some(&json)).unwrap()
+        } else {
+            manager::NativeManager::new(config)
+        };
+        let cold_features = manager.get_features();
+        assert_eq!(cold_features, 0);
+        assert!(!manager.connected());
+        let info = manager.get_info().unwrap();
+        let mut uuid = Vec::new();
+        assert!(manager.request_uuid(&mut uuid).unwrap());
+        assert_eq!(uuid, [socket.as_os_str().as_bytes(), b"_-1"].concat());
+        if whole {
+            std::fs::write(directory.join(format!("api-{cycle}.uuid")), &uuid).unwrap();
+            std::fs::write(directory.join(format!("api-{cycle}.info")), &info).unwrap();
+        }
         let connected = manager.connect_native().unwrap();
         assert!(connected.connected && connected.failure.is_none());
+        assert!(manager.connected());
+        assert_eq!(manager.get_features(), 3);
         let ManagerEvidence::Wlr(initial) = connected.evidence else {
             panic!("missing initial Wlr evidence")
         };
@@ -355,10 +404,14 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
         for call in 0..3 {
             if call == 1 {
                 assert!(manager.inactive_native());
+                assert!(manager.connected());
+                assert_eq!(manager.get_features(), 3);
             }
             if call == 2 {
                 let connected = manager.connect_native().unwrap();
                 assert!(connected.connected && connected.failure.is_none());
+                assert!(manager.connected());
+                assert_eq!(manager.get_features(), 3);
                 let ManagerEvidence::Wlr(e) = connected.evidence else {
                     panic!("missing reconnect evidence")
                 };
@@ -398,6 +451,11 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
             std::fs::write(directory.join(format!("{stem}.meta.txt")),format!("conversion={:?}\nwidth={}\nheight={}\nnative_stride={}\nready_time={:?}\nflags={:?}\n",sample.conversion,sample.width,sample.height,sample.native_stride,sample.ready_time,sample.flags)).unwrap();
             held.push(image);
         }
+        assert!(manager.request_uuid(&mut uuid).unwrap());
+        assert_eq!(uuid, [socket.as_os_str().as_bytes(), b"_-1"].concat());
+        assert_eq!(manager.get_info().unwrap(), info);
+        let active_features = manager.get_features();
+        assert_eq!(active_features, 3);
         drop(manager);
         let Some(ManagerEvidence::Wlr(closed)) = final_close.unwrap().take() else {
             panic!("missing completed manager close")
@@ -410,7 +468,16 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
         assert_eq!(closed.data_created, closed.destroyed);
         assert_eq!(closed.data_created, closed.data_dropped);
         assert_eq!(fds(), baseline_fds);
-        assert_eq!(tasks(), baseline_tasks);
+        let closed_tasks = tasks();
+        assert_eq!(closed_tasks, baseline_tasks);
+        if whole {
+            save_task_ids(
+                &directory.join(format!("closed-{cycle}-task-ids.txt")),
+                &closed_tasks,
+            );
+            cases.push_str(&format!("{cycle}\t{cold_features}\t{active_features}\t3\t3\t2\t3\t{baseline_fds}\t{}\t{}\t1\t1\n",fds(),baseline_tasks.len()));
+            std::fs::write(directory.join("rust-cases.tsv"), &cases).unwrap();
+        }
         for image in &held {
             bgr(image.pixels());
         }
@@ -434,6 +501,7 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
     });
     let connected = manager.connect_native().unwrap();
     assert!(!connected.connected && connected.failure.is_some());
+    assert_eq!(manager.get_features(), 0);
     let mut output = Some(held.pop().unwrap());
     let pointer = output.as_ref().unwrap().pixels().as_ptr();
     let before_owners = adapter.owners();
@@ -446,6 +514,8 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
     assert_eq!(adapter.owners(), before_owners);
     let connected = manager.connect_native().unwrap();
     assert!(connected.connected && connected.failure.is_none());
+    assert!(manager.connected());
+    assert_eq!(manager.get_features(), 3);
     assert!(matches!(
         manager.capture_native(&mut output, &mut converter).result,
         Err(CaptureFailure::Wayland(_))
@@ -465,6 +535,17 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
     // Even an empty Option<Image> has drop glue tied to the adapter borrow.
     // End this output slot before explicitly unloading the owning module.
     drop(output);
+    if whole {
+        assert_eq!(held.len(), 60);
+        assert_eq!(converter.held.len(), 60);
+        for (i, (image, sample)) in held.iter().zip(&converter.held).enumerate() {
+            bgr(image.pixels());
+            raw(sample);
+            std::fs::write(directory.join(format!("held-{i}.bgr")), image.pixels()).unwrap();
+            std::fs::write(directory.join(format!("held-{i}.raw")), sample.pixels()).unwrap();
+        }
+        std::fs::write(directory.join("failed-client-control.txt"),b"first_connected=0 first_features=0 retained_connected=1 retained_features=3 same_client=1 failed_output_preserved=1 resources_balanced=1\n").unwrap();
+    }
     std::thread::spawn(move || {
         for sample in converter.held {
             raw(&sample);
@@ -479,6 +560,11 @@ fn forwards_native_manager_reconnects_and_retains_images_after_shutdown() {
     eprintln!(
         "native Rust Wlr manager cycles=20 captures=60 connects=40 retained_raw=60 retained_bgr=60 same_client_reconnect=20 failed_client_retained=1 failed_output_preserved=1 resources_balanced=1 passed"
     );
+    if whole {
+        eprintln!(
+            "Rust whole Wlr comparison objects=21 capture_objects=20 captures=60 connects=42 held_bgr=60 held_raw=60 active_features=3 same_client_reconstruction=20 failed_client_control=1 resources_balanced=1 input_actions=0 full_P1_acceptance=0 passed"
+        );
+    }
 }
 
 fn context_capture<'a>(

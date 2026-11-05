@@ -317,7 +317,7 @@ fn ledgers(text: &str) -> Result<()> {
     }
     Ok(())
 }
-fn layout(text: &str) -> Result<(usize, [usize; 3])> {
+pub(super) fn layout(text: &str) -> Result<(usize, [usize; 3])> {
     let mut fields = BTreeMap::new();
     for line in text.lines() {
         let (key, value) = line.split_once('=').ok_or("invalid Wlr raw metadata")?;
@@ -367,7 +367,7 @@ fn layout(text: &str) -> Result<(usize, [usize; 3])> {
         .parse::<u32>()?;
     Ok((channels, order))
 }
-fn pixels(bytes: &[u8], channels: usize, order: [usize; 3]) -> Result<()> {
+pub(super) fn pixels(bytes: &[u8], channels: usize, order: [usize; 3]) -> Result<()> {
     if bytes.len() != 64 * 48 * channels {
         return Err("Wlr host native pixel span differs".into());
     }

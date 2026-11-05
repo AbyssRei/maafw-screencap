@@ -2,6 +2,8 @@
 
 ## Actual State and Reading Order
 
+Complete original Linux manager/API/NoneInput now has an independent Wlr native target beside the extracted-body caller. Real Wlr/Wayland/buffer/protocol sources and the same Rust NativeManager capture path cover same-client reconstruction, inactive, metadata/features, held images and retained failed-client behavior. Typed original owner observations and immediate forwarding roundtrip counts have a readonly verifier. External UUID name provider/input exclusions remain explicit; native Linux execution and full P1 acceptance are pending. See current-wlr-whole-manager-path.txt and the development guide.
+
 Exact 45bf whole PipeWire native compilation stopped at missing LogInfo in the shared acceptance logger; no new whole capture ran. The isolated logger now supplies the native trace/debug/info levels through the same sink. Fixed F capture/manager bodies are unchanged; preserve the original build failure and await native execution of the corrected target.
 
 Exact ecb Linux PipeWire failed its two dedicated None profile invocations before tests: they omitted the prepared prototype-linux-pipewire feature and build.rs correctly rejected the mismatch. Both calls now select the same prototype-linux-pipewire,linux-pipewire set as that native batch. Preserve the failed job/profiles; new hosted execution remains pending. This is an invocation fix, not a capture/tool-age failure or P1 acceptance.

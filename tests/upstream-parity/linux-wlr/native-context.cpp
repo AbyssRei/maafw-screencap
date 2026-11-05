@@ -49,13 +49,23 @@ void save(const std::filesystem::path& path,const cv::Mat& image) {
     out.close();require(out.good(),"cannot save Wlr native pixels");
 }
 }
+#if defined(MFS_WLR_WHOLE_NATIVE)
+#include "whole-native-owner.hpp"
+#else
 #include "native-owner.hpp"
+#endif
 MAA_CTRL_UNIT_NS_BEGIN
 #include "uuid-context.inc"
 MAA_CTRL_UNIT_NS_END
+#if defined(MFS_WLR_WHOLE_NATIVE)
+#include "whole-native-context.hpp"
+#endif
 int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
+#if defined(MFS_WLR_WHOLE_NATIVE)
+        return whole_context(argc,argv);
+#else
         const bool construction=argc==5 && std::string_view(argv[4])=="--host-create-failure";
         require(argc==4 || construction,"usage: native-context <private socket> <new artifact directory> <actual libwayland> [--host-create-failure]");
         Dl_info owner{};
@@ -133,5 +143,6 @@ int main(int argc,char** argv) {
             std::cout<<"original Wlr ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 shared_last_client=20 final_client_snapshots_expired=20 input_actions=0 passed\n";
         }
         return 0;
+#endif
     }catch(const std::exception& error) {std::cerr<<"Wlr native ABI failure: "<<error.what()<<'\n';return 1;}
 }

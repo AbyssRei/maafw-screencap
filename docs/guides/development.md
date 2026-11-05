@@ -144,6 +144,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+Wlr 已新增完整原版 Linux manager/header、C API 和真实 NoneInput 的独立原生捕获目标，与原 Wlr/WaylandClient/MemfdBuffer/协议源码共同编译。它通过真实 C 工厂和虚接口，观察二十个生命周期中的同 client 重建、inactive、完整元数据及 features=`3`；只借用类型化成员指针读取槽位，弱 client 仅作最终过期观察。roundtrip 包装始终立即转发，验证重建没有重新连接或执行 roundtrip；其余输入及 PipeWire 构造明确拒绝，既有外部 UUID 名称 provider 保留，不执行输入动作。
+
+Rust 新用例复用现有 manager 捕获程序，通过同一配置解析/NativeManager/转换路径，与完整原类分别完成六十次取帧、两次 connect/生命周期，以及另一个失败 client 保留后的原行为控制。双方总计要求 42 个 manager、84 次 connect；独立 `cargo xtask upstream-trace wlr-whole-manager <外部矩阵> [--check-only]` 核对 120 次取帧、360 份完整即时/持帧、UUID/info、fd/线程身份和 140 份原类 owner/roundtrip 观察；旧提取函数体入口保持独立。Windows 的本机 CPU/记录校验不代替 Linux 原生执行，新目标仍待 Actions；`local/current-wlr-whole-manager-path.txt` 指向开发材料，完整 Wlr/P1 未验收。
+
+本机归档 Cargo/vendor 输入下工作区 Release、36+4+155 项测试、严格 Clippy、格式/文档检查通过。实际 Step 的十五组控制核对两侧完整摘要，拒绝旧 features、重复/缺失/缺帧、零测试及错误退出；完整 CLI 的十五组文件控制拒绝 owner/roundtrip/元数据/线程替换、边缘像素和持帧变化、错误原格式布局、失败 client 状态替换及缺失/多余文件。均为 CPU/合成控制，未在 Windows 冒称 Linux 构建、加载或捕获。初次 Clippy 的固定七项分块警告保留，现改用标准库定长分块。
+
 确切 `45bfdd2` 的完整 PipeWire 新目标已在原生 Linux 编译，实际 clang 报告共享验收 logger 缺少 `LogInfo`，在截图执行前停止；原版 C API 和 NoneInput 的两个编译单元已成功，不能据此声称完整目标可加载或取帧。官方 95,015 字节诊断包的摘要和编译日志保留。现为同一隔离 sink 补全 Trace/Debug/Info 级别，原 F 捕获/manager 源码未改；修正后的原生结果另行验证。
 
 确切 `ecb1a1c` 的 Linux PipeWire 步骤失败：新增 None 的 Debug/Release Cargo 调用漏选已准备的 `prototype-linux-pipewire`，两次在 `build.rs` 的明确 feature 核对处退出，均未进入目标测试。保留完整原 job 日志及两个失败，不归因于截图或预装工具年龄。现将两个调用改为该批一致的 `prototype-linux-pipewire,linux-pipewire`；原/修正的实际 PowerShell 循环分别核对两次失配/匹配，并验证首 profile 失败后仍执行第二项，共三组控制通过。`local/current-linux-none-cargo-fix-path.txt` 指向材料；后继原生执行另行验证，不以参数修正追认失败批通过。
