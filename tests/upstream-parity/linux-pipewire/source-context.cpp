@@ -45,7 +45,9 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#if defined(MFS_PW_KWIN_NATIVE_API)
+#if defined(MFS_PW_WHOLE_NATIVE)
+#include "whole-native-owner.hpp"
+#elif defined(MFS_PW_KWIN_NATIVE_API)
 #include "kwin-native-owner.hpp"
 #else
 namespace MfsOriginalPipeWire {
@@ -877,12 +879,14 @@ void save_memfd_fixtures(const std::filesystem::path& directory) {
 }
 #include "dma-fixtures.hpp"
 #include "format-stream.hpp"
+#if !defined(MFS_PW_WHOLE_NATIVE)
 #include "manager-context.hpp"
 #include "manager-host-context.hpp"
 #if !defined(MFS_PW_KWIN_NATIVE_API)
 #include "manager-host-offer-context.hpp"
 #endif
 #include "sustained-context.hpp"
+#endif
 void reinitialization_context(const char* socket,uint32_t node,const std::filesystem::path& artifacts,bool inject_failure=false) {
     std::filesystem::create_directories(artifacts);
     std::optional<FdFaultControl> fault;
@@ -985,6 +989,11 @@ void reinitialization_context(const char* socket,uint32_t node,const std::filesy
     }
 }
 }
+#if defined(MFS_PW_WHOLE_NATIVE)
+namespace {
+#include "whole-native-context.hpp"
+}
+#endif
 #if defined(MFS_PW_KWIN_NATIVE_API)
 #include "kwin-native-host.hpp"
 #include "kwin-portal-failure.hpp"
@@ -993,7 +1002,13 @@ int main(int argc,char** argv) {
     try {
         std::cout.setf(std::ios::unitbuf);
         verify_runtime();
-#if defined(MFS_PW_KWIN_NATIVE_API)
+#if defined(MFS_PW_WHOLE_NATIVE)
+        require(argc==5 && (std::string_view(argv[1])=="--whole-manager-daemon" || std::string_view(argv[1])=="--whole-manager-fd"),
+            "usage: --whole-manager-daemon|--whole-manager-fd socket node artifacts");
+        uint32_t node=0;const std::string_view id=argv[3];const auto parsed=std::from_chars(id.data(),id.data()+id.size(),node);
+        require(parsed.ec==std::errc{} && parsed.ptr==id.data()+id.size(),"invalid whole manager node");
+        whole_manager_context(argv[2],node,argv[4],std::string_view(argv[1])=="--whole-manager-fd");return 0;
+#elif defined(MFS_PW_KWIN_NATIVE_API)
         if(argc==4 && std::string_view(argv[1])=="--kwin-portal-failure") {
             kwin_portal_failure(argv[2],argv[3]);return 0;
         }

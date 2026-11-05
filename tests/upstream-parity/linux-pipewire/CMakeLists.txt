@@ -51,6 +51,33 @@ target_compile_options(mfs_pipewire_dma_fixture PRIVATE -Wall -Wextra -Werror)
 set_target_properties(mfs_pipewire_dma_fixture PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 target_link_libraries(mfs_pipewire_source_context PRIVATE mfs_pipewire_dma_fixture)
 if(DEFINED MFS_MEOJSON_INCLUDE)
+    # Separate complete-class consumer. Do not shadow the real PipeWire/base
+    # headers with the older extracted screenshot-only declarations.
+    set(_whole_native_overlay "${CMAKE_CURRENT_BINARY_DIR}/whole-native-overlay")
+    foreach(_name "Input/EiInput.h" "Input/UInput.h" "Input/WlrInput.h"
+        "Input/VkToEvdev.h" "Screencap/WlrScreencap.h")
+        get_filename_component(_parent "${_whole_native_overlay}/${_name}" DIRECTORY)
+        file(MAKE_DIRECTORY "${_parent}")
+        file(WRITE "${_whole_native_overlay}/${_name}"
+            "#pragma once\n// Unselected rejecting boundary in whole-native-owner.hpp.\n")
+    endforeach()
+    add_executable(mfs_pipewire_whole_native_context source-context.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/API/LinuxControlUnitAPI.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Input/NoneInput.cpp")
+    target_compile_definitions(mfs_pipewire_whole_native_context PRIVATE _GNU_SOURCE
+        MFS_PW_WHOLE_NATIVE MAA_CONTROL_UNIT_EXPORTS MAA_VERSION="mfs-p1-whole-pipewire"
+        MFS_WHOLE_LINUX_MANAGER_HEADER="${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h"
+        MFS_WHOLE_LINUX_MANAGER_CPP="${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.cpp")
+    target_include_directories(mfs_pipewire_whole_native_context PRIVATE
+        "${_whole_native_overlay}" "${CMAKE_CURRENT_BINARY_DIR}/linux-manager/config-overlay"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../linux-manager/config-overlay"
+        "${CMAKE_CURRENT_BINARY_DIR}/linux-manager" "${MFS_MEOJSON_INCLUDE}"
+        "${MFS_UPSTREAM_ROOT}/include" "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit"
+        "${MFS_DRM_INCLUDE}" ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mfs_pipewire_whole_native_context PRIVATE PkgConfig::PIPEWIRE
+        Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS} mfs_pipewire_dma_fixture)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/whole-native-scope.txt"
+        "Complete unchanged F Linux manager/header/API, PipeWire capture/header, UnitBase/Config and real NoneInput.cpp. Real C factories and virtual calls; borrowed typed member pointers observe exact manager/capture/input dynamic types without shared-owner copies. Only unselected Wlr/non-None input boundaries reject construction. Fixture balances original pw_init after native destruction. Owned padded RGB producer, private daemon and supplied-fd modes; no Portal desktop authorization, input actions or complete P1 acceptance.\n")
     add_executable(mfs_pipewire_kwin_native_context source-context.cpp
         "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp")
     target_compile_definitions(mfs_pipewire_kwin_native_context PRIVATE _GNU_SOURCE

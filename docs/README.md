@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+完整原版 Linux manager、C API、PipeWire 与真实 NoneInput 的独立捕获入口已接入构建/编排，覆盖 daemon 重建和单次 fd 转交；即时/持帧、类型、features、元数据及资源记录有独立校验入口。原生执行仍待 Actions，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 已修正 Linux 原生工厂的 None 元数据：实际原版 NoneInput 的 features 为 `3`，Rust 先前误报 `0`。完整原类 CPU 观察已核对连接、inactive、重建后的 features、动态 owner 与调用者图像；新 Linux Debug/Release 回归已接入，原生执行待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `c3c8b19` 的 Linux PipeWire 步骤已成功，210 项记录包括完整类 946 例原版/Rust 比较。新增目录的 4,988 份输入与输出已全部上传并核对，来源完整输入仍缺 709 项；这批只验证预连接查询，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

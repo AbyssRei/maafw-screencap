@@ -69,6 +69,7 @@ mod pipewire_host_offer;
 mod pipewire_memfd_stream;
 mod pipewire_thread_mobility;
 mod pipewire_trace;
+mod pipewire_whole_manager;
 mod quality;
 mod records;
 mod reference;
@@ -288,6 +289,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace desktop-fullscreen <external window-fullscreen directory> [--check-only]\n\
                       cargo xtask upstream-trace desktop-workarea <external window-workarea directory> [--check-only]\n\
                       cargo xtask upstream-trace pipewire-host <external matrix> [--check-only]\n\n\
+                      cargo xtask upstream-trace pipewire-whole-manager <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace wlr-host-api <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace wlr-host-construction <external matrix> [--check-only]\n\n\
                       cargo xtask upstream-trace macos-display-patch <external directory> [--check-only]\n\n\

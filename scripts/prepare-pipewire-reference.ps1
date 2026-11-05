@@ -85,6 +85,29 @@ function Prepare-PipeWireReference([string]$FixedUpstream) {
     Copy-Item -LiteralPath $kwin -Destination $saved;Save $saved
     Step kwin-native-source-linkage ldd @($kwin)
     $env:MFS_P1_KWIN_NATIVE_SOURCE=$kwin
+    $whole=Join-Path $refBuild mfs_pipewire_whole_native_context
+    $wholeInputs=Join-Path $refInputs whole-native-pipewire
+    New-Item -ItemType Directory -Path $wholeInputs|Out-Null
+    foreach($item in @(@($whole,'mfs_pipewire_whole_native_context'),
+        @((Join-Path $refBuild whole-native-scope.txt),'scope.txt'),
+        @((Join-Path $refBuild compile_commands.json),'compile-commands.json'))) {
+        $saved=Join-Path $wholeInputs $item[1]
+        Copy-Item -LiteralPath $item[0] -Destination $saved;Save $saved
+    }
+    foreach($relative in @('source/MaaLinuxControlUnit/API/LinuxControlUnitAPI.cpp',
+        'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.cpp',
+        'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h',
+        'source/MaaLinuxControlUnit/Base/UnitBase.h','source/MaaLinuxControlUnit/Base/Config.h',
+        'source/MaaLinuxControlUnit/Input/NoneInput.cpp','source/MaaLinuxControlUnit/Input/NoneInput.h',
+        'source/MaaLinuxControlUnit/Screencap/PipeWireScreencap.cpp',
+        'source/MaaLinuxControlUnit/Screencap/PipeWireScreencap.h',
+        'include/MaaControlUnit/LinuxControlUnitAPI.h')) {
+        $saved=Join-Path $wholeInputs $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $FixedUpstream $relative) -Destination $saved;Save $saved
+    }
+    Step whole-native-pipewire-linkage ldd @($whole)
+    $env:MFS_P1_PIPEWIRE_WHOLE_SOURCE=$whole
     $kwinDeclarations=Join-Path $refInputs kwin-native-abi-source
     foreach($relative in @('source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp',
         'source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h','source/MaaLinuxControlUnit/Base/UnitBase.h',

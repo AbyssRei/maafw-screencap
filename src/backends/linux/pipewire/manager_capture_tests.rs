@@ -37,12 +37,22 @@ impl<'a> managed::Converter for Convert<'a> {
 #[test]
 #[ignore = "requires native owned PipeWire routing and actual C++/OpenCV adapter"]
 fn reconnects_daemon_manager_and_retains_native_cpu_images() {
-    run(false);
+    run(false, false);
 }
 #[test]
 #[ignore = "requires a unique supplied socket for each manager and native OpenCV adapter"]
 fn forwards_supplied_fd_manager_and_closes_consumed_socket() {
-    run(true);
+    run(true, false);
+}
+#[test]
+#[ignore = "requires complete original manager records and native PipeWire/OpenCV"]
+fn compares_whole_daemon_manager_capture_inactive_and_reconstruction() {
+    run(false, true);
+}
+#[test]
+#[ignore = "requires complete original manager records and unique native socket offers"]
+fn compares_whole_fd_manager_capture_inactive_and_consumed_socket() {
+    run(true, true);
 }
 pub(super) fn check_close(evidence: managed::Evidence, expected: u64) {
     let managed::Evidence::PipeWire(e) = evidence else {
@@ -55,7 +65,7 @@ pub(super) fn check_close(evidence: managed::Evidence, expected: u64) {
     assert_eq!(e.dequeued, e.returned, "{e:?}");
     assert_eq!((e.copies, e.allocated), (expected, expected), "{e:?}");
 }
-fn run(supplied_fd: bool) {
+fn run(supplied_fd: bool, whole: bool) {
     let socket = env::var("MFS_P0_PIPEWIRE_SOCKET").unwrap();
     assert_eq!(
         Path::new(&env::var("PIPEWIRE_RUNTIME_DIR").unwrap())
@@ -67,8 +77,14 @@ fn run(supplied_fd: bool) {
         .parse()
         .unwrap();
     let mode = if supplied_fd { "fd" } else { "daemon" };
-    let directory = Path::new(&env::var("MFS_P1_PIPEWIRE_BGR_ARTIFACTS").unwrap())
-        .join(format!("manager-{mode}"));
+    let directory = if whole {
+        Path::new(&env::var("MFS_P1_PIPEWIRE_WHOLE_ARTIFACTS").unwrap())
+            .join(mode)
+            .join("rust")
+    } else {
+        Path::new(&env::var("MFS_P1_PIPEWIRE_BGR_ARTIFACTS").unwrap())
+            .join(format!("manager-{mode}"))
+    };
     fs::create_dir(&directory).unwrap();
     let sessions = if supplied_fd { 1 } else { 2 };
     let total = 20 * sessions * 3;
@@ -87,6 +103,14 @@ fn run(supplied_fd: bool) {
     cache.clear();
     let fds = count("/proc/self/fd");
     let baseline = task_ids();
+    let mut cases = String::new();
+    if whole {
+        fs::write(
+            directory.join("baseline-task-ids.txt"),
+            task_lines(&baseline),
+        )
+        .unwrap();
+    }
     let mut converter = Convert {
         adapter: &adapter,
         raw: Vec::new(),
@@ -114,6 +138,13 @@ fn run(supplied_fd: bool) {
             r#"{{"screencap_method":4,"input_method":0,"pw_socket_fd":{fd},"pw_node_id":{node}}}"#
         );
         let mut manager = manager::NativeManager::from_config_json(Some(json.as_bytes())).unwrap();
+        let cold_features = manager.get_features();
+        assert_eq!(cold_features, 0);
+        assert!(!manager.connected());
+        let info = manager.get_info().unwrap();
+        if whole {
+            fs::write(directory.join(format!("api-{cycle}.info")), &info).unwrap();
+        }
         let mut output = None;
         assert!(
             !manager
@@ -125,6 +156,9 @@ fn run(supplied_fd: bool) {
         let mut uuid = Vec::new();
         assert!(manager.request_uuid(&mut uuid).unwrap());
         assert_eq!(uuid, format!("{fd}_{node}_-1").as_bytes());
+        if whole {
+            fs::write(directory.join(format!("api-{cycle}.uuid")), &uuid).unwrap();
+        }
         let mut close: Option<managed::CloseWatch> = None;
         for session in 0..sessions {
             let connected = if supplied_fd {
@@ -139,6 +173,8 @@ fn run(supplied_fd: bool) {
                 connected.connected && connected.failure.is_none(),
                 "{connected:?}"
             );
+            assert!(manager.connected());
+            assert_eq!(manager.get_features(), 3);
             if let Some(previous) = close.take() {
                 check_close(
                     previous
@@ -152,6 +188,8 @@ fn run(supplied_fd: bool) {
                 if call == 1 {
                     assert!(manager.inactive_native());
                 }
+                assert!(manager.connected());
+                assert_eq!(manager.get_features(), 3);
                 assert!(
                     manager
                         .capture_native(&mut output, &mut converter)
@@ -177,8 +215,13 @@ fn run(supplied_fd: bool) {
                 identities.push(serial);
                 held.push((image, serial));
             }
+            assert!(manager.request_uuid(&mut uuid).unwrap());
+            assert_eq!(uuid, format!("{fd}_{node}_-1").as_bytes());
+            assert_eq!(manager.get_info().unwrap(), info);
         }
         let live = live_tasks();
+        let active_features = manager.get_features();
+        assert_eq!(active_features, 3);
         drop(manager);
         check_close(
             close
@@ -197,6 +240,23 @@ fn run(supplied_fd: bool) {
             );
         }
         assert_resources(&directory, cycle, fds, &baseline, &live);
+        if whole {
+            let closed = task_ids();
+            assert_eq!(closed, baseline);
+            fs::write(
+                directory.join(format!("closed-{cycle}-task-ids.txt")),
+                task_lines(&closed),
+            )
+            .unwrap();
+            cases.push_str(&format!(
+                "{cycle}\t{fd}\t{node}\t{sessions}\t{cold_features}\t{active_features}\t{fds}\t{}\t{}\t1\t{}\t{}\n",
+                count("/proc/self/fd"),
+                baseline.len(),
+                u8::from(supplied_fd),
+                sessions * 3
+            ));
+            fs::write(directory.join("rust-cases.tsv"), &cases).unwrap();
+        }
         for (image, serial) in &held {
             assert_eq!(known_bgr(image), *serial);
         }
@@ -207,6 +267,12 @@ fn run(supplied_fd: bool) {
     }
     assert_eq!(converter.raw.len(), total);
     assert_eq!(identities.len(), total);
+    if whole {
+        for (i, ((image, _), raw)) in held.iter().zip(&converter.raw).enumerate() {
+            fs::write(directory.join(format!("held-{i}.bgr")), image.pixels()).unwrap();
+            fs::write(directory.join(format!("held-{i}.rgb")), raw.pixels()).unwrap();
+        }
+    }
     std::thread::spawn(move || {
         for (raw, serial) in converter.raw.into_iter().zip(identities) {
             assert_eq!(marker(&raw), serial);
@@ -226,4 +292,16 @@ fn run(supplied_fd: bool) {
         20 * sessions,
         if supplied_fd { 20 } else { 0 }
     );
+    if whole {
+        eprintln!(
+            "Rust whole PipeWire comparison mode={mode} objects=20 sessions={} captures={total} held_bgr={total} held_rgb={total} active_features=3 resources_balanced=1 input_actions=0 full_P1_acceptance=0 passed",
+            20 * sessions
+        );
+    }
+}
+fn task_lines(tasks: &[std::ffi::OsString]) -> String {
+    tasks
+        .iter()
+        .map(|task| format!("{}\n", task.to_str().unwrap()))
+        .collect()
 }

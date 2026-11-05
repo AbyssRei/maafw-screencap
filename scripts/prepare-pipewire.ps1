@@ -399,6 +399,20 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
         if($Name -eq 'original-kwin-native-host' -and -not (Get-Content -LiteralPath $log -Raw).Contains('original KWin ABI objects=20 host_true_false_error=7,7,6 captures=60 retained=60 exact_compat_create_destroy=20 real_virtual_handles=20 helper_call_order=20 duplicated_socket_identity=20 input_actions=0 passed')) {
             throw 'Expected exact original KWin C create/destroy, real public virtual handles and native host captures'
         }
+        if($Name -match '^(original|rust)-pipewire-whole-(daemon|fd)$') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $mode=$Matches[2]
+            $sessions=$mode -eq 'fd' ? 20 : 40
+            $images=$sessions*3
+            $owners=20*(1+5*($sessions/20))
+            $expected=$Name.StartsWith('original-') ?
+                "original whole PipeWire manager mode=$mode objects=20 sessions=$sessions captures=$images held=$images owner_observations=$owners original_class_api=1 real_NoneInput=1 active_features=3 resources_balanced=1 input_actions=0 full_P1_acceptance=0 passed" :
+                "Rust whole PipeWire comparison mode=$mode objects=20 sessions=$sessions captures=$images held_bgr=$images held_rgb=$images active_features=3 resources_balanced=1 input_actions=0 full_P1_acceptance=0 passed"
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($expected)+'\r?$').Count -ne 1 -or
+                ($Name.StartsWith('rust-') -and [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1)) {
+                throw 'Expected complete native whole-manager invocation, features, pixels and lifetimes'
+            }
+        }
         if($Name -in @('original-pipewire-manager-daemon','original-pipewire-manager-fd','rust-pipewire-manager-daemon','rust-pipewire-manager-fd')) {
             $observed=Get-Content -LiteralPath $log -Raw
             $fdMode=$Name.EndsWith('-fd')
@@ -882,6 +896,22 @@ try {
             try { Step ('rust-pipewire-manager-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire',('backends::linux::pipewire::native::tests::opencv::manager_capture::'+$probe[2]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
         }
+        $wholeMatrix=Join-Path $referenceArtifacts whole-native-manager
+        New-Item -ItemType Directory -Path $wholeMatrix|Out-Null
+        $env:MFS_P1_PIPEWIRE_WHOLE_ARTIFACTS=$wholeMatrix
+        foreach($probe in @(
+            @('daemon','--whole-manager-daemon','compares_whole_daemon_manager_capture_inactive_and_reconstruction'),
+            @('fd','--whole-manager-fd','compares_whole_fd_manager_capture_inactive_and_consumed_socket')
+        )) {
+            $modeRoot=Join-Path $wholeMatrix $probe[0]
+            New-Item -ItemType Directory -Path $modeRoot|Out-Null
+            try { Step ('original-pipewire-whole-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s',$env:MFS_P1_PIPEWIRE_WHOLE_SOURCE,$probe[1],$socket,$env:MFS_P0_PIPEWIRE_NODE_ID,(Join-Path $modeRoot source)) }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+            try { Step ('rust-pipewire-whole-'+$probe[0]) timeout @('--signal=TERM','--kill-after=5s','180s','cargo','test','--release','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire',('backends::linux::pipewire::native::tests::opencv::manager_capture::'+$probe[2]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
+            catch { $failed=$true; Write-Host $_.Exception.Message }
+        }
+        try { Step pipewire-whole-manager-records $ConfigureTool @('upstream-trace','pipewire-whole-manager',$wholeMatrix) }
+        catch { $failed=$true; Write-Host $_.Exception.Message }
         $hostMatrix=Join-Path $referenceArtifacts manager-host-matrix
         New-Item -ItemType Directory -Path $hostMatrix|Out-Null
         $env:MFS_P1_PIPEWIRE_HOST_ARTIFACTS=Join-Path $hostMatrix rust

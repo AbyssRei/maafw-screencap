@@ -144,6 +144,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+完整原版 Linux manager 的真实 PipeWire 捕获现有独立入口，原样编译 manager/header、C API、UnitBase/Config、PipeWire 和 NoneInput；真实 C 工厂与虚调用分别覆盖私有 daemon 重建和单次 fd 转交。类型化成员指针只借用原类槽位，不复制 shared_ptr，检查实际 PipeWire/NoneInput 类型、features=`3`、inactive 前后 owner 和连接状态。早期提取函数体入口继续独立回归，未选 Wlr/其他输入构造仍明确拒绝；不执行输入操作或桌面授权。
+
+新编排要求双方共八十个生命周期、360 次捕获及 1,080 份即时/销毁后持帧文件。Rust 复用原有 `NativeManager`、捕获与 OpenCV 适配路径，分别记录完整 UUID/info、冷态/活动 features、fd 关闭及线程身份；独立 `cargo xtask upstream-trace pipewire-whole-manager <外部矩阵> [--check-only]` 逐像素核对自有非对称图样、转换、持帧和 340 份原类 owner 观察。原生执行仍待 Linux Actions，不以本机 Windows 构建或合成校验器控制替代；`local/current-pipewire-whole-manager-path.txt` 指向本批开发材料，完整 P1 未通过。
+
+本机沿明确归档 Cargo/vendor 输入完成工作区 Release、36+4+153 项测试、严格 Clippy 和格式/文档检查。实际 Step 的 26 组控制核对正常两侧/两种模式，并拒绝旧 features、缺行、重复、零测试和非零退出；独立 CLI 的十三组完整文件控制核对报告重放，拒绝边缘坏像素、持帧变化、元数据/owner/线程替换、fd 未消费、缺失及多余文件。它们全部是 CPU/合成控制，Linux 原生执行次数为零。首次合成原文标志因 Windows 写出 CRLF 被精确字节检查拒收，原文件/日志保留，仅将新夹具写为规定 LF；首轮 Clippy 的固定三字节分块警告也已修正并保留日志。
+
 继续完整 Linux 类审阅时发现了实际迁移缺陷：固定 F 的 `NoneInput::get_features()` 返回鼠标/键盘两种旧 down/up 标志，数值为 `3`；Rust `NativeFactory::input_features()` 却直接返回 `0`。此前原生截图夹具替代了 None 输入 owner，预连接语料又没有创建它，因而未覆盖这一状态。现修正同一 Rust 原生工厂的返回值，冷态与尚未创建 input 的拒绝状态仍为 `0`；这是保持 F 的管理器元数据，不新增输入操作或定案 SDK 能力。
 
 完整原类程序新增独立 `--whole-none` CPU 入口，实际 C 工厂、manager/API 与 NoneInput 源码保持不变。借用类型化成员指针读取原类拥有的 capture/input 槽，不复制 shared_ptr；实际 RTTI 确认 None 类型，并观察 None 连接、inactive、拒绝截图及重建后的 features=`3`。ExtImage/未知方法在 input 构造前拒绝，features=`0`，三份真实调用者 Mat 的地址、引用和全部像素保持。首次探针错误地假定 ExtImage 的空 socket UUID 等于 None，原版按其 Wlr socket 路径返回 `_-1`；该失败输出保留，仅修正夹具预期。旧切片程序没有这个完整类入口，实际 Step 会拒收其异常输出。默认 946 例配置入口继续独立回归，不把 None 生命周期算作原生后端连接或截图。
