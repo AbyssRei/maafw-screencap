@@ -1,5 +1,9 @@
 # 文档导航与维护约定
 
+已修正 Linux 原生工厂的 None 元数据：实际原版 NoneInput 的 features 为 `3`，Rust 先前误报 `0`。完整原类 CPU 观察已核对连接、inactive、重建后的 features、动态 owner 与调用者图像；新 Linux Debug/Release 回归已接入，原生执行待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
+确切 `c3c8b19` 的 Linux PipeWire 步骤已成功，210 项记录包括完整类 946 例原版/Rust 比较。新增目录的 4,988 份输入与输出已全部上传并核对，来源完整输入仍缺 709 项；这批只验证预连接查询，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 Linux 完整类查询已在原生 runner 通过编译、加载和 946 例原版语料；后续 Rust 比较暴露了函数导入作用域问题，现已修正并用实际导入/调用路径复核。诊断包同步补入完整类输入目录，原失败保留，新托管执行待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `3c50a97` 的 Windows 完整类记录已独立复算：完整查询、108 种宿主配置和七种完整 Gamepad→Win32 链均通过图像、持帧、类型与所有权检查。七组件为 734/745，原有十一项失败保留；594 份报告及全部 57,242 份原始文件核对通过，仍有 4,932 个完整输入缺口，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

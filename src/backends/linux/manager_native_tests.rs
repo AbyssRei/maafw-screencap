@@ -92,8 +92,13 @@ fn none_and_unimplemented_native_methods_do_not_enter_capture_adapters() {
             pipewire_node: 0,
             ..Config::default()
         });
+        assert!(!manager.connected());
+        assert_eq!(manager.get_features(), 0);
+        let original_info = manager.get_info().unwrap();
         let connected = manager.connect_native().unwrap();
         assert_eq!(connected.connected, method == NONE);
+        let expected_features = if method == NONE { 3 } else { 0 };
+        assert_eq!(manager.get_features(), expected_features);
         assert!(connected.failure.is_none());
         assert!(matches!(connected.evidence, Evidence::None));
         let mut output = 99;
@@ -103,14 +108,29 @@ fn none_and_unimplemented_native_methods_do_not_enter_capture_adapters() {
         assert!(matches!(captured.evidence, Evidence::None));
         assert!(captured.replayed.is_none());
         assert!(manager.inactive_native());
+        assert_eq!(manager.get_features(), expected_features);
+        assert_eq!(manager.get_info().unwrap(), original_info);
+        let reconstructed = manager.connect_native().unwrap();
+        assert_eq!(reconstructed.connected, method == NONE);
+        assert_eq!(manager.get_features(), expected_features);
+        assert_eq!(manager.get_info().unwrap(), original_info);
         let close = connected.close;
+        let rebuilt_close = reconstructed.close;
         drop(manager);
         if method == NONE {
             assert!(matches!(close.unwrap().take(), Some(Evidence::None)));
+            assert!(matches!(
+                rebuilt_close.unwrap().take(),
+                Some(Evidence::None)
+            ));
         } else {
             assert!(close.is_none());
+            assert!(rebuilt_close.is_none());
         }
     }
+    println!(
+        "Rust native Linux None cases=3 cold_features=0 active_NoneInput_features=3 unsupported_features=0 reconstructed=3 inactive_preserved=1 false_output_preserved=1 adapter_calls=0 passed"
+    );
 }
 #[cfg(feature = "linux-pipewire")]
 #[test]

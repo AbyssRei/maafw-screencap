@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 #pragma once
 // This CPU-only configuration caller compiles the complete original manager.
-// No connect/input operation is permitted. These explicitly unselected native
-// dependencies reject construction; they are not capture implementations.
+// These explicitly unselected native dependencies reject construction; they
+// are not capture implementations. The separate None lifecycle uses the real
+// original None capture/input classes without a native connection/input action.
 #include "Base/UnitBase.h"
 #include <filesystem>
 #include <memory>

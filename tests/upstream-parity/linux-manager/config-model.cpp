@@ -55,6 +55,9 @@ std::string hex(std::string_view bytes) {
 }
 }
 #include "compat-model.hpp"
+#if defined(MFS_WHOLE_LINUX_QUERY)
+#include "whole-none-query.hpp"
+#endif
 int main(int argc,char** argv) {
     try {
         static_assert(sizeof(MaaLinuxScreencapMethod)==8 && sizeof(MaaLinuxInputMethod)==8);
@@ -63,6 +66,9 @@ int main(int argc,char** argv) {
             "Recharacterize the explicit source parser before changing its packed-byte trait");
         require(std::string_view(MaaLinuxControlUnitGetVersion())=="mfs-p1-config-oracle","original API version forwarding changed");
 #if defined(MFS_WHOLE_LINUX_QUERY)
+        if(argc==2 && std::string_view(argv[1])=="--whole-none") {
+            whole_none_query();return 0;
+        }
         if(argc==2 && std::string_view(argv[1])=="--whole-origin") {
             std::cout<<"whole_original_linux_manager=1 full_original_api=1 native_connection=0 input_actions=0\n";
             return 0;

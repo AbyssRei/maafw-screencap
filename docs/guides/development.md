@@ -144,6 +144,16 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+继续完整 Linux 类审阅时发现了实际迁移缺陷：固定 F 的 `NoneInput::get_features()` 返回鼠标/键盘两种旧 down/up 标志，数值为 `3`；Rust `NativeFactory::input_features()` 却直接返回 `0`。此前原生截图夹具替代了 None 输入 owner，预连接语料又没有创建它，因而未覆盖这一状态。现修正同一 Rust 原生工厂的返回值，冷态与尚未创建 input 的拒绝状态仍为 `0`；这是保持 F 的管理器元数据，不新增输入操作或定案 SDK 能力。
+
+完整原类程序新增独立 `--whole-none` CPU 入口，实际 C 工厂、manager/API 与 NoneInput 源码保持不变。借用类型化成员指针读取原类拥有的 capture/input 槽，不复制 shared_ptr；实际 RTTI 确认 None 类型，并观察 None 连接、inactive、拒绝截图及重建后的 features=`3`。ExtImage/未知方法在 input 构造前拒绝，features=`0`，三份真实调用者 Mat 的地址、引用和全部像素保持。首次探针错误地假定 ExtImage 的空 socket UUID 等于 None，原版按其 Wlr socket 路径返回 `_-1`；该失败输出保留，仅修正夹具预期。旧切片程序没有这个完整类入口，实际 Step 会拒收其异常输出。默认 946 例配置入口继续独立回归，不把 None 生命周期算作原生后端连接或截图。
+
+十二组实际 C++ Step 控制接受一项、拒绝十一项，包含原初失败、旧 features、缺失类型、错冷态/重建、缺行/重复/顺序以及退出码；另两个真实程序分别通过/拒收。Rust 原有 None/未实现方法单测增加连接前后、inactive、重建、metadata 和两个关闭观察的断言，测试描述符数不变；CI 单独以 `linux-pipewire` 的 Debug/Release 精确执行同一用例。二十二组实际 Rust Step mock 与三组从实际脚本提取的 profile 编排控制通过，失败保留且另一 profile 继续。夜间工具链更新至 `2d20b42b8`，归档离线输入下工作区 Release、36+4+151 项 Windows 测试、Windows manager/custom 严格 Clippy 和格式检查通过；这些不编译/执行 Linux 原生工厂，新 Linux 回归仍待 CI。`local/current-linux-none-features-path.txt` 指向本批材料。
+
+该库文件变化影响两份历史对应清单的十一项来源记录；其中“Input=None 返回零”的旧推理已被完整原类反例否定。旧源码、映射与运行结果保留，不能继续把其整文件位置与该结论当作当前实现证明；新原生结果和当前对应刷新另行验收。真实 Wlr/PipeWire 捕获仍使用早期提取函数体夹具，完整类接入捕获的工作尚未完成，也没有开启 P2/SDK。
+
+上一修正确切 `c3c8b19` 已得到原生 Linux 结果：PipeWire 生命周期步骤成功，组件 210/210，旧 209 项状态保持，新增完整类 Rust 比较通过。官方 ZIP 摘要、49,285 份原始文件、所有检查日志与可用登记输入核对通过；4,988 份完整类输入/输出全部可用，946 例 full/legacy 的每例文件及 852 份 Rust UUID/info 字节一致，十份原始 F 文件摘要相符。五条实际 Ninja 对象构建消息核对通过，但轻量包没有完整 compile database，另有 709 个完整输入缺口；不接受完整编译来源闭合。首次外部 reader 未加 Windows 长路径前缀，随后误假定 compile database 在包中，两次审阅失败保留，不重跑原生测试。`local/current-c3-linux-whole-query-review-path.txt` 保存封存复核。这是先前预连接查询修正的验收，与本次新增活动 None owner 观察及真实后端捕获分别报告。
+
 确切 `5a068a9` 的原生 Linux 已通过完整类程序的编译、ldd 加载及 946 个原版查询/426 次归一化；官方诊断 ZIP 摘要与对应日志核对通过。不过，后续 Rust 比较函数随 `Prepare-PipeWireReference` 内部 dot-source 的函数作用域一起消失，调用方无法找到它。该批步骤整体失败，组件 manifest 的 209 项虽都记录为通过，却缺少必需的 `linux-whole-config-rust-parity`，不能写成完整 CI 通过。受控执行原导入语句复现了“准备作用域内存在、返回后缺失”；现将函数定义文件导入移至共享脚本作用域。原/修正两种实际导入路径分别确认失败/可调用，新路径还用真实 Rust 程序比较 946 例、归档 852 份输出并恢复环境，通过后才保留修正。
 
 该批轻量诊断没有匹配新增完整类目录，遗漏 4,136 个已登记输入；workflow 现只增加 `inputs/source-reference/whole-linux-query/**` 路径，后续 source/Rust 数据均随该目录上传。YAML 其余步骤与参数保持原文、预装工具政策和断言不变。外部记录由 `local/current-linux-query-scope-fix-path.txt` 指向；这次未重建 Rust/C++、未重跑本机捕获，也没有抹去失败。新托管 Rust 比较、数据上传及完整来源核验仍待下一次确切提交验证。

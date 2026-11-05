@@ -172,6 +172,7 @@ function Observe-LinuxWholeConfigReference([string]$Build,[string]$InputDirector
     $env:MFS_P1_LINUX_WHOLE_CONFIG_RUST_ARTIFACTS=Join-Path $root rust
     try {Step linux-whole-config-source-corpus $ConfigureTool @('upstream-config','linux-whole',$executable,$observations)}
     finally {if(Test-Path -LiteralPath $observations){Get-ChildItem -LiteralPath $observations -Recurse -File|ForEach-Object{Save $_.FullName}}}
+    Step linux-whole-none-source $executable @('--whole-none')
 }
 
 function Compare-LinuxWholeConfigReference([string]$Program,[string[]]$Prefix) {

@@ -75,5 +75,5 @@ if(DEFINED MFS_MEOJSON_INCLUDE)
         target_compile_options(mfs_linux_whole_config_model PRIVATE /utf-8 /EHs)
     endif()
     file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/whole-query-scope.txt"
-        "Whole unchanged F LinuxControlUnitMgr.cpp/header and LinuxControlUnitAPI.cpp plus real NoneInput.cpp; actual virtual query/caller Mat consumption only, no connect/input action/native capture. Explicit rejecting Wlr/PipeWire/input/key-translation boundaries compile unselected dependencies only. This closes whole manager source/vtable query compilation, not actual native manager capture, original input construction or P1.\n")
+        "Whole unchanged F LinuxControlUnitMgr.cpp/header and LinuxControlUnitAPI.cpp plus real NoneInput.cpp. The configuration corpus consumes only pre-connect virtual queries/caller Mat. Separate --whole-none connects/reconstructs the original None capture/input classes, checks actual dynamic owner types, legacy features and unchanged caller Mat. Rejecting Wlr/PipeWire/non-None input/key-translation boundaries remain unselected. No native backend connection/capture or input action, general input construction or P1 acceptance.\n")
 endif()

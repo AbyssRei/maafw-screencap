@@ -226,7 +226,10 @@ impl Factory for NativeFactory {
         Ok(true)
     }
     fn input_features(_: &Arc<NoneInput>) -> u64 {
-        0
+        // Fixed NoneInput::get_features advertises both legacy down/up flags.
+        // These are original manager metadata, not screenshot SDK capabilities
+        // or an input-action implementation.
+        super::INPUT_FEATURE_MASK
     }
     fn inactive_capture(unit: &mut Self::Unit) {
         match &mut unit.unit {

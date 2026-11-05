@@ -291,6 +291,27 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected all original/Rust configuration acceptance, UUID and metadata comparisons in one actual test'
             }
         }
+        if($Name -eq 'linux-whole-none-source') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $expected=@(
+                'whole_none method=0 cold_features=0 connected=1 active_features=3 inactive_features=3 reconstructed_features=3 actual_capture_none=1 actual_input_none=1 caller_unchanged=1 original_destroyed=1',
+                'whole_none method=2 cold_features=0 connected=0 active_features=0 inactive_features=0 reconstructed_features=0 actual_capture_none=0 actual_input_none=0 caller_unchanged=1 original_destroyed=1',
+                'whole_none method=18446744073709551615 cold_features=0 connected=0 active_features=0 inactive_features=0 reconstructed_features=0 actual_capture_none=0 actual_input_none=0 caller_unchanged=1 original_destroyed=1',
+                'Original whole Linux None manager cases=3 active_NoneInput=1 active_features=3 original_class_api=1 caller_checks=3 native_connection=0 native_captures=0 input_actions=0 full_P1_acceptance=0 passed'
+            )
+            $actual=@($observed -split '\r?\n'|Where-Object {$_ -match '^(whole_none |Original whole Linux None manager |caller_caught_exception_hex=)'})
+            if(($actual -join "`n") -cne ($expected -join "`n")){throw 'Expected complete original NoneInput owner/features and false-capture caller observations'}
+        }
+        if($Name -in @('linux-none-features-debug','linux-none-features-release')) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            $prefix='(?m)^(?:test backends::linux::manager::native::tests::none_and_unimplemented_native_methods_do_not_enter_capture_adapters \.\.\. )?'
+            if([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1 -or
+                [regex]::Matches($observed,$prefix+'Rust native Linux None cases=').Count -ne 1 -or
+                [regex]::Matches($observed,$prefix+'Rust native Linux None cases=3 cold_features=0 active_NoneInput_features=3 unsupported_features=0 reconstructed=3 inactive_preserved=1 false_output_preserved=1 adapter_calls=0 passed\r?$').Count -ne 1) {
+                throw 'Expected actual native NoneInput feature/state regression in one exact test'
+            }
+        }
         if($Name -eq 'linux-whole-config-source-corpus') {
             $observed=Get-Content -LiteralPath $log -Raw
             if([regex]::Matches($observed,'(?m)^Original whole Linux manager configuration ').Count -ne 1 -or
@@ -747,6 +768,13 @@ try {
             catch { $failed=$true; Write-Host $_.Exception.Message }
             try { Step rust-pipewire-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::native::tests::','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
+            foreach($noneProfile in @('debug','release')) {
+                $noneArguments=@('test','--locked','--lib','--features','linux-pipewire')
+                if($noneProfile -eq 'release'){$noneArguments+='--release'}
+                $noneArguments+=@('backends::linux::manager::native::tests::none_and_unimplemented_native_methods_do_not_enter_capture_adapters','--','--exact','--test-threads=1','--nocapture')
+                try{Step ('linux-none-features-'+$noneProfile) cargo $noneArguments}
+                catch{$failed=$true;Write-Host $_.Exception.Message}
+            }
         }
         try { Step native-joined-task-observation timeout @('--signal=TERM','--kill-after=5s','60s',$sourceExecutable,'--joined-task-observation',(Join-Path $referenceArtifacts task-observation)) }
         catch { $failed=$true; Write-Host $_.Exception.Message }
