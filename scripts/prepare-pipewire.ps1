@@ -285,10 +285,28 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 throw 'Expected 960 exact original-body/Rust manager scripts and one actual test'
             }
         }
-        if($Name -eq 'linux-config-rust-parity') {
+        if($Name -in @('linux-config-rust-parity','linux-whole-config-rust-parity')) {
             $observed=Get-Content -LiteralPath $log -Raw
             if($observed -notmatch 'Rust Linux config cases=946 accepted=426 rejected=520 exact_uuid_metadata=1 input_actions=0 passed' -or $observed -notmatch '(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;') {
                 throw 'Expected all original/Rust configuration acceptance, UUID and metadata comparisons in one actual test'
+            }
+        }
+        if($Name -eq 'linux-whole-config-source-corpus') {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if([regex]::Matches($observed,'(?m)^Original whole Linux manager configuration ').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^Original Linux configuration ').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^Original whole Linux manager configuration cases=946 complete_class_api=1 no_native_connection=1 input_actions=0 full_P1_acceptance=0 passed\r?$').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^Original Linux configuration cases=946 accepted=426 rejected=520 normalized_roundtrips=426 no_native_connection=1 passed\r?$').Count -ne 1) {
+                throw 'Expected complete whole-class original configuration and RTTI corpus'
+            }
+        }
+        if($Name -eq 'linux-whole-config-rust-parity') {
+            $prefix='(?m)^(?:test backends::linux::manager::configuration::tests::matches_original_configuration_creation_uuid_and_metadata_bytes \.\.\. )?'
+            if([regex]::Matches($observed,'(?m)^test result:').Count -ne 1 -or
+                [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1 -or
+                [regex]::Matches($observed,$prefix+'Rust Linux config cases=').Count -ne 1 -or
+                [regex]::Matches($observed,$prefix+'Rust Linux config cases=946 accepted=426 rejected=520 exact_uuid_metadata=1 input_actions=0 passed\r?$').Count -ne 1) {
+                throw 'Incomplete or repeated whole-class Rust configuration comparison'
             }
         }
         if($Name -eq 'linux-compat-rust-parity'){
@@ -718,6 +736,8 @@ try {
             try { Step linux-config-rust-parity timeout @('--signal=TERM','--kill-after=5s','90s',$managerTest,'backends::linux::manager::configuration::tests::matches_original_configuration_creation_uuid_and_metadata_bytes','--exact','--ignored','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
             finally {if(Test-Path -LiteralPath $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS){Get-ChildItem -LiteralPath $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS -Recurse -File|ForEach-Object{Save $_.FullName}}}
+            try {Compare-LinuxWholeConfigReference timeout @('--signal=TERM','--kill-after=5s','90s',$managerTest)}
+            catch {$failed=$true;Write-Host $_.Exception.Message}
             try{
                 Step linux-compat-rust-parity timeout @('--signal=TERM','--kill-after=5s','60s',$managerTest,'backends::linux::manager::compat::tests::matches_original_compatibility_arguments_metadata_and_portal_call_order','--exact','--ignored','--test-threads=1','--nocapture')
                 Step linux-compat-records $ConfigureTool @('upstream-config','linux-compat-records',$env:MFS_P1_LINUX_COMPAT_MATRIX)

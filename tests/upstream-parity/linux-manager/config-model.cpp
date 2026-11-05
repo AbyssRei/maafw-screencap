@@ -3,7 +3,13 @@
 // Exact legacy create/destroy, Config.h and queried manager bodies, using real
 // public C++ handles/vtables, meojson and Mat. No backend/input connection runs.
 #include "MaaControlUnit/LinuxControlUnitAPI.h"
+#if defined(MFS_WHOLE_LINUX_QUERY)
+#include MFS_WHOLE_LINUX_MANAGER_HEADER
+#include "whole-query-boundary.hpp"
+#include MFS_WHOLE_LINUX_MANAGER_CPP
+#else
 #include "Manager/LinuxControlUnitMgr.h"
+#endif
 #include "MaaUtils/Logger.h"
 #include <fstream>
 #include <iostream>
@@ -12,7 +18,9 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <typeinfo>
 
+#if !defined(MFS_WHOLE_LINUX_QUERY)
 MAA_CTRL_UNIT_NS_BEGIN
 #include "linux-config-manager.inc"
 // Full original class declarations remain authoritative. These unrelated
@@ -34,6 +42,7 @@ bool LinuxControlUnitMgr::scroll(int,int) {throw std::logic_error("input exclude
 bool LinuxControlUnitMgr::relative_move(int,int) {throw std::logic_error("input excluded");}
 MAA_CTRL_UNIT_NS_END
 #include "linux-config-api.inc"
+#endif
 
 namespace {
 void require(bool value,const char* message) {if(!value) {throw std::runtime_error(message);}}
@@ -53,6 +62,12 @@ int main(int argc,char** argv) {
         static_assert(json::_packed_bytes::packed_bytes_trait_max::step==16,
             "Recharacterize the explicit source parser before changing its packed-byte trait");
         require(std::string_view(MaaLinuxControlUnitGetVersion())=="mfs-p1-config-oracle","original API version forwarding changed");
+#if defined(MFS_WHOLE_LINUX_QUERY)
+        if(argc==2 && std::string_view(argv[1])=="--whole-origin") {
+            std::cout<<"whole_original_linux_manager=1 full_original_api=1 native_connection=0 input_actions=0\n";
+            return 0;
+        }
+#endif
         if(argc>1 && std::string_view(argv[1])=="--compat") { return compat_main(argc,argv); }
         require(argc==2 || argc==3,"usage: config-model --null | --file <raw JSON file>");
         std::string input;
@@ -69,6 +84,12 @@ int main(int argc,char** argv) {
             MaaLinuxControlUnitCreate(offered),MaaLinuxControlUnitDestroy);
         std::cout<<"created="<<static_cast<bool>(unit)<<'\n';
         if(unit) {
+#if defined(MFS_WHOLE_LINUX_QUERY)
+            require(typeid(*unit)==typeid(MAA_CTRL_UNIT_NS::LinuxControlUnitMgr)
+                && dynamic_cast<MAA_CTRL_UNIT_NS::ScrollableUnit*>(unit.get())
+                && dynamic_cast<MAA_CTRL_UNIT_NS::RelativeMovableUnit*>(unit.get()),
+                "whole original Linux class or actual interface bases differ");
+#endif
             require(!unit->connected(),"configuration API unexpectedly connected its manager");
             std::string uuid="unchanged";
             require(unit->request_uuid(uuid),"original config UUID failed");

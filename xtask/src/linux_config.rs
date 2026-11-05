@@ -29,10 +29,10 @@ pub fn run(args: &[String]) -> Result<()> {
     }
     let [kind, executable, path] = args else {
         return Err(
-            "expected upstream-config linux <original executable> <new external directory>".into(),
+            "expected upstream-config linux|linux-whole <original executable> <new external directory>".into(),
         );
     };
-    if kind != "linux" {
+    if !matches!(kind.as_str(), "linux" | "linux-whole") {
         return Err("only the Linux original configuration oracle is implemented".into());
     }
     let executable = fs::canonicalize(executable)?;
@@ -41,6 +41,17 @@ pub fn run(args: &[String]) -> Result<()> {
         return Err("configuration observation directory must be new".into());
     }
     let directory = records::external_root(Path::new(path))?;
+    let whole = kind == "linux-whole";
+    if whole {
+        let origin = Command::new(&executable).arg("--whole-origin").output()?;
+        fs::write(directory.join("whole-origin.stdout"), &origin.stdout)?;
+        fs::write(directory.join("whole-origin.stderr"), &origin.stderr)?;
+        if !origin.status.success() || !matches!(origin.stdout.as_slice(),
+            b"whole_original_linux_manager=1 full_original_api=1 native_connection=0 input_actions=0\n"
+            | b"whole_original_linux_manager=1 full_original_api=1 native_connection=0 input_actions=0\r\n") {
+            return Err("whole-class query requires its explicitly compiled original manager/API executable".into());
+        }
+    }
     let mut observations = Vec::new();
     for case in corpus::cases() {
         let case_dir = directory.join(&case.name);
@@ -121,19 +132,28 @@ pub fn run(args: &[String]) -> Result<()> {
     if records::hash(&executable)? != executable_sha256 {
         return Err("original configuration executable changed during observation".into());
     }
-    records::create_json(
-        &directory.join("observations.json"),
-        &serde_json::json!({
-            "layout_version":1, "phase":"P1", "phase_status":"incomplete", "cases":observations,
-        "executable_sha256":executable_sha256,
-            "scope":"Original Config.h/meojson/API and queried manager bodies with real C++ handles/vtables/Mat; no native/input connection. Byte metadata/UUID and normalization roundtrip observations, not Rust config or backend acceptance."
-        }),
-    )?;
+    let mut report = serde_json::json!({
+        "layout_version":1, "phase":"P1", "phase_status":"incomplete", "cases":observations,
+    "executable_sha256":executable_sha256,
+        "scope":"Original Config.h/meojson/API and queried manager bodies with real C++ handles/vtables/Mat; no native/input connection. Byte metadata/UUID and normalization roundtrip observations, not Rust config or backend acceptance."
+    });
+    if whole {
+        report["layout_version"] = 2.into();
+        report["whole_original_manager_and_api"] = true.into();
+        report["scope"] = "Complete unchanged F LinuxControlUnitMgr.cpp/header and LinuxControlUnitAPI.cpp, original NoneInput.cpp and real public virtual interfaces, Config.h/meojson and caller Mat. CPU query/factory/normalization observations only: native Wlr/PipeWire/input/key-translation dependencies explicitly reject construction and are unselected. RTTI/interface casts and caller ownership are required for every created manager. No connect, input action, native capture or full P1 acceptance.".into();
+    }
+    records::create_json(&directory.join("observations.json"), &report)?;
     println!(
         "Original Linux configuration cases={} accepted={accepted} rejected={} normalized_roundtrips={accepted} no_native_connection=1 passed",
         observations.len(),
         observations.len() - accepted
     );
+    if whole {
+        println!(
+            "Original whole Linux manager configuration cases={} complete_class_api=1 no_native_connection=1 input_actions=0 full_P1_acceptance=0 passed",
+            observations.len()
+        );
+    }
     Ok(())
 }
 

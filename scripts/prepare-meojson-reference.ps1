@@ -141,3 +141,57 @@ function Observe-LinuxConfigReference([string]$Build,[string]$InputDirectory,[st
     . (Join-Path $PSScriptRoot prepare-manager-metadata.ps1)
     Save-ManagerMetadataReference (Join-Path $managerBuild metadata) $InputDirectory (Join-Path $RunRoot linux-x64/reference-u/artifacts/manager-metadata)
 }
+
+# Independent CPU query corpus from the whole original manager/API program.
+# Rejecting native dependencies are unselected; this does not connect/capture.
+function Observe-LinuxWholeConfigReference([string]$Build,[string]$InputDirectory,[string]$FixedUpstream) {
+    $managerBuild=Join-Path $Build linux-manager
+    $root=Join-Path $InputDirectory whole-linux-query
+    New-Item -ItemType Directory -Path $root|Out-Null
+    $executable=Join-Path $managerBuild mfs_linux_whole_config_model
+    $saved=Join-Path $root mfs_linux_whole_config_model
+    Copy-Item -LiteralPath $executable -Destination $saved;Save $saved
+    Step linux-whole-config-linkage ldd @($executable)
+    foreach($relative in @('whole-query-scope.txt','whole-query-overlay/Input/EiInput.h','whole-query-overlay/Input/UInput.h',
+        'whole-query-overlay/Input/WlrInput.h','whole-query-overlay/Input/VkToEvdev.h',
+        'whole-query-overlay/Screencap/PipeWireScreencap.h','whole-query-overlay/Screencap/WlrScreencap.h')) {
+        $saved=Join-Path $root $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $managerBuild $relative) -Destination $saved;Save $saved
+    }
+    foreach($relative in @('source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.cpp','source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h',
+        'source/MaaLinuxControlUnit/API/LinuxControlUnitAPI.cpp','source/MaaLinuxControlUnit/Base/Config.h','source/MaaLinuxControlUnit/Base/UnitBase.h',
+        'source/MaaLinuxControlUnit/Input/NoneInput.cpp','source/MaaLinuxControlUnit/Input/NoneInput.h',
+        'include/MaaControlUnit/LinuxControlUnitAPI.h','include/MaaControlUnit/ControlUnitAPI.h','include/MaaControlUnit/MaaControlUnitDef.h')) {
+        $saved=Join-Path $root $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $FixedUpstream $relative) -Destination $saved;Save $saved
+    }
+    $observations=Join-Path $root observations
+    $env:MFS_P1_LINUX_WHOLE_CONFIG_OBSERVATIONS=$observations
+    $env:MFS_P1_LINUX_WHOLE_CONFIG_RUST_ARTIFACTS=Join-Path $root rust
+    try {Step linux-whole-config-source-corpus $ConfigureTool @('upstream-config','linux-whole',$executable,$observations)}
+    finally {if(Test-Path -LiteralPath $observations){Get-ChildItem -LiteralPath $observations -Recurse -File|ForEach-Object{Save $_.FullName}}}
+}
+
+function Compare-LinuxWholeConfigReference([string]$Program,[string[]]$Prefix) {
+    $before=[ordered]@{}
+    foreach($key in @('MFS_P1_LINUX_CONFIG_OBSERVATIONS','MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS')) {
+        $before[$key]=[Environment]::GetEnvironmentVariable($key)
+    }
+    try {
+        $env:MFS_P1_LINUX_CONFIG_OBSERVATIONS=$env:MFS_P1_LINUX_WHOLE_CONFIG_OBSERVATIONS
+        $env:MFS_P1_LINUX_CONFIG_RUST_ARTIFACTS=$env:MFS_P1_LINUX_WHOLE_CONFIG_RUST_ARTIFACTS
+        Step linux-whole-config-rust-parity $Program ($Prefix+@('backends::linux::manager::configuration::tests::matches_original_configuration_creation_uuid_and_metadata_bytes','--exact','--ignored','--test-threads=1','--nocapture'))
+    } finally {
+        try {
+            $artifacts=$env:MFS_P1_LINUX_WHOLE_CONFIG_RUST_ARTIFACTS
+            if($artifacts -and (Test-Path -LiteralPath $artifacts)){Get-ChildItem -LiteralPath $artifacts -Recurse -File|ForEach-Object{Save $_.FullName}}
+        } finally {
+            foreach($key in $before.Keys){
+                if($null -eq $before[$key]){Remove-Item -LiteralPath ('Env:'+$key) -ErrorAction SilentlyContinue}
+                else{[Environment]::SetEnvironmentVariable($key,$before[$key])}
+            }
+        }
+    }
+}

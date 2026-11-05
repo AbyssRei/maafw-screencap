@@ -144,7 +144,17 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
-原有严格整屏 RGB 用例现增加独立的 `records_all_display_pixels_with_distinct_scene_path_in_both_orders`：场景使用同一 libtest 程序的完整字节和 Unix 权限副本，从相邻不同路径启动，消费程序路径、同一工作线程中的原版/Rust 调用、默认五秒等待、绘制及关闭次序不变。两种顺序各执行六次调用，仍要求每张完整目标 RGB、两侧完整 BGR 字节一致、原格式转换和场景关闭后的持帧；不借用仅检查绿色区域的既有成功结果。同路径用例继续独立执行，新用例尚无 Apple 原生捕获结论。
+Linux 新增独立 `mfs_linux_whole_config_model`，直接编译固定 F 完整、未修改的 `LinuxControlUnitMgr.cpp/header`、`LinuxControlUnitAPI.cpp`、`NoneInput.cpp` 和两份兼容 API。原 `Config.h`、`UnitBase.h` 及公共接口继续使用相同字节，实际编译器读取的复制头与原文件另行比对；没有把先前的函数切片改名当作完整类。程序对每个成功创建的对象要求实际 RTTI 和 Scrollable/RelativeMovable 基类转换，并通过真实工厂/虚接口查询、拒绝未连接截图、检查调用者 Mat 及销毁后的像素。完整原类也编译了未执行的 connect/输入成员；六份生成 overlay 仅将未选择的 Wlr/PipeWire/输入/按键转换依赖导向明确抛错类型。真实 NoneInput 源码参与链接，但本批没有创建或初始化活动输入 owner，不接受完整原生 manager 捕获或输入行为。
+
+`cargo xtask upstream-config linux-whole <完整原类程序> <新外部目录>` 要求独立来源标记，接受该单行标记的 LF 或 Windows CRT CRLF，生成 schema2 CPU 查询记录。旧 `linux` 命令与 schema1 保持。本机 VS2026/MSBuild、SDK 10.0.28000.0、缓存 OpenCV 5.0.0/meojson 构建完整及旧切片程序；946 例包含 426 个接受、520 个拒绝和 426 次归一化 roundtrip，两程序每例全部文件一致，Rust Debug/Release 各 852 份 UUID/info 输出逐字节一致。实际 MSBuild tracking 核对五个编译单元、256 个读取输入及完整 manager/API 身份，744 份固定 F Git blob 另行核验；这不是 Windows 上的原生 Linux 执行。
+
+新 CI 在既有 Linux 配置语料后独立执行完整类语料，并复用同一 Rust 测试与原来的 timeout 包装；测试环境仅临时指向新记录。五项 CLI 拒收、十八项实际 Step 子进程控制、十二项比较 wrapper 和两项观察 wrapper 控制通过，后两类使用明确 mock；覆盖非零/零测试/重复或缺失汇总、原生连接范围破坏、失败时归档，以及原环境不存在、空字符串、已有值三态的恢复。另以真实语料和 Rust 可执行文件运行实际比较 wrapper，852 份输出归档及环境恢复通过。实际 libtest 可以在汇总前带精确测试名前缀，仍只接受唯一完整汇总。首个真实 whole-origin 观察因 CRT CRLF 被拒绝；外部审阅先后误假定 tracking 目录唯一、Config/base 头从原目录读取，两次失败保留，仅修正审阅路径并核验复制原文。控制还发现 PowerShell 将 .NET 的 null 参数转为空字符串，现通过显式删除原先不存在的变量修正。材料由 `local/current-linux-whole-query-development-path.txt` 指向；nightly 检查无变化，已归档离线输入下 Release、工作区 36+4+151 项测试、严格 Clippy、格式和文档检查通过，未宣称新在线依赖解析。托管完整类执行与 P1 仍待验收。
+
+确切 `40fc748` 的 Mac job 已失败结束，组件 151/175：原 172 项名称/状态保持，新增两个调用顺序及记录检查共三项严格失败。官方源码/系统诊断 ZIP 摘要、安全解压、12,488 份轻量原始文件、可用登记输入和已有二十三份只读报告通过；同路径观察器及新整屏 reader 仍分别拒收，678 个不同完整输入尚未闭合。两组进程使用相邻不同路径、相同 1,909,648 字节 ARM64 程序和 0755 权限，四个实际 PID 及新增日志谓词覆盖均核对。
+
+新用例返回十二张完整 1024×768 图像，三十六份当前/持帧 BGR/RAW 保持，Rust 转换及 alpha 核验通过，但六张原版和六张 Rust 中的五张不满足整屏 RGB。原版先调用时双方每张均有 52 个差异像素、完整配对字节相同；Rust 先调用时原版差异为 36/44/52 像素，Rust 为 0/12/24，完整配对字节均不同，边界都落在 x=1012..1019、y=4..11 内。本批独立路径没有消除严格整屏差异；不通过遮罩、容差或已成功的绿色 ROI 控制放行。系统收集窗口中四个 PID 未记录连接中断/4097，不证明全局日志无遗漏或根因。`local/current-40fc-macos-full-distinct-review-path.txt` 保存封存复核；未接受原生请求排空、完整来源闭合或 P1，也没有重跑捕获。
+
+原有严格整屏 RGB 用例现增加独立的 `records_all_display_pixels_with_distinct_scene_path_in_both_orders`：场景使用同一 libtest 程序的完整字节和 Unix 权限副本，从相邻不同路径启动，消费程序路径、同一工作线程中的原版/Rust 调用、默认五秒等待、绘制及关闭次序不变。两种顺序各执行六次调用，仍要求每张完整目标 RGB、两侧完整 BGR 字节一致、原格式转换和场景关闭后的持帧；不借用仅检查绿色区域的既有成功结果。同路径用例继续独立执行，新增原生失败及独立复算见上文。
 
 `cargo xtask upstream-trace macos-full-display-distinct-scene <外部矩阵> [--check-only]` 使用独立 schema7 报告，核对实际双进程身份、相邻不同路径、完整相同程序字节/可执行权限，以及原来的全部整屏断言；旧命令拒绝混入新路径记录，新命令拒绝旧同路径数据。CI 每个顺序和记录检查独立保留失败，七组真实编排控制确认先前步骤失败后仍执行其余步骤。既有可失败的服务日志收集另加 Rust 测试进程名前缀，其余 workflow 步骤、原退出码、一分钟收集期限和非阻断属性不变；实际原生日志覆盖仍以运行结果为准。
 

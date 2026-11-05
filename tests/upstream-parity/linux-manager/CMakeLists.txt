@@ -48,4 +48,32 @@ if(DEFINED MFS_MEOJSON_INCLUDE)
         # assume those functions are nothrow via /EHc.
         target_compile_options(mfs_linux_config_model PRIVATE /utf-8 /EHs)
     endif()
+    # Full original manager/API bodies, independently built beside the older
+    # extracted-body oracle. This query-only caller never connects a backend.
+    set(_whole_overlay "${CMAKE_CURRENT_BINARY_DIR}/whole-query-overlay")
+    foreach(_name "Input/EiInput.h" "Input/UInput.h" "Input/WlrInput.h" "Input/VkToEvdev.h"
+        "Screencap/PipeWireScreencap.h" "Screencap/WlrScreencap.h")
+        get_filename_component(_parent "${_whole_overlay}/${_name}" DIRECTORY)
+        file(MAKE_DIRECTORY "${_parent}")
+        file(WRITE "${_whole_overlay}/${_name}" "#pragma once\n// Query-only rejecting type is declared by whole-query-boundary.hpp.\n")
+    endforeach()
+    add_executable(mfs_linux_whole_config_model config-model.cpp
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/API/LinuxControlUnitAPI.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Input/NoneInput.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Compat/WlRootsControlUnitCompat.cpp"
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Compat/KWinControlUnitCompat.cpp")
+    target_compile_definitions(mfs_linux_whole_config_model PRIVATE MFS_WHOLE_LINUX_QUERY
+        MFS_WHOLE_LINUX_MANAGER_HEADER="${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.h"
+        MFS_WHOLE_LINUX_MANAGER_CPP="${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit/Manager/LinuxControlUnitMgr.cpp"
+        MAA_CONTROL_UNIT_EXPORTS MAA_TOOLKIT_EXPORTS MAA_VERSION="mfs-p1-config-oracle")
+    target_include_directories(mfs_linux_whole_config_model PRIVATE "${_whole_overlay}"
+        "${CMAKE_CURRENT_BINARY_DIR}/config-overlay" "${CMAKE_CURRENT_SOURCE_DIR}/config-overlay"
+        "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_MEOJSON_INCLUDE}" "${MFS_UPSTREAM_ROOT}/include"
+        "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit" ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mfs_linux_whole_config_model PRIVATE ${OpenCV_LIBS})
+    if(MSVC)
+        target_compile_options(mfs_linux_whole_config_model PRIVATE /utf-8 /EHs)
+    endif()
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/whole-query-scope.txt"
+        "Whole unchanged F LinuxControlUnitMgr.cpp/header and LinuxControlUnitAPI.cpp plus real NoneInput.cpp; actual virtual query/caller Mat consumption only, no connect/input action/native capture. Explicit rejecting Wlr/PipeWire/input/key-translation boundaries compile unselected dependencies only. This closes whole manager source/vtable query compilation, not actual native manager capture, original input construction or P1.\n")
 endif()
