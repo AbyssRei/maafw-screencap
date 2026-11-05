@@ -2,6 +2,8 @@
 
 ## Actual State and Reading Order
 
+Exact ecb Linux artifact independently verifies 49,259 raw files/all check logs/available inputs: 211/213, retaining both pre-test profile invocation failures. Actual whole original None cases and the existing four-test Release native group pass the features=3 regression; dedicated Debug/Release acceptance remains separate. Ten F source/header copies and the x86_64 ELF verify; retain 88 full-input gaps, other pixel review limits and full P1 pending. See current-linux-none-cargo-fix-path.txt and the development guide.
+
 Complete original Linux manager/API/NoneInput now has an independent Wlr native target beside the extracted-body caller. Real Wlr/Wayland/buffer/protocol sources and the same Rust NativeManager capture path cover same-client reconstruction, inactive, metadata/features, held images and retained failed-client behavior. Typed original owner observations and immediate forwarding roundtrip counts have a readonly verifier. External UUID name provider/input exclusions remain explicit; native Linux execution and full P1 acceptance are pending. See current-wlr-whole-manager-path.txt and the development guide.
 
 Exact 45bf whole PipeWire native compilation stopped at missing LogInfo in the shared acceptance logger; no new whole capture ran. The isolated logger now supplies the native trace/debug/info levels through the same sink. Fixed F capture/manager bodies are unchanged; preserve the original build failure and await native execution of the corrected target.

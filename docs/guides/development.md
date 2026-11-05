@@ -154,6 +154,8 @@ Rust 新用例复用现有 manager 捕获程序，通过同一配置解析/Nativ
 
 确切 `ecb1a1c` 的 Linux PipeWire 步骤失败：新增 None 的 Debug/Release Cargo 调用漏选已准备的 `prototype-linux-pipewire`，两次在 `build.rs` 的明确 feature 核对处退出，均未进入目标测试。保留完整原 job 日志及两个失败，不归因于截图或预装工具年龄。现将两个调用改为该批一致的 `prototype-linux-pipewire,linux-pipewire`；原/修正的实际 PowerShell 循环分别核对两次失配/匹配，并验证首 profile 失败后仍执行第二项，共三组控制通过。`local/current-linux-none-cargo-fix-path.txt` 指向材料；后继原生执行另行验证，不以参数修正追认失败批通过。
 
+该确切批次的官方 PipeWire 包现已复核整体 SHA-256、全部 ZIP CRC、49,259 份原始文件、213 项检查的日志及所有可用登记输入：211 项通过、上述两项失败；88 个完整输入缺口保留。完整原版 None 的三例真实工厂/类型/features 检查通过，既有 Release 原生 manager 四项组也实际执行了 Rust None 回归并通过；这与未能启动的两个独立 profile 分开报告。实际完整类程序为 x86_64 ELF，十份固定 F 声明/来源副本相符；没有重跑原生捕获、复算其余全部图像或接受完整来源闭合/P1。复核材料在同一外部 marker 下。
+
 完整原版 Linux manager 的真实 PipeWire 捕获现有独立入口，原样编译 manager/header、C API、UnitBase/Config、PipeWire 和 NoneInput；真实 C 工厂与虚调用分别覆盖私有 daemon 重建和单次 fd 转交。类型化成员指针只借用原类槽位，不复制 shared_ptr，检查实际 PipeWire/NoneInput 类型、features=`3`、inactive 前后 owner 和连接状态。早期提取函数体入口继续独立回归，未选 Wlr/其他输入构造仍明确拒绝；不执行输入操作或桌面授权。
 
 新编排要求双方共八十个生命周期、360 次捕获及 1,080 份即时/销毁后持帧文件。Rust 复用原有 `NativeManager`、捕获与 OpenCV 适配路径，分别记录完整 UUID/info、冷态/活动 features、fd 关闭及线程身份；独立 `cargo xtask upstream-trace pipewire-whole-manager <外部矩阵> [--check-only]` 逐像素核对自有非对称图样、转换、持帧和 340 份原类 owner 观察。原生执行仍待 Linux Actions，不以本机 Windows 构建或合成校验器控制替代；`local/current-pipewire-whole-manager-path.txt` 指向本批开发材料，完整 P1 未通过。

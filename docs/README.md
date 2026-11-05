@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+确切 `ecb1a1c` Linux 的官方包已复核为 211/213；完整原版 None 三例与既有 Release 原生 Rust 回归通过，两项独立 profile 仍保留编译参数失败。全部原始文件/日志和可用输入核对，88 个完整输入缺口保留，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 Wlr 已接入完整原版 manager/C API/真实 NoneInput 的独立捕获入口，覆盖同 client 重建、inactive、失败 client 保留及完整帧所有权，并有独立记录校验。原生执行仍待 Actions，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 完整原版 Linux manager、C API、PipeWire 与真实 NoneInput 的独立捕获入口已接入构建/编排，覆盖 daemon 重建和单次 fd 转交；即时/持帧、类型、features、元数据及资源记录有独立校验入口。原生执行仍待 Actions，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
