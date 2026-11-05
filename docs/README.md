@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Linux manager/None 的 29 个函数映射条目已同步 features=3 修复及确切原生依据，完整映射联合的 705 个 Rust 引用均匹配当前 Git 文件；历史失败和完整 P1 待验收状态保留，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 Wlr 验收的 UUID 来源已接入真实 MaaUtils/Boost，256 次本机原版 CPU 输出及独立复核通过；新依赖接线的 Linux 原生取帧仍待执行，早期成功批次保留原范围。见[Wlr 入口](guides/development.md#当前仓库与本机命令)。
 
 确切 `8e6673d` 的 Wlr 步骤为 155/155。完整原版 manager/API/NoneInput 调用链已原生执行，双方 42 个对象、84 次 connect、120 次捕获、360 份即时/持帧及 140 份 owner 观察经独立复算；完整来源和 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

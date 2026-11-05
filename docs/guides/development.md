@@ -144,6 +144,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+Linux manager/None 的两份函数映射现刷新 29 个条目至确切 `3f1a5ef`，明确将旧 `Input=None=0` 理由替代为固定原版的 legacy features=3；旧映射、census、状态与失败完整保留。另只读链接确切 `0991d0e` 的完整原版 None 调用及 Rust 原生 Debug/Release 三项检查，未重新执行原生捕获。冻结校验器接受两份新映射，整个 18 份映射联合的 43 份 F 来源、306 个身份和 705 个 Rust 引用均复核；705 个归档文件与当前 Git 整文件一致，只有 `NativeFactory::input_features` 这一函数体相对前次映射发生变化。来源身份、职责与原有证据保持，其他历史失败未变；这不接受完整原源码覆盖、一般语义等价或 P1。外部记录指针为 `current-linux-none-function-refresh-path.txt`。
+
 确切 `8e6673d` 的 Wlr 原生步骤现为 155/155，包含新增完整原类的四项检查。完整原版 Linux manager/API/NoneInput 与实际 Wlr/client/buffer/协议链已原生执行；双方 42 个 manager、84 次 connect、120 次捕获、360 份即时/持帧及 140 份源端 owner 观察通过独立只读复算。同一 client 重建不增加 roundtrip，inactive 保持 owner，失败 client 的两次 connect/拒绝捕获保持原行为，完整 UUID/info、features=`3`、线程/fd 和源端弱 client 过期亦核对通过。
 
 官方 7,144,596 字节 ZIP 的整体摘要、CRC、9,617 份原始文件、155 项检查日志及可用父层输入核对通过；579 份新增完整类材料全部可用，二十五份 F 源码/声明的摘要与 Git blob、实际 x86_64 ELF 和十份 C/C++ 编译单元均匹配。七份确切实现/测试源码由 Git 补充，保存报告重新计算后相同，没有再次执行捕获。父 manifest 的轻量输入缺口仍为 719 项；外部 UUID 名称 provider、输入排除和完整编译器头文件追踪范围保持，不以本批接受完整 Wlr/P1。`local/current-8e-whole-wlr-review-path.txt` 指向封存材料。
