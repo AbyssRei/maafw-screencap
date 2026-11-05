@@ -1,12 +1,14 @@
 # 文档导航与维护约定
 
-确切 `ecb1a1c` Linux 的官方包已复核为 211/213；完整原版 None 三例与既有 Release 原生 Rust 回归通过，两项独立 profile 仍保留编译参数失败。全部原始文件/日志和可用输入核对，88 个完整输入缺口保留，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `0991d0e` 的 Linux PipeWire 步骤为 219/219。完整原版 manager/API/PipeWire/NoneInput 的真实工厂捕获已原生执行，双方 360 次捕获、1,080 份即时/持帧及 340 份 owner 观察经独立复算；None Debug/Release 回归也通过。父层来源缺口和整个 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
+确切 `ecb1a1c` Linux 的官方包已复核为 211/213；完整原版 None 三例与既有 Release 原生 Rust 回归通过，两项独立 profile 仍保留编译参数失败。原报告的 88 项为 native-result 缺口，补核父 manifest 后完整轻量输入缺口为 711 项，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 Wlr 已接入完整原版 manager/C API/真实 NoneInput 的独立捕获入口，覆盖同 client 重建、inactive、失败 client 保留及完整帧所有权，并有独立记录校验。原生执行仍待 Actions，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
-完整原版 Linux manager、C API、PipeWire 与真实 NoneInput 的独立捕获入口已接入构建/编排，覆盖 daemon 重建和单次 fd 转交；即时/持帧、类型、features、元数据及资源记录有独立校验入口。原生执行仍待 Actions，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+完整原版 Linux manager、C API、PipeWire 与真实 NoneInput 的独立捕获入口覆盖 daemon 重建和单次 fd 转交；即时/持帧、类型、features、元数据及资源记录的本批原生与独立复算已通过，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
-已修正 Linux 原生工厂的 None 元数据：实际原版 NoneInput 的 features 为 `3`，Rust 先前误报 `0`。完整原类 CPU 观察已核对连接、inactive、重建后的 features、动态 owner 与调用者图像；新 Linux Debug/Release 回归已接入，原生执行待验证，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+已修正 Linux 原生工厂的 None 元数据：实际原版 NoneInput 的 features 为 `3`，Rust 先前误报 `0`。完整原类已核对连接、inactive、重建后的 features、动态 owner 与调用者图像；Linux Debug/Release 回归在确切 `0991d0e` 原生通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `c3c8b19` 的 Linux PipeWire 步骤已成功，210 项记录包括完整类 946 例原版/Rust 比较。新增目录的 4,988 份输入与输出已全部上传并核对，来源完整输入仍缺 709 项；这批只验证预连接查询，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 

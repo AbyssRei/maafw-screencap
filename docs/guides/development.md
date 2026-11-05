@@ -144,6 +144,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `0991d0e` 的 Linux PipeWire 原生步骤现为 219/219。完整原版 manager/header、C API、PipeWire 和真实 NoneInput 已实际编译、加载并经真实工厂取帧；daemon 重建与单次 fd 转交的双方共八十个生命周期、360 次捕获、1,080 份完整即时/销毁后持帧和 340 份原类 owner 观察，已用独立只读命令复算全部图样、RGB/BGR 转换、元数据、features=`3` 及 fd/线程关闭。新组六项通过，既有 211 项通过状态保持；原失败的 None 独立 Debug/Release 入口本批也实际执行并通过，旧批失败不重标。
+
+官方 ZIP 的整体摘要、CRC、50,672 份原始文件、全部检查日志和可用登记输入核对通过；新增完整原类的 1,395 份登记材料全部可用，十份 F 源码/声明的 SHA-256 与 Git blob 相符，实际程序为 x86_64 ELF。编译数据库核对三份真实 C++ 单元及 manager 原文 include 宏；另六份该提交的测试/实现源码由确切 Git blob 补充。父 manifest 的轻量包输入缺口为 714 项，仍未接受完整编译器头文件来源闭合、Portal 桌面授权、任意原生失败或整个 P1；其余捕获矩阵未在此批逐像素重新复算。首次外部 reader 误从 `native-result` 查父层产品源码，失败脚本/日志保留，改读父 manifest 后通过；前后已提取原始字节相同，没有重跑捕获。封存材料由 `local/current-099-whole-pipewire-review-path.txt` 指向。
+
 Wlr 已新增完整原版 Linux manager/header、C API 和真实 NoneInput 的独立原生捕获目标，与原 Wlr/WaylandClient/MemfdBuffer/协议源码共同编译。它通过真实 C 工厂和虚接口，观察二十个生命周期中的同 client 重建、inactive、完整元数据及 features=`3`；只借用类型化成员指针读取槽位，弱 client 仅作最终过期观察。roundtrip 包装始终立即转发，验证重建没有重新连接或执行 roundtrip；其余输入及 PipeWire 构造明确拒绝，既有外部 UUID 名称 provider 保留，不执行输入动作。
 
 Rust 新用例复用现有 manager 捕获程序，通过同一配置解析/NativeManager/转换路径，与完整原类分别完成六十次取帧、两次 connect/生命周期，以及另一个失败 client 保留后的原行为控制。双方总计要求 42 个 manager、84 次 connect；独立 `cargo xtask upstream-trace wlr-whole-manager <外部矩阵> [--check-only]` 核对 120 次取帧、360 份完整即时/持帧、UUID/info、fd/线程身份和 140 份原类 owner/roundtrip 观察；旧提取函数体入口保持独立。Windows 的本机 CPU/记录校验不代替 Linux 原生执行，新目标仍待 Actions；`local/current-wlr-whole-manager-path.txt` 指向开发材料，完整 Wlr/P1 未验收。
@@ -154,7 +158,7 @@ Rust 新用例复用现有 manager 捕获程序，通过同一配置解析/Nativ
 
 确切 `ecb1a1c` 的 Linux PipeWire 步骤失败：新增 None 的 Debug/Release Cargo 调用漏选已准备的 `prototype-linux-pipewire`，两次在 `build.rs` 的明确 feature 核对处退出，均未进入目标测试。保留完整原 job 日志及两个失败，不归因于截图或预装工具年龄。现将两个调用改为该批一致的 `prototype-linux-pipewire,linux-pipewire`；原/修正的实际 PowerShell 循环分别核对两次失配/匹配，并验证首 profile 失败后仍执行第二项，共三组控制通过。`local/current-linux-none-cargo-fix-path.txt` 指向材料；后继原生执行另行验证，不以参数修正追认失败批通过。
 
-该确切批次的官方 PipeWire 包现已复核整体 SHA-256、全部 ZIP CRC、49,259 份原始文件、213 项检查的日志及所有可用登记输入：211 项通过、上述两项失败；88 个完整输入缺口保留。完整原版 None 的三例真实工厂/类型/features 检查通过，既有 Release 原生 manager 四项组也实际执行了 Rust None 回归并通过；这与未能启动的两个独立 profile 分开报告。实际完整类程序为 x86_64 ELF，十份固定 F 声明/来源副本相符；没有重跑原生捕获、复算其余全部图像或接受完整来源闭合/P1。复核材料在同一外部 marker 下。
+该确切批次的官方 PipeWire 包现已复核整体 SHA-256、全部 ZIP CRC、49,259 份原始文件、213 项检查的日志及所有可用登记输入：211 项通过、上述两项失败。先前记录的 88 项缺口只针对 `native-result`；补核父 manifest 后，包含父层产品/准备材料的轻量包缺口为 711 项，原计数与审阅记录保留并另附范围更正。完整原版 None 的三例真实工厂/类型/features 检查通过，既有 Release 原生 manager 四项组也实际执行了 Rust None 回归并通过；这与未能启动的两个独立 profile 分开报告。实际完整类程序为 x86_64 ELF，十份固定 F 声明/来源副本相符；没有重跑原生捕获、复算其余全部图像或接受完整来源闭合/P1。复核材料在同一外部 marker 下。
 
 完整原版 Linux manager 的真实 PipeWire 捕获现有独立入口，原样编译 manager/header、C API、UnitBase/Config、PipeWire 和 NoneInput；真实 C 工厂与虚调用分别覆盖私有 daemon 重建和单次 fd 转交。类型化成员指针只借用原类槽位，不复制 shared_ptr，检查实际 PipeWire/NoneInput 类型、features=`3`、inactive 前后 owner 和连接状态。早期提取函数体入口继续独立回归，未选 Wlr/其他输入构造仍明确拒绝；不执行输入操作或桌面授权。
 
