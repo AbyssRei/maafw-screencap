@@ -4,6 +4,12 @@
 
 ## 逐函数对应审阅
 
+`LinuxControlUnitAPI.cpp` 的完整 F 原文现补两项创建／销毁对应。Create 仍先拒绝空指针，以原 meojson 规则解析 C 字符串、应用默认值并反序列化，然后创建未连接的 manager；既有 Rust `Manager::from_config_json`、`Config::parse_c_string`／Default 和 `Manager::new` 保留相应字节与初始空 owner。Destroy 对空原 handle 不删除，活 owner 经原虚析构退出；Rust 用无 owner／类型化 Drop 表达，既有次序仍为 manager 自身 client 引用、capture、input。没有导出旧堆指针 ABI；日志、异常、任意错误指针、分配失败和进程终止不被声明等价。字面 `GetVersion` 的实际原调用已保留为明确未选版本／ABI 范围，没有归为输入排除或提前定案 SDK 版本。
+
+本次链接确切 `24e117b` 的四项历史原生 Linux 检查：动态链接、完整原类／API 的 946 例配置语料、同一 Rust 比较及 manager 控制。官方 ZIP 摘要、原清单／日志、全部 4,988 个 whole-query 登记输入与五份当前完整源码的登记哈希匹配；缺失的下载版产品源码按实际 committed Git 重建核对，没有改称轻量包已来源闭合。独立读数保留 426 次创建、520 次拒绝和 426 次归一化回读，852 份 Rust UUID／元数据与原版逐字节相同。原程序实际调用 null Destroy、正常 Destroy，并检查调用者 Mat；这些 owner 都未连接，不能据此接受活动原生 owner 关闭、输入动作或回调排空。本轮零新原生执行，历史依赖失败、完整 P1 未验收状态不变。
+
+新增记录由 `local/current-linux-api-functions-path.txt` 指向，原 `reference function-map` 只读校验通过；`local/current-linux-api-function-union-path.txt` 更新为十九组、四十四份来源／308 项，720 处 Rust 引用的所属完整 Git 文件均匹配当前源码。旧原始索引仍为四十四份来源／353 个 callable，本次另索引一份 API 的三个完整函数体；合计四十五份来源／356 项为 304 项已选、52 项未选，另有四项手工声明进入 308 项并集。未选范围仍保留 MaaBuffer 的 45 项、四个字面版本和三个旧 SDK 分支 stub，不以有限语法计数宣布编译器／宏／完整语义覆盖。首版 reader 以普通 Windows 路径读到长路径时失败，原目录和脚本保留；扩展路径版本及封存回读通过，没有重跑或改写原生结果。
+
 `GamepadControlUnitAPI.cpp` 完整 F 文件新增两项创建/销毁职责对应：原工厂不校验 HWND，原样将指针位值及完整 unsigned type/method 交给未连接的 manager；既有 Rust `GamepadCapture::new` 保存相同标量、空 input、connected=false，复用同一 capture delegate。销毁对应既有 Drop/reset 及 delegate 先于 input 的字段退出顺序；空原 handle 的 no-op 与 Rust 没有 owner 分开解释。Rust 返回类型化值 owner，没有导出原堆指针 ABI，也不据此接受任意错误句柄、异常/OOM、输入动作或原生回调排空。字面 `GetVersion` 继续单列未选范围，最终 SDK 版本契约没有在 P1 提前定案。
 
 对应记录引用之后的真实集成批次：primary Rust/C++ Debug、Release 每配置已有 72 组 owner 和 144 组元数据查询，八份原日志全部通过；四组保存数据再次只读校核通过，零新截图/输入动作。当前 `gamepad.rs` 及三份测试/边界文件匹配该批封存 canonical 源码，完整原 API 和两个调用夹具也匹配更早编译时登记输入。较早 owner 批次的 Rust 构造尚未保存两项元数据，测试文件后来也有新增，因此不声称它们整文件未变或直接沿用该批对当前构造的验收。原接口 Create、普通 Destroy、null Destroy 均在实际 CPU 调用程序中消费；旧源码调用和 Rust owner 对应不构成新公共 C 导出。

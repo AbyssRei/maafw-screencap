@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Linux 完整 API 的创建／销毁已补两项对应，原生 CPU 语料 946 例、4,988 个登记输入及 852 份 Rust 元数据／UUID 输出再次只读核对；最新并集为十九组、四十四份来源／308 项、720 处 Rust 引用，没有新增截图或 SDK 验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
+
 OpenCV core 的 zlib 准备缺口已补齐，本机真实 gzip/PNG 及完整 Custom 入口 42/42 通过并经独立记录复核；新 Unix 接线仍待 GitHub 账单限制解除后的原生 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 原生 PNG 准备已适配 zlib 1.4 的两段正式版本和 MSVC 静态库名，本机真实 codec/OpenCV 编解码及旧批次重放通过；原 CI 准备失败保留，新托管验证和完整 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
