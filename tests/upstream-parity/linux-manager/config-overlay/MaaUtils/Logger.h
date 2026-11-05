@@ -5,8 +5,11 @@ namespace MfsConfigLog {
 struct NullLog {template<class T> const NullLog& operator<<(const T&) const noexcept {return *this;}};
 inline const NullLog sink;
 }
-// Explicit configuration oracle logging suppression; no timing claim.
+// Explicit original-manager/native acceptance logging suppression; no timing claim.
 #define LogFunc MfsConfigLog::sink
+#define LogTrace MfsConfigLog::sink
+#define LogDebug MfsConfigLog::sink
+#define LogInfo MfsConfigLog::sink
 #define LogError MfsConfigLog::sink
 #define LogWarn MfsConfigLog::sink
 #define VAR(x) x

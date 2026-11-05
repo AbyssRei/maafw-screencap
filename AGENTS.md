@@ -2,6 +2,8 @@
 
 ## Actual State and Reading Order
 
+Exact 45bf whole PipeWire native compilation stopped at missing LogInfo in the shared acceptance logger; no new whole capture ran. The isolated logger now supplies the native trace/debug/info levels through the same sink. Fixed F capture/manager bodies are unchanged; preserve the original build failure and await native execution of the corrected target.
+
 Exact ecb Linux PipeWire failed its two dedicated None profile invocations before tests: they omitted the prepared prototype-linux-pipewire feature and build.rs correctly rejected the mismatch. Both calls now select the same prototype-linux-pipewire,linux-pipewire set as that native batch. Preserve the failed job/profiles; new hosted execution remains pending. This is an invocation fix, not a capture/tool-age failure or P1 acceptance.
 
 The complete original Linux manager/API/PipeWire and real NoneInput now have a separate native capture target beside the old extracted-body caller. Daemon reconstruction and single fd transfer are wired to the same Rust NativeManager capture implementation; a readonly record checker covers full pixels/held storage, exact metadata, features, typed original owner observations and fd/task closure. Native Linux execution remains pending; local Windows builds and synthetic reader controls do not accept capture or full P1. See current-pipewire-whole-manager-path.txt and the development guide.
