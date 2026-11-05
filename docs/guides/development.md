@@ -4,6 +4,14 @@
 
 ## 逐函数对应审阅
 
+`Win32ControlUnitAPI.cpp`、`MacOSControlUnitAPI.cpp` 和 `CustomControlUnitAPI.cpp` 完整 F 原文现补六项 Create／Destroy 对应。Win32 的 Create 不验证 HWND，原样保存目标和 selector；现有 Rust capture manager 的创建对应限于 Input=None，native loader 仍按原宽度转发 HWND／capture／mouse／keyboard，并保留匹配的 destroy 和模块 lease。销毁对应实际 Manager 字段退出及 Loader 的原入口调用，非零 destroy 状态仍记录失败并保留代码，不能称为成功清理。非 None 原生输入 owner／动作、任意错误指针、异常／OOM 和旧公共堆指针 ABI 不由此接受。
+
+macOS 的 Create 原样转交 uint32 window 和两个 uint64 selector；现有 `new` 明确选择 Input=None，`with_host_input` 保存实际输入 selector。Destroy 对应 Manager 中 selected 先于 input 的隐式字段退出，位置指向完整结构声明，没有伪造显式 Drop 函数。本轮原生 ARM64 查询消费者使用精确 Create／Destroy 片段和原公开虚接口、Input=None facade，不能改称完整原类／活动 SCK／非 None input 清理。Custom 的 Create 仅拒绝空回调表，现有 `Manager::create`／`new` 借用包含原表和 context 的同一 boundary，不复制可变回调指针。其 Destroy 结束不拥有用户表／context 的值；测试桥接中的 RustUnit／Host drop callback 只属于验收包装，不是产品 provider 的释放承诺。
+
+证据分开链接八项历史检查，并只读执行四个实际记录消费者：Win32 工厂 36 例／72 个事件、完整 Win32 查询 256 个 unit／500 份保留快照／2,000 次虚调用；macOS 原接口查询 66 例／133 个工厂 unit／528 份快照／2,113 次虚查询；Custom 原接口 20 生命周期／1,308 次虚查询／20 对持帧。十一份当前完整源码／边界文件与各自原生清单登记哈希匹配，Windows CRLF 单独核对；两份实际 Win32 工厂片段、macOS query 工厂片段及 Custom 完整原 API 编译输入也匹配固定 F。macOS query 只选择 Create／Destroy，三份 `GetVersion` 字面体明确为未选版本／ABI 范围，没有冒充输入排除或 SDK。四组数据文件均保持原字节；旧像素／回调／准备失败保留在各历史完整清单，本轮零新原生执行，不把跨批检查数相加成新 native 通过率。
+
+新记录由 `local/current-remaining-api-functions-path.txt` 指向，原 `reference function-map` 只读校核接受三份来源／六项对应；`local/current-remaining-api-function-union-path.txt` 核对二十组、四十七份来源／314 项，以及 730 处 Rust 引用的完整当前 Git 文件。原四十四份来源／353 个 callable 索引保持不变，另加 Linux／Win32／macOS／Custom 四份 API 共十二个体后，有限语法范围为四十八份来源／365 项：310 项已选、55 项未选，另四个手工声明进入已选并集。未选项仍逐一保留 MaaBuffer 45 项、七个字面版本和三个旧 SDK 分支 stub，没有据此宣布预处理／宏／编译器或完整语义覆盖。首版外部 reader 把 Custom 的 cfg(test) `Buffer::new` 也选入而失败，原脚本／部分输出保留；限定库 owner 后的新目录通过，没有重跑或改变原生结果。完整 P1 与后续阶段仍未验收。
+
 `LinuxControlUnitAPI.cpp` 的完整 F 原文现补两项创建／销毁对应。Create 仍先拒绝空指针，以原 meojson 规则解析 C 字符串、应用默认值并反序列化，然后创建未连接的 manager；既有 Rust `Manager::from_config_json`、`Config::parse_c_string`／Default 和 `Manager::new` 保留相应字节与初始空 owner。Destroy 对空原 handle 不删除，活 owner 经原虚析构退出；Rust 用无 owner／类型化 Drop 表达，既有次序仍为 manager 自身 client 引用、capture、input。没有导出旧堆指针 ABI；日志、异常、任意错误指针、分配失败和进程终止不被声明等价。字面 `GetVersion` 的实际原调用已保留为明确未选版本／ABI 范围，没有归为输入排除或提前定案 SDK 版本。
 
 本次链接确切 `24e117b` 的四项历史原生 Linux 检查：动态链接、完整原类／API 的 946 例配置语料、同一 Rust 比较及 manager 控制。官方 ZIP 摘要、原清单／日志、全部 4,988 个 whole-query 登记输入与五份当前完整源码的登记哈希匹配；缺失的下载版产品源码按实际 committed Git 重建核对，没有改称轻量包已来源闭合。独立读数保留 426 次创建、520 次拒绝和 426 次归一化回读，852 份 Rust UUID／元数据与原版逐字节相同。原程序实际调用 null Destroy、正常 Destroy，并检查调用者 Mat；这些 owner 都未连接，不能据此接受活动原生 owner 关闭、输入动作或回调排空。本轮零新原生执行，历史依赖失败、完整 P1 未验收状态不变。
