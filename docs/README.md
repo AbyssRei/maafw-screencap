@@ -2,7 +2,7 @@
 
 原生 PNG 准备已适配 zlib 1.4 的两段正式版本和 MSVC 静态库名，本机真实 codec/OpenCV 编解码及旧批次重放通过；原 CI 准备失败保留，新托管验证和完整 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
-Wlr 名称生成已开始恢复原版延迟初始化和跨名称复用的 ChaCha12 状态，本机 2,048 个实际 Boost 输出及失败初始化对照通过；新 Linux 默认函数/捕获验证仍待执行，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+确切 `24e117b` 的 Wlr 为 167/167，新的 UUID 状态及默认熵观察通过原生执行和独立复算；Wlr/Memfd 的 39 个映射条目、联合 715 个 Rust 引用已同步，完整 P1 仍待完成。后续 zlib 修复已正常推送，GitHub 因账户账单问题未启动新 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `8e6673d` 的完整 Linux 工程包已补齐 Wlr 轻量包的 719 项来源缺口；确切 `3f1a5ef` 的 PipeWire 保持 219/219，macOS 保持 151/175。新 UUID 接线另通过 Wlr 原生 159/159 检查，完整 P1 仍待验收，详见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
