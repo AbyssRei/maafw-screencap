@@ -195,7 +195,13 @@ pub fn run(args: &[String]) -> Result<()> {
         .first()
         .is_some_and(|kind| kind == "macos-display-observer-same-path")
     {
-        return crate::macos_display_patch::run_observer_same_path(&args[1..]);
+        return crate::macos_display_patch::run_observer(&args[1..], false);
+    }
+    if args
+        .first()
+        .is_some_and(|kind| kind == "macos-display-observer-distinct-path")
+    {
+        return crate::macos_display_patch::run_observer(&args[1..], true);
     }
     if args.first().is_some_and(|kind| kind == "desktop-workarea") {
         return crate::desktop_fullscreen::run_workarea(&args[1..]);

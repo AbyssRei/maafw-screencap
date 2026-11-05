@@ -402,13 +402,21 @@ fn foundation_state(bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// Instrumented same-path control only. Its images never supply an unchanged
+pub(crate) fn observer_scope(distinct: bool) -> &'static str {
+    if distinct {
+        "observer_same_path=0\noriginal_oracle=0\nrust_comparison=0\n"
+    } else {
+        "observer_same_path=1\noriginal_oracle=0\nrust_comparison=0\n"
+    }
+}
+
+/// Instrumented path control only. Its images never supply an unchanged
 /// source oracle or a source/Rust paired-acceptance record.
-pub(crate) fn run_observer_same_path(args: &[String]) -> Result<()> {
+pub(crate) fn run_observer(args: &[String], distinct: bool) -> Result<()> {
     let (path, check_only) = match args {
         [path] => (path, false),
         [path, flag] if flag == "--check-only" => (path, true),
-        _ => return Err("expected upstream-trace macos-display-observer-same-path <external directory> [--check-only]".into()),
+        _ => return Err("expected upstream-trace macos-display-observer-<same|distinct>-path <external directory> [--check-only]".into()),
     };
     let root = records::external_root(Path::new(path))?;
     let mut artifacts = Vec::new();
@@ -417,9 +425,7 @@ pub(crate) fn run_observer_same_path(args: &[String]) -> Result<()> {
         artifacts.push(records::artifact(&root, &path)?);
         Ok(fs::read(path)?)
     };
-    if read("diagnostic-only.txt")?
-        != b"observer_same_path=1\noriginal_oracle=0\nrust_comparison=0\n"
-    {
+    if read("diagnostic-only.txt")? != observer_scope(distinct).as_bytes() {
         return Err("observer control must remain separate from original/Rust parity".into());
     }
     let scene: Scene = serde_json::from_slice(&read("scene/ready.json")?)?;
@@ -428,7 +434,7 @@ pub(crate) fn run_observer_same_path(args: &[String]) -> Result<()> {
         || scene.colour != "green"
         || scene.display_patch != 1
     {
-        return Err("observer same-path owned scene premise differs".into());
+        return Err("observer owned scene premise differs".into());
     }
     let identity: SceneExecutable =
         serde_json::from_slice(&read("scene-executable-identity.json")?)?;
@@ -436,7 +442,7 @@ pub(crate) fn run_observer_same_path(args: &[String]) -> Result<()> {
         scene.owner_pid,
         &read("scene-executables/consumer")?,
         &read("scene-executables/scene")?,
-        false,
+        distinct,
     )?;
     let geometry_bytes = read("scene/display-geometry.tsv")?;
     let g = macos_display_geometry::parse(std::str::from_utf8(&geometry_bytes)?)?;
@@ -500,22 +506,32 @@ pub(crate) fn run_observer_same_path(args: &[String]) -> Result<()> {
             return Err("observer CPU image changed after capture owner closure".into());
         }
     }
-    let report = serde_json::json!({"layout_version":1,"diagnostic_only":true,"original_oracle":false,
-        "paired_acceptance":false,"rust_comparison":false,"same_executable_path":true,
+    let mut report = serde_json::json!({"layout_version":1,"diagnostic_only":true,"original_oracle":false,
+        "paired_acceptance":false,"rust_comparison":false,"same_executable_path":!distinct,
         "observed_captures":3,"payloads":6,"native_successful_waits":3,"owned_window":g.window,"owned_pid":g.pid,
         "wait_timestamps_create_enter_return_signal_enter_return":waits,"artifacts":artifacts,
         "scope":"Both owned scene and consumer use the same instrumented executable pathname and identical archived bytes/mode. Producer uses the existing Foundation scene loop; consumer captures the original first display with native semaphore wrappers that log real create/wait/signal calls and preserve original values/default five-second wait. All three known patch images, held bytes, geometry/window/PID, actual successful native waits, caller/signal thread continuity and acknowledged scene closure are checked. Instrumentation changes binary identity and timing. This removes the previous different scene-path confound only for this observer control; it does not prove root cause, accept any uninstrumented failure, reclaim residual source references, prove late-owner drain or establish source/Rust/full P1 acceptance."});
-    let output = root.join("observer-same-path-validation.json");
+    if distinct {
+        report["scope"] = "The instrumented consumer retains its original pathname while its owned scene runs byte-identical code copied to a distinct sibling executable pathname. Exact binary hashes/modes, actual scene PID, geometry, all three known patch images and held bytes, successful native waits and acknowledged scene closure remain mandatory. Original capture calls, default first display, five-second wait and producer loop are unchanged. This is a separate instrumented path control; timing/service state remain uncontrolled, no causal mechanism or old failure is accepted, and it is not source/Rust parity or native request disposal/drain.".into();
+    }
+    let kind = if distinct { "distinct" } else { "same" };
+    let output = root.join(format!("observer-{kind}-path-validation.json"));
     if check_only && output.exists() {
         if records::read::<serde_json::Value>(&output)? != report {
-            return Err("observer same-path report differs from raw native records".into());
+            return Err("observer path report differs from raw native records".into());
         }
     } else if !check_only {
         records::create_json(&output, &report)?;
     }
-    println!(
-        "macOS display_observer_same_path observed_captures=3 payloads=6 native_successful_waits=3 same_binary_path_mode_pid=1 diagnostic_only=1 original_oracle=0 rust_comparison=0 paired_acceptance=0 full_P1_acceptance=0 passed"
-    );
+    if distinct {
+        println!(
+            "macOS display_observer_distinct_path observed_captures=3 payloads=6 native_successful_waits=3 same_binary_sha256_mode_pid=1 distinct_scene_executable_path=1 diagnostic_only=1 original_oracle=0 rust_comparison=0 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
+    } else {
+        println!(
+            "macOS display_observer_same_path observed_captures=3 payloads=6 native_successful_waits=3 same_binary_path_mode_pid=1 diagnostic_only=1 original_oracle=0 rust_comparison=0 paired_acceptance=0 full_P1_acceptance=0 passed"
+        );
+    }
     Ok(())
 }
 
@@ -523,6 +539,8 @@ fn observer_waits(text: &str) -> Result<[[u64; 5]; 3]> {
     let mut times = [[None; 5]; 3];
     let mut threads = [[0; 5]; 3];
     let mut scopes = 0;
+    let mut observation = [None; 2];
+    let mut observation_thread = 0;
     for line in text
         .lines()
         .filter_map(|line| line.strip_prefix("dispatch_observer "))
@@ -570,6 +588,32 @@ fn observer_waits(text: &str) -> Result<[[u64; 5]; 3]> {
             scopes += 1;
             continue;
         }
+        if matches!(fields[0], "late_observation_begin" | "late_observation_end") {
+            let phase = usize::from(fields[0] == "late_observation_end");
+            if slot != 16
+                || value != 0
+                || times.iter().flatten().any(Option::is_none)
+                || times
+                    .iter()
+                    .flatten()
+                    .flatten()
+                    .any(|previous| *previous > time)
+                || observation[phase].replace(time).is_some()
+                || (phase == 1 && (observation[0].is_none() || observation_thread != thread))
+                || fields[6]
+                    != if phase == 0 {
+                        ""
+                    } else {
+                        "original_capture_completed_observation_no_owner_drain_claim"
+                    }
+            {
+                return Err("observer post-return observation precedes successful captures or changes scope".into());
+            }
+            if phase == 0 {
+                observation_thread = thread;
+            }
+            continue;
+        }
         let kind = match fields[0] {"create"=>0,"wait_enter"=>1,"wait_return"=>2,"signal_enter"=>3,"signal_return"=>4,_=>return Err("observer source error, late observation or unknown event cannot certify this successful series".into())};
         if slot >= 3
             || (kind != 4 && value != 0)
@@ -586,6 +630,13 @@ fn observer_waits(text: &str) -> Result<[[u64; 5]; 3]> {
             );
         }
         threads[slot][kind] = thread;
+    }
+    if observation[0].is_some() != observation[1].is_some()
+        || observation[0]
+            .zip(observation[1])
+            .is_some_and(|(begin, end)| end < begin)
+    {
+        return Err("observer post-return observation is incomplete or reversed".into());
     }
     if scopes != 1 {
         return Err("missing or duplicated diagnostic observer scope".into());
@@ -880,7 +931,26 @@ mod tests {
             }
         }
         assert_eq!(observer_waits(&good).unwrap(), [[10, 20, 50, 30, 40]; 3]);
+        let begin = "dispatch_observer event=late_observation_begin slot=16 value=0 monotonic_ns=60 thread=1 thread_error=0 message=\n";
+        let end = "dispatch_observer event=late_observation_end slot=16 value=0 monotonic_ns=70 thread=1 thread_error=0 message=original_capture_completed_observation_no_owner_drain_claim\n";
+        assert_eq!(
+            observer_waits(&(good.clone() + begin + end)).unwrap(),
+            observer_waits(&good).unwrap()
+        );
         for bad in [
+            good.clone() + begin,
+            good.clone() + end,
+            begin.to_owned() + &good + end,
+            good.clone() + begin + begin + end,
+            good.clone() + begin + &end.replace("thread=1", "thread=2"),
+            good.clone() + begin + &end.replace("monotonic_ns=70", "monotonic_ns=59"),
+            good.clone()
+                + begin
+                + &end.replace(
+                    "original_capture_completed_observation_no_owner_drain_claim",
+                    "original_failure_preserved_no_owner_drain_claim",
+                ),
+            good.clone() + &begin.replace("value=0", "value=1") + end,
             good.replace(
                 "event=wait_return slot=0 value=0",
                 "event=wait_return slot=0 value=1",
@@ -971,6 +1041,14 @@ mod tests {
     }
     #[test]
     fn rejects_substituted_scene_executables_paths_modes_and_owners() {
+        assert_eq!(
+            observer_scope(false),
+            "observer_same_path=1\noriginal_oracle=0\nrust_comparison=0\n"
+        );
+        assert_eq!(
+            observer_scope(true),
+            "observer_same_path=0\noriginal_oracle=0\nrust_comparison=0\n"
+        );
         let bytes = b"owned executable input";
         let good = SceneExecutable {
             layout_version: 1,

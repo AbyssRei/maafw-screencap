@@ -56,7 +56,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
                 }
             }
         }
-        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','rust-macos-live-sample','rust-macos-native-host','rust-macos-native-host-original-oracle') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
+        if($code -eq 77 -and ($Name -in @('native-capture','original-macos-windows','original-macos-display','macos-display-observer-same-path-consumer','macos-display-observer-distinct-path-consumer','rust-macos-live-sample','rust-macos-native-host','rust-macos-native-host-original-oracle') -or $Name -match '^rust-macos-(same-binary|full-display|full-witness|full-max-level|native-sample)-[01]$' -or $Name -match '^rust-macos-(capture|exception|timeout|display|display-patch|display-host-premise|display-distinct-host|display-foundation-consumer|display-appkit-consumer|display-appkit-scene|display-cg-scene|manager)(-original-oracle|-dispatch-observer)?$')){$status='missing_environment'}
         elseif($code -eq 0){$status='passed'}
         if($status -ne 'passed'){
             Get-Content -LiteralPath $log -Tail 50|ForEach-Object{Write-Host $_}
@@ -115,7 +115,7 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             [regex]::Matches($observed,[regex]::Escape('native Rust macOS completion_inputs cases=2 invoked=1 uninvoked=1 heap_alias=2 native_weak_checks=10 fixture_reclaimed_refs=2 capture=0 full_P1_acceptance=0 passed')).Count -ne 1)) {
             $status='failed';throw 'Incomplete native Rust completion create-reference control'
         }
-        if($Name -eq 'macos-display-observer-same-path-stages' -and (
+        if($Name -match '^macos-display-observer-(same|distinct)-path-stages$' -and (
             [regex]::Matches($observed,'(?m)^macOS capture_stages consumer_exit=').Count -ne 1 -or
             $observed -notmatch '(?m)^macOS capture_stages consumer_exit=-?\d+ content_submissions=\d+ sample_submissions=\d+ unobserved_content_callbacks=\[[^\r\n]*\] unobserved_sample_callbacks=\[[^\r\n]*\] diagnostic_only=1 source_capture_acceptance=0 paired_acceptance=0 recorded\r?$' -or
             [regex]::Matches($observed,[regex]::Escape('macOS callback_observation required_on_failure=1 source_capture_acceptance=0 native_owner_drain=0 recorded')).Count -ne 1 -or
@@ -123,11 +123,15 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
             [regex]::Matches($observed,[regex]::Escape('macOS input_weak_observation required=1 native_object_snapshot_owners_escape=0 native_request_disposal=0 recorded')).Count -ne 1)) {
             $status='failed';throw 'Incomplete current callback observation records or required-snapshot policy'
         }
-        if($Name -eq 'macos-display-observer-same-path-consumer' -and
+        if($Name -match '^macos-display-observer-(same|distinct)-path-consumer$' -and
             (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or
              -not $observed.Contains('event=wait_return slot=0 value=0') -or
              -not $observed.Contains('original macOS display_patch first_enumerated=1 captures=3 retained=3 native_geometry=1 known_owned_patch=3 full_display_pixels_unasserted=1 passed'))){
-            $status='failed';throw 'Expected the separate same-path observer and three actual known-patch captures; no original/Rust parity claim'
+            $status='failed';throw 'Expected the instrumented observer and three actual known-patch captures; no original/Rust parity claim'
+        }
+        if($Name -eq 'macos-display-observer-distinct-path-records' -and
+            [regex]::Matches($observed,'(?m)^macOS display_observer_distinct_path observed_captures=3 payloads=6 native_successful_waits=3 same_binary_sha256_mode_pid=1 distinct_scene_executable_path=1 diagnostic_only=1 original_oracle=0 rust_comparison=0 paired_acceptance=0 full_P1_acceptance=0 passed\r?$').Count -ne 1) {
+            $status='failed';throw 'Incomplete distinct-path observer records'
         }
         if($Name -match '^rust-macos-display-(patch|host-premise)-dispatch-observer$' -and
             (-not $observed.Contains('event=scope slot=16 value=1') -or -not $observed.Contains('diagnostic_only_not_parity_oracle') -or -not $observed.Contains('event=wait_return slot=0'))){
@@ -417,8 +421,10 @@ try {
         Run-MacosMaximumLevelProbes $rustArtifacts
         Run-MacosNativeSampleProbes $rustArtifacts
         Run-MacosLiveSampleProbe $rustArtifacts
-        try {Run-ObservedMacosSamePathProbe $rustArtifacts}
-        catch {$failed=$true;Write-Host $_.Exception.Message}
+        foreach($distinct in @($false,$true)) {
+            try {Run-ObservedMacosProbe $rustArtifacts $distinct}
+            catch {$failed=$true;Write-Host $_.Exception.Message}
+        }
     }else{
     $messages=Join-Path $inputRoot compiler-artifacts.jsonl
     $log=Join-Path $logsRoot native-build.log

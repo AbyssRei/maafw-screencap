@@ -59,8 +59,8 @@ inline unsigned unsignalled_failed_waits() noexcept {
     }
     return pending;
 }
-template<class Pump> void observe_late(Pump pump) {
-    // Fixture observation AFTER the original caller has already failed. No
+template<class Pump> void observe_late(Pump pump,const char* outcome="original_failure_preserved_no_owner_drain_claim") {
+    // Fixture observation AFTER the original caller has returned. No
     // second capture, changed deadline, native cancellation or residual reclaim.
     event("late_observation_begin",16,unsignalled_failed_waits());
     mfs_mac_capture_late_snapshot("begin",unsignalled_failed_waits());
@@ -75,7 +75,7 @@ template<class Pump> void observe_late(Pump pump) {
         pump();
     }
     mfs_mac_capture_late_snapshot("end",unsignalled_failed_waits());
-    event("late_observation_end",16,unsignalled_failed_waits(),"original_failure_preserved_no_owner_drain_claim");
+    event("late_observation_end",16,unsignalled_failed_waits(),outcome);
 }
 struct ErrorLog {
     const ErrorLog& operator<<(const char* message) const noexcept {

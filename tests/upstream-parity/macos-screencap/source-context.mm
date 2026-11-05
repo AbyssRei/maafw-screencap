@@ -320,6 +320,11 @@ int main(int argc,char** argv) {
             else if(mode=="external-window" && argc==4) { external_window(directory,argv[3]); }
             else if(mode=="manager-external-window" && argc==4) { manager_external_window(directory,argv[3]); }
             else { throw std::runtime_error("unknown original macOS context mode"); }
+#ifdef MFS_MAC_DISPATCH_OBSERVER
+            if(mode=="display-patch") {
+                MfsMacObserve::observe_late([] {pump();},"original_capture_completed_observation_no_owner_drain_claim");
+            }
+#endif
         }
         return 0;
     }catch(const CgSceneUnavailable& error) {

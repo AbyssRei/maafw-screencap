@@ -64,20 +64,22 @@ struct BlockLeaseObservation {
 
 pub(crate) fn run(args: &[String]) -> Result<()> {
     let (path, flags) = args.split_first().ok_or("missing native stage directory")?;
-    let (mut check_only, mut require_late, mut require_blocks, mut require_inputs) =
-        (false, false, false, false);
+    let (mut check_only, mut require_late, mut require_blocks, mut require_inputs, mut distinct) =
+        (false, false, false, false, false);
     for flag in flags {
         let selected = match flag.as_str() {
             "--check-only" => &mut check_only,
             "--require-late-snapshots" => &mut require_late,
             "--require-block-leases" => &mut require_blocks,
             "--require-input-weak" => &mut require_inputs,
+            "--distinct-scene-path" => &mut distinct,
             _ => return Err("unknown native stage analysis flag".into()),
         };
         if std::mem::replace(selected, true) {
             return Err("duplicate native stage analysis flag".into());
         }
     }
+    require_inputs |= distinct;
     require_blocks |= require_inputs;
     require_late |= require_blocks;
     let root = records::external_root(Path::new(path))?;
@@ -87,9 +89,7 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
         artifacts.push(records::artifact(&root, &path)?);
         Ok(fs::read_to_string(path)?)
     };
-    if read("diagnostic-only.txt")?
-        != "observer_same_path=1\noriginal_oracle=0\nrust_comparison=0\n"
-    {
+    if read("diagnostic-only.txt")? != crate::macos_display_patch::observer_scope(distinct) {
         return Err("native stage analysis requires the separate diagnostic scope".into());
     }
     let consumer_log = read("consumer-log.txt")?;
@@ -106,10 +106,10 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     if exit.to_string() != exits[0] {
         return Err("noncanonical diagnostic exit".into());
     }
-    if require_late && exit != 0 && consumer.late_observations.len() != 2 {
+    if require_late && (exit != 0 || distinct) && consumer.late_observations.len() != 2 {
         return Err("current failed diagnostic lacks required late callback snapshots".into());
     }
-    if require_blocks && exit != 0 && consumer.block_lease_observations.len() != 2 {
+    if require_blocks && (exit != 0 || distinct) && consumer.block_lease_observations.len() != 2 {
         return Err(
             "current failed diagnostic lacks required block capture lease snapshots".into(),
         );
@@ -139,6 +139,10 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
     let mut report = serde_json::json!({"layout_version":1,"diagnostic_only":true,"source_capture_accepted":false,
         "paired_acceptance":false,"consumer_exit":exit,"native_wait_returns":waits,"consumer":consumer,"scene":scene,"artifacts":artifacts,
         "scope":"Only actual content-query/sample submission, callback entry and original-handler-return observations from the instrumented executable. Missing callbacks mean unobserved within this recorded process, not proven cancellation, permanent noncompletion or native owner drain. Width/height are first SCDisplay properties for content callbacks or original configured extents for sample calls, never inferred physical pixel dimensions. Callback results/errors and late observations cannot accept a failed original call. This analysis does not independently certify binary identity, target pixels or full P1; those have separate records and strict gates."});
+    if distinct {
+        report["same_executable_path"] = false.into();
+        report["requires_post_return_snapshots"] = true.into();
+    }
     if !report["consumer"]["late_observations"].is_null()
         || !report["scene"]["late_observations"].is_null()
     {
