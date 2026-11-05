@@ -144,6 +144,12 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `3c50a97` 的 Windows job 已失败结束；官方组件 ZIP 的 1,638,673,148 字节与 SHA-256、安全解压/CRC、57,242 份原始文件、七份 manifest、全部检查日志及可用登记输入核对通过。七组件为 734/745：保留七项旧 manager 掩码 `6/10/14/30/38/42/46` 和四项原版 FramePool pseudo 失败。相对 `1649943`，新增 224 项记录为通过；旧 22/26 在本批通过，30 在本批失败，不删除各自历史结果。594 份保存报告由 580 次只读调用全部重算，七组完整链的三层嵌套报告每组同时检查；另十四次旧 manager reader 拒收与原失败一致。所有原始字节保持，没有重新执行捕获。
+
+新增完整 Win32 查询记录独立核对 256 个 unit、500 份 CPU 快照、2,000 次实际虚调用返回及 256 份原类 RTTI。完整原类的四种 COM 环境×三种线程 DPI×九种掩码共 108 组实际配对记录包含 216 个生命周期、168 次成功捕获、336 份非空当前/持帧图像、3,024 份 COM/DPI 快照及 432 次后端类型/身份观察，完整目标像素、持帧、调用结果和双方宿主副作用逐项通过。本批十二组混合配置的胜者相同，不推广为任意性能次序保证。
+
+完整 Gamepad→真实 loader/工厂→完整 Win32 的七种配置独立复算 280 个生命周期、840 次捕获、1,680 份完整当前/持帧文件和 1,120 份源端 owner 观察；受控外层重连失败后仍保留同一内部对象/后端/模块，几何与原始 host 事件核对通过。查询、108 配置与七种完整链实际使用的 source/Rust DLL 字节身份一致。源 facade 事件计数为空，不能写成原生资源为零；本批是一次托管执行，不继承本机三轮无输入监测结论。完整编译来源追踪与 4,932 个轻量包完整输入缺口仍单列，尚未接受全量来源闭合、原生排空或 P1。`local/current-3c50-windows-record-final-review-path.txt` 保存封存复核。首次分片下载的 416 个 HTTPError 与已校验 368 个分片保留，使用新官方地址续传并完成整包摘要；初次封存脚本的汇总算术错误单独保留，仅修正外部汇总，原生状态未改。
+
 Linux 新增独立 `mfs_linux_whole_config_model`，直接编译固定 F 完整、未修改的 `LinuxControlUnitMgr.cpp/header`、`LinuxControlUnitAPI.cpp`、`NoneInput.cpp` 和两份兼容 API。原 `Config.h`、`UnitBase.h` 及公共接口继续使用相同字节，实际编译器读取的复制头与原文件另行比对；没有把先前的函数切片改名当作完整类。程序对每个成功创建的对象要求实际 RTTI 和 Scrollable/RelativeMovable 基类转换，并通过真实工厂/虚接口查询、拒绝未连接截图、检查调用者 Mat 及销毁后的像素。完整原类也编译了未执行的 connect/输入成员；六份生成 overlay 仅将未选择的 Wlr/PipeWire/输入/按键转换依赖导向明确抛错类型。真实 NoneInput 源码参与链接，但本批没有创建或初始化活动输入 owner，不接受完整原生 manager 捕获或输入行为。
 
 `cargo xtask upstream-config linux-whole <完整原类程序> <新外部目录>` 要求独立来源标记，接受该单行标记的 LF 或 Windows CRT CRLF，生成 schema2 CPU 查询记录。旧 `linux` 命令与 schema1 保持。本机 VS2026/MSBuild、SDK 10.0.28000.0、缓存 OpenCV 5.0.0/meojson 构建完整及旧切片程序；946 例包含 426 个接受、520 个拒绝和 426 次归一化 roundtrip，两程序每例全部文件一致，Rust Debug/Release 各 852 份 UUID/info 输出逐字节一致。实际 MSBuild tracking 核对五个编译单元、256 个读取输入及完整 manager/API 身份，744 份固定 F Git blob 另行核验；这不是 Windows 上的原生 Linux 执行。
