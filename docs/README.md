@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+确切 `8e6673d` 的 Windows 组件为 731/745，十个 manager／四个原版 FramePool 失败全部保留。57,236 份原始文件、588 份报告及 7,560 对当前／持帧已独立核对，134 张目标差异均匹配该批 border 对照；仍缺 5,023 个完整输入，未接受完整 P1，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 Linux 完整 API 的创建／销毁已补两项对应，原生 CPU 语料 946 例、4,988 个登记输入及 852 份 Rust 元数据／UUID 输出再次只读核对；最新并集为十九组、四十四份来源／308 项、720 处 Rust 引用，没有新增截图或 SDK 验收，见[逐函数审阅](guides/development.md#逐函数对应审阅)。
 
 OpenCV core 的 zlib 准备缺口已补齐，本机真实 gzip/PNG 及完整 Custom 入口 42/42 通过并经独立记录复核；新 Unix 接线仍待 GitHub 账单限制解除后的原生 CI，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
