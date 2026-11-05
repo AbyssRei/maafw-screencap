@@ -783,7 +783,7 @@ try {
             try { Step rust-pipewire-manager-controls timeout @('--signal=TERM','--kill-after=5s','30s',$managerTest,'backends::linux::manager::native::tests::','--test-threads=1','--nocapture') }
             catch { $failed=$true; Write-Host $_.Exception.Message }
             foreach($noneProfile in @('debug','release')) {
-                $noneArguments=@('test','--locked','--lib','--features','linux-pipewire')
+                $noneArguments=@('test','--locked','--lib','--features','prototype-linux-pipewire,linux-pipewire')
                 if($noneProfile -eq 'release'){$noneArguments+='--release'}
                 $noneArguments+=@('backends::linux::manager::native::tests::none_and_unimplemented_native_methods_do_not_enter_capture_adapters','--','--exact','--test-threads=1','--nocapture')
                 try{Step ('linux-none-features-'+$noneProfile) cargo $noneArguments}

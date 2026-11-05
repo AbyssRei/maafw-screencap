@@ -144,6 +144,8 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `ecb1a1c` 的 Linux PipeWire 步骤失败：新增 None 的 Debug/Release Cargo 调用漏选已准备的 `prototype-linux-pipewire`，两次在 `build.rs` 的明确 feature 核对处退出，均未进入目标测试。保留完整原 job 日志及两个失败，不归因于截图或预装工具年龄。现将两个调用改为该批一致的 `prototype-linux-pipewire,linux-pipewire`；原/修正的实际 PowerShell 循环分别核对两次失配/匹配，并验证首 profile 失败后仍执行第二项，共三组控制通过。`local/current-linux-none-cargo-fix-path.txt` 指向材料；后继原生执行另行验证，不以参数修正追认失败批通过。
+
 完整原版 Linux manager 的真实 PipeWire 捕获现有独立入口，原样编译 manager/header、C API、UnitBase/Config、PipeWire 和 NoneInput；真实 C 工厂与虚调用分别覆盖私有 daemon 重建和单次 fd 转交。类型化成员指针只借用原类槽位，不复制 shared_ptr，检查实际 PipeWire/NoneInput 类型、features=`3`、inactive 前后 owner 和连接状态。早期提取函数体入口继续独立回归，未选 Wlr/其他输入构造仍明确拒绝；不执行输入操作或桌面授权。
 
 新编排要求双方共八十个生命周期、360 次捕获及 1,080 份即时/销毁后持帧文件。Rust 复用原有 `NativeManager`、捕获与 OpenCV 适配路径，分别记录完整 UUID/info、冷态/活动 features、fd 关闭及线程身份；独立 `cargo xtask upstream-trace pipewire-whole-manager <外部矩阵> [--check-only]` 逐像素核对自有非对称图样、转换、持帧和 340 份原类 owner 观察。原生执行仍待 Linux Actions，不以本机 Windows 构建或合成校验器控制替代；`local/current-pipewire-whole-manager-path.txt` 指向本批开发材料，完整 P1 未通过。
