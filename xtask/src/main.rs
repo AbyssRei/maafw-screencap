@@ -29,6 +29,7 @@ mod framepool_map;
 mod framepool_order;
 mod framepool_queries;
 mod framepool_record_control;
+mod framepool_screen_witness;
 mod framepool_size;
 mod framepool_target_loss;
 mod function_map;
@@ -274,6 +275,7 @@ fn run() -> Result<()> {
                       cargo xtask upstream-trace framepool-target-loss <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-order <external observations> [--check-only]\n\
                       cargo xtask upstream-trace framepool-border <external observations> [--check-only]\n\
+                      cargo xtask upstream-trace framepool-screen-witness <external observations> [--check-only]\n\
                       cargo xtask upstream-trace framepool-init <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace kwin-portal-failure <external matrix> [--check-only]\n\
                       cargo xtask upstream-trace framepool-queries <external matrix> [--check-only]\n\

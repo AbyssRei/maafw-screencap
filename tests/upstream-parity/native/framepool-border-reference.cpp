@@ -12,6 +12,7 @@
 #include <memory>
 #include <string_view>
 #include <vector>
+#include "framepool-screen-witness.hpp"
 
 namespace mfs_border_observation {
 using Wgc = MaaNS::CtrlUnitNs::FramePoolScreencap;
@@ -110,11 +111,13 @@ std::array<int64_t, 12> fixture_boundary(HWND window)
         static_cast<uint32_t>(GetWindowLongPtrW(window, GWL_EXSTYLE)) };
 }
 template<class Source> void take(std::vector<BorderShot>& shots, uint64_t arm,
-    const char* phase, uint64_t kind, Source& source, HWND window, bool wgc, bool device, int scene)
+    const char* phase, uint64_t kind, Source& source, HWND window, bool wgc, bool device, int scene,
+    std::vector<mfs_screen_witness::Read>* screen = nullptr)
 {
     BorderShot shot;
     shot.arm = arm; shot.slot = shots.size(); shot.phase = phase; shot.kind = kind;
     shot.wgc_alive = wgc; shot.device_only_alive = device;
+    if (screen) { screen->push_back(mfs_screen_witness::read(window, shot.slot, 0)); }
     shot.before = window_state(window);
     if (scene >= 0) { shot.fixture_before = fixture_boundary(window); }
     shot.begin = qpc();
@@ -123,6 +126,7 @@ template<class Source> void take(std::vector<BorderShot>& shots, uint64_t arm,
     if (scene >= 0) { shot.fixture_after = fixture_boundary(window); }
     // Snapshot before native object teardown; original results may share cache.
     if (image && !image->empty()) { shot.image = image->clone(); }
+    if (screen) { screen->push_back(mfs_screen_witness::read(window, shot.slot, 1)); }
     shots.push_back(std::move(shot));
 }
 void observe_property(Property& row, Wgc& source, bool require)
@@ -206,19 +210,29 @@ std::array<int64_t, 63> prepare_fixture_geometry(Fixture& fixture, uint64_t arm,
 
 int wmain(int argc, wchar_t** argv)
 {
-    if (argc != 2 && argc != 3) { return 64; }
+    if (argc < 2 || argc > 4) { return 64; }
+    const bool screen_mode = argc == 4 && std::wstring_view(argv[3]) == L"screen-witness";
+    if (argc == 4 && !screen_mode) { return 64; }
     int scene = -1;
-    if (argc == 3) {
+    if (argc >= 3) {
         const std::wstring_view requested(argv[2]);
         if (requested == L"popup") { scene = 0; }
         else if (requested == L"caption") { scene = 1; }
         else if (requested == L"client-band") { scene = 2; }
         else { return 64; }
     }
-    const std::filesystem::path root(argv[1]);
-    if (!root.is_absolute() || !std::filesystem::is_directory(root) || !std::filesystem::is_empty(root)) { return 64; }
+    const std::filesystem::path output(argv[1]);
+    if (!output.is_absolute() || !std::filesystem::is_directory(output) || !std::filesystem::is_empty(output)) { return 64; }
+    const auto root = screen_mode ? output / "capture" : output;
+    const auto witness_root = output / "screen";
     using namespace mfs_border_observation;
     try {
+        std::vector<mfs_screen_witness::Read> screen_reads;
+        if (screen_mode) {
+            std::filesystem::create_directory(root); std::filesystem::create_directory(witness_root);
+            screen_reads.reserve(54); mfs_screen_witness::control(witness_root);
+        }
+        auto* screen = screen_mode ? &screen_reads : nullptr;
         Initialization initialization;
         winrt::check_hresult(RoInitialize(RO_INIT_MULTITHREADED)); initialization.owned = true;
         if (!winrt::Windows::Foundation::Metadata::ApiInformation::IsPropertyPresent(
@@ -272,16 +286,16 @@ int wmain(int argc, wchar_t** argv)
             auto& driver = drivers[arm]; driver = { arm, update[0], marker_thread, marker_pid, update[1], 0, 0, 1, 1, 0 };
             {
                 Dup duplicate(hwnd); std::unique_ptr<Wgc> wgc; std::unique_ptr<DeviceOnly> device;
-                take(shots, arm, "dd-before-warm", 0, duplicate, hwnd, false, false, scene);
-                take(shots, arm, "dd-before-test", 0, duplicate, hwnd, false, false, scene);
+                take(shots, arm, "dd-before-warm", 0, duplicate, hwnd, false, false, scene, screen);
+                take(shots, arm, "dd-before-test", 0, duplicate, hwnd, false, false, scene, screen);
                 if (arm < 2) {
                     wgc = std::make_unique<Wgc>(hwnd);
-                    take(shots, arm, "wgc-default", 1, *wgc, hwnd, true, false, scene);
+                    take(shots, arm, "wgc-default", 1, *wgc, hwnd, true, false, scene, screen);
                     properties[arm].arm = arm;
                     auto& initial_session = (*wgc).*member(SessionMember {});
                     properties[arm].session = reinterpret_cast<uintptr_t>(winrt::get_abi(initial_session));
                     if (arm == 0) { observe_property(properties[arm], *wgc, false); }
-                    take(shots, arm, "dd-with-default", 0, duplicate, hwnd, true, false, scene);
+                    take(shots, arm, "dd-with-default", 0, duplicate, hwnd, true, false, scene, screen);
                     if (arm == 1) {
                         // Positive native control: require the system indicator.
                         // This test never adds a false setter or host consent change.
@@ -289,18 +303,18 @@ int wmain(int argc, wchar_t** argv)
                         observe_property(required, *wgc, true);
                         if (required.session != properties[arm].session) { throw std::runtime_error("border session changed"); }
                         properties[arm] = required;
-                        take(shots, arm, "dd-with-required", 0, duplicate, hwnd, true, false, scene);
+                        take(shots, arm, "dd-with-required", 0, duplicate, hwnd, true, false, scene, screen);
                     }
                 } else if (arm == 2) {
                     device = std::make_unique<DeviceOnly>(hwnd);
-                    take(shots, arm, "dd-with-device", 0, duplicate, hwnd, false, true, scene);
-                    take(shots, arm, "dd-with-device-test", 0, duplicate, hwnd, false, true, scene);
+                    take(shots, arm, "dd-with-device", 0, duplicate, hwnd, false, true, scene, screen);
+                    take(shots, arm, "dd-with-device-test", 0, duplicate, hwnd, false, true, scene, screen);
                 }
                 destroyed[arm][0] = qpc(); wgc.reset(); device.reset(); destroyed[arm][1] = qpc();
                 // Three fixed observations, not retries toward a pixel outcome.
                 for (unsigned call = 0; call < 3; ++call) {
                     const auto phase = "dd-post-" + std::to_string(call);
-                    take(shots, arm, phase.c_str(), 0, duplicate, hwnd, false, false, scene);
+                    take(shots, arm, phase.c_str(), 0, duplicate, hwnd, false, false, scene, screen);
                 }
             }
             if (mfs_desktop_fixture_update_info(fixture.value.owner, update.data(), update.size())
@@ -362,9 +376,11 @@ int wmain(int argc, wchar_t** argv)
                 << "\nsource_bodies_unchanged=1\nextra_cpu_snapshots=1\nrequired_true_setters=1\nadded_false_setters=0\noriginal_failure_reclassified=0\nfull_P1_acceptance=0\n";
         if (scene >= 0) { summary << "fixture_case=" << scene << "\nfixture_geometry_calls=12\nfixture_boundary_observations=54\n"; }
         summary.close();
+        if (screen_mode) { mfs_screen_witness::save(screen_reads, witness_root); }
         std::cout << "source border diagnostic shots=" << shots.size() << " windows_closed=" << closed << " positive_controls=" << controls
                   << " required_true_setters=1 added_false_setters=0 source_bodies_unchanged=1 full_P1_acceptance=0\n";
         if (scene >= 0) { std::cout << "matched border fixture case=" << scene << " full_client=96x64 geometry_calls=12 boundary_observations=54 target_inset=0\n"; }
+        if (screen_mode) { std::cout << "source screen witness calls=27 reads=54 bitblt_calls=54 getdibits_calls=54 released_dc=54 atomic_snapshot=0 producer_proved=0 full_P1_acceptance=0\n"; }
         return controls ? 0 : 5;
     } catch (const winrt::hresult_error& error) { std::cerr << "border source hresult=" << error.code().value << '\n'; return 3; }
     catch (const std::exception& error) { std::cerr << "border diagnostic failure=" << error.what() << '\n'; return 3; }

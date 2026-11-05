@@ -197,7 +197,8 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                 throw 'Expected one complete successful-capture FramePool lifetime matrix distinguishing uninit, owning drop and explicit holds'
             }
         }
-        if ($Name -in @('frame-pool-source-border','frame-pool-source-border-popup','frame-pool-source-border-caption','frame-pool-source-border-client-band')) {
+        $screenWitnessSource = $Name -match '^frame-pool-source-screen-witness-(popup|caption|client-band)$'
+        if ($Name -in @('frame-pool-source-border','frame-pool-source-border-popup','frame-pool-source-border-caption','frame-pool-source-border-client-band') -or $screenWitnessSource) {
             $observed = [IO.File]::ReadAllText($logPath)
             if ($exitCode -eq 77 -and $observed -match '(?m)^border environment missing before_capture=1 property_unavailable=1\r?$') {
                 $status = 'missing_environment'
@@ -216,13 +217,18 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
                     throw 'Expected the matched fixture style and complete client with twelve actual geometry calls'
                 }
             }
+            if ($exitCode -eq 0 -and $screenWitnessSource -and
+                [regex]::Matches($observed,'(?m)^source screen witness calls=27 reads=54 bitblt_calls=54 getdibits_calls=54 released_dc=54 atomic_snapshot=0 producer_proved=0 full_P1_acceptance=0\r?$').Count -ne 1) {
+                throw 'Expected all54 independent complete-target screen DC reads with successful same-thread release'
+            }
         }
         if ($Name -eq 'frame-pool-border-records' -and $exitCode -eq 0 -and
             [regex]::Matches([IO.File]::ReadAllText($logPath), '(?m)^source border records calls=27 windows_closed=4 positive_controls=13 files=61 producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed\r?$').Count -ne 1) {
             throw 'Expected the complete border native property/owner/pixel records, without producer or capture acceptance'
         }
-        if ($Name -in @('frame-pool-border-popup-records','frame-pool-border-caption-records','frame-pool-border-client-band-records') -and $exitCode -eq 0) {
-            $fixtureCase=if($Name -eq 'frame-pool-border-popup-records'){0}elseif($Name -eq 'frame-pool-border-caption-records'){1}else{2}
+        $screenWitnessRecords = $Name -match '^frame-pool-screen-witness-(popup|caption|client-band)-records$'
+        if (($Name -in @('frame-pool-border-popup-records','frame-pool-border-caption-records','frame-pool-border-client-band-records') -or $screenWitnessRecords) -and $exitCode -eq 0) {
+            $fixtureCase=if($Name.Contains('-popup-')){0}elseif($Name.Contains('-caption-')){1}else{2}
             $observed=[IO.File]::ReadAllText($logPath)
             if ([regex]::Matches($observed,'(?m)^source border records calls=27 windows_closed=4 positive_controls=13 files=63 producer_proved=0 capture_acceptance=0 full_P1_acceptance=0 passed\r?$').Count -ne 1 -or
                 [regex]::Matches($observed,'(?m)^matched border records case='+$fixtureCase+' geometry_calls=12 boundary_observations=54 full_client=96x64 target_inset=0 producer_proved=0 passed\r?$').Count -ne 1 -or
@@ -232,6 +238,10 @@ function Step([string]$Name, [string]$Program, [string[]]$Arguments) {
             }
             if ($fixtureCase -eq 2 -and [regex]::Matches($observed,'(?m)^client band records nonclient_pixels=6 strict_target_images=27 target_inset=0 privacy_disabled=0 native_owner_drain=0 passed\r?$').Count -ne 1) {
                 throw 'Expected all27 full-client targets for the native nonclient-band fixture'
+            }
+            if ($screenWitnessRecords -and
+                [regex]::Matches($observed,'(?m)^source screen witness records calls=27 reads=54 bitblt_calls=54 getdibits_calls=54 released_dc=54 positive_reads=22 target_inset=0 atomic_snapshot=0 producer_proved=0 full_P1_acceptance=0 passed\r?$').Count -ne 1) {
+                throw 'Expected the complete independent screen/DC/control record matrix'
             }
         }
         if ($Name -eq 'desktop-dup-source-held-acquisition' -and $exitCode -eq 0 -and
@@ -1480,6 +1490,8 @@ try {
             New-Item -ItemType Directory -Path $borderEvidence|Out-Null
             $matchedBorderEvidence=Join-Path $frameContextEvidence source-border-matched
             New-Item -ItemType Directory -Path $matchedBorderEvidence|Out-Null
+            $screenWitnessEvidence=Join-Path $frameContextEvidence source-screen-witness
+            New-Item -ItemType Directory -Path $screenWitnessEvidence|Out-Null
             try {
                 Step frame-pool-border-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_border_reference','--parallel','4')
                 $borderProgram=Join-Path $artifacts mfs_framepool_border_reference.exe
@@ -1496,6 +1508,12 @@ try {
                     if ($checks[-1].status -ne 'missing_environment') {
                         Invoke-FrameCheck "frame-pool-border-$fixtureStyle-records" $ConfigureTool @('upstream-trace','framepool-border',$caseEvidence)
                     }
+                    $screenCaseEvidence=Join-Path $screenWitnessEvidence $fixtureStyle
+                    New-Item -ItemType Directory -Path $screenCaseEvidence|Out-Null
+                    Invoke-FrameCheck "frame-pool-source-screen-witness-$fixtureStyle" $borderProgram @($screenCaseEvidence,$fixtureStyle,'screen-witness')
+                    if ($checks[-1].status -ne 'missing_environment') {
+                        Invoke-FrameCheck "frame-pool-screen-witness-$fixtureStyle-records" $ConfigureTool @('upstream-trace','framepool-screen-witness',$screenCaseEvidence)
+                    }
                 }
             } catch { $script:failed=$true; Write-Host $_.Exception.Message }
             finally {
@@ -1507,6 +1525,7 @@ try {
                 }
                 Get-ChildItem -LiteralPath $borderEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName }
                 Get-ChildItem -LiteralPath $matchedBorderEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName }
+                Get-ChildItem -LiteralPath $screenWitnessEvidence -File -Recurse|ForEach-Object { Save-Input $_.FullName }
             }
             Step frame-pool-order-build $cmake @('--build',$build,'--config','Release','--target','mfs_framepool_order_reference','--parallel','4')
             $orderProgram=Join-Path $artifacts mfs_framepool_order_reference.exe
