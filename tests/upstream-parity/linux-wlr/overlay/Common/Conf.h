@@ -9,6 +9,8 @@
 #include <string>
 #include <string_view>
 #include <unistd.h>
+#include "MaaUtils/Uuid.h"
+namespace MfsOriginalWlr { using ::MaaNS::make_uuid; }
 #define MAA_CTRL_UNIT_NS MfsOriginalWlr
 #define MAA_CTRL_UNIT_NS_BEGIN namespace MfsOriginalWlr {
 #define MAA_CTRL_UNIT_NS_END }

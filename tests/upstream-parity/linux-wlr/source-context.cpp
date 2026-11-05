@@ -254,9 +254,6 @@ extern "C" int __wrap_wl_display_roundtrip(wl_display* display) {
     return result;
 }
 
-namespace MfsOriginalWlr {
-#include "uuid-context.inc"
-}
 
 extern "C" void __wrap_wl_display_disconnect(wl_display* display) noexcept {
     // Normal modes forward immediately. Only the explicitly named prefix

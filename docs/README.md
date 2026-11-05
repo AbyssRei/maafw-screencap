@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Wlr 验收的 UUID 来源已接入真实 MaaUtils/Boost，256 次本机原版 CPU 输出及独立复核通过；新依赖接线的 Linux 原生取帧仍待执行，早期成功批次保留原范围。见[Wlr 入口](guides/development.md#当前仓库与本机命令)。
+
 确切 `8e6673d` 的 Wlr 步骤为 155/155。完整原版 manager/API/NoneInput 调用链已原生执行，双方 42 个对象、84 次 connect、120 次捕获、360 份即时/持帧及 140 份 owner 观察经独立复算；完整来源和 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `0991d0e` 的 Linux PipeWire 步骤为 219/219。完整原版 manager/API/PipeWire/NoneInput 的真实工厂捕获已原生执行，双方 360 次捕获、1,080 份即时/持帧及 340 份 owner 观察经独立复算；None Debug/Release 回归也通过。父层来源缺口和整个 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

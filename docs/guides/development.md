@@ -1520,7 +1520,10 @@ DMA-BUF 私有迁移已接入回调的单 plane packed 路径。首个原生批�
 
 另已接入独立 CPU 写入的 kernel DMA 生产器和实际流验证入口；首个实际生产器构建的 timespec const/API 错误已修正，新的原生构建/运行尚未验收；生产器编译单独记账，缺少 exporter 不能掩盖其构建结果。普通 RGB 生产器与路由先完整停止，随后在同一私有 daemon 上创建新的 DMA 生产器与精确路由；注册/移除等待只属于夹具就绪，不重试捕获。生产端通过 ALLOC_BUFFERS 提供真实 DMA-BUF fd，完成 WRITE START/copy/END 后才归还，不设置 MAPPABLE；捕获端保留 U 的 MAP_BUFFERS。原源码与 Rust 各要求 20 个流生命周期/60 张已知图像，Rust 还要求真实回调的 60 次 NULL-data owning map、READ START/END/unmap、无 borrowed bypass、queue 与资源配平，关闭后仍保持独立 CPU 图像。原源码输出为 BGR，Rust 该入口保留 RGB；各自按生产序号核对，不声称同一时刻逐帧对照。原源码回调指针没有被单独插桩，GPU 异步完成与 Portal 授权仍未覆盖。
 
-`cargo xtask upstream-context wlr` 是原生 Linux x64 原源码入口，原 C++ 编译和受控运行已验证。它直接编译固定的 WlrScreencap、WaylandClient、MemfdBuffer、WaylandHelper 与原有生成 C 协议文件；截图 base 从原声明抽取，日志、私有 namespace 和外部 UUID 名称提供者有明确适配边界。名称提供者用 getrandom 生成 UUID 形状的随机文件名，不验证原 Boost UUID 工具；真实 memfd 创建/截断/映射、Wayland buffer、native 连接和 OpenCV 转换保持原调用。该入口现也运行下述 Rust 捕获切片，完整框架/P1 对照仍未完成。
+`cargo xtask upstream-context wlr` 是原生 Linux x64 原源码入口，原 C++ 编译和受控运行已验证。它直接编译固定的 WlrScreencap、WaylandClient、MemfdBuffer、WaylandHelper 与原有生成 C 协议文件；截图 base 从原声明抽取，日志与私有 namespace 保留明确适配边界。当前三个原版入口链接真实 MaaUtils `Uuid.cpp`/头文件与最新正式 Boost::uuid，原 getrandom 测试名称提供者及替代头已移除；真实 memfd 创建/截断/映射、Wayland buffer、native 连接和 OpenCV 转换保持原调用。早期已验收批次仍保留外部名称提供者的原始范围，新接线的 Linux 原生取帧尚待验证。该入口现也运行下述 Rust 捕获切片，完整框架/P1 对照仍未完成。
+
+
+本轮 UUID 准备共用 MaaUtils 的原 Custom 解析政策：每次查询正式发布，无正式发布时解析维护分支，验证确切 Git commit/缓存清洁度并保存完整源码与许可。Boost 每次查询正式发布，即使命中下载缓存也复核完整资产长度/摘要并在新批次目录重建；不向核心依赖树引入 Boost。当前解析为 MaaUtils `55be777e326db9419f45b4082e2bf2a1ed10e697`、Boost `1.92.0`。本机 VS2026/MSBuild 编译真实 UUID 实现，256 次实际输出的长度、小写格式、version/variant 及唯一性均通过，并由独立 Python UUID 解析和全部 15 个登记输入摘要复核；四份实际 MaaUtils 源/头与此前准备身份逐字节相同。较早 HTTPS clone 的连接失败及后续单独 SSH 获取保留在外部记录。这只验收 Windows CPU UUID 代码与依赖准备，不证明 Linux 捕获、随机值跨进程相同、线程安全或完整 P1。新原生入口将另保存 256 次实际 UUID 输出、原源/头、编译数据库和正式依赖身份；Linux 取帧的旧成功结果不追溯改写。
 
 自有 compositor 的显式 source-client 模式仅额外注册原客户端强制要求的 virtual-keyboard/virtual-pointer manager；不创建输入设备或执行输入动作。参考进程要求 20 次连接/三次截图/关闭生命周期、60 张完整已知 BGR 图像、fd/任务身份配平及关闭后独立持帧。链接器 wrapper 只记录并立即转发真实 wl_display_roundtrip，要求观察到原 Buffer 回调内的递归 roundtrip；不提前把它改为排队或移到回调外。完整 source 失败/格式/客户提前关闭矩阵仍待实现；Rust 递归执行通道的原生验证见下文。独立轻量诊断 artifact 在通用工程归档校验前上传，完整工程包仍为来源/依赖重建依据。
 

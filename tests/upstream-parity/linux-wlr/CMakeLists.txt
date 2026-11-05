@@ -39,6 +39,9 @@ target_compile_options(mfs_wlr_protocol_server PRIVATE -Wall -Wextra -Werror)
 target_link_libraries(mfs_wlr_protocol_server PRIVATE PkgConfig::WAYLAND_SERVER ${CMAKE_DL_LIBS})
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/pipewire-base-source.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/linux-manager-source.cmake")
+include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/reference-uuid.cmake")
+add_executable(mfs_wlr_uuid_corpus uuid-corpus.cpp)
+target_link_libraries(mfs_wlr_uuid_corpus PRIVATE mfs_reference_uuid)
 set(_mfs_root "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit")
 add_executable(mfs_wlr_source_context source-context.cpp
     "${_mfs_root}/Screencap/WlrScreencap.cpp"
@@ -52,7 +55,7 @@ target_compile_definitions(mfs_wlr_source_context PRIVATE _GNU_SOURCE)
 target_include_directories(mfs_wlr_source_context PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/overlay" "${CMAKE_CURRENT_SOURCE_DIR}/overlay"
     "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(mfs_wlr_source_context PRIVATE
+target_link_libraries(mfs_wlr_source_context PRIVATE mfs_reference_uuid
     PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
 # Roundtrips always forward immediately. Disconnects also forward immediately
 # except in the named early-close-prefix probe, where a fixture-owned display
@@ -81,7 +84,7 @@ target_include_directories(mfs_wlr_native_context PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_MEOJSON_INCLUDE}"
     "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
 # Do not include the config oracle's unrelated Wayland stub directory.
-target_link_libraries(mfs_wlr_native_context PRIVATE
+target_link_libraries(mfs_wlr_native_context PRIVATE mfs_reference_uuid
     PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/native-context-scope.txt"
     "Whole fixed original Wlr compatibility cpp and unchanged complete public API/manager/config/base declarations with real original Wlr/Wayland capture sources. Only input construction/init is a controlled capture-only host: it retains the original shared client and five proxy slots (no seat in this fixture), owns an independent socketpair on successful construction and excludes every input action/device. The separate host-create-failure mode throws controlled error98 after copying client/proxy members but before allocating host sockets; the original manager's retained capture must still produce known pixels and release all owners. Original manager capture/UUID/metadata/inactive/features/destruction bodies are exact extractions. Native library identity, final weak client/proxy expiry, last-connected-client destructor order, actual pixels and exact resources are required. This is not original input initialization, allocation-failure recovery, live-client early close or full Wlr/P1 acceptance.\n")
@@ -106,10 +109,10 @@ target_include_directories(mfs_wlr_whole_native_context PRIVATE "${_whole_overla
     "${CMAKE_CURRENT_SOURCE_DIR}/abi-overlay" "${CMAKE_CURRENT_BINARY_DIR}/config-overlay"
     "${CMAKE_CURRENT_SOURCE_DIR}/overlay" "${CMAKE_CURRENT_BINARY_DIR}" "${MFS_MEOJSON_INCLUDE}"
     "${MFS_UPSTREAM_ROOT}/include" "${_mfs_root}" ${OpenCV_INCLUDE_DIRS})
-target_link_libraries(mfs_wlr_whole_native_context PRIVATE PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
+target_link_libraries(mfs_wlr_whole_native_context PRIVATE mfs_reference_uuid PkgConfig::WAYLAND Threads::Threads ${OpenCV_LIBS} ${CMAKE_DL_LIBS})
 target_link_options(mfs_wlr_whole_native_context PRIVATE "LINKER:--wrap=wl_display_roundtrip")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/whole-native-scope.txt"
-    "Complete unchanged original Linux manager/header/C API/NoneInput and real Wlr/Wayland/Memfd/protocol sources. Typed borrowed member pointers observe actual native/input/client owners; weak client witnesses do not retain native resources. Forwarding roundtrip counter observes same-client reconstruction. Other input/PipeWire constructors reject; external UUID name provider/log suppression retained. Owned compositor only, no input actions/general desktop authorization or full P1 acceptance.\n")
+    "Complete unchanged original Linux manager/header/C API/NoneInput and real Wlr/Wayland/Memfd/protocol sources. Typed borrowed member pointers observe actual native/input/client owners; weak client witnesses do not retain native resources. Forwarding roundtrip counter observes same-client reconstruction. Other input/PipeWire constructors reject; actual MaaUtils/Boost UUID implementation with log suppression. Owned compositor only, no input actions/general desktop authorization or full P1 acceptance.\n")
 # Reuse the self-owned, header-checked conversion acceptance source. It includes
 # OpenCV only and introduces no PipeWire runtime or capture dependency.
 add_library(mfs_wlr_opencv SHARED ../linux-pipewire/conversion-adapter.cpp)
@@ -118,7 +121,7 @@ target_link_libraries(mfs_wlr_opencv PRIVATE Threads::Threads ${OpenCV_LIBS} ${C
 target_link_options(mfs_wlr_opencv PRIVATE "LINKER:--exclude-libs,ALL")
 set_target_properties(mfs_wlr_opencv PROPERTIES CXX_VISIBILITY_PRESET hidden VISIBILITY_INLINES_HIDDEN YES)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
-    "Complete fixed WlrScreencap, WaylandClient, MemfdBuffer, WaylandHelper and original generated C protocol sources compile unchanged. Only the screenshot base is extracted. Private namespace/logging and a kernel-random external UUID name provider replace unrelated framework dependencies. Passive virtual keyboard/pointer managers are required by the original client; no input action runs. A forwarding linker wrapper records actual source roundtrip recursion. Native capture, buffers, C++ owners and OpenCV conversion remain real. This is original source context only, not a Rust backend, original UUID implementation or full Wlr/P1 acceptance.\n")
+    "Complete fixed WlrScreencap, WaylandClient, MemfdBuffer, WaylandHelper and original generated C protocol sources compile unchanged. Only the screenshot base is extracted. Private namespace/logging remain explicit boundaries. The actual MaaUtils Uuid.cpp/header and prepared Boost::uuid generate buffer names. Passive virtual keyboard/pointer managers are required by the original client; no input action runs. A forwarding linker wrapper records actual source roundtrip recursion. Native capture, buffers, C++ owners and OpenCV conversion remain real. This is original source context only, not a Rust backend or full Wlr/P1 acceptance.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"
     "The separate early-close-prefix mode observes eighty original close/reconnect requests. Its linker wrapper defers sixty disconnects while capture-owned proxy snapshots survive, then calls the real native disconnect once after those owners end; twenty no-capture controls forward immediately. Forty closed-client captures preserve caller output, and twenty rebound clients are consumed only through fresh captures after the old snapshots end. Native descriptor/task closure and sixty retained known images are checked. This is an explicit fixture intervention to observe a source lifetime boundary safely, not original immediate-disconnect cleanup, stale-proxy capture validation or a completed Rust early-close migration. Other modes still forward disconnect immediately.\n")
 file(APPEND "${CMAKE_CURRENT_BINARY_DIR}/source-context-scope.txt"

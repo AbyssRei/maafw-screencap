@@ -73,42 +73,9 @@ function Invoke-CustomUnixReference([string]$FixedUpstream,[string]$Artifacts) {
     if(-not($IsLinux -or $IsMacOS)){throw 'Unix Custom acceptance requires a native Linux/macOS host'}
     $customInputs=Join-Path $inputRoot custom-reference
     New-Item -ItemType Directory -Path $customInputs|Out-Null
-    # Resolve the current official policy even when the source cache exists.
-    $repositoryFile=Join-Path $customInputs maautils-repository.json
-    & gh api repos/MaaXYZ/MaaUtils > $repositoryFile
-    if($LASTEXITCODE -ne 0){throw 'Official MaaUtils repository query failed'}
-    Save $repositoryFile
-    $releasesFile=Join-Path $customInputs maautils-releases.json
-    & gh api --paginate --slurp 'repos/MaaXYZ/MaaUtils/releases?per_page=100' > $releasesFile
-    if($LASTEXITCODE -ne 0){throw 'Official MaaUtils release query failed; cache is not a fallback'}
-    Save $releasesFile
-    $pages=Get-Content -LiteralPath $releasesFile -Raw|ConvertFrom-Json -NoEnumerate
-    $formal=@($pages|ForEach-Object{$_}|Where-Object{-not $_.draft -and -not $_.prerelease}|Sort-Object published_at -Descending)
-    $repository=Get-Content -LiteralPath $repositoryFile -Raw|ConvertFrom-Json
-    $ref=if($formal.Count){$formal[0].tag_name}else{$repository.default_branch}
-    $refKind=if($formal.Count){'tags'}else{'heads'}
-    $remote=@(& git ls-remote https://github.com/MaaXYZ/MaaUtils.git "refs/$refKind/$ref" "refs/$refKind/$ref^{}")
-    if($LASTEXITCODE -ne 0 -or -not $remote.Count){throw 'Resolved MaaUtils ref has no source identity'}
-    $peeled=@($remote|Where-Object{$_ -match '\^\{\}$'})
-    $commit=(($peeled.Count ? $peeled[0] : $remote[0]) -split '\s+')[0]
-    if($commit -notmatch '^[0-9a-f]{40}$'){throw 'Invalid MaaUtils commit identity'}
-    $policy=Join-Path $customInputs maautils-release-policy.json
-    Json $policy ([ordered]@{formal_release=[bool]$formal.Count;selected_ref=$ref;commit=$commit;remote=$remote})
-    Save $policy
-    $source=Join-Path $DepsRoot "native-sources/MaaUtils-$commit"
-    if(-not(Test-Path -LiteralPath $source)){
-        Step custom-maautils-clone git @('-c','core.autocrlf=false','clone','--depth=1','--branch',$ref,'https://github.com/MaaXYZ/MaaUtils.git',$source)
-    }
-    $actual=(& git -C $source rev-parse HEAD|Out-String).Trim()
-    if($LASTEXITCODE -ne 0 -or $actual -ne $commit){throw 'MaaUtils cached source identity differs'}
-    $dirty=& git -C $source status --porcelain --untracked-files=all
-    if($LASTEXITCODE -ne 0 -or $dirty){throw 'MaaUtils source cache was modified'}
-    $archive=Join-Path $customInputs MaaUtils-source.tar
-    Step custom-maautils-archive git @('-C',$source,'archive','--format=tar','--output',$archive,$commit)
-    Save $archive
-    $license=Join-Path $customInputs MaaUtils-LICENSE.md
-    Copy-Item -LiteralPath (Join-Path $source LICENSE.md) -Destination $license
-    Save $license
+    . (Join-Path $PSScriptRoot prepare-maautils-reference.ps1)
+    $maautils=Prepare-MaaUtilsReference $customInputs -StepPrefix custom-maautils
+    $source=$maautils.Source
     . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
     $customJson=Prepare-MeoJsonReference $customInputs -StepPrefix custom-meojson
     . (Join-Path $PSScriptRoot prepare-opencv-reference.ps1)

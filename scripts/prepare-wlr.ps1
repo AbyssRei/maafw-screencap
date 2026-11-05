@@ -53,6 +53,10 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
                 throw 'Expected whole original manager/native Wlr/NoneInput and complete Rust capture comparison'
             }
         }
+        if($Name -eq 'original-wlr-uuid-corpus' -and [regex]::Matches((Get-Content -LiteralPath $log -Raw),
+            '(?m)^original MaaUtils UUID draws=256 unique=256 canonical_v4=256 passed\r?$').Count -ne 1){
+            throw 'Expected the complete actual MaaUtils/Boost UUID corpus'
+        }
         if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
             throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
         }
@@ -371,7 +375,7 @@ try{
         $sourceExecutable=Prepare-WlrReference $UpstreamRoot
         $referenceArtifacts=Join-Path $RunRoot linux-x64/reference-u/artifacts
         New-Item -ItemType Directory -Path $referenceArtifacts -Force|Out-Null
-        Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=64;height=48;format='BGR';stride=192;pattern='top-left red, top-right green, bottom blue';scope='Original source context only; external UUID name provider and suppressed logging; no Rust capture comparison.'})
+        Json (Join-Path $referenceArtifacts geometry.json) ([ordered]@{width=64;height=48;format='BGR';stride=192;pattern='top-left red, top-right green, bottom blue';scope='Original source context only; actual MaaUtils/Boost UUID implementation and suppressed logging; Rust comparison has separate records.'})
     }
     $runtime=Join-Path $DepsRoot ('runtime/wlr-'+[Guid]::NewGuid().ToString('N').Substring(0,12))
     $socket=Join-Path $runtime mfs-p0-wlr
@@ -489,6 +493,6 @@ try{
         }catch{$status='failed';$_.Exception.ToString()|Add-Content -LiteralPath $log -Encoding utf8}
         finally{$checks.Add([ordered]@{name='compositor-stop';status=$status;log=(Artifact $log)});$server.Dispose()}
     }
-    Json (Join-Path $RunRoot native-result.json) ([ordered]@{layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete';checks=@($checks.ToArray());inputs=@($inputs.ToArray());pending=@(($SourceReference ? 'Fixed original Wlr source context: native buffers/Mat owners and forwarding roundtrip recursion observation; private namespace/logging and a kernel-random external UUID name provider. Passive virtual input manager globals are a source prerequisite; no input actions or host devices. Private Rust migration is now included with separate build/layout/capture/exception probes; full source failure/format/client-close/FD0/partial-state parity and P1 remain unaccepted.' : 'Native headless/Pixman Wlr feasibility only; full compositor/format/failure and C++ parity gates remain outstanding.'),'Compiler/make/bison/OS identities are recorded; complete latest native toolchain policy verification and offline entry remain pending.','The initial private Rust Wlr slice runs only in explicit P1 probes; full backend/P1 acceptance remains pending. No public SDK target policy or ExtImage capture.')})
+    Json (Join-Path $RunRoot native-result.json) ([ordered]@{layout_version=1;run_id=(Split-Path -Leaf $RunRoot);phase=($SourceReference ? 'P1' : 'P0');phase_status='incomplete';checks=@($checks.ToArray());inputs=@($inputs.ToArray());pending=@(($SourceReference ? 'Fixed original Wlr source context: native buffers/Mat owners and forwarding roundtrip recursion observation; private namespace/logging and actual MaaUtils/Boost UUID implementation. Passive virtual input manager globals are a source prerequisite; no input actions or host devices. Private Rust migration is now included with separate build/layout/capture/exception probes; full source failure/format/client-close/FD0/partial-state parity and P1 remain unaccepted.' : 'Native headless/Pixman Wlr feasibility only; full compositor/format/failure and C++ parity gates remain outstanding.'),'Compiler/make/bison/OS identities are recorded; complete latest native toolchain policy verification and offline entry remain pending.','The initial private Rust Wlr slice runs only in explicit P1 probes; full backend/P1 acceptance remains pending. No public SDK target policy or ExtImage capture.')})
 }
 if($failed -or @($checks|Where-Object status -EQ failed).Count){exit 1}

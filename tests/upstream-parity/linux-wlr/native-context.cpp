@@ -54,9 +54,6 @@ void save(const std::filesystem::path& path,const cv::Mat& image) {
 #else
 #include "native-owner.hpp"
 #endif
-MAA_CTRL_UNIT_NS_BEGIN
-#include "uuid-context.inc"
-MAA_CTRL_UNIT_NS_END
 #if defined(MFS_WLR_WHOLE_NATIVE)
 #include "whole-native-context.hpp"
 #endif

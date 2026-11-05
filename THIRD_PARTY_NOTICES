@@ -238,8 +238,13 @@ src/platform/windows/delegate.rs adapts the reachable fixed-name Windows
 load/reuse/symbol/unload behavior of include/MaaUtils/LibraryHolder.h, with
 standard Rust Arc/Weak ownership and a mutex. Explicit acceptance compiles that
 original header and the selected include/MaaUtils/Time.hpp duration_since body;
-Custom acceptance also compiles the real ImageBuffer/StringBuffer code. These
-source files have no additional per-file copyright or licence notices. MaaUtils
+Custom acceptance also compiles the real ImageBuffer/StringBuffer code. Wlr
+acceptance compiles the actual source/Uuid/Uuid.cpp and original Uuid/Conf/Port
+headers with the prepared formal Boost.UUID library, replacing the historical
+reference-only random-name provider. Both complete dependency sources and their
+licences are recorded externally for reconstruction; no Boost UUID runtime
+dependency enters the Rust core. These source files have no additional per-file
+copyright or licence notices. MaaUtils
 is not a runtime dependency of the default product core.
 
 Boost.DLL

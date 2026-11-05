@@ -8,14 +8,31 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     . (Join-Path $PSScriptRoot prepare-opencv-reference.ps1)
     $opencv=Prepare-OpenCvReference $refInputs ([ordered]@{
         backend='wlr';wayland_version=$wayland.version;wayland_library=$library
-        scope='Fixed original Wlr/WaylandClient/MemfdBuffer screenshot context; private namespace/logging and external random-name provider.'
+        scope='Fixed original Wlr/WaylandClient/MemfdBuffer screenshot context; private namespace/logging; actual MaaUtils/Boost UUID provider.'
     })
     $build=Join-Path $opencv.Native (Split-Path -Leaf $RunRoot)
     . (Join-Path $PSScriptRoot prepare-meojson-reference.ps1)
     $meojson=Prepare-MeoJsonReference $refInputs
+    . (Join-Path $PSScriptRoot prepare-maautils-reference.ps1)
+    $maautils=Prepare-MaaUtilsReference $refInputs -StepPrefix wlr-maautils
+    . (Join-Path $PSScriptRoot prepare-boost-reference.ps1)
+    $boost=Prepare-BoostReference $refInputs -StepPrefix wlr-boost
+    $uuidInputs=Join-Path $refInputs original-uuid
+    New-Item -ItemType Directory -Path $uuidInputs|Out-Null
+    foreach($relative in @('source/Uuid/Uuid.cpp','include/MaaUtils/Uuid.h','include/MaaUtils/Conf.h','include/MaaUtils/Port.h')) {
+        $saved=Join-Path $uuidInputs $relative
+        New-Item -ItemType Directory -Path (Split-Path -Parent $saved) -Force|Out-Null
+        Copy-Item -LiteralPath (Join-Path $maautils.Source $relative) -Destination $saved;Save $saved
+    }
     Step wlr-protocol-scanner wayland-scanner @('--version')
-    Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)","-DMFS_WLROOTS_PROTOCOL_ROOT=$(Join-Path $wlr.source protocol)","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)")
+    Step wlr-reference-configure cmake @('-S',(Join-Path $productRoot tests/upstream-parity/linux-wlr),'-B',$build,'-G','Ninja','-DCMAKE_BUILD_TYPE=Release','-DCMAKE_EXPORT_COMPILE_COMMANDS=ON',"-DCMAKE_C_COMPILER:FILEPATH=$($env:CC)","-DCMAKE_CXX_COMPILER:FILEPATH=$($env:CXX)","-DOpenCV_DIR=$($opencv.Package)","-DMFS_UPSTREAM_ROOT=$FixedUpstream","-DMFS_WAYLAND_VERSION=$($wayland.version)","-DMFS_WLROOTS_PROTOCOL_ROOT=$(Join-Path $wlr.source protocol)","-DMFS_MEOJSON_INCLUDE=$($meojson.Include)","-DMFS_MAAUTILS_ROOT=$($maautils.Source)","-DMFS_BOOST_ROOT=$($boost.Source)")
     Step wlr-reference-build cmake @('--build',$build,'--parallel','4')
+    $uuidProgram=Join-Path $build mfs_wlr_uuid_corpus
+    $saved=Join-Path $uuidInputs mfs_wlr_uuid_corpus
+    Copy-Item -LiteralPath $uuidProgram -Destination $saved;Save $saved
+    $uuidCorpus=Join-Path $uuidInputs draws.txt
+    try { Step original-wlr-uuid-corpus $uuidProgram @($uuidCorpus) }
+    finally { if(Test-Path -LiteralPath $uuidCorpus){Save $uuidCorpus} }
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-source.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-features.inc
