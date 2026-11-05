@@ -144,6 +144,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+Wlr 私有 memfd 名称生成现保留一个进程内、延迟初始化的 ChaCha12 状态；成功初始化后复用，取种子失败不提交状态，下一次构造可重新初始化。48 字节种子按实际 Boost 头的十二个 u32 布局解释：前 32 字节为 key，中间两个计数器字重置，最后 8 字节保留为 nonce；逐次 UUID 的 version/variant、小写拼写与 NUL 结尾不变。核心采用当前正式 RustCrypto `chacha20 0.10.2` 的 [ChaCha12Rng](https://docs.rs/chacha20/latest/chacha20/struct.ChaCha12Rng.html) 和 `rand_core 0.10.1`，使用其 64 位计数器的 RNG 接口；正常运行依赖仅由 Linux/Wlr feature 选择，其他主机只在私有 portable 单元测试中使用开发依赖。标准 Mutex 只覆盖初始化和名称生成，随后才调用原 memfd/ftruncate/mmap 路径；它防止 Rust 共享可变 RNG 的数据竞争，不接受原版未同步并发用法。原版 `std::random_device` 与 Rust `getrandom` 的具体原生提供者、errno 与任意并发仍作为明确的语言适配边界，不据此宣称全部故障等价或 P1。
+
+本机用实际正式 Boost 1.92 头编译独立 C++ SeedSeq/UUID 程序；八组种子的 2,048 次连续结果与同一 Rust 实现的 Debug/Release 逐字节相同，另 256 次失败初始化后的结果匹配。两项私有状态控制、串行 workspace 与 Clippy 通过，最新 VS2026/SDK 身份也重新核对。先前 MaaUtils HTTPS 远端身份查询失败的准备记录保留，随后单独在线解析并重建 Boost oracle，未以旧源码缓存绕过失败查询。新的 Linux/libstdc++ 专用观察器只在独立测试程序链接时包装 `_M_getval`：real 模式转发原调用，controlled/retry 模式分别给固定种子和第一/第五/第十二个种子字故障，观察完整原 `MaaUtils::make_uuid` 的静态初始化、资源与 warm 状态；不改原函数体、不包装其他捕获进程。该目标单独构建，失败保留且继续独立捕获探针；新观察器、Rust 记录对照及实际取帧已接入原生流程，尚未验收。原确切 `3f1a5ef` 的成功结果保留其旧实现范围；受影响的 Wlr/Memfd 函数映射需在新提交后刷新。外部记录指针为 `current-wlr-uuid-state-development-path.txt`。
+
 确切 `3f1a5ef` 的 Wlr 原生步骤为 159/159，原有 155 项状态全部保持通过。官方包的精确摘要、全部 9,635 份原始文件/日志/可用父层输入，以及 579 项完整 manager 入口输入均通过；25 份 F 来源与十个该入口实际 C/C++ 单元不变。只读校核再次通过双方 42 个 manager、84 次 connect、120 次捕获、360 份即时/持帧、140 份类型化原版 owner 观察、完整像素、metadata、同 client 重建、失败 client 保留和原生清理。新增 UUID 入口原生输出 256 个唯一、规范小写 v4 值，经独立解析；真实 `Uuid.cpp` 编译命令绑定实际 MaaUtils commit，四份原源/头与本机已验收输入逐字节相同，Boost 正式资产摘要与实际 UUID include 路径对应，完整 manager 和 UUID corpus 的真实 x86_64 ELF 都含 `MaaNS::make_uuid` 符号。保留该批自己的 722 项父层轻量输入缺口；随机源时序/状态/线程等价性、完整 Boost 编译头闭包与 P1 仍未接受。外部指针为 `current-3f-whole-wlr-review-path.txt`。
 
 确切 `3f1a5ef` 的 PipeWire 原生步骤仍为 219/219。官方轻量包完整摘要通过，50,816 份原始文件、全部日志与可用父层登记输入、1,412 项完整原版 manager 入口输入核对一致；十份 F 原源/头、三个实际 C++ 编译单元及 x86_64 ELF 通过。只读重放再次通过双方 80 个生命周期、360 次捕获、1,080 份即时/持帧、340 份类型化 owner 观察、完整像素/metadata 和 fd/task 清理；其自身 719 项父层轻量输入缺口仍保留，不借用旧批次来源闭包。外部指针为 `current-3f-whole-pipewire-review-path.txt`。同一提交的 macOS 仍为 151/175，175 项状态全部与前批一致；12,488 份原始文件、日志与可用输入及 12 张全显示器图像/36 份即时与持帧独立复核。source-first 六张各有 52 个差异像素、三对图字节相等；Rust-first 原版差异为 32/36/44 个、Rust 为 0/4/12 个，三对图不等，仍位于右上小区域。全部持帧、BGRA→BGR 与 alpha=255 通过；不放宽严格图样断言、不归因窗口生产者，且保留 689 项该批轻量输入缺口。指针为 `current-3f-macos-focused-review-path.txt`；完整 P1 仍未通过。
@@ -1533,7 +1537,7 @@ DMA-BUF 私有迁移已接入回调的单 plane packed 路径。首个原生批�
 
 本轮 UUID 准备共用 MaaUtils 的原 Custom 解析政策：每次查询正式发布，无正式发布时解析维护分支，验证确切 Git commit/缓存清洁度并保存完整源码与许可。Boost 每次查询正式发布，即使命中下载缓存也复核完整资产长度/摘要并在新批次目录重建；不向核心依赖树引入 Boost。当前解析为 MaaUtils `55be777e326db9419f45b4082e2bf2a1ed10e697`、Boost `1.92.0`。本机 VS2026/MSBuild 编译真实 UUID 实现，256 次实际输出的长度、小写格式、version/variant 及唯一性均通过，并由独立 Python UUID 解析和全部 15 个登记输入摘要复核；四份实际 MaaUtils 源/头与此前准备身份逐字节相同。较早 HTTPS clone 的连接失败及后续单独 SSH 获取保留在外部记录。这只验收 Windows CPU UUID 代码与依赖准备，不证明 Linux 捕获、随机值跨进程相同、线程安全或完整 P1。新原生入口已保存 256 次实际 UUID 输出、原源/头、编译数据库和正式依赖身份，独立原生复核见本轮记录；Linux 取帧的旧成功结果不追溯改写。
 
-实际 Boost 头还表明原版 `make_uuid` 持有进程内静态 `random_generator`，其默认 `chacha20_12` 在初始化时由 `std::random_device` 种子化并复用；当前 Rust `buffer_name` 在每次构造名称时调用 `getrandom` 取 16 字节。真实源码与五份相关 Boost 头及这一差异已单独归档。256 个 UUID 的形状通过不证明随机源调用时序、失败路径、生成器状态或线程语义等价；它们仍是 P1 的待核对边界，未为此改产品行为。
+实际 Boost 头还表明原版 `make_uuid` 持有进程内静态 `random_generator`，其默认 `chacha20_12` 在初始化时由 `std::random_device` 种子化并复用；该批 Rust `buffer_name` 在每次构造名称时调用 `getrandom` 取 16 字节；后续状态迁移见本轮记录。真实源码与五份相关 Boost 头及这一差异已单独归档。256 个 UUID 的形状通过不证明随机源调用时序、失败路径、生成器状态或线程语义等价；它们仍是 P1 的待核对边界，未为此改产品行为。
 
 
 自有 compositor 的显式 source-client 模式仅额外注册原客户端强制要求的 virtual-keyboard/virtual-pointer manager；不创建输入设备或执行输入动作。参考进程要求 20 次连接/三次截图/关闭生命周期、60 张完整已知 BGR 图像、fd/任务身份配平及关闭后独立持帧。链接器 wrapper 只记录并立即转发真实 wl_display_roundtrip，要求观察到原 Buffer 回调内的递归 roundtrip；不提前把它改为排队或移到回调外。完整 source 失败/格式/客户提前关闭矩阵仍待实现；Rust 递归执行通道的原生验证见下文。独立轻量诊断 artifact 在通用工程归档校验前上传，完整工程包仍为来源/依赖重建依据。

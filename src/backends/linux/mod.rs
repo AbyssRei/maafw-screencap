@@ -5,3 +5,6 @@ pub(crate) mod manager;
 pub(crate) mod pipewire;
 #[cfg(all(target_os = "linux", feature = "linux-wlr"))]
 pub(crate) mod wlr;
+
+#[cfg(any(all(target_os = "linux", feature = "linux-wlr"), test))]
+mod wlr_uuid;

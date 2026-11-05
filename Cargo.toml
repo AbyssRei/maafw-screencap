@@ -18,7 +18,7 @@ windows-desktop-dup-window = ["windows-desktop-dup"]
 windows-manager = ["windows-gdi", "windows-print-window", "windows-screen-dc", "windows-frame-pool", "windows-desktop-dup-window"]
 # Private consumer plus an unfinished native daemon/SHM migration.
 linux-pipewire = ["dep:pipewire", "dep:rustix"]
-linux-wlr = ["dep:wayland-client", "dep:wayland-backend", "dep:wayland-protocols-wlr", "dep:wayland-protocols-misc", "dep:wayland-sys", "dep:rustix", "rustix/rand", "dep:memmap2", "dep:cc", "dep:pkg-config"]
+linux-wlr = ["dep:wayland-client", "dep:wayland-backend", "dep:wayland-protocols-wlr", "dep:wayland-protocols-misc", "dep:wayland-sys", "dep:rustix", "rustix/rand", "dep:chacha20", "dep:rand_core", "dep:memmap2", "dep:cc", "dep:pkg-config"]
 macos-screen-capture-kit = ["dep:objc2", "dep:block2", "dep:dispatch2", "dep:objc2-foundation", "dep:objc2-screen-capture-kit", "dep:objc2-core-media", "dep:objc2-core-video", "dep:objc2-core-foundation", "dep:objc2-core-graphics"]
 macos-manager = ["macos-screen-capture-kit"]
 prototype-windows = ["dep:windows-bindgen", "dep:windows-link"]
@@ -42,6 +42,13 @@ wayland-protocols-misc = { version = "0.3", optional = true, features = ["client
 wayland-sys = { version = "0.31", optional = true, features = ["client"] }
 rustix = { version = "1", optional = true, features = ["fs", "event", "mm"] }
 memmap2 = { version = "0.9", optional = true }
+chacha20 = { version = "0.10", optional = true, default-features = false, features = ["rng"] }
+rand_core = { version = "0.10", optional = true, default-features = false }
+
+[dev-dependencies]
+# Portable tests of the same private UUID stream; no non-Linux runtime edge.
+chacha20 = { version = "0.10", default-features = false, features = ["rng"] }
+rand_core = { version = "0.10", default-features = false }
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
 # Loader ABI for explicit private OpenCV acceptance adapters, never core runtime.

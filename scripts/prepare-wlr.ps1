@@ -57,6 +57,26 @@ function Step([string]$Name,[string]$Program,[string[]]$Arguments){
             '(?m)^original MaaUtils UUID draws=256 unique=256 canonical_v4=256 passed\r?$').Count -ne 1){
             throw 'Expected the complete actual MaaUtils/Boost UUID corpus'
         }
+        $uuidSummary=switch($Name) {
+            'original-wlr-uuid-vectors' {'original Boost UUID seeds=8 draws=2048 seed_words=96 reseeds=0 passed'}
+            'original-wlr-uuid-entropy-real' {'original MaaUtils entropy mode=real draws=256 successful_seed_words=12 failures=0 calls=12 warm_calls=0 resources_balanced=1 capture=0 passed'}
+            'original-wlr-uuid-entropy-controlled' {'original MaaUtils entropy mode=controlled draws=256 successful_seed_words=12 failures=0 calls=12 warm_calls=0 resources_balanced=1 capture=0 passed'}
+            'original-wlr-uuid-entropy-retry' {'original MaaUtils entropy mode=retry draws=256 successful_seed_words=12 failures=3 calls=30 warm_calls=0 resources_balanced=1 capture=0 passed'}
+            'rust-wlr-uuid-vectors' {'Rust original Boost UUID seeds=8 paired_draws=2048 retry_draws=256 failed_initializations=3 warm_reseeds=0 passed'}
+            'rust-wlr-uuid-entropy' {'Rust original default UUID modes=3 source_draws=768 controlled_pairs=512 seed_failures=3 source_warm_entropy_calls=0 passed'}
+            default {$null}
+        }
+        if($uuidSummary) {
+            $observed=Get-Content -LiteralPath $log -Raw
+            if([regex]::Matches($observed,'(?m)^'+[regex]::Escape($uuidSummary)+'\r?$').Count -ne 1 -or
+                ($Name.StartsWith('rust-') -and [regex]::Matches($observed,'(?m)^test result: ok\. 1 passed; 0 failed; 0 ignored;').Count -ne 1)) {
+                throw 'Expected complete original UUID state/seed corpus and one exact Rust comparison'
+            }
+        }
+        if($Name -eq 'rust-wlr-uuid-state-controls' -and [regex]::Matches((Get-Content -LiteralPath $log -Raw),
+            '(?m)^test result: ok\. 2 passed; 0 failed; 2 ignored;').Count -ne 1) {
+            throw 'Expected both portable private UUID state controls'
+        }
         if($Name -eq 'original-wlr-source-context' -and (Get-Content -LiteralPath $log -Raw) -notmatch 'original Wlr source cycles=20 captures=60 retained=60 recursive_roundtrip=1 resources_balanced=1 passed'){
             throw 'Expected twenty actual original Wlr lifecycles, recursive roundtrip and sixty independently retained images'
         }
@@ -409,6 +429,12 @@ try{
         Json $managerHashes ([ordered]@{recorded_before_rust=$true;images=$managerOracles});Save $managerHashes
         if($managerOracles.Count -ne 60){$failed=$true;Write-Host 'Original manager oracle is incomplete; retain failures without retry'}
         Json (Join-Path $env:MFS_P1_WLR_RUST_ARTIFACTS geometry.json) ([ordered]@{width=64;height=48;bgr_stride=192;raw_format='per-image metadata';scope='Private Rust Wlr migration: preserved recursive callback, frame alive through conversion, one added raw CPU copy; no full Wlr/P1 or public SDK acceptance.'})
+        try { Step rust-wlr-uuid-state-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr_uuid::tests::','--','--test-threads=1','--nocapture') }
+        catch { $failed=$true;Write-Host $_.Exception.Message }
+        foreach($probe in @(@('vectors','compares_original_boost_stream_seed_layout_and_initialization_retry'),@('entropy','compares_original_default_entropy_seed_failure_and_warm_state'))) {
+            try { Step ('rust-wlr-uuid-'+$probe[0]) cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr',('backends::linux::wlr_uuid::tests::'+$probe[1]),'--','--exact','--ignored','--test-threads=1','--nocapture') }
+            catch { $failed=$true;Write-Host $_.Exception.Message }
+        }
         try { Step rust-wlr-layout-controls cargo @('test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::tests::rejects_overflowing_native_layouts_and_unsupported_source_conversions','--','--exact','--test-threads=1','--nocapture') }
         catch { $failed=$true;Write-Host $_.Exception.Message }
         try { Step rust-wlr-resource-scope-controls timeout @('--signal=TERM','--kill-after=5s','30s','cargo','test','--release','--locked','--lib','--features','prototype-linux-wlr,linux-wlr','backends::linux::wlr::resource_probe::restores_real_memfd_scope_and_leaves_unarmed_calls_unchanged','--','--exact','--ignored','--test-threads=1','--nocapture') }

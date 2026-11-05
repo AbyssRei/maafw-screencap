@@ -33,6 +33,35 @@ function Prepare-WlrReference([string]$FixedUpstream) {
     $uuidCorpus=Join-Path $uuidInputs draws.txt
     try { Step original-wlr-uuid-corpus $uuidProgram @($uuidCorpus) }
     finally { if(Test-Path -LiteralPath $uuidCorpus){Save $uuidCorpus} }
+    $vectorsProgram=Join-Path $build mfs_wlr_uuid_vectors
+    $saved=Join-Path $uuidInputs mfs_wlr_uuid_vectors
+    Copy-Item -LiteralPath $vectorsProgram -Destination $saved;Save $saved
+    $vectors=Join-Path $uuidInputs vectors.tsv
+    try { Step original-wlr-uuid-vectors $vectorsProgram @($vectors) }
+    finally { if(Test-Path -LiteralPath $vectors){Save $vectors} }
+    $env:MFS_P1_WLR_UUID_VECTORS=$vectors
+    # This GNU standard-library observer is separate from the capture build.
+    # Preserve its failure and continue the independent native capture probes.
+    try { Step wlr-uuid-entropy-build cmake @('--build',$build,'--target','mfs_wlr_uuid_entropy','--parallel','4') }
+    catch { Write-Host $_.Exception.Message }
+    $entropyProgram=Join-Path $build mfs_wlr_uuid_entropy
+    $entropy=Join-Path $uuidInputs default-entropy
+    New-Item -ItemType Directory -Path $entropy|Out-Null
+    if(Test-Path -LiteralPath $entropyProgram) {
+        $saved=Join-Path $uuidInputs mfs_wlr_uuid_entropy
+        Copy-Item -LiteralPath $entropyProgram -Destination $saved;Save $saved
+        foreach($mode in @('real','controlled','retry')) {
+            $records=Join-Path $entropy "$mode.tsv"
+            try { Step ('original-wlr-uuid-entropy-'+$mode) $entropyProgram @($mode,$records) }
+            catch { Write-Host $_.Exception.Message }
+            finally {
+                foreach($path in @($records,($records+'.failures'))) {
+                    if(Test-Path -LiteralPath $path){Save $path}
+                }
+            }
+        }
+    }
+    $env:MFS_P1_WLR_UUID_ENTROPY=$entropy
     $saved=Join-Path $refInputs linux-manager-source.inc
     Copy-Item -LiteralPath (Join-Path $build linux-manager-source.inc) -Destination $saved;Save $saved
     $saved=Join-Path $refInputs linux-manager-features.inc

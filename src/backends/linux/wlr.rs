@@ -262,12 +262,24 @@ impl Drop for Buffer {
         }
     }
 }
+// The source has a process-static generator. Rust serializes its mutable
+// stream to prevent the source's unsynchronized cross-caller data race.
+static BUFFER_NAMES: Mutex<super::wlr_uuid::NameGenerator> =
+    Mutex::new(super::wlr_uuid::NameGenerator::new());
 fn buffer_name() -> Result<[u8; 53], Error> {
-    let mut random = [0u8; 16];
+    BUFFER_NAMES
+        .lock()
+        .map_err(|_| Error::new("Wlr UUID state poisoned", -1))?
+        .next(seed_buffer_names)
+}
+fn seed_buffer_names() -> Result<[u8; 48], Error> {
+    // std::random_device is the original compiler/library entropy provider.
+    // The Rust port uses getrandom for its nondeterministic seed; exact native
+    // provider calls/errno and arbitrary concurrency remain separate evidence.
+    let mut seed = [0; 48];
     let mut offset = 0;
-    while offset < random.len() {
-        match rustix::rand::getrandom(&mut random[offset..], rustix::rand::GetRandomFlags::empty())
-        {
+    while offset < seed.len() {
+        match rustix::rand::getrandom(&mut seed[offset..], rustix::rand::GetRandomFlags::empty()) {
             Ok(0) => return Err(Error::new("Wlr UUID empty random read", -1)),
             Ok(read) => {
                 offset = offset.checked_add(read).ok_or(Error::new(
@@ -279,22 +291,7 @@ fn buffer_name() -> Result<[u8; 53], Error> {
             Err(error) => return Err(Error::new("Wlr UUID random", error.raw_os_error())),
         }
     }
-    random[6] = (random[6] & 15) | 64;
-    random[8] = (random[8] & 63) | 128;
-    let mut name = [0u8; 53];
-    name[..16].copy_from_slice(b"maafw-wl-buffer-");
-    let digits = b"0123456789abcdef";
-    let mut cursor = 16;
-    for (index, byte) in random.into_iter().enumerate() {
-        if [4, 6, 8, 10].contains(&index) {
-            name[cursor] = b'-';
-            cursor += 1;
-        }
-        name[cursor] = digits[usize::from(byte >> 4)];
-        name[cursor + 1] = digits[usize::from(byte & 15)];
-        cursor += 2;
-    }
-    Ok(name)
+    Ok(seed)
 }
 #[derive(Default)]
 struct State {

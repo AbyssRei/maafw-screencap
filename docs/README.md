@@ -1,5 +1,7 @@
 # 文档导航与维护约定
 
+Wlr 名称生成已开始恢复原版延迟初始化和跨名称复用的 ChaCha12 状态，本机 2,048 个实际 Boost 输出及失败初始化对照通过；新 Linux 默认函数/捕获验证仍待执行，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `8e6673d` 的完整 Linux 工程包已补齐 Wlr 轻量包的 719 项来源缺口；确切 `3f1a5ef` 的 PipeWire 保持 219/219，macOS 保持 151/175。新 UUID 接线另通过 Wlr 原生 159/159 检查，完整 P1 仍待验收，详见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 Linux manager/None 的 29 个函数映射条目已同步 features=3 修复及确切原生依据，完整映射联合的 705 个 Rust 引用均匹配当前 Git 文件；历史失败和完整 P1 待验收状态保留，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。

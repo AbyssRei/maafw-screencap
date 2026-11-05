@@ -247,6 +247,21 @@ dependency enters the Rust core. These source files have no additional per-file
 copyright or licence notices. MaaUtils
 is not a runtime dependency of the default product core.
 
+RustCrypto ChaCha20 and rand_core
+===============================
+
+Repositories: https://github.com/RustCrypto/stream-ciphers and
+https://github.com/rust-random/rand_core
+Licences: MIT OR Apache-2.0, as supplied by the resolved packages.
+
+The private Linux Wlr buffer-name generator uses chacha20's ChaCha12Rng and
+rand_core traits to preserve the prepared Boost.UUID stream and seed layout.
+The generator is retained across names. Its OS entropy seed comes from rustix;
+Rust serializes the shared generator with the standard Mutex. These dependencies
+are selected by linux-wlr at runtime and by portable private unit tests during
+development. Actual package sources, licences and resolutions are archived with
+each Rust batch.
+
 Boost.DLL
 =========
 

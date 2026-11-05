@@ -42,6 +42,11 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/linux-manager-source
 include("${CMAKE_CURRENT_SOURCE_DIR}/../../../build-support/reference-uuid.cmake")
 add_executable(mfs_wlr_uuid_corpus uuid-corpus.cpp)
 target_link_libraries(mfs_wlr_uuid_corpus PRIVATE mfs_reference_uuid)
+add_executable(mfs_wlr_uuid_vectors uuid-vectors.cpp)
+target_link_libraries(mfs_wlr_uuid_vectors PRIVATE Boost::uuid)
+add_executable(mfs_wlr_uuid_entropy EXCLUDE_FROM_ALL uuid-entropy-context.cpp)
+target_link_libraries(mfs_wlr_uuid_entropy PRIVATE mfs_reference_uuid)
+target_link_options(mfs_wlr_uuid_entropy PRIVATE "LINKER:--wrap=_ZNSt13random_device9_M_getvalEv")
 set(_mfs_root "${MFS_UPSTREAM_ROOT}/source/MaaLinuxControlUnit")
 add_executable(mfs_wlr_source_context source-context.cpp
     "${_mfs_root}/Screencap/WlrScreencap.cpp"
