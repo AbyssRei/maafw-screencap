@@ -144,6 +144,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `8e6673d` 的 Wlr 原生步骤现为 155/155，包含新增完整原类的四项检查。完整原版 Linux manager/API/NoneInput 与实际 Wlr/client/buffer/协议链已原生执行；双方 42 个 manager、84 次 connect、120 次捕获、360 份即时/持帧及 140 份源端 owner 观察通过独立只读复算。同一 client 重建不增加 roundtrip，inactive 保持 owner，失败 client 的两次 connect/拒绝捕获保持原行为，完整 UUID/info、features=`3`、线程/fd 和源端弱 client 过期亦核对通过。
+
+官方 7,144,596 字节 ZIP 的整体摘要、CRC、9,617 份原始文件、155 项检查日志及可用父层输入核对通过；579 份新增完整类材料全部可用，二十五份 F 源码/声明的摘要与 Git blob、实际 x86_64 ELF 和十份 C/C++ 编译单元均匹配。七份确切实现/测试源码由 Git 补充，保存报告重新计算后相同，没有再次执行捕获。父 manifest 的轻量输入缺口仍为 719 项；外部 UUID 名称 provider、输入排除和完整编译器头文件追踪范围保持，不以本批接受完整 Wlr/P1。`local/current-8e-whole-wlr-review-path.txt` 指向封存材料。
+
 确切 `0991d0e` 的 Linux PipeWire 原生步骤现为 219/219。完整原版 manager/header、C API、PipeWire 和真实 NoneInput 已实际编译、加载并经真实工厂取帧；daemon 重建与单次 fd 转交的双方共八十个生命周期、360 次捕获、1,080 份完整即时/销毁后持帧和 340 份原类 owner 观察，已用独立只读命令复算全部图样、RGB/BGR 转换、元数据、features=`3` 及 fd/线程关闭。新组六项通过，既有 211 项通过状态保持；原失败的 None 独立 Debug/Release 入口本批也实际执行并通过，旧批失败不重标。
 
 官方 ZIP 的整体摘要、CRC、50,672 份原始文件、全部检查日志和可用登记输入核对通过；新增完整原类的 1,395 份登记材料全部可用，十份 F 源码/声明的 SHA-256 与 Git blob 相符，实际程序为 x86_64 ELF。编译数据库核对三份真实 C++ 单元及 manager 原文 include 宏；另六份该提交的测试/实现源码由确切 Git blob 补充。父 manifest 的轻量包输入缺口为 714 项，仍未接受完整编译器头文件来源闭合、Portal 桌面授权、任意原生失败或整个 P1；其余捕获矩阵未在此批逐像素重新复算。首次外部 reader 误从 `native-result` 查父层产品源码，失败脚本/日志保留，改读父 manifest 后通过；前后已提取原始字节相同，没有重跑捕获。封存材料由 `local/current-099-whole-pipewire-review-path.txt` 指向。

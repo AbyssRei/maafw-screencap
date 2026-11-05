@@ -1,10 +1,12 @@
 # 文档导航与维护约定
 
+确切 `8e6673d` 的 Wlr 步骤为 155/155。完整原版 manager/API/NoneInput 调用链已原生执行，双方 42 个对象、84 次 connect、120 次捕获、360 份即时/持帧及 140 份 owner 观察经独立复算；完整来源和 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+
 确切 `0991d0e` 的 Linux PipeWire 步骤为 219/219。完整原版 manager/API/PipeWire/NoneInput 的真实工厂捕获已原生执行，双方 360 次捕获、1,080 份即时/持帧及 340 份 owner 观察经独立复算；None Debug/Release 回归也通过。父层来源缺口和整个 P1 仍待完成，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 确切 `ecb1a1c` Linux 的官方包已复核为 211/213；完整原版 None 三例与既有 Release 原生 Rust 回归通过，两项独立 profile 仍保留编译参数失败。原报告的 88 项为 native-result 缺口，补核父 manifest 后完整轻量输入缺口为 711 项，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
-Wlr 已接入完整原版 manager/C API/真实 NoneInput 的独立捕获入口，覆盖同 client 重建、inactive、失败 client 保留及完整帧所有权，并有独立记录校验。原生执行仍待 Actions，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
+Wlr 完整原版 manager/C API/真实 NoneInput 的独立捕获入口，已在本批核对同 client 重建、inactive、失败 client 保留及完整帧所有权；原生执行和独立记录校验通过，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
 完整原版 Linux manager、C API、PipeWire 与真实 NoneInput 的独立捕获入口覆盖 daemon 重建和单次 fd 转交；即时/持帧、类型、features、元数据及资源记录的本批原生与独立复算已通过，完整 P1 未通过，见[本轮复核](guides/development.md#本轮原生与-ci-复核)。
 
