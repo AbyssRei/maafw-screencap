@@ -144,6 +144,10 @@ WaylandClient/WlrScreencap 的四份 `.cpp/.h` 随后补入 31 项对应记录�
 
 ## 本轮原生与 CI 复核
 
+确切 `24e117b` 的七个 Windows 组件均在原生准备阶段拒收 zlib 正式版本；已下载的官方组件包整体摘要、全部七份错误日志和对应失败状态核对，没有执行这些组件的捕获。官方 [zlib 1.4](https://github.com/madler/zlib/releases/tag/v1.4) 使用两段版本号，MSVC 静态输出也从 `zs.lib` 改为 `libzs.lib`。`prepare-png-codec.ps1` 现接受 zlib 两段/三段正式版本，并按已审阅版本选择确切静态文件；libpng 的三段格式、草稿/预发布和新主版本审阅、源码摘要、头文件及运行时精确版本检查保持严格，不回退旧依赖或搜索替代库。
+
+本机使用 VS2026/MSBuild、SDK 28000 和 CMake 4.4.5，实际编译 zlib 1.4、libpng 1.6.59 及 OpenCV 5.0.0；codec 和真正的 OpenCV `imencode`/`imdecode` 均逐字节保留六个已知像素及 alpha，配置与实际链接记录绑定确切静态库。显式归档重放的 zlib 1.3.2 也通过 codec 编解码，范围与本次在线最新依赖分开。26 项控制包含原版 resolver 对实际新 release 的同错误复现，以及草稿、预发布、格式、新主版本、归档摘要/版本和实际运行时版本不符的拒收。初次 HTTPS 来源查询失败、首次新静态库名缺失及外部消费夹具的包选择/长路径准备失败均保留，后续采用当前进程 SSH 传输、确切原生 package 和 deps 短构建路径；未重试捕获断言。本批只验证依赖准备和 CPU codec 链，不接受新截图、Wlr 熵观察器或完整 P1；新的托管执行待验证。外部证据指针为 `current-zlib-release-grammar-path.txt`，CI 预装工具年龄继续只记录，不作为严格最新版门禁。
+
 Wlr 私有 memfd 名称生成现保留一个进程内、延迟初始化的 ChaCha12 状态；成功初始化后复用，取种子失败不提交状态，下一次构造可重新初始化。48 字节种子按实际 Boost 头的十二个 u32 布局解释：前 32 字节为 key，中间两个计数器字重置，最后 8 字节保留为 nonce；逐次 UUID 的 version/variant、小写拼写与 NUL 结尾不变。核心采用当前正式 RustCrypto `chacha20 0.10.2` 的 [ChaCha12Rng](https://docs.rs/chacha20/latest/chacha20/struct.ChaCha12Rng.html) 和 `rand_core 0.10.1`，使用其 64 位计数器的 RNG 接口；正常运行依赖仅由 Linux/Wlr feature 选择，其他主机只在私有 portable 单元测试中使用开发依赖。标准 Mutex 只覆盖初始化和名称生成，随后才调用原 memfd/ftruncate/mmap 路径；它防止 Rust 共享可变 RNG 的数据竞争，不接受原版未同步并发用法。原版 `std::random_device` 与 Rust `getrandom` 的具体原生提供者、errno 与任意并发仍作为明确的语言适配边界，不据此宣称全部故障等价或 P1。
 
 本机用实际正式 Boost 1.92 头编译独立 C++ SeedSeq/UUID 程序；八组种子的 2,048 次连续结果与同一 Rust 实现的 Debug/Release 逐字节相同，另 256 次失败初始化后的结果匹配。两项私有状态控制、串行 workspace 与 Clippy 通过，最新 VS2026/SDK 身份也重新核对。先前 MaaUtils HTTPS 远端身份查询失败的准备记录保留，随后单独在线解析并重建 Boost oracle，未以旧源码缓存绕过失败查询。新的 Linux/libstdc++ 专用观察器只在独立测试程序链接时包装 `_M_getval`：real 模式转发原调用，controlled/retry 模式分别给固定种子和第一/第五/第十二个种子字故障，观察完整原 `MaaUtils::make_uuid` 的静态初始化、资源与 warm 状态；不改原函数体、不包装其他捕获进程。该目标单独构建，失败保留且继续独立捕获探针；新观察器、Rust 记录对照及实际取帧已接入原生流程，尚未验收。原确切 `3f1a5ef` 的成功结果保留其旧实现范围；受影响的 Wlr/Memfd 函数映射需在新提交后刷新。外部记录指针为 `current-wlr-uuid-state-development-path.txt`。

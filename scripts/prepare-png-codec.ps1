@@ -13,6 +13,22 @@ function Get-PngPublicReleaseVersion([string]$Page) {
     if($matches.Count -ne 1){throw 'Official libpng page has no unique current public release; no tag/cache fallback'}
     return $matches[0].Groups[1].Value
 }
+function Get-PngCodecReleaseVersion([object]$Release,[string]$Label) {
+    # zlib's formal tags include both v1.4 and v1.3.2. Keep the exact spelling
+    # for source/header/runtime verification; libpng still uses three parts.
+    $pattern=switch -Exact ($Label) {
+        'ZLIB' {'\Av?(\d+\.\d+(?:\.\d+)?)\z'}
+        'PNG' {'\Av?(\d+\.\d+\.\d+)\z'}
+        default {throw "Unsupported PNG codec dependency: $Label"}
+    }
+    $match=[regex]::Match([string]$Release.tag_name,$pattern)
+    if($Release.draft -or $Release.prerelease -or -not $match.Success){
+        throw "$Label release is not a recognized formal version"
+    }
+    $version=[version]$match.Groups[1].Value
+    if($version.Major -ne 1){throw "New $Label major requires native preparation review; no older release will be selected"}
+    return $version
+}
 function Resolve-PngCodecSource([string]$Repository,[string]$Label,[string]$Directory,[string]$DepsRoot,[scriptblock]$Register,[scriptblock]$Replay,[string]$StepPrefix) {
     $releasePath=Join-Path $Directory "$Label-release.json"
     $resolutionPath=Join-Path $Directory "$Label-resolution.json"
@@ -52,11 +68,7 @@ function Resolve-PngCodecSource([string]$Repository,[string]$Label,[string]$Dire
             throw 'Archived libpng formal release page identity differs'
         }
     }
-    if($release.draft -or $release.prerelease -or $release.tag_name -notmatch '^v?(\d+\.\d+\.\d+)$'){
-        throw "$Label release is not a recognized formal version"
-    }
-    $version=[version]$Matches[1]
-    if($version.Major -ne 1){throw "New $Label major requires native preparation review; no older release will be selected"}
+    $version=Get-PngCodecReleaseVersion $release $Label
     if($Replay){
         if($resolution.repository -ne "https://github.com/$Repository.git" -or $resolution.requested_ref -ne $release.tag_name -or
            $resolution.version -ne $version.ToString() -or $resolution.commit -notmatch '^[0-9a-f]{40}$' -or
@@ -136,7 +148,10 @@ function Prepare-PngCodec {
     $pbuild=Join-Path $native png-build
     Step "$StepPrefix-zlib-configure" $CMake (@('-S',$zlib.Source,'-B',$zbuild,"-DCMAKE_INSTALL_PREFIX=$install",'-DZLIB_BUILD_SHARED=OFF','-DZLIB_BUILD_STATIC=ON','-DZLIB_BUILD_TESTING=OFF')+$Generator+$common)
     Step "$StepPrefix-zlib-install" $CMake @('--build',$zbuild,'--config','Release','--target','install','--parallel','4')
-    $zlibLibrary=Join-Path $install ($IsWindows ? 'lib/zs.lib' : 'lib/libz.a')
+    # zlib 1.4 changed the MSVC static ARCHIVE_OUTPUT_NAME from zs to libzs.
+    # Choose the reviewed version's exact output, never a glob/system fallback.
+    $zlibArchive=if($IsWindows){([version]$zlib.Version -ge [version]'1.4') ? 'lib/libzs.lib' : 'lib/zs.lib'}else{'lib/libz.a'}
+    $zlibLibrary=Join-Path $install $zlibArchive
     if(-not(Test-Path -LiteralPath $zlibLibrary -PathType Leaf)){throw 'Expected exact static zlib archive missing; no system fallback'}
     $zargs=@("-DZLIB_INCLUDE_DIR:PATH=$install/include","-DZLIB_LIBRARY:FILEPATH=$zlibLibrary","-DZLIB_LIBRARY_RELEASE:FILEPATH=$zlibLibrary","-DZLIB_LIBRARY_DEBUG:FILEPATH=$zlibLibrary",'-DZLIB_USE_STATIC_LIBS=ON')
     Step "$StepPrefix-png-configure" $CMake (@('-S',$png.Source,'-B',$pbuild,"-DCMAKE_INSTALL_PREFIX=$install",'-DPNG_SHARED=OFF','-DPNG_STATIC=ON','-DPNG_FRAMEWORK=OFF','-DPNG_TESTS=OFF','-DPNG_TOOLS=OFF','-DPNG_HARDWARE_OPTIMIZATIONS=ON')+$Generator+$common+$zargs)
